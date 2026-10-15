@@ -1,0 +1,31 @@
+Balsam fir and pond lighting correction — 2026-10-10
+
+Scene: Assets/CityForge/Art/Environment/NaturalTerrainLab/PondFirLighting.unity
+Preserved predecessors: NaturalTerrain.unity and PondTreesSun.unity.
+Tool: Assets/CityForge/Scripts/Editor/PondRepairStudy.cs
+
+Source inventory (read only):
+/Users/joelinstrum/Downloads/trees/fir-3.rar — three Balsam fir models with embedded albedo, opacity, gloss and normal atlases. Fuller first variant selected.
+fir-1.rar — Fraser fir large, small and winter meshes; external texture references missing from this archive.
+fir-Abies cilicica.rar — Cilician fir source, also available in V3.
+forest-trees.zip — broadleaf FBX collection already represented by the current ForestTreesTrial assets.
+Downloads and V3 originals remain untouched. Archive extraction and Blender intermediate files live in the Codex task work/pond-repair folder.
+
+Port:
+Assets/CityForge/Art/Trees/BalsamFirStudy/BalsamFirA.fbx
+First Balsam mesh variant, no needle/leaf decimation. Excluded the high-poly fruit/cone object, which adds 171,859 source faces with little aerial benefit. Recentered the common source x offset to the trunk origin and exported with Y up. Retained bark, branch/leaf and single-needle geometry.
+BalsamAtlas.png combines the embedded first-variant albedo and opacity atlas. URP Lit double-sided cutout material uses alpha-coverage mipmaps, cutoff .2 and smoothness .1. A production distance-LOD pass remains future work.
+
+Final scene:
+17 new Balsam firs plus full-canopy broadleaf Tree8/Tree9 variants. Sparse Tree1/Tree2 variants are absent. Replacements include miniature trees outside the previous 65 m pond filter. Shoreline tree roots sit on dry sampled ground above y7.35; heights 16 m on the shoreline and 15–20 m for other replacements.
+Sun angle corrected from the overly high (70,250,0) to (46,233,0). This restores wave highlights while avoiding the broad white glare of the (55,225,0) lighting trial. Light intensity, color and shadow strength unchanged.
+
+Water:
+At inspection the editor was paused and Crest's clock was stationary with delta=0. After resuming, Unity and Crest time advanced and two-frame comparison showed changing center-water pixels. Final verification: Playing=True, paused=False, timeScale=1; Crest time 103.885 -> 106.068 over approximately two seconds; center-water mean RGB difference approximately (1.419,1.488,1.450) on a 300x200 crop. Editor left playing and unpaused.
+Crest renderer, wave input settings, wave spectrum and water materials were not modified. Original serialized component settings and protected-file hashes pass preservation checks. Grass, terrain/bank shader and geometry retained.
+
+Evidence in Codex task outputs:
+PondFirLighting_LakeDetail.png
+PondFirLighting_Changes.txt
+PondFirLighting_Validation.txt
+PondFirLighting_Preservation.txt

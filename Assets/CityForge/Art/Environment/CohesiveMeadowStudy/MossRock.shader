@@ -1,0 +1,11 @@
+Shader "CityForge/Natural Moss Rock" { Properties {_BaseMap("Rock",2D)="white"{} _Moss("Moss",2D)="white"{} _BaseColor("Tint",Color)=(.8,.8,.8,1) _BaseNormal("Normal",2D)="bump"{} } SubShader { Tags {"RenderPipeline"="UniversalPipeline" "RenderType"="Opaque"} Pass { Tags {"LightMode"="UniversalForward"} HLSLPROGRAM
+#pragma vertex vert
+#pragma fragment frag
+#pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE
+#pragma multi_compile_fragment _ _SHADOWS_SOFT _SHADOWS_SOFT_LOW _SHADOWS_SOFT_MEDIUM _SHADOWS_SOFT_HIGH
+#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+TEXTURE2D(_BaseMap);SAMPLER(sampler_BaseMap);TEXTURE2D(_Moss);SAMPLER(sampler_Moss);TEXTURE2D(_BaseNormal);SAMPLER(sampler_BaseNormal);float4 _BaseColor;
+struct A{float4 p:POSITION;float3 n:NORMAL;float4 t:TANGENT;float2 uv:TEXCOORD0;};struct V{float4 p:SV_POSITION;float3 ws:TEXCOORD0;float3 n:TEXCOORD1;float2 uv:TEXCOORD2;float4 t:TEXCOORD3;};V vert(A i){V o;o.ws=TransformObjectToWorld(i.p.xyz);o.p=TransformWorldToHClip(o.ws);o.n=TransformObjectToWorldNormal(i.n);o.uv=i.uv;o.t=float4(TransformObjectToWorldDir(i.t.xyz),i.t.w*GetOddNegativeScale());return o;}
+half4 frag(V i):SV_Target{float3 n=normalize(i.n);float variation=sin(i.ws.x*1.7+sin(i.ws.z*2.3))*sin(i.ws.z*1.2)*.18;float amount=smoothstep(.35,.9,n.y+variation)*.65;half3 rock=SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,i.uv).rgb*_BaseColor.rgb;half3 moss=SAMPLE_TEXTURE2D(_Moss,sampler_Moss,i.ws.xz/1.8).rgb*half3(.55,.65,.45);half3 normalTS=UnpackNormal(SAMPLE_TEXTURE2D(_BaseNormal,sampler_BaseNormal,i.uv));normalTS.xy*=.65;n=normalize(TransformTangentToWorld(normalTS,half3x3(normalize(i.t.xyz),cross(n,normalize(i.t.xyz))*i.t.w,n)));InputData input=(InputData)0;input.positionWS=i.ws;input.normalWS=n;input.viewDirectionWS=GetWorldSpaceNormalizeViewDir(i.ws);input.shadowCoord=TransformWorldToShadowCoord(i.ws);input.bakedGI=SampleSH(n);input.normalizedScreenSpaceUV=GetNormalizedScreenSpaceUV(i.p);SurfaceData surf=(SurfaceData)0;surf.albedo=lerp(rock,moss,amount);surf.normalTS=half3(0,0,1);surf.occlusion=1;surf.smoothness=.07;surf.alpha=1;return UniversalFragmentPBR(input,surf);}
+ENDHLSL } UsePass "Universal Render Pipeline/Lit/ShadowCaster" } }

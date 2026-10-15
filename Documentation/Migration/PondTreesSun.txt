@@ -1,0 +1,17 @@
+Pond trees and sun study — 2026-10-10
+
+Scene: Assets/CityForge/Art/Environment/NaturalTerrainLab/PondTreesSun.unity
+Baseline: NaturalTerrain.unity remains unchanged and can be opened to revert.
+Editor tool: Assets/CityForge/Scripts/Editor/PondTreeStudy.cs
+
+Final scene changes:
+Remove miniature pond vegetation and undersized saplings near the lake. Normalize shoreline broadleaf trees to 14–16 m. Replace FraserFirA instances with existing mature broadleaf variants medium_poly_3, medium_poly_5 and medium_poly_2, retaining their prefab LODs and material lineage. Normalize shoreline replacement heights to 15.5 m and other replacements to 12–17 m.
+Sun rotation: (43,222,0) -> (70,250,0). Keep intensity, color and shadow strength. The higher angle shortens shadows so reflections extend beyond them.
+Grass, shoreline/terrain geometry, Crest renderer and water materials remain unchanged. No runtime terrain or tree generation changes.
+
+V3 read-only candidates evaluated:
+Authoring/Flora/IncomingVarious/cilician-fir/v01_source/Blender-Abies cilicica/Abies cilicica.blend
+Authoring/Flora/SpeedTree/EvergreenPilot/v01_export/CF_Flora_EvergreenPilot_v01.fbx
+Both remain too sparse or noisy for this aerial view, even with alpha-coverage mipmaps. Neither is used in the final scene. Export trials are retained outside the Unity Assets folder in the Codex task's work/trees directory. No V3 source files were modified.
+
+Conifer replacement remains an art-selection decision. The weak fir has been removed from this scene; broadleaf replacements give a usable forest/pond composition now.

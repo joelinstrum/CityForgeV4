@@ -1,0 +1,166 @@
+# Unity-generated project state (keep Assets .meta files)
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emoryCaptures/
+/[Rr]ecordings/
+/[Cc]rashReports/
+
+# Build products, player bundles, and generated debug information
+/[Bb]uild/
+/[Bb]uilds/
+/*.app/
+/*_BurstDebugInformation_DoNotShip/
+/*_BackUpThisFolder_ButDontShipItWithYourGame/
+*.apk
+*.aab
+*.ipa
+*.unitypackage
+*.unitypackage.meta
+
+# IDE and OS state
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+Desktop.ini
+.vs/
+.vscode/
+.idea/
+*.csproj
+*.sln
+*.slnx
+*.user
+*.suo
+*.userprefs
+*.pidb
+*.booproj
+*.opendb
+*.VC.db
+
+# Local scripting caches and authoring recovery files
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.blend[0-9]*
+*.blend[0-9]*.meta
+*.tmp
+*.bak
+*.swp
+*~
+
+# Local secrets and signing material
+.env
+.env.*
+!.env.example
+!.env.sample
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+*.jks
+
+# Local evaluation/save data; intentional shipped region presets use .bytes
+*.cfregion
+*.cfregion.bak
+
+# Public source-only repository. Keep local asset libraries out by default.
+/Assets/*
+!/Assets/CityForge/
+!/Assets/CityForge.meta
+/Assets/CityForge/*
+!/Assets/CityForge/Scripts/
+!/Assets/CityForge/Scripts.meta
+!/Assets/CityForge/Rendering/
+!/Assets/CityForge/Rendering.meta
+!/Assets/CityForge/Art/
+!/Assets/CityForge/Art.meta
+
+# CityForge runtime/editor code and shader source only.
+/Assets/CityForge/Scripts/**
+!/Assets/CityForge/Scripts/**/
+!/Assets/CityForge/Scripts/**/*.cs
+!/Assets/CityForge/Scripts/**/*.cs.meta
+/Assets/CityForge/Rendering/**
+!/Assets/CityForge/Rendering/**/
+!/Assets/CityForge/Rendering/**/*.shader
+!/Assets/CityForge/Rendering/**/*.shader.meta
+!/Assets/CityForge/Rendering/**/*.hlsl
+!/Assets/CityForge/Rendering/**/*.hlsl.meta
+!/Assets/CityForge/Rendering/**/*.shadergraph
+!/Assets/CityForge/Rendering/**/*.shadergraph.meta
+!/Assets/CityForge/Rendering/CityForge_URP.asset
+!/Assets/CityForge/Rendering/CityForge_URP.asset.meta
+!/Assets/CityForge/Rendering/CityForge_UniversalRenderer.asset
+!/Assets/CityForge/Rendering/CityForge_UniversalRenderer.asset.meta
+
+# Custom integration shaders live alongside locally installed artwork.
+/Assets/CityForge/Art/**
+!/Assets/CityForge/Art/**/
+!/Assets/CityForge/Art/Environment/MeadowNativeURP/Integration/**/*.shader
+!/Assets/CityForge/Art/Environment/MeadowNativeURP/Integration/**/*.shader.meta
+!/Assets/CityForge/Art/Environment/MeadowNativeURP/Integration/**/*.hlsl
+!/Assets/CityForge/Art/Environment/MeadowNativeURP/Integration/**/*.hlsl.meta
+!/Assets/CityForge/Art/Environment/CohesiveMeadowStudy/*.shader
+!/Assets/CityForge/Art/Environment/CohesiveMeadowStudy/*.shader.meta
+!/Assets/CityForge/Art/Environment/NaturalTerrainLab/*.shader
+!/Assets/CityForge/Art/Environment/NaturalTerrainLab/*.shader.meta
+!/Assets/CityForge/Art/Environment/MapMagicMeadowStudy/*.shader
+!/Assets/CityForge/Art/Environment/MapMagicMeadowStudy/*.shader.meta
+!/Assets/CityForge/Art/Environment/TerrainLookStudy/*.shader
+!/Assets/CityForge/Art/Environment/TerrainLookStudy/*.shader.meta
+
+# Embedded third-party packages stay local; registry manifests are public.
+/Packages/*
+!/Packages/manifest.json
+!/Packages/packages-lock.json
+
+# Artwork, screenshots and reference images are local; keep text design docs.
+/Documentation/**
+!/Documentation/**/
+!/Documentation/**/*.md
+!/Documentation/**/*.txt
+
+# Authoring assets and downloaded source packages stay local.
+/SourceAssets/**
+!/SourceAssets/**/
+!/SourceAssets/**/*.py
+/Tools/**
+!/Tools/**/
+!/Tools/**/*.py
+
+# Customized copies of commercial NatureManufacture shaders stay local too.
+/Assets/CityForge/Rendering/Seasons/AutumnFoliage.shader
+/Assets/CityForge/Rendering/Seasons/AutumnFoliage.shader.meta
+/Assets/CityForge/Rendering/Seasons/AutumnCross.shader
+/Assets/CityForge/Rendering/Seasons/AutumnCross.shader.meta
+# Downloaded third-party Blender add-on source is not CityForge code.
+/SourceAssets/Trees/AmericanElmFresh/Generator/
+
+# Preserve GUIDs of included source folders.
+!/Assets/CityForge/Art/Environment/CohesiveMeadowStudy.meta
+!/Assets/CityForge/Art/Environment/MapMagicMeadowStudy.meta
+!/Assets/CityForge/Art/Environment/MeadowNativeURP/Integration/Polish.meta
+!/Assets/CityForge/Art/Environment/MeadowNativeURP/Integration.meta
+!/Assets/CityForge/Art/Environment/MeadowNativeURP.meta
+!/Assets/CityForge/Art/Environment/NaturalTerrainLab.meta
+!/Assets/CityForge/Art/Environment/TerrainLookStudy.meta
+!/Assets/CityForge/Art/Environment.meta
+!/Assets/CityForge/Art.meta
+!/Assets/CityForge/Rendering/Coasts.meta
+!/Assets/CityForge/Rendering/Mountains.meta
+!/Assets/CityForge/Rendering/Region.meta
+!/Assets/CityForge/Rendering/Water.meta
+!/Assets/CityForge/Rendering.meta
+!/Assets/CityForge/Scripts/Camera.meta
+!/Assets/CityForge/Scripts/Editor.meta
+!/Assets/CityForge/Scripts/Environment.meta
+!/Assets/CityForge/Scripts/UI.meta
+!/Assets/CityForge/Scripts/World.meta
+!/Assets/CityForge/Scripts.meta
+!/Assets/CityForge.meta

@@ -1,0 +1,1 @@
+using UnityEngine;namespace CityForge.World {public static class MountainSurfaceTreatment {public static bool Enabled=true;[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]static void Reset(){Enabled=true;}}}

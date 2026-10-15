@@ -1,0 +1,340 @@
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
+
+namespace CityForge.UI
+{
+    /// <summary>A reusable, screen-relative modal shell with a clipped scrolling body.</summary>
+    public sealed class CityForgeModal : MonoBehaviour
+    {
+        [SerializeField] private Button backdropButton;
+        [SerializeField] private Button closeButton;
+        [SerializeField] private RawImage heroIcon;
+        [SerializeField] private Text headerLabel;
+        [SerializeField] private Text bodyLabel;
+        [SerializeField] private Text footerLabel;
+        [SerializeField] private ScrollRect bodyScroll;
+        [SerializeField] private RectTransform bodyViewport;
+        [SerializeField] private GameObject createRegionNavigation;
+        [SerializeField] private RawImage[] navigationBackgrounds;
+        [SerializeField] private Button[] navigationButtons;
+        [SerializeField] private Texture2D navigationButtonTexture;
+        [SerializeField] private GameObject createRegionBasicSettings;
+        [SerializeField] private InputField regionNameInput;
+        [SerializeField] private Dropdown regionSizeInput;
+        [SerializeField] private Text eraValue;
+        [SerializeField] private Button eraPrevious;
+        [SerializeField] private Button eraNext;
+        [SerializeField] private Text periodValue;
+        [SerializeField] private Button periodPrevious;
+        [SerializeField] private Button periodNext;
+        [SerializeField] private Text periodYears;
+        [SerializeField] private Button nextButton;
+        [SerializeField] private GameObject createRegionTerrainIntro;
+        [SerializeField] private Button terrainNextButton;
+
+        private InputField generationSeed;
+        private GameObject savedRegionList;
+        private const float NavigationWidth = 270f;
+        private int selectedNavigationIndex;
+        private int selectedEraIndex;
+        private int selectedPeriodIndex;
+
+        public CityForge.World.RegionSize SelectedSize => regionSizeInput != null ? (CityForge.World.RegionSize)regionSizeInput.value : CityForge.World.RegionSize.Medium;
+        public void SetRegionSize(CityForge.World.RegionSize size) { if (regionSizeInput != null) regionSizeInput.value = (int)size; }
+
+        public string RegionName => regionNameInput != null ? regionNameInput.text : string.Empty;
+        public CityForgeTimeline.Era SelectedEra => CityForgeTimeline.Eras[selectedEraIndex];
+        public CityForgeTimeline.Period SelectedPeriod => SelectedEra.Periods[selectedPeriodIndex];
+        public bool BasicSettingsComplete => CountLetters(RegionName) >= 2;
+
+        public void SetRegionName(string name)
+        {
+            if (regionNameInput != null) regionNameInput.text = name ?? string.Empty;
+            RefreshProgression();
+        }
+
+        public void Configure(Button backdrop, Button close, RawImage icon, Text header,
+            Text body, Text footer, ScrollRect scroll)
+        {
+            backdropButton = backdrop;
+            closeButton = close;
+            heroIcon = icon;
+            headerLabel = header;
+            bodyLabel = body;
+            footerLabel = footer;
+            bodyScroll = scroll;
+            bodyViewport = scroll != null ? scroll.GetComponent<RectTransform>() : null;
+        }
+
+        public void ConfigureCreateRegionNavigation(GameObject navigation, RawImage[] backgrounds,
+            Button[] buttons, Texture2D buttonTexture)
+        {
+            createRegionNavigation = navigation;
+            navigationBackgrounds = backgrounds;
+            navigationButtons = buttons;
+            navigationButtonTexture = buttonTexture;
+        }
+
+        public void ConfigureCreateRegionSettings(GameObject settings, InputField nameInput,
+            Text era, Button previousEra, Button nextEra, Text period,
+            Button previousPeriod, Button nextPeriod, Text years, Button next,
+            GameObject terrainIntro, Button terrainNext, Dropdown sizeInput)
+        {
+            createRegionBasicSettings = settings;
+            regionNameInput = nameInput;
+            regionSizeInput = sizeInput;
+            eraValue = era;
+            eraPrevious = previousEra;
+            eraNext = nextEra;
+            periodValue = period;
+            periodPrevious = previousPeriod;
+            periodNext = nextPeriod;
+            periodYears = years;
+            nextButton = next;
+            createRegionTerrainIntro = terrainIntro;
+            terrainNextButton = terrainNext;
+        }
+
+        private void Awake()
+        {
+            if (backdropButton != null) backdropButton.onClick.AddListener(Close);
+            if (closeButton != null) closeButton.onClick.AddListener(Close);
+            if (eraPrevious != null) eraPrevious.onClick.AddListener(() => ChangeEra(-1));
+            if (eraNext != null) eraNext.onClick.AddListener(() => ChangeEra(1));
+            if (periodPrevious != null) periodPrevious.onClick.AddListener(() => ChangePeriod(-1));
+            if (periodNext != null) periodNext.onClick.AddListener(() => ChangePeriod(1));
+            if (regionNameInput != null) regionNameInput.onValueChanged.AddListener(_ => RefreshProgression());
+            if (nextButton != null) nextButton.onClick.AddListener(() => SelectCreateRegionSection(1));
+            if (terrainNextButton != null) terrainNextButton.onClick.AddListener(CreatePrototypeRegion);
+            RefreshTimeSelection();
+            if (navigationButtons != null)
+            {
+                for (var index = 0; index < navigationButtons.Length; index++)
+                {
+                    var selectedIndex = index;
+                    if (navigationButtons[index] != null)
+                        navigationButtons[index].onClick.AddListener(() => SelectCreateRegionSection(selectedIndex));
+                }
+            }
+        }
+
+        public void Show(string header, string body, Texture iconTexture, Rect iconUv, string footer)
+        {
+            if(savedRegionList)savedRegionList.SetActive(false);
+            SetCreateRegionNavigationVisible(false);
+            if (createRegionBasicSettings != null) createRegionBasicSettings.SetActive(false);
+            if (createRegionTerrainIntro != null) createRegionTerrainIntro.SetActive(false);
+            if (bodyLabel != null) bodyLabel.gameObject.SetActive(true);
+            if (headerLabel != null) headerLabel.text = header;
+            if (bodyLabel != null) bodyLabel.text = body;
+            if (footerLabel != null) footerLabel.text = footer;
+            if (heroIcon != null)
+            {
+                heroIcon.gameObject.SetActive(iconTexture != null);
+                heroIcon.texture = iconTexture;
+                heroIcon.uvRect = iconUv;
+            }
+
+            gameObject.SetActive(true);
+            Canvas.ForceUpdateCanvases();
+            if (bodyScroll != null) bodyScroll.verticalNormalizedPosition = 1f;
+        }
+
+        public void ShowSavedRegions(System.Collections.Generic.List<World.SavedRegionInfo> regions,System.Action<World.SavedRegionInfo> open)
+        {
+            if(savedRegionList){savedRegionList.SetActive(false);Destroy(savedRegionList);}
+            savedRegionList=new GameObject("SavedRegionList",typeof(RectTransform),typeof(VerticalLayoutGroup));savedRegionList.transform.SetParent(bodyScroll.content,false);
+            var layout=savedRegionList.GetComponent<VerticalLayoutGroup>();layout.spacing=12;layout.childControlWidth=true;layout.childControlHeight=true;layout.childForceExpandWidth=true;layout.childForceExpandHeight=false;
+            bodyLabel.gameObject.SetActive(false);
+            foreach(var entry in regions){
+                var region=entry;
+                var row=new GameObject("OpenRegion_"+region.id,typeof(RectTransform),typeof(Image),typeof(Button),typeof(LayoutElement));row.transform.SetParent(savedRegionList.transform,false);row.GetComponent<LayoutElement>().preferredHeight=104;
+                row.GetComponent<Image>().color=new Color(.12f,.15f,.14f,.98f);var colors=row.GetComponent<Button>().colors;colors.highlightedColor=new Color(.78f,.87f,.78f);colors.pressedColor=new Color(.65f,.76f,.65f);row.GetComponent<Button>().colors=colors;
+                var name=SavedText(row.transform,"Name",region.name,27);name.rectTransform.anchorMin=new Vector2(0,1);name.rectTransform.anchorMax=new Vector2(1,1);name.rectTransform.pivot=new Vector2(0,1);name.rectTransform.offsetMin=new Vector2(24,-52);name.rectTransform.offsetMax=new Vector2(-150,-14);
+                string district=region.district==3?"Northeast district":region.district<0?"Region overview":"District "+(region.district+1);
+                var detail=SavedText(row.transform,"Details",((World.RegionSize)region.size)+" region  ·  "+district,18);detail.color=new Color(.72f,.76f,.70f);detail.rectTransform.anchorMin=new Vector2(0,0);detail.rectTransform.anchorMax=new Vector2(1,0);detail.rectTransform.pivot=new Vector2(0,0);detail.rectTransform.offsetMin=new Vector2(24,18);detail.rectTransform.offsetMax=new Vector2(-150,45);
+                var action=SavedText(row.transform,"OpenLabel","OPEN",21);action.alignment=TextAnchor.MiddleRight;action.rectTransform.anchorMin=new Vector2(1,0);action.rectTransform.anchorMax=Vector2.one;action.rectTransform.offsetMin=new Vector2(-140,0);action.rectTransform.offsetMax=new Vector2(-24,0);
+                row.GetComponent<Button>().onClick.AddListener(()=>open(region));
+            }
+            if(regions.Count==0){bodyLabel.gameObject.SetActive(true);bodyLabel.text="No saved regions yet. Use Save Region while viewing a region.";}
+            Canvas.ForceUpdateCanvases();bodyScroll.verticalNormalizedPosition=1;
+            var first=savedRegionList.GetComponentInChildren<Button>();if(first&&EventSystem.current)EventSystem.current.SetSelectedGameObject(first.gameObject);
+        }
+        Text SavedText(Transform parent,string name,string value,int size)
+        {
+            var go=new GameObject(name,typeof(RectTransform),typeof(Text));go.transform.SetParent(parent,false);var text=go.GetComponent<Text>();text.text=value;text.font=bodyLabel.font;text.fontSize=size;text.color=new Color(.92f,.91f,.82f);text.raycastTarget=false;text.horizontalOverflow=HorizontalWrapMode.Wrap;return text;
+        }
+
+        public void ShowCreateRegion(string header, Texture iconTexture, Rect iconUv, string footer)
+        {
+            Show(header, string.Empty, iconTexture, iconUv, footer);
+            SetCreateRegionNavigationVisible(true);
+            if (bodyLabel != null) bodyLabel.gameObject.SetActive(false);
+            ConfigureGenerationControls();
+            RefreshTimeSelection();
+            SelectCreateRegionSection(0);
+            RefreshProgression();
+            if (Application.isPlaying && regionNameInput != null)
+            {
+                if (EventSystem.current != null)
+                    EventSystem.current.SetSelectedGameObject(regionNameInput.gameObject);
+                regionNameInput.ActivateInputField();
+            }
+        }
+
+        private void ChangeEra(int direction)
+        {
+            SelectEra((selectedEraIndex + direction + CityForgeTimeline.Eras.Length)
+                % CityForgeTimeline.Eras.Length);
+        }
+
+        public void SelectEra(int index)
+        {
+            if (index < 0 || index >= CityForgeTimeline.Eras.Length) return;
+            selectedEraIndex = index;
+            selectedPeriodIndex = 0;
+            RefreshTimeSelection();
+        }
+
+        private void ChangePeriod(int direction)
+        {
+            var periods = CityForgeTimeline.Eras[selectedEraIndex].Periods;
+            SelectPeriod((selectedPeriodIndex + direction + periods.Length) % periods.Length);
+        }
+
+        public void SelectPeriod(int index)
+        {
+            if (index < 0 || index >= SelectedEra.Periods.Length) return;
+            selectedPeriodIndex = index;
+            RefreshTimeSelection();
+        }
+
+        private void RefreshTimeSelection()
+        {
+            var era = CityForgeTimeline.Eras[selectedEraIndex];
+            var period = era.Periods[selectedPeriodIndex];
+            if (eraValue != null) eraValue.text = era.Name;
+            if (periodValue != null) periodValue.text = period.Name;
+            if (periodYears != null)
+                periodYears.text = period.FirstYear + "–" + period.LastYear;
+        }
+
+        public void SelectCreateRegionSection(int index)
+        {
+            if (navigationBackgrounds == null || index < 0 || index >= navigationBackgrounds.Length)
+                return;
+            if (index == 1 && !BasicSettingsComplete) return;
+            if (index > 1) return;
+
+            selectedNavigationIndex = index;
+            if (createRegionBasicSettings != null)
+                createRegionBasicSettings.SetActive(index == 0);
+            if (createRegionTerrainIntro != null)
+                createRegionTerrainIntro.SetActive(index == 1);
+            for (var i = 0; i < navigationBackgrounds.Length; i++)
+            {
+                var image = navigationBackgrounds[i];
+                if (image == null) continue;
+                image.texture = navigationButtonTexture;
+                // Top strip: unselected. Middle strip: illuminated selection.
+                image.uvRect = i == selectedNavigationIndex
+                    ? PixelUv(0f, 196f, 1070f, 242f, 1070f, 635f)
+                    : PixelUv(0f, 0f, 1070f, 192f, 1070f, 635f);
+            }
+            if (bodyScroll != null) bodyScroll.verticalNormalizedPosition = 1f;
+        }
+
+        private void RefreshProgression()
+        {
+            var nameIsValid = BasicSettingsComplete;
+            var canCreate = nameIsValid && (!generationSeed || int.TryParse(generationSeed.text,out _));
+            if (terrainNextButton != null)
+            {
+                terrainNextButton.interactable = canCreate;
+                terrainNextButton.GetComponent<CanvasGroup>().alpha = canCreate ? 1f : 0.4f;
+            }
+            if (!nameIsValid && selectedNavigationIndex > 0)
+                SelectCreateRegionSection(0);
+            if (nextButton != null)
+            {
+                nextButton.interactable = nameIsValid;
+                var group = nextButton.GetComponent<CanvasGroup>();
+                if (group != null) group.alpha = nameIsValid ? 1f : 0.4f;
+            }
+            if (navigationButtons == null) return;
+            for (var i = 0; i < navigationButtons.Length; i++)
+            {
+                var unlocked = i == 0 || (i == 1 && nameIsValid);
+                if (navigationButtons[i] == null) continue;
+                navigationButtons[i].interactable = unlocked;
+                var group = navigationButtons[i].GetComponent<CanvasGroup>();
+                if (group != null) group.alpha = unlocked ? 1f : 0.4f;
+            }
+        }
+
+        private static int CountLetters(string value)
+        {
+            var count = 0;
+            foreach (var character in value)
+                if (char.IsLetter(character)) count++;
+            return count;
+        }
+
+        public void CreatePrototypeRegion()
+        {
+            if (!Application.isPlaying || !BasicSettingsComplete || (generationSeed && !int.TryParse(generationSeed.text,out _))) return;
+            var controller = FindFirstObjectByType<MainMenuController>();
+            if (controller != null) controller.CreatePrototypeRegion(RegionName, SelectedSize, ReadCreationSettings());
+        }
+
+        Dropdown TerrainChoice(string name) => createRegionTerrainIntro.transform.Find(name+"Dropdown").GetComponent<Dropdown>();
+        public World.RegionCreationSettings ReadCreationSettings()
+        {
+            return new World.RegionCreationSettings { seed=generationSeed&&int.TryParse(generationSeed.text,out var seed)?seed:World.PrototypeRegionData.DefaultSeed,
+                topography=TerrainChoice("Topography").value,rivers=TerrainChoice("Rivers").value,streams=TerrainChoice("Streams").value,
+                era=SelectedEra.Name,period=SelectedPeriod.Name };
+        }
+        void ConfigureGenerationControls()
+        {
+            if(!createRegionTerrainIntro||generationSeed)return;
+            var parent=createRegionTerrainIntro.transform;
+            TerrainChoice("Climate").ClearOptions();TerrainChoice("Climate").AddOptions(new System.Collections.Generic.List<string>{"Temperate (first release)"});TerrainChoice("Climate").interactable=false;
+            TerrainChoice("Land Type").ClearOptions();TerrainChoice("Land Type").AddOptions(new System.Collections.Generic.List<string>{"Inland (first release)"});TerrainChoice("Land Type").interactable=false;
+            parent.Find("ClimateNote").GetComponent<Text>().text="Other climates are not implemented yet.";
+            parent.Find("CoastalNote").GetComponent<Text>().text="Four equal districts. Alternate land types follow later.";
+            parent.Find("SectionDescription").GetComponent<Text>().text="Choose inland terrain and waterways, then create your map.";
+            var label=Instantiate(parent.Find("StreamsLabel").gameObject,parent);label.name="SeedLabel";label.GetComponent<Text>().text="MAP SEED";
+            label.GetComponent<RectTransform>().anchoredPosition=new Vector2(425,-315);
+            generationSeed=Instantiate(regionNameInput,parent);generationSeed.name="MapSeedInput";
+            var rect=generationSeed.GetComponent<RectTransform>();rect.anchorMin=rect.anchorMax=rect.pivot=new Vector2(0,1);rect.anchoredPosition=new Vector2(425,-349);rect.sizeDelta=new Vector2(350,48);
+            generationSeed.onValueChanged=new InputField.OnChangeEvent();generationSeed.onEndEdit=new InputField.EndEditEvent();
+            generationSeed.characterValidation=InputField.CharacterValidation.Integer;generationSeed.characterLimit=11;generationSeed.text=World.PrototypeRegionData.DefaultSeed.ToString();
+            generationSeed.onValueChanged.AddListener(_=>RefreshProgression());
+            terrainNextButton.GetComponentInChildren<Text>().text="CREATE MAP";
+        }
+
+        private void SetCreateRegionNavigationVisible(bool visible)
+        {
+            if (createRegionNavigation != null) createRegionNavigation.SetActive(visible);
+            if (bodyViewport != null)
+            {
+                var offset = bodyViewport.offsetMin;
+                offset.x = visible ? NavigationWidth : 0f;
+                bodyViewport.offsetMin = offset;
+            }
+        }
+
+        private static Rect PixelUv(float x, float y, float width, float height,
+            float textureWidth, float textureHeight)
+        {
+            return new Rect(x / textureWidth, 1f - (y + height) / textureHeight,
+                width / textureWidth, height / textureHeight);
+        }
+
+        public void Close()
+        {
+            gameObject.SetActive(false);
+        }
+    }
+}

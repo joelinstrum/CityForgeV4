@@ -1,0 +1,66 @@
+using System;
+using System.IO;
+using System.Linq;
+using System.Collections.Generic;
+using System.Reflection;
+using UnityEditor;
+using UnityEditor.SceneManagement;
+using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
+using CityForge.CameraSystem;
+using Den.Tools;
+using Den.Tools.Matrices;
+using MapMagic.Core;
+using MapMagic.Nodes;
+using MapMagic.Nodes.MatrixGenerators;
+using MapMagic.Nodes.ObjectsGenerators;
+using MapMagic.Products;
+using MapMagic.Terrains;
+namespace CityForge.Editor {
+[InitializeOnLoad] public static class ObjectsWoodlandStudy {
+const string Root="Assets/CityForge/Art/Environment/ObjectsWoodlandStudy/";
+const string Work="/Users/joelinstrum/Documents/Codex/2026-10-08/tre/work/";
+static Camera camera; static double captureAt;
+static ObjectsWoodlandStudy(){EditorApplication.update+=Tick;}
+static void Tick(){if(EditorApplication.isPlaying||EditorApplication.isCompiling)return; if(File.Exists(Work+"objects-woodland")){File.Delete(Work+"objects-woodland");try{Run();}catch(Exception e){Debug.LogException(e);}} if(captureAt>0&&EditorApplication.timeSinceStartup>captureAt){captureAt=0;Capture("ObjectsWoodland_Zoom1");var rig=camera.GetComponent<CityForgeCameraController>();rig.SetZoomLevel(2);rig.ApplyPose();Capture("ObjectsWoodland_Overview");rig.SetZoomLevel(1);rig.ApplyPose();}}
+static float PathX(float z)=>112+18*Mathf.Sin(z*.026f)+.12f*(z-128);
+static float N(float x,float z,float scale)=>Mathf.PerlinNoise(x/scale+31,z/scale+59);
+static float Grove(float x,float z,float cx,float cz,float radius){float d=Vector2.Distance(new Vector2(x,z),new Vector2(cx,cz));return 1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(radius*.4f,radius,d));}
+static float Suitability(float x,float z){float groves=Mathf.Max(Mathf.Max(Grove(x,z,48,88,66),Grove(x,z,193,102,65)),Mathf.Max(Grove(x,z,65,206,78),Grove(x,z,208,219,63)));groves=Mathf.Clamp01(groves+(N(x,z,22)-.5f)*.6f);float path=Mathf.SmoothStep(0,1,Mathf.InverseLerp(6,12,Mathf.Abs(x-PathX(z))));float valley=Mathf.SmoothStep(0,1,Mathf.InverseLerp(20,47,Mathf.Abs(x-(120+12*Mathf.Sin(z*.022f)))));float edge=Mathf.SmoothStep(0,1,Mathf.InverseLerp(6,18,Mathf.Min(Mathf.Min(x,z),Mathf.Min(256-x,256-z))));return groves*path*Mathf.Max(valley,Mathf.SmoothStep(0,1,Mathf.InverseLerp(159,201,z)))*edge;}
+static MatrixAsset MakeMap(string name,Func<float,float,float> value){var ma=ScriptableObject.CreateInstance<MatrixAsset>();ma.name=name;ma.source=MatrixAsset.Source.New;ma.matrix=new Matrix(new CoordRect(0,0,256,256));for(int z=0;z<256;z++)for(int x=0;x<256;x++)ma.matrix.arr[z*256+x]=value(x,z);return Save(ma,Root+name+".asset");}
+static T Add<T>(Graph graph,T gen,float x,float y) where T:Generator {gen.id=Den.Tools.Id.Generate();if(gen is IMultiInlet multi)foreach(IUnit inlet in multi.Inlets()){inlet.SetGen(gen);inlet.Id=Den.Tools.Id.Generate();}gen.guiPosition=new Vector2(x,y);graph.Add(gen);return gen;}
+static ObjectsOutput Branch(Graph graph,MatrixAsset map,GameObject[] prefabs,float density,Vector2 scale,int seed,float y,bool forest){
+var import=Add(graph,new Import200{matrixAsset=map},0,y);
+var scatter=Add(graph,new Scatter200{density=density,uniformity=.15f,relax=.25f,seed=seed},210,y);
+IOutlet<TransitionsList> source=scatter;
+if(forest){var grow=Add(graph,new Forest200{years=55,density=12000,fecundity=.65f,seedDist=15,reproductiveAge=5,survivalRate=.995f,sizeIsLife=false,seed=seed+1},410,y);graph.Link(scatter,grow.seedlingsIn);graph.Link(import,grow.soilIn);source=grow;}
+var mask=Add(graph,new MapMagic.Nodes.ObjectsGenerators.Mask200{seed=seed+2},forest?620:410,y);graph.Link(source,mask.srcIn);graph.Link(import,mask.maskIn);
+var adjust=Add(graph,new Adjust200{useRandom=true,scale=scale,rotation=new Vector2(0,360),seed=seed+3},forest?830:620,y);graph.Link(mask,adjust.input);
+var output=Add(graph,new ObjectsOutput{prefabs=prefabs,seed=seed+4,posSettings=new PositioningSettings{relativeHeight=true,objHeight=false,useRotation=true,rotateYonly=true,useScale=true}},forest?1040:830,y);graph.Link(adjust,output);return output;
+}
+static GameObject[] TreeVariants(){var result=new List<GameObject>();Color[] colors={new Color(.27f,.43f,.14f),new Color(.32f,.46f,.16f),new Color(.36f,.46f,.18f)};for(int i=1;i<=10;i++){var src=AssetDatabase.LoadAssetAtPath<GameObject>("Assets/CityForge/Art/Environment/ForestTreesTrial/medium_poly_"+i+".prefab");var go=UnityEngine.Object.Instantiate(src);go.name="Woodland tree "+i;var mat=new Material(AssetDatabase.LoadAssetAtPath<Material>("Assets/CityForge/Art/Environment/ForestTreesTrial/Leaves.mat"));mat.SetColor("_BaseColor",colors[(i-1)%3]);mat=Save(mat,Root+"Leaves"+i+".mat");foreach(var r in go.GetComponentsInChildren<Renderer>())r.sharedMaterials=r.sharedMaterials.Select(m=>m.name.StartsWith("Leaves")?mat:m).ToArray();result.Add(PrefabUtility.SaveAsPrefabAsset(go,Root+"Tree"+i+".prefab"));UnityEngine.Object.DestroyImmediate(go);}return result.ToArray();}
+static GameObject[] Stones(){var mat=new Material(Shader.Find("Universal Render Pipeline/Lit"));mat.SetColor("_BaseColor",new Color(.39f,.385f,.34f));mat.SetFloat("_Smoothness",.06f);mat=Save(mat,Root+"Stone.mat");var result=new List<GameObject>();for(int i=1;i<=3;i++){var model=AssetDatabase.LoadAssetAtPath<GameObject>("Assets/MapMagic/Demo/Stones/Meshes/Stone0"+i+".fbx");var root=new GameObject("Woodland stone "+i);var child=UnityEngine.Object.Instantiate(model,root.transform);foreach(var r in child.GetComponentsInChildren<Renderer>())r.sharedMaterials=r.sharedMaterials.Select(m=>mat).ToArray();var bounds=child.GetComponentsInChildren<Renderer>()[0].bounds;foreach(var r in child.GetComponentsInChildren<Renderer>())bounds.Encapsulate(r.bounds);float scale=2.5f/Mathf.Max(bounds.size.x,bounds.size.z);child.transform.localScale*=scale;child.transform.localPosition=new Vector3(-bounds.center.x,-bounds.min.y-.15f,-bounds.center.z)*scale;result.Add(PrefabUtility.SaveAsPrefabAsset(root,Root+"Stone"+i+".prefab"));UnityEngine.Object.DestroyImmediate(root);}return result.ToArray();}
+[MenuItem("CityForge/Ground Study/MapMagic Objects Woodland Zoom 1")]
+public static void Run(){Directory.CreateDirectory(Root);AssetDatabase.Refresh();var scene=EditorSceneManager.OpenScene("Assets/CityForge/Art/Environment/HillsValleyStudy/HillsValleyZoom1.unity",OpenSceneMode.Single);var terrain=UnityEngine.Object.FindFirstObjectByType<Terrain>(FindObjectsInactive.Include);var oldTrees=scene.GetRootGameObjects().First(g=>g.name.StartsWith("Forest pack woodland"));UnityEngine.Object.DestroyImmediate(oldTrees);
+var trees=TreeVariants();var stones=Stones();var woodland=MakeMap("WoodlandSuitability",Suitability);var understory=MakeMap("SaplingSuitability",(x,z)=>Suitability(x,z)*(.3f+.7f*N(x,z,8)));var rockMap=MakeMap("StoneSuitability",(x,z)=>Suitability(x,z)*Mathf.SmoothStep(0,1,Mathf.InverseLerp(5,16,HillsValleyStudy.Height(x,z)))*(.35f+.65f*N(x,z,13)));
+var graph=ScriptableObject.CreateInstance<Graph>();graph.name="Woodland objects on approved hills";graph.random=new Noise(730421,32768);
+Branch(graph,woodland,trees,1800,new Vector2(.65f,1.05f),4123,0,true);
+Branch(graph,understory,trees,7500,new Vector2(.12f,.28f),6821,380,false);
+Branch(graph,rockMap,stones,1500,new Vector2(.5f,1.6f),9524,720,false);
+graph=Save(graph,Root+"WoodlandObjectsGraph.asset");AssetDatabase.SaveAssets();
+var data=new MapMagic.Products.TileData{area=new Area(new Vector2D(0,0),new Vector2D(256,256),256,0),globals=new Globals{height=80},random=graph.random};data.heights=new MatrixWorld(data.area.full.rect,data.area.full.worldPos,data.area.full.worldSize,80);for(int z=0;z<256;z++)for(int x=0;x<256;x++)data.heights.arr[z*256+x]=HillsValleyStudy.Height(x,z)/80;
+var stop=new StopToken();graph.Prepare(data,terrain);graph.Generate(data,stop);graph.Finalize(data,stop);var applied=data.ApplyOfType<ObjectsOutput.ApplyObjectsData>();if(applied==null)throw new Exception("MapMagic produced no Objects output");
+var woodlandRoot=new GameObject("MapMagic generated woodland, saplings and stones");int adults=0,young=0,rocks=0;for(int i=0;i<applied.prototypes.Length;i++){var prefab=applied.prototypes[i].prefab;foreach(var tr in applied.transitions[i]){var obj=(GameObject)PrefabUtility.InstantiatePrefab(prefab,scene);obj.transform.SetParent(woodlandRoot.transform,false);obj.transform.position=tr.pos;obj.transform.rotation=tr.rotation;obj.transform.localScale=tr.scale;if(prefab.name.StartsWith("Stone"))rocks++;else if(tr.scale.x<.4f)young++;else adults++;}}
+RebuildGround(scene,woodlandRoot.transform);
+camera=UnityEngine.Object.FindFirstObjectByType<Camera>();var rig=camera.GetComponent<CityForgeCameraController>();rig.FrameArea(2048,120,new Vector3(128,0,128));typeof(CityForgeCameraController).GetField("focus",BindingFlags.NonPublic|BindingFlags.Instance).SetValue(rig,new Vector3(128,18,128));rig.SetZoomLevel(1);rig.ApplyPose();
+AssetDatabase.SaveAssets();EditorSceneManager.SaveScene(scene,Root+"ObjectsWoodlandZoom1.unity");captureAt=EditorApplication.timeSinceStartup+4;File.WriteAllText(Work+"objects-woodland-result.txt",$"Generated through saved MapMagic graph: {adults} mature trees, {young} saplings, {rocks} stones\n");Debug.Log($"OBJECTS WOODLAND READY: {adults} mature trees, {young} saplings, {rocks} stones");}
+static void RebuildGround(UnityEngine.SceneManagement.Scene scene,Transform trees){
+var canopy=new float[512*512];foreach(Transform tree in trees){if(tree.name.StartsWith("Stone")||tree.localScale.x<.4f)continue;var bounds=tree.GetComponentInChildren<Renderer>().bounds;float radius=Mathf.Max(bounds.extents.x,bounds.extents.z)*1.1f+2;for(int z=Mathf.Max(0,(int)((tree.position.z-radius)*2));z<=Mathf.Min(511,(int)((tree.position.z+radius)*2));z++)for(int x=Mathf.Max(0,(int)((tree.position.x-radius)*2));x<=Mathf.Min(511,(int)((tree.position.x+radius)*2));x++){float d=Vector2.Distance(new Vector2(x*.5f,z*.5f),new Vector2(tree.position.x,tree.position.z));canopy[z*512+x]=Mathf.Max(canopy[z*512+x],1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(radius*.3f,radius,d)));}}
+var pixels=new Color[512*512];for(int z=0;z<512;z++)for(int x=0;x<512;x++){float wx=x*.5f,wz=z*.5f,d=Mathf.Abs(wx-PathX(wz))+(N(wx,wz,3)-.5f)*.9f;float path=1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(1.1f,3.1f,d));float shoulder=(1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(2.5f,5.8f,d)))*(.4f+.6f*N(wx,wz,7));pixels[z*512+x]=new Color(Mathf.Clamp01(canopy[z*512+x]+(N(wx,wz,6)-.5f)*.2f),path,shoulder,1);}
+var tex=new Texture2D(512,512,TextureFormat.RGB24,false,true);tex.SetPixels(pixels);tex.Apply();string pathMask=Root+"GroundCoverage.png";File.WriteAllBytes(pathMask,tex.EncodeToPNG());UnityEngine.Object.DestroyImmediate(tex);AssetDatabase.ImportAsset(pathMask);var ti=(TextureImporter)AssetImporter.GetAtPath(pathMask);ti.sRGBTexture=false;ti.wrapMode=TextureWrapMode.Clamp;ti.textureCompression=TextureImporterCompression.Uncompressed;ti.SaveAndReimport();var ground=scene.GetRootGameObjects().First(g=>g.name.StartsWith("Ground with meadow"));var material=new Material(ground.GetComponent<Renderer>().sharedMaterial);material.SetTexture("_Coverage",AssetDatabase.LoadAssetAtPath<Texture2D>(pathMask));material=Save(material,Root+"Ground.mat");ground.GetComponent<Renderer>().sharedMaterial=material;
+var gv=new List<Vector3>();var gn=new List<Vector3>();var gt=new List<int>();var rnd=new System.Random(46023);for(int i=0;i<65000;i++){float x=5+(float)rnd.NextDouble()*246,z=5+(float)rnd.NextDouble()*246;var p=pixels[Mathf.Clamp((int)(z*2),0,511)*512+Mathf.Clamp((int)(x*2),0,511)];if(p.r>.35f||p.g>.05f||N(x,z,5)<.43f)continue;var b=new Vector3(x,HillsValleyStudy.Height(x,z),z);for(int j=0;j<3;j++){float angle=(float)rnd.NextDouble()*6.283f;var side=new Vector3(Mathf.Cos(angle),0,Mathf.Sin(angle))*.06f;int q=gv.Count;gv.Add(b-side);gv.Add(b+side);gv.Add(b+Vector3.up*(.09f+(float)rnd.NextDouble()*.14f)+side*.5f);gn.Add(Vector3.up);gn.Add(Vector3.up);gn.Add(Vector3.up);gt.AddRange(new[]{q,q+1,q+2});}}
+var mesh=new Mesh{indexFormat=IndexFormat.UInt32};mesh.SetVertices(gv);mesh.SetNormals(gn);mesh.SetTriangles(gt,0);mesh.RecalculateBounds();mesh=Save(mesh,Root+"Grass.asset");var grass=scene.GetRootGameObjects().First(g=>g.name.StartsWith("Short meadow grass"));grass.GetComponent<MeshFilter>().sharedMesh=mesh;var grassMat=new Material(material);grassMat.SetFloat("_SurfaceScale",.83f);grass.GetComponent<Renderer>().sharedMaterial=Save(grassMat,Root+"Grass.mat");}
+static T Save<T>(T item,string path) where T:UnityEngine.Object {var old=AssetDatabase.LoadMainAssetAtPath(path);if(old){EditorUtility.CopySerialized(item,old);UnityEngine.Object.DestroyImmediate(item);return (T)old;}AssetDatabase.CreateAsset(item,path);return item;}
+static void Capture(string name){var rt=new RenderTexture(3840,2160,24);rt.Create();var previous=RenderTexture.active;try{RenderPipeline.SubmitRenderRequest(camera,new UniversalRenderPipeline.SingleCameraRequest{destination=rt});RenderTexture.active=rt;var image=new Texture2D(3840,2160,TextureFormat.RGB24,false);image.ReadPixels(new Rect(0,0,3840,2160),0,0);image.Apply();File.WriteAllBytes("/Users/joelinstrum/Documents/Codex/2026-10-08/tre/outputs/"+name+".png",image.EncodeToPNG());UnityEngine.Object.DestroyImmediate(image);}finally{RenderTexture.active=previous;rt.Release();UnityEngine.Object.DestroyImmediate(rt);}}
+}}

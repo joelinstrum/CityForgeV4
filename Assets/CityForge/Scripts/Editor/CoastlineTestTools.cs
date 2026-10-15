@@ -1,0 +1,10 @@
+#if UNITY_EDITOR
+using System.IO;using UnityEditor;using UnityEngine;using CityForge.World;
+namespace CityForge.EditorTools {
+[InitializeOnLoad] public static class CoastlineTestTools {
+ static CoastlineTestTools(){EditorApplication.update+=Poll;}
+ static void Poll(){const string request="Library/Coastline.request";if(EditorApplication.isCompiling||EditorApplication.isUpdating||!File.Exists(request))return;var action=File.ReadAllText(request).Trim();if(!EditorApplication.isPlaying){EditorApplication.isPlaying=true;return;}EditorApplication.isPaused=false;File.Delete(request);if(action=="check")new GameObject("Coastline acceptance").AddComponent<CoastlineAcceptance>();else CityForge.Editor.EditorCoroutineRunner.Begin(Open());}
+ [MenuItem("CityForge/Terrain/Open Coastline Test")] static void Menu(){File.WriteAllText("Library/Coastline.request","open");}
+ static System.Collections.IEnumerator Open(){var old=Object.FindFirstObjectByType<PrototypeRegionView>();if(old)old.ReturnToMenu();yield return null;yield return null;var path=Path.Combine(SavedRegionStore.DirectoryPath,CoastlineTestRegion.Id+".cfregion");if(!File.Exists(path))SavedRegionStore.Save(CoastlineTestRegion.Generate());var saved=SavedRegionStore.Load(path);if(saved.info.coastVersion<2){var backup="/Users/joelinstrum/Documents/Codex/2026-10-12/begin-from-this-handoff-and-start/outputs/Coastline-Before-Bounded.cfregion";if(!File.Exists(backup))File.Copy(path,backup);saved=CoastlineTestRegion.Generate(saved.info.seed);SavedRegionStore.Save(saved);}if(saved.info.waterBodies==null||saved.info.waterBodies.Length!=1||saved.info.waterBodies[0].kind!=WaterBodyKind.Ocean){saved.info.waterBodies=CoastlineTestRegion.Generate().data.WaterBodies;saved.data.WaterBodies=saved.info.waterBodies;SavedRegionStore.Save(saved);}PrototypeRegionView.Open(saved.info.name,Object.FindFirstObjectByType<Canvas>(),snapshot:saved);var view=Object.FindFirstObjectByType<PrototypeRegionView>();view.ApprovedDistrict.SetTreesEnabled(true);view.ApprovedDistrict.SetSmallPlantsEnabled(true);view.ApprovedDistrict.SetFramePacing60(true);Debug.Log("Coastline Test opened with Crest ocean");}
+}}
+#endif

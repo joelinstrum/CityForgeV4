@@ -1,0 +1,12 @@
+# Keep source changes consistent across macOS and other platforms.
+* text=auto
+*.cs text eol=lf
+*.py text eol=lf
+*.shader text eol=lf
+*.hlsl text eol=lf
+*.shadergraph text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.meta text eol=lf
+*.asset text eol=lf
