@@ -151,11 +151,30 @@ namespace CityForge.UI
                 var region=entry;
                 var row=new GameObject("OpenRegion_"+region.id,typeof(RectTransform),typeof(Image),typeof(Button),typeof(LayoutElement));row.transform.SetParent(savedRegionList.transform,false);row.GetComponent<LayoutElement>().preferredHeight=104;
                 row.GetComponent<Image>().color=new Color(.12f,.15f,.14f,.98f);var colors=row.GetComponent<Button>().colors;colors.highlightedColor=new Color(.78f,.87f,.78f);colors.pressedColor=new Color(.65f,.76f,.65f);row.GetComponent<Button>().colors=colors;
-                var name=SavedText(row.transform,"Name",region.name,27);name.rectTransform.anchorMin=new Vector2(0,1);name.rectTransform.anchorMax=new Vector2(1,1);name.rectTransform.pivot=new Vector2(0,1);name.rectTransform.offsetMin=new Vector2(24,-52);name.rectTransform.offsetMax=new Vector2(-150,-14);
+                var name=SavedText(row.transform,"Name",region.name,27);name.rectTransform.anchorMin=new Vector2(0,1);name.rectTransform.anchorMax=new Vector2(1,1);name.rectTransform.pivot=new Vector2(0,1);name.rectTransform.offsetMin=new Vector2(24,-52);name.rectTransform.offsetMax=new Vector2(-290,-14);
                 string district=region.district==3?"Northeast district":region.district<0?"Region overview":"District "+(region.district+1);
-                var detail=SavedText(row.transform,"Details",((World.RegionSize)region.size)+" region  ·  "+district,18);detail.color=new Color(.72f,.76f,.70f);detail.rectTransform.anchorMin=new Vector2(0,0);detail.rectTransform.anchorMax=new Vector2(1,0);detail.rectTransform.pivot=new Vector2(0,0);detail.rectTransform.offsetMin=new Vector2(24,18);detail.rectTransform.offsetMax=new Vector2(-150,45);
-                var action=SavedText(row.transform,"OpenLabel","OPEN",21);action.alignment=TextAnchor.MiddleRight;action.rectTransform.anchorMin=new Vector2(1,0);action.rectTransform.anchorMax=Vector2.one;action.rectTransform.offsetMin=new Vector2(-140,0);action.rectTransform.offsetMax=new Vector2(-24,0);
-                row.GetComponent<Button>().onClick.AddListener(()=>open(region));
+                var detail=SavedText(row.transform,"Details",((World.RegionSize)region.size)+" region  ·  "+district,18);detail.color=new Color(.72f,.76f,.70f);detail.rectTransform.anchorMin=new Vector2(0,0);detail.rectTransform.anchorMax=new Vector2(1,0);detail.rectTransform.pivot=new Vector2(0,0);detail.rectTransform.offsetMin=new Vector2(24,18);detail.rectTransform.offsetMax=new Vector2(-290,45);
+                var action=SavedText(row.transform,"OpenLabel","OPEN",21);action.alignment=TextAnchor.MiddleRight;action.rectTransform.anchorMin=new Vector2(1,0);action.rectTransform.anchorMax=Vector2.one;action.rectTransform.offsetMin=new Vector2(-270,0);action.rectTransform.offsetMax=new Vector2(-155,0);
+                var openButton=row.GetComponent<Button>();
+                openButton.onClick.AddListener(()=>open(region));
+                var deleteObject=new GameObject("DeleteRegion",typeof(RectTransform),typeof(Image),typeof(Button));deleteObject.transform.SetParent(row.transform,false);
+                var deleteRect=deleteObject.GetComponent<RectTransform>();deleteRect.anchorMin=new Vector2(1,.5f);deleteRect.anchorMax=new Vector2(1,.5f);deleteRect.pivot=new Vector2(1,.5f);deleteRect.anchoredPosition=new Vector2(-16,0);deleteRect.sizeDelta=new Vector2(125,64);
+                deleteObject.GetComponent<Image>().color=new Color(.35f,.16f,.14f,1);
+                var deleteLabel=SavedText(deleteObject.transform,"Label","DELETE",19);deleteLabel.alignment=TextAnchor.MiddleCenter;deleteLabel.rectTransform.anchorMin=Vector2.zero;deleteLabel.rectTransform.anchorMax=Vector2.one;deleteLabel.rectTransform.offsetMin=Vector2.zero;deleteLabel.rectTransform.offsetMax=Vector2.zero;
+                bool confirming=false;
+                deleteObject.GetComponent<Button>().onClick.AddListener(()=>{
+                    if(!confirming){
+                        confirming=true;name.text="Delete “"+region.name+"”?";detail.text="Remove this region from your saved regions?";
+                        action.text="CANCEL";deleteLabel.text="CONFIRM";
+                        openButton.onClick.RemoveAllListeners();openButton.onClick.AddListener(()=>{
+                            confirming=false;name.text=region.name;detail.text=((World.RegionSize)region.size)+" region  ·  "+district;action.text="OPEN";deleteLabel.text="DELETE";
+                            openButton.onClick.RemoveAllListeners();openButton.onClick.AddListener(()=>open(region));
+                        });
+                        return;
+                    }
+                    try{World.SavedRegionStore.Delete(region);ShowSavedRegions(World.SavedRegionStore.ListRegions(),open);}
+                    catch(System.Exception error){Debug.LogException(error);detail.text="Could not delete this region. Please try again.";}
+                });
             }
             if(regions.Count==0){bodyLabel.gameObject.SetActive(true);bodyLabel.text="No saved regions yet. Use Save Region while viewing a region.";}
             Canvas.ForceUpdateCanvases();bodyScroll.verticalNormalizedPosition=1;
@@ -292,6 +311,7 @@ namespace CityForge.UI
         public World.RegionCreationSettings ReadCreationSettings()
         {
             return new World.RegionCreationSettings { seed=generationSeed&&int.TryParse(generationSeed.text,out var seed)?seed:World.PrototypeRegionData.DefaultSeed,
+                moisture=(World.RegionMoisture)TerrainChoice("Climate").value,vegetation=(World.RegionVegetation)TerrainChoice("Land Type").value,
                 topography=TerrainChoice("Topography").value,rivers=TerrainChoice("Rivers").value,streams=TerrainChoice("Streams").value,
                 era=SelectedEra.Name,period=SelectedPeriod.Name };
         }
@@ -299,11 +319,12 @@ namespace CityForge.UI
         {
             if(!createRegionTerrainIntro||generationSeed)return;
             var parent=createRegionTerrainIntro.transform;
-            TerrainChoice("Climate").ClearOptions();TerrainChoice("Climate").AddOptions(new System.Collections.Generic.List<string>{"Temperate (first release)"});TerrainChoice("Climate").interactable=false;
-            TerrainChoice("Land Type").ClearOptions();TerrainChoice("Land Type").AddOptions(new System.Collections.Generic.List<string>{"Inland (first release)"});TerrainChoice("Land Type").interactable=false;
-            parent.Find("ClimateNote").GetComponent<Text>().text="Other climates are not implemented yet.";
-            parent.Find("CoastalNote").GetComponent<Text>().text="Four equal districts. Alternate land types follow later.";
-            parent.Find("SectionDescription").GetComponent<Text>().text="Choose inland terrain and waterways, then create your map.";
+            TerrainChoice("Climate").ClearOptions();TerrainChoice("Climate").AddOptions(new System.Collections.Generic.List<string>{"Temperate — balanced", "Temperate — dry", "Temperate — wet"});TerrainChoice("Climate").interactable=true;
+            TerrainChoice("Land Type").ClearOptions();TerrainChoice("Land Type").AddOptions(new System.Collections.Generic.List<string>{"Meadow and woodland", "Open meadow", "Woodland"});TerrainChoice("Land Type").interactable=true;
+            parent.Find("ClimateNote").GetComponent<Text>().text="Moisture influences woodland and riverside vegetation.";
+            parent.Find("Land TypeLabel").GetComponent<Text>().text="VEGETATION";
+            parent.Find("CoastalNote").GetComponent<Text>().text="One inland region, 64 connected districts.";
+            parent.Find("SectionDescription").GetComponent<Text>().text="Shape terrain, waterways, and temperate habitats across an 8 × 8 district grid.";
             var label=Instantiate(parent.Find("StreamsLabel").gameObject,parent);label.name="SeedLabel";label.GetComponent<Text>().text="MAP SEED";
             label.GetComponent<RectTransform>().anchoredPosition=new Vector2(425,-315);
             generationSeed=Instantiate(regionNameInput,parent);generationSeed.name="MapSeedInput";

@@ -12,6 +12,7 @@ namespace CityForge.World
         public const int DefaultSeed = 730421;
         public readonly int Seed;
         public RegionWaterBody[] WaterBodies;
+        public RegionBiomeMap Biomes;
         public RegionWaterBody WaterBodyAt(Vector2 point)
         {
             if(WaterBodies==null)return null;

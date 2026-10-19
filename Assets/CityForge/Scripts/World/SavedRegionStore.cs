@@ -18,6 +18,7 @@ namespace CityForge.World
         // Missing/zero values in older saves migrate to the accepted lake/pond renderer.
         public int lakeWaterVersion=1;
         public RegionCreationSettings creation;
+        public RegionDistrictInfo[] districts;
         public int meadowCacheDistrict=-1;
         public float terrainHeightRange;
         public RegionWaterBody[] waterBodies;
@@ -42,7 +43,7 @@ namespace CityForge.World
         {
             Directory.CreateDirectory(DirectoryPath);
             var path=Path.Combine(DirectoryPath,TestId+".cfregion");
-            if(File.Exists(path))return;
+            if(File.Exists(path)||File.Exists(Path.Combine(DirectoryPath,"Deleted",TestId+".removed")))return;
             var preset=Resources.Load<TextAsset>("Regions/MeadowTestValley");
             if(preset){var temp=path+".tmp";File.WriteAllBytes(temp,preset.bytes);File.Move(temp,path);}
         }
@@ -55,13 +56,34 @@ namespace CityForge.World
             }
             return result.OrderByDescending(x=>x.savedUtc).ToList();
         }
+        /// <summary>Remove a listed save, preserving its file and backup outside the active list.</summary>
+        public static void Delete(SavedRegionInfo region)
+        {
+            if(region==null||string.IsNullOrEmpty(region.path))throw new ArgumentException("Select a saved region.");
+            var path=Path.GetFullPath(region.path);
+            if(Path.GetDirectoryName(path)!=Path.GetFullPath(DirectoryPath)||Path.GetExtension(path)!=".cfregion")
+                throw new ArgumentException("The region is outside the saved region folder.");
+            if(!File.Exists(path))throw new FileNotFoundException("This region has already been removed.",path);
+            var archive=Path.Combine(DirectoryPath,"Deleted",Guid.NewGuid().ToString("N"));Directory.CreateDirectory(archive);
+            var destination=Path.Combine(archive,Path.GetFileName(path));bool movedBackup=false;
+            try{
+                File.Move(path,destination);
+                if(File.Exists(path+".bak")){File.Move(path+".bak",destination+".bak");movedBackup=true;}
+                // Do not silently reinstall the bundled test region after the user deletes it.
+                if(Path.GetFileNameWithoutExtension(path)==TestId)File.WriteAllText(Path.Combine(DirectoryPath,"Deleted",TestId+".removed"),"");
+            }catch{
+                if(movedBackup)File.Move(destination+".bak",path+".bak");
+                if(File.Exists(destination))File.Move(destination,path);
+                throw;
+            }
+        }
         public static SavedRegionSnapshot Capture(PrototypeRegionView view,string id=null,string name=null)
         {
             var baseline=Resources.Load<MeadowRuntimeBaseline>("Region/MeadowRuntimeBaseline");
             var info=new SavedRegionInfo{id=id??view.SavedRegionId??Guid.NewGuid().ToString("N"),name=name??view.RegionName,season=(int)view.Season,terrainHeightRange=view.TerrainHeightRange,seed=view.Data.Seed,size=(int)view.Size,district=view.SelectedDistrict,meadow=view.PrefersMeadow,waterBodies=view.Data.WaterBodies,waterless=view.Waterless,coastline=view.Coastline,coastVersion=view.CoastVersion,minimalRiverCrest=view.MinimalRiverCrest,stillWater=false,lakeWaterVersion=LakeWaterRenderer.UsesCalmWater(view)?1:-1,riverBedVersion=view.RiverBedVersion,savedUtc=DateTime.UtcNow.ToString("O"),baselineVersion=baseline?baseline.generationVersion:0,camera=view.GetComponentInChildren<CameraSystem.CityForgeCameraController>().CaptureRegionState()};
-            info.creation=view.CreationSettings;
-            var pilot=view.ApprovedDistrict;info.meadowCacheDistrict=pilot?pilot.DistrictIndex:-1;
-            return new SavedRegionSnapshot{info=info,data=view.Data,meadow=pilot?pilot.CaptureSnapshot():null};
+            info.creation=view.CreationSettings;info.districts=view.Districts;
+            var pilot=view.ApprovedDistrict;info.meadowCacheDistrict=pilot?pilot.DistrictIndex:view.LoadedMeadowDistrict;
+            return new SavedRegionSnapshot{info=info,data=view.Data,meadow=pilot?pilot.CaptureSnapshot():view.LoadedMeadow};
         }
         public static string Save(SavedRegionSnapshot snapshot)
         {
@@ -98,7 +120,7 @@ namespace CityForge.World
                 var m=new MeadowRegionSnapshot{version=reader.ReadInt32()};int roads=Count(reader,2,1024);m.road=new Vector2[roads];for(int i=0;i<roads;i++){m.road[i]=new Vector2(reader.ReadSingle(),reader.ReadSingle());if(!Finite(m.road[i].x)||!Finite(m.road[i].y)||(i>0&&m.road[i]==m.road[i-1]))throw new InvalidDataException("Invalid saved road.");}
                 int trees=Count(reader,0,200000);m.trees=new TreeInstance[trees];for(int i=0;i<trees;i++){
                     var t=new TreeInstance{position=new Vector3(reader.ReadSingle(),reader.ReadSingle(),reader.ReadSingle()),widthScale=reader.ReadSingle(),heightScale=reader.ReadSingle(),rotation=reader.ReadSingle(),prototypeIndex=reader.ReadInt32(),color=ReadColor(reader),lightmapColor=ReadColor(reader)};
-                    if(!Finite(t.position.x)||!Finite(t.position.y)||!Finite(t.position.z)||t.position.x<0||t.position.x>1||t.position.z<0||t.position.z>1||!Finite(t.widthScale)||!Finite(t.heightScale)||!Finite(t.rotation)||t.widthScale<=0||t.heightScale<=0||t.prototypeIndex<0||t.prototypeIndex>=15)throw new InvalidDataException("Invalid saved tree.");m.trees[i]=t;
+                    if(!Finite(t.position.x)||!Finite(t.position.y)||!Finite(t.position.z)||t.position.x<0||t.position.x>1||t.position.z<0||t.position.z>1||!Finite(t.widthScale)||!Finite(t.heightScale)||!Finite(t.rotation)||t.widthScale<=0||t.heightScale<=0||!ForestTreeMix.IsValidPrototype(t.prototypeIndex,info.id==HillsMountainTestRegion.Id))throw new InvalidDataException("Invalid saved tree.");m.trees[i]=t;
                 }
                 int n=Count(reader,32,4096),layers=Count(reader,1,8);m.alphamaps=new float[n,n,layers];ReadFloats(reader,m.alphamaps);foreach(float value in m.alphamaps)if(!Finite(value)||value<0||value>1)throw new InvalidDataException("Invalid saved ground cover.");result.meadow=m;
             }
@@ -108,7 +130,7 @@ namespace CityForge.World
         static SavedRegionInfo ReadInfo(BinaryReader reader)
         {
             if(reader.ReadString()!=Magic)throw new InvalidDataException("Unsupported saved region.");int length=Count(reader,2,65536);var bytes=reader.ReadBytes(length);if(bytes.Length!=length)throw new EndOfStreamException();
-            var json=Encoding.UTF8.GetString(bytes);var info=JsonUtility.FromJson<SavedRegionInfo>(json);if(info!=null&&!json.Contains("\"meadowCacheDistrict\""))info.meadowCacheDistrict=info.district>=0?info.district:3;if(info==null||info.schema!=1||info.season<0||info.season>2||info.size<0||info.size>2||!Finite(info.terrainHeightRange)||info.terrainHeightRange<0||info.terrainHeightRange>10000||info.district< -1||info.district>3||string.IsNullOrWhiteSpace(info.name))throw new InvalidDataException("Unsupported region metadata.");if(info.creation!=null)info.creation.Validate();return info;
+            var json=Encoding.UTF8.GetString(bytes);var info=JsonUtility.FromJson<SavedRegionInfo>(json);if(info!=null&&!json.Contains("\"meadowCacheDistrict\""))info.meadowCacheDistrict=info.district>=0?info.district:3;if(info==null||info.schema!=1||info.season<0||info.season>2||info.size<0||info.size>2||!Finite(info.terrainHeightRange)||info.terrainHeightRange<0||info.terrainHeightRange>10000||info.district< -1||info.district>=(info.creation?.GridSide??2)*(info.creation?.GridSide??2)||string.IsNullOrWhiteSpace(info.name))throw new InvalidDataException("Unsupported region metadata.");if(info.creation!=null)info.creation.Validate();return info;
         }
         static int Count(BinaryReader reader,int min,int max){int count=reader.ReadInt32();if(count<min||count>max)throw new InvalidDataException("Invalid snapshot dimensions.");return count;}
         static void WriteFloats(BinaryWriter writer,Array values){var buffer=new byte[Buffer.ByteLength(values)];Buffer.BlockCopy(values,0,buffer,0,buffer.Length);writer.Write(buffer);}

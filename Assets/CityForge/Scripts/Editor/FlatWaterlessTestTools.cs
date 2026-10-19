@@ -16,7 +16,7 @@ namespace CityForge.Editor
             if(System.IO.File.Exists(existing))source=World.SavedRegionStore.Load(existing);
             source.info.id="meadow-river-beds-dry";source.info.name="Meadow River Beds — No Water";source.info.waterless=true;source.info.savedUtc=System.DateTime.UtcNow.ToString("O");
             var path=World.SavedRegionStore.Save(source);
-            Object.FindFirstObjectByType<UI.MainMenuController>().OpenSavedRegion(World.SavedRegionStore.Load(path).info);
+            Object.FindFirstObjectByType<UI.MainMenuController>().OpenSavedRegionImmediatelyForTools(World.SavedRegionStore.Load(path).info);
             var view=Object.FindFirstObjectByType<World.PrototypeRegionView>();var pilot=view.ApprovedDistrict;
             if(!view.Waterless||pilot.Water||pilot.Baseline.waterTemplate||pilot.Baseline.fftTemplate||pilot.Baseline.flowMaterial||Object.FindObjectsByType<WaveHarmonic.Crest.WaterRenderer>(FindObjectsInactive.Include,FindObjectsSortMode.None).Length!=0)throw new System.Exception("Unexpected Crest reference in dry landscape.");
             float worst=0;var alpha=pilot.DisplayTerrain.terrainData.GetAlphamaps(0,0,1024,1024);
@@ -33,7 +33,7 @@ namespace CityForge.Editor
             var source=World.SavedRegionStore.Load(System.IO.Path.Combine(World.SavedRegionStore.DirectoryPath,World.SavedRegionStore.TestId+".cfregion"));
             source.info.id="meadow-river-beds-dry";source.info.name="Meadow River Beds — No Water";source.info.waterless=true;source.info.savedUtc=System.DateTime.UtcNow.ToString("O");
             World.DryRiverBedMigration.Apply(source);var path=World.SavedRegionStore.Save(source);
-            Object.FindFirstObjectByType<UI.MainMenuController>().OpenSavedRegion(World.SavedRegionStore.Load(path).info);
+            Object.FindFirstObjectByType<UI.MainMenuController>().OpenSavedRegionImmediatelyForTools(World.SavedRegionStore.Load(path).info);
             var view=Object.FindFirstObjectByType<World.PrototypeRegionView>();var pilot=view.ApprovedDistrict;
             if(!pilot.UsedSavedTerrain||pilot.Water||pilot.DisplayTerrain.terrainData.alphamapLayers!=7)throw new System.Exception("Dry bed restore failed.");
             System.IO.File.WriteAllText("/Users/joelinstrum/Documents/Codex/2026-10-11/be/outputs/Meadow-Deep-River-Beds-Checks.txt","PASS dry saved terrain migrated once: main channel additional 6 m incision, tributary additional 3.5 m; gradual banks; gravel/sand/silt native terrain layers.\nPASS saved seven-layer terrain restored; no water instantiated; trees repositioned to new height and removed from exposed bed.\nOriginal region untouched; previous dry save recoverable from .bak.\n");
@@ -67,7 +67,7 @@ namespace CityForge.Editor
             var source=World.SavedRegionStore.Load(System.IO.Path.Combine(World.SavedRegionStore.DirectoryPath,World.SavedRegionStore.TestId+".cfregion"));
             source.info.id="meadow-single-narrow-river";source.info.name="Meadow — Single Narrow River";source.info.waterless=true;source.info.savedUtc=System.DateTime.UtcNow.ToString("O");
             World.DryRiverBedMigration.Apply(source,true);var path=World.SavedRegionStore.Save(source);
-            Object.FindFirstObjectByType<UI.MainMenuController>().OpenSavedRegion(World.SavedRegionStore.Load(path).info);
+            Object.FindFirstObjectByType<UI.MainMenuController>().OpenSavedRegionImmediatelyForTools(World.SavedRegionStore.Load(path).info);
             var view=Object.FindFirstObjectByType<World.PrototypeRegionView>();var pilot=view.ApprovedDistrict;var renderer=pilot.GetComponent<World.RiverBedRockRenderer>();
             if(pilot.Water||view.RiverBedVersion!=2||!renderer||renderer.RockCount==0)throw new System.Exception("Single river/rocks setup failed.");
             System.IO.File.WriteAllText("/Users/joelinstrum/Documents/Codex/2026-10-11/be/outputs/Meadow-Single-River-Checks.txt","PASS single tributary channel; old main channel filled from neighboring bank heights; dirt-dominant bed, gravel and sand.\nPASS native cached terrain/collider; seeded instanced rock count="+renderer.RockCount+"; no water instantiated.\nSaved separately in Open Region. Existing reference and two-river saves unchanged.\n");
@@ -96,7 +96,7 @@ namespace CityForge.Editor
             }
             var path=System.IO.Path.Combine(World.SavedRegionStore.DirectoryPath,"meadow-single-narrow-river.cfregion");var source=World.SavedRegionStore.Load(path);var before=(float[,])source.data.Heights.Clone();
             World.DryRiverBedMigration.RefineAppearance(source);source.info.savedUtc=System.DateTime.UtcNow.ToString("O");World.SavedRegionStore.Save(source);
-            Object.FindFirstObjectByType<UI.MainMenuController>().OpenSavedRegion(World.SavedRegionStore.Load(path).info);
+            Object.FindFirstObjectByType<UI.MainMenuController>().OpenSavedRegionImmediatelyForTools(World.SavedRegionStore.Load(path).info);
             var view=Object.FindFirstObjectByType<World.PrototypeRegionView>();var pilot=view.ApprovedDistrict;
             for(int z=0;z<513;z++)for(int x=0;x<513;x++)if(view.Data.Heights[z,x]!=before[z,x])throw new System.Exception("Appearance update changed channel geometry.");
             if(pilot.Water||pilot.DisplayTerrain.terrainData.alphamapLayers!=8)throw new System.Exception("Riverbed setup differs.");
@@ -201,7 +201,7 @@ namespace CityForge.Editor
             var source=World.SavedRegionStore.Load(System.IO.Path.Combine(World.SavedRegionStore.DirectoryPath,"meadow-single-narrow-river.cfregion"));
             source.info.id="meadow-narrow-river-crest-trial";source.info.name="Meadow — Narrow River Crest Trial";source.info.waterless=true;source.info.minimalRiverCrest=true;
             source.info.waterBodies=source.data.WaterBodies??World.RegionWaterBody.Generate(source.data,source.info.riverBedVersion,source.info.waterless,1024*Mathf.Pow(2,source.info.size));source.data.WaterBodies=source.info.waterBodies;source.info.savedUtc=System.DateTime.UtcNow.ToString("O");var path=World.SavedRegionStore.Save(source);
-            Object.FindFirstObjectByType<UI.MainMenuController>().OpenSavedRegion(World.SavedRegionStore.Load(path).info);
+            Object.FindFirstObjectByType<UI.MainMenuController>().OpenSavedRegionImmediatelyForTools(World.SavedRegionStore.Load(path).info);
         }
         [MenuItem("CityForge/Meadow Migration/Fix And Open Riverbank Grid Ridging")]
         static void FixBankRidging()
@@ -211,7 +211,7 @@ namespace CityForge.Editor
             int district=source.info.district;float ox=(district%2)*.5f,oz=(district/2)*.5f;
             for(int i=0;i<source.meadow.trees.Length;i++){var t=source.meadow.trees[i];t.position.y=source.data.SmoothHeight(ox+t.position.x*.5f,oz+t.position.z*.5f);source.meadow.trees[i]=t;}
             source.info.camera.zoom=1;source.info.camera.size=40;source.info.savedUtc=System.DateTime.UtcNow.ToString("O");World.SavedRegionStore.Save(source);
-            Object.FindFirstObjectByType<UI.MainMenuController>().OpenSavedRegion(World.SavedRegionStore.Load(path).info);
+            Object.FindFirstObjectByType<UI.MainMenuController>().OpenSavedRegionImmediatelyForTools(World.SavedRegionStore.Load(path).info);
             var view=Object.FindFirstObjectByType<World.PrototypeRegionView>();var pilot=view.ApprovedDistrict;var terrain=pilot.DisplayTerrain;
             if(!terrain.GetComponent<TerrainCollider>().enabled||view.transform.Find("ContinuousRegionTerrain").GetComponent<TerrainCollider>().enabled)throw new System.Exception("River terrain collider mismatch.");
             float worst=0;var hs=terrain.terrainData.GetHeights(0,0,1025,1025);

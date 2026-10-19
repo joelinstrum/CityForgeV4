@@ -8,7 +8,13 @@ public sealed class CoastalWaterClock : MonoBehaviour, ITimeProvider {
  public float Time=>UnityEngine.Time.time*Speed;
  public float Delta=>UnityEngine.Time.deltaTime*Speed;
  public void Initialize(WaterRenderer renderer){water=renderer;}
- void LateUpdate(){if(water&&water.TimeProvider!=this)water.TimeProviders.Push(this);}
+ void LateUpdate(){
+  // Crest initializes its provider stack when enabled. During staged loading or
+  // teardown the renderer can exist before that stack has a default provider.
+  if(!water||!water.isActiveAndEnabled||water.TimeProviders.Count==0)return;
+  if(water.TimeProvider!=this)water.TimeProviders.Push(this);
+ }
+ void OnDisable(){if(water)water.TimeProviders.Pop(this);}
  void OnDestroy(){if(water)water.TimeProviders.Pop(this);}
 }
 }
