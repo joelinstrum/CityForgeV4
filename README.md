@@ -4,6 +4,8 @@ CityForge's Unity 6 / URP prototype: region creation, continuous terrain and dis
 
 This is a **public source-only repository**, not a complete playable Unity project or a backup of the local asset library. Imported artwork, scenes, prefabs, materials, terrain data, images, and commercial packages are intentionally excluded. A fresh clone will need the local assets and third-party dependencies restored before it can compile and run. Some editor utilities also contain machine-specific paths from development studies.
 
+Read [the main development handoff](HANDOFF.md) before continuing implementation. It identifies the approved meadow biome, seasonal tree library, retired prototype assets, and visual preservation requirements.
+
 ## Project configuration
 
 - Unity **6000.1.12f1**
@@ -30,7 +32,7 @@ The `.gitignore` deliberately allows only selected source paths inside the asset
 
 ## Current development state
 
-The first inland region-generation slice connects wizard topography, river count, streams, and seed to generated terrain and water descriptors. Created maps open in overview with four equal districts; creation settings persist with saved terrain. Climate variants and alternate land shapes remain pending.
+The first inland region-generation slice connects wizard topography, river count, streams, and seed to generated terrain and water descriptors. Created maps open in overview with four equal districts; creation settings persist with saved terrain. Temperate moisture and vegetation choices now affect the shared ecology field; alternate land shapes remain pending. Both generated-region views use the approved meadow renderer.
 
 The grass/quilt rendering experiments were rolled back. The approved mountain and meadow shader sources are retained. Oceans and their approved surf settings remain separate from the region-generation work.
 

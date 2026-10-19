@@ -164,3 +164,15 @@ venv/
 !/Assets/CityForge/Scripts/World.meta
 !/Assets/CityForge/Scripts.meta
 !/Assets/CityForge.meta
+
+# Authored relief shader only; biome artwork remains local.
+!/Assets/CityForge/Resources/
+/Assets/CityForge/Resources/**
+!/Assets/CityForge/Resources/Region/
+!/Assets/CityForge/Resources.meta
+!/Assets/CityForge/Resources/Region.meta
+!/Assets/CityForge/Resources/Region/RegionalRelief.shader
+!/Assets/CityForge/Resources/Region/RegionalRelief.shader.meta
+
+!/Assets/CityForge/Resources/Region/RegionalSlab.shader
+!/Assets/CityForge/Resources/Region/RegionalSlab.shader.meta

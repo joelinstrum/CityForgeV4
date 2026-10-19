@@ -59,13 +59,15 @@ namespace CityForge.UI
             RefreshSettingsLabels();
         }
 
+        public bool IsOpeningRegion {get;private set;}
         private void Update()
         {
-            if (Input.GetKeyDown(KeyCode.Escape)) CloseDialog();
+            if (!IsOpeningRegion&&Input.GetKeyDown(KeyCode.Escape)) CloseDialog();
         }
 
         public void Handle(MenuAction action)
         {
+            if(IsOpeningRegion)return;
             switch (action)
             {
                 case MenuAction.OpenRegion:
@@ -159,20 +161,42 @@ namespace CityForge.UI
 
         public void OpenSavedRegion(World.SavedRegionInfo info)
         {
-            if(!Application.isPlaying)return;
-            try{
-                var saved=World.SavedRegionStore.Load(info.path);
-                World.PrototypeRegionView.Open(saved.info.name,largeModal.GetComponentInParent<Canvas>(),snapshot:saved);
-                CloseDialog();
-            }catch(System.Exception e){Debug.LogException(e);ShowRegionModal("OPEN REGION","This saved region could not be opened. Your save file has been kept.",new Rect(10f,105f,405f,395f));}
+            if(!Application.isPlaying||IsOpeningRegion)return;
+            var canvas=largeModal.GetComponentInParent<Canvas>();
+            var label=largeModal.GetComponentInChildren<Text>(true);
+            CloseDialog();IsOpeningRegion=true;
+            var loading=RegionLoadingOverlay.Show(info.name,label?label.font:null);
+            loading.Begin(info,canvas,()=>IsOpeningRegion=false,error=>{
+                Debug.LogException(error);
+                ShowRegionModal("OPEN REGION","This saved region could not be opened. Your save file has been kept.",new Rect(10f,105f,405f,395f));
+            });
         }
+
+#if UNITY_EDITOR
+        // Historical asset-study tools deliberately inspect the result in the same call.
+        public void OpenSavedRegionImmediatelyForTools(World.SavedRegionInfo info)
+        {
+            if(IsOpeningRegion)throw new System.InvalidOperationException("A region is loading.");
+            var saved=World.SavedRegionStore.Load(info.path);
+            World.PrototypeRegionView.Open(saved.info.name,largeModal.GetComponentInParent<Canvas>(),snapshot:saved);
+            CloseDialog();
+        }
+#endif
 
         public void CreatePrototypeRegion(string regionName, CityForge.World.RegionSize size = CityForge.World.RegionSize.Medium, World.RegionCreationSettings settings = null)
         {
             if (!Application.isPlaying) return;
-            var snapshot=World.RegionMapGenerator.Generate(regionName,size,settings??new World.RegionCreationSettings());
-            CityForge.World.PrototypeRegionView.Open(regionName, largeModal.GetComponentInParent<Canvas>(), snapshot:snapshot);
+            if(IsOpeningRegion)return;
+            var menu=largeModal.GetComponentInParent<Canvas>();
+            var overlay=RegionLoadingOverlay.Show(regionName,null);IsOpeningRegion=true;
+            overlay.BeginDistrict(CreateRegionStages(regionName,size,settings??new World.RegionCreationSettings(),menu,overlay.Report),()=>{if(this)IsOpeningRegion=false;},error=>{Debug.LogException(error);ShowRegionModal("CREATE REGION","The region could not be generated. Please try again.",new Rect(10f,105f,405f,395f));},"Preparing new region");
             CloseDialog();
+        }
+        private System.Collections.IEnumerator CreateRegionStages(string name,World.RegionSize size,World.RegionCreationSettings settings,Canvas menu,System.Action<string,float> progress)
+        {
+            World.SavedRegionSnapshot snapshot=null;
+            yield return World.RegionMapGenerator.GenerateStages(name,size,settings,value=>snapshot=value,progress);
+            yield return World.PrototypeRegionView.OpenStages(name,menu,snapshot:snapshot,progress:progress);
         }
 
         private static void Exit()

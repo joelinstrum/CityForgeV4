@@ -6,6 +6,8 @@ This folder is the design source of truth for V4. It records the direction agree
 
 **V4 foundation:** a clean Unity 6 project using URP, PBR materials, and a genuine 3D world. The familiar elevated orthographic/dimetric view is the default camera choice, not a limitation of the assets or world. [Initial scaffold](03_Technical/Initial_Scaffold.md), [asset conventions](03_Technical/Asset_Conventions.md), and the [scalability plan](03_Technical/Scalability_Plan.md) record the implementation baseline. The concept images remain visual acceptance targets as the world develops.
 
+For current implementation and the approved biome assets, read the [main development handoff](../HANDOFF.md) first.
+
 ## Read in this order
 
 1. [Vision](00_Vision/CityForge_Vision.md) and [design principles](00_Vision/Design_Principles.md) establish the identity and guardrails.

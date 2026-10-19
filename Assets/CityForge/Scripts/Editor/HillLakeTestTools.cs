@@ -33,7 +33,7 @@ namespace CityForge.Editor
             if(!File.Exists(path))SavedRegionStore.Save(HillLakeTestRegion.Generate());
             var saved=SavedRegionStore.Load(path);
             if(saved.info.camera.size==160){saved.info.camera.size=80;saved.info.camera.zoom=2;SavedRegionStore.Save(saved);}
-            Object.FindFirstObjectByType<UI.MainMenuController>().OpenSavedRegion(saved.info);
+            Object.FindFirstObjectByType<UI.MainMenuController>().OpenSavedRegionImmediatelyForTools(saved.info);
             var view=Object.FindFirstObjectByType<PrototypeRegionView>();
             var water=view.ApprovedDistrict.Water;
             if(!LakeWaterRenderer.UsesCalmWater(view)&&(!water||water.FlowLod.Enabled||water.FoamLod.Enabled||water.AnimatedWavesLod.Enabled))throw new System.Exception("Lake water profile failed.");

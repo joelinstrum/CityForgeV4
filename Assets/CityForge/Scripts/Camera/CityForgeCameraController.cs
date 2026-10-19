@@ -36,10 +36,20 @@ namespace CityForge.CameraSystem
         private void Awake()
         {
             viewCamera = GetComponent<Camera>();
+            if (!TryGetComponent<CameraMotionQuality>(out _)) gameObject.AddComponent<CameraMotionQuality>();
             ApplyPose();
         }
 
-        public float PanSpeedMultiplier=>regionSide>0&&ZoomLevel<=1?1.69f:1f;
+        public float PanSpeedMultiplier
+        {
+            get
+            {
+                if (regionSide <= 0f) return 1f;
+                float multiplier = ZoomLevel <= 1 ? 1.69f : 1f;
+                // Close navigation: the original 2x boost, plus the requested further 25%.
+                return ZoomLevel >= 1 && ZoomLevel <= 3 ? multiplier * 2.5f : multiplier;
+            }
+        }
         public void StepZoom(bool closer)=>SetZoomLevel(ZoomLevel+(closer?-1:1));
         private void LateUpdate()
         {
@@ -207,7 +217,24 @@ namespace CityForge.CameraSystem
             viewCamera=GetComponent<Camera>();viewCamera.orthographic=true;SetZoomLevel(1);
         }
 
-        public void FrameRegion(float side, float height = 1200f) => FrameArea(side, height, Vector3.zero);
+        public void FrameRegion(float side, float height = 1200f)
+        {
+            FrameArea(side, height, Vector3.zero);
+            var map=GetComponentInParent<World.PrototypeRegionView>()?.GetComponentInChildren<World.RegionReliefMap>(true);
+            if(!map)return;
+            var bounds=map.GetComponent<Renderer>().bounds;
+            foreach(var renderer in map.GetComponentsInChildren<Renderer>())bounds.Encapsulate(renderer.bounds);
+            focus=bounds.center;
+            var inverse=Quaternion.Inverse(Quaternion.Euler(pitch,yaw,0));
+            float horizontal=0,vertical=0;
+            for(int i=0;i<8;i++){
+                var corner=bounds.center+Vector3.Scale(bounds.extents,new Vector3((i&1)==0?-1:1,(i&2)==0?-1:1,(i&4)==0?-1:1));
+                var projected=inverse*(corner-focus);horizontal=Mathf.Max(horizontal,Mathf.Abs(projected.x));vertical=Mathf.Max(vertical,Mathf.Abs(projected.y));
+            }
+            // Fit the actual relief bounds, with room above/below for the HUD.
+            orthographicSize=1.25f*Mathf.Max(vertical,horizontal/Mathf.Max(.1f,viewCamera.aspect));
+            farthestSize=orthographicSize;ApplyPose();
+        }
 
         public void FrameArea(float side, float height, Vector3 center)
         {

@@ -44,7 +44,7 @@ namespace CityForge.World
             return new Color(shortTurf / total, rough / total, dry / total, sparse / total);
         }
 
-        public static Texture2D Build(float side)
+        public static Texture2D Build(float side,RegionBiomeMap biomes=null)
         {
             const int n = 257;
             var texture = new Texture2D(n, n, TextureFormat.RGBA32, false, true)
@@ -52,8 +52,11 @@ namespace CityForge.World
                     filterMode = FilterMode.Bilinear };
             var colors = new Color[n * n];
             for (var z = 0; z < n; z++) for (var x = 0; x < n; x++)
-                colors[z * n + x] = Sample(new Vector2(x / (float)(n - 1) - .5f,
-                    z / (float)(n - 1) - .5f) * side, side);
+                {
+                var uv=new Vector2(x/(float)(n-1),z/(float)(n-1));
+                if(biomes==null)colors[z*n+x]=Sample((uv-Vector2.one*.5f)*side,side);
+                else {var sample=biomes.At(uv);float rough=sample.woodland*.65f,dry=sample.dryness*.27f,sparse=sample.dryness*.03f;colors[z*n+x]=new Color(1-rough-dry-sparse,rough,dry,sparse);}
+                }
             texture.SetPixels(colors); texture.Apply(false, true);
             return texture;
         }
