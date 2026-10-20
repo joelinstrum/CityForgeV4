@@ -7,7 +7,7 @@ namespace CityForge.EditorTools
         public static void Apply(Material material,string path)
         {
             var color=new Color(.65f,.65f,.65f,1);
-            if(path.Contains("SilverMaple")&&path.Contains("GreenLeaf"))color=new Color(.25f,.45f,.28f,1);
+            if(path.Contains("SilverMaple")&&path.Contains("GreenLeaf"))color=new Color(.20f,.32f,.25f,1);
             else if(path.Contains("SilverMaple")&&path.Contains("YellowLeaf"))color=new Color(.55f,.5f,.45f,1);
             else if(path.Contains("CanyonLiveOak")&&path.Contains("Leaf"))color=new Color(.24f,.4f,.22f,1);
             else if(path.Contains("SouthernLiveOak")&&path.Contains("Leaf"))color=new Color(.3f,.45f,.28f,1);

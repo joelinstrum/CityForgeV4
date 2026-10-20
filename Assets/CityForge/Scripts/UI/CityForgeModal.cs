@@ -307,13 +307,14 @@ namespace CityForge.UI
             if (controller != null) controller.CreatePrototypeRegion(RegionName, SelectedSize, ReadCreationSettings());
         }
 
+        Dropdown generationAnimals;
         Dropdown TerrainChoice(string name) => createRegionTerrainIntro.transform.Find(name+"Dropdown").GetComponent<Dropdown>();
         public World.RegionCreationSettings ReadCreationSettings()
         {
             return new World.RegionCreationSettings { seed=generationSeed&&int.TryParse(generationSeed.text,out var seed)?seed:World.PrototypeRegionData.DefaultSeed,
                 moisture=(World.RegionMoisture)TerrainChoice("Climate").value,vegetation=(World.RegionVegetation)TerrainChoice("Land Type").value,
                 topography=TerrainChoice("Topography").value,rivers=TerrainChoice("Rivers").value,streams=TerrainChoice("Streams").value,
-                era=SelectedEra.Name,period=SelectedPeriod.Name };
+                animals=generationAnimals&&generationAnimals.value==1,era=SelectedEra.Name,period=SelectedPeriod.Name };
         }
         void ConfigureGenerationControls()
         {
@@ -326,12 +327,29 @@ namespace CityForge.UI
             parent.Find("CoastalNote").GetComponent<Text>().text="One inland region, 64 connected districts.";
             parent.Find("SectionDescription").GetComponent<Text>().text="Shape terrain, waterways, and temperate habitats across an 8 × 8 district grid.";
             var label=Instantiate(parent.Find("StreamsLabel").gameObject,parent);label.name="SeedLabel";label.GetComponent<Text>().text="MAP SEED";
-            label.GetComponent<RectTransform>().anchoredPosition=new Vector2(425,-315);
+            label.GetComponent<RectTransform>().anchoredPosition=new Vector2(425,-262);
             generationSeed=Instantiate(regionNameInput,parent);generationSeed.name="MapSeedInput";
-            var rect=generationSeed.GetComponent<RectTransform>();rect.anchorMin=rect.anchorMax=rect.pivot=new Vector2(0,1);rect.anchoredPosition=new Vector2(425,-349);rect.sizeDelta=new Vector2(350,48);
+            var rect=generationSeed.GetComponent<RectTransform>();rect.anchorMin=rect.anchorMax=rect.pivot=new Vector2(0,1);rect.anchoredPosition=new Vector2(425,-296);rect.sizeDelta=new Vector2(350,48);
             generationSeed.onValueChanged=new InputField.OnChangeEvent();generationSeed.onEndEdit=new InputField.EndEditEvent();
             generationSeed.characterValidation=InputField.CharacterValidation.Integer;generationSeed.characterLimit=11;generationSeed.text=World.PrototypeRegionData.DefaultSeed.ToString();
             generationSeed.onValueChanged.AddListener(_=>RefreshProgression());
+            var animalLabel=Instantiate(parent.Find("StreamsLabel").gameObject,parent);animalLabel.name="AnimalsLabel";animalLabel.GetComponent<Text>().text="ANIMALS";
+            animalLabel.GetComponent<RectTransform>().anchoredPosition=new Vector2(0,-372);
+            generationAnimals=Instantiate(TerrainChoice("Streams"),parent);generationAnimals.name="AnimalsDropdown";
+            generationAnimals.GetComponent<RectTransform>().anchoredPosition=new Vector2(0,-406);
+            generationAnimals.onValueChanged=new Dropdown.DropdownEvent();generationAnimals.ClearOptions();
+            generationAnimals.AddOptions(new System.Collections.Generic.List<string>{"None","Temperate wildlife"});generationAnimals.value=1;generationAnimals.interactable=true;
+            foreach(var choice in new[]{"Topography","Streams"}){
+                parent.Find(choice+"Label").GetComponent<RectTransform>().anchoredPosition=new Vector2(choice=="Streams"?425:0,-154);
+                TerrainChoice(choice).GetComponent<RectTransform>().anchoredPosition=new Vector2(choice=="Streams"?425:0,-188);
+            }
+            parent.Find("Land TypeLabel").GetComponent<RectTransform>().anchoredPosition=new Vector2(0,-262);
+            TerrainChoice("Land Type").GetComponent<RectTransform>().anchoredPosition=new Vector2(0,-296);
+            var climateNote=parent.Find("ClimateNote").GetComponent<Text>();climateNote.text="Temperate woodland and riverside habitats.";climateNote.rectTransform.sizeDelta=new Vector2(350,18);
+            var mountainNote=parent.Find("MountainNote").GetComponent<RectTransform>();mountainNote.anchoredPosition=new Vector2(0,-242);mountainNote.sizeDelta=new Vector2(350,18);
+            var coastalNote=parent.Find("CoastalNote").GetComponent<RectTransform>();coastalNote.anchoredPosition=new Vector2(0,-350);coastalNote.sizeDelta=new Vector2(350,18);
+            parent.GetComponent<LayoutElement>().preferredHeight=456;
+            terrainNextButton.GetComponent<RectTransform>().anchoredPosition=new Vector2(615,-392);
             terrainNextButton.GetComponentInChildren<Text>().text="CREATE MAP";
         }
 

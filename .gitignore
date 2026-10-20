@@ -176,3 +176,11 @@ venv/
 
 !/Assets/CityForge/Resources/Region/RegionalSlab.shader
 !/Assets/CityForge/Resources/Region/RegionalSlab.shader.meta
+
+# Licensed Animal Pack Deluxe and generated wildlife art stay local.
+/Assets/Animal pack deluxe/
+/Assets/Animal pack deluxe.meta
+
+# Licensed Living Birds assets stay local.
+/Assets/living birds/
+/Assets/living birds.meta

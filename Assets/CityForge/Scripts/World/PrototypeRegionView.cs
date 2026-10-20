@@ -140,7 +140,7 @@ namespace CityForge.World
             }
             if(!active&&!buildingRegion&&!legacyTreesReady){legacyTreesReady=true;BuildTrees(Data.Seed);}
             NaturalLandscape=active;
-            var continuousCollider=transform.Find("ContinuousRegionTerrain");if(continuousCollider)continuousCollider.GetComponent<TerrainCollider>().enabled=!(active&&RiverBedVersion>=4);
+            var continuousCollider=transform.Find("ContinuousRegionTerrain");if(continuousCollider)continuousCollider.GetComponent<TerrainCollider>().enabled=!(active&&(RiverBedVersion>=4||CreationSettings?.version>=5));
             if(approvedDistrict!=null){approvedDistrict.ApplyPresentation(active);approvedDistrict.gameObject.SetActive(active);}
             if(active&&Data.Biomes!=null&&SelectedDistrict<0){var camera=GetComponentInChildren<Camera>();camera.farClipPlane=Mathf.Max(camera.farClipPlane,MapSide*10);}
             if(!relief){var map=new GameObject("Regional relief map");map.transform.SetParent(transform,false);relief=map.AddComponent<RegionReliefMap>();yield return relief.BuildStages(this);}
@@ -163,6 +163,8 @@ namespace CityForge.World
         }
         public RegionDistrictInfo[] Districts {get;private set;}
         public RegionCreationSettings CreationSettings {get;private set;}
+        public bool AnimalsEnabled {get;private set;}
+        public void SetAnimalsEnabled(bool enabled){AnimalsEnabled=enabled;if(approvedDistrict)approvedDistrict.RefreshWildlife();}
         public int SelectedDistrict { get; private set; } = -1;
         public int TreeCount => trees.Count;
         public int WoodlandRevision { get; private set; }
@@ -222,7 +224,7 @@ namespace CityForge.World
             try
             {
                 progress?.Invoke("Preparing region",.15f);yield return null;
-                if(snapshot!=null){view.CreationSettings=snapshot.info.creation;size=(RegionSize)snapshot.info.size;seed=snapshot.info.seed;regionName=snapshot.info.name;view.SavedRegionId=snapshot.info.id;view.Season=(RegionSeason)snapshot.info.season;view.TerrainHeightRange=snapshot.info.terrainHeightRange;view.LoadedMeadow=snapshot.meadow;view.LoadedMeadowDistrict=snapshot.info.meadowCacheDistrict;view.LoadedFromSnapshot=true;view.wantsMeadow=snapshot.info.meadow;view.Waterless=snapshot.info.waterless;view.Coastline=snapshot.info.coastline;view.CoastVersion=snapshot.info.coastVersion;view.MinimalRiverCrest=snapshot.info.minimalRiverCrest;view.StillWater=snapshot.info.stillWater;view.LakeWaterVersion=snapshot.info.lakeWaterVersion<0?-1:1;view.RiverBedVersion=snapshot.info.riverBedVersion;}
+                if(snapshot!=null){view.CreationSettings=snapshot.info.creation;view.AnimalsEnabled=snapshot.info.animals;size=(RegionSize)snapshot.info.size;seed=snapshot.info.seed;regionName=snapshot.info.name;view.SavedRegionId=snapshot.info.id;view.Season=(RegionSeason)snapshot.info.season;view.TerrainHeightRange=snapshot.info.terrainHeightRange;view.LoadedMeadow=snapshot.meadow;view.LoadedMeadowDistrict=snapshot.info.meadowCacheDistrict;view.LoadedFromSnapshot=true;view.wantsMeadow=snapshot.info.meadow;view.Waterless=snapshot.info.waterless;view.Coastline=snapshot.info.coastline;view.CoastVersion=snapshot.info.coastVersion;view.MinimalRiverCrest=snapshot.info.minimalRiverCrest;view.StillWater=snapshot.info.stillWater;view.LakeWaterVersion=snapshot.info.lakeWaterVersion<0?-1:1;view.RiverBedVersion=snapshot.info.riverBedVersion;}
                 view.Size = size;
                 view.RegionName = string.IsNullOrWhiteSpace(regionName) ? "Test Region" : regionName.Trim();
                 view.deferLegacyTrees=view.wantsMeadow&&Resources.Load<MeadowRuntimeBaseline>("Region/MeadowRuntimeBaseline")!=null&&(snapshot==null||snapshot.info.district>=0);
@@ -518,6 +520,7 @@ namespace CityForge.World
                 seasonCaption.rectTransform.offsetMin=seasonCaption.rectTransform.offsetMax=Vector2.zero;
             }
             ForestSpeciesControls.Build(this,root.transform,font);
+            WildlifeControls.Build(this,root.transform,font);
             SetTestControlsVisible(testControlsVisible);
             RefreshSeasonButtons();
             var diagnostics = gameObject.AddComponent<RegionPreviewDiagnostics>();

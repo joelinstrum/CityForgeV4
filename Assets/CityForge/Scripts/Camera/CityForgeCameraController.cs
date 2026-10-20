@@ -18,6 +18,7 @@ namespace CityForge.CameraSystem
 
         private bool lowerView;
         public bool LowerView => lowerView;
+        public float OrthographicSetback {get;private set;}
         public bool FitShadowDepth {get;set;}=true;
         private bool meadowFraming;private float meadowStartSize;
         private Camera viewCamera;
@@ -163,6 +164,14 @@ namespace CityForge.CameraSystem
             if(viewCamera.orthographicSize!=orthographicSize)viewCamera.orthographicSize=orthographicSize;
             var posePitch = lowerView ? 12f : pitch;
             var poseDistance = lowerView ? orthographicSize / Mathf.Tan(viewCamera.fieldOfView * .5f * Mathf.Deg2Rad) : distance;
+            // Orthographic projection is unchanged by retreating along the viewing ray.
+            // Keep tall district terrain in front of the camera at every zoom level.
+            if(!lowerView&&regionSide>0){
+                float screenDepth=orthographicSize/Mathf.Tan(posePitch*Mathf.Deg2Rad);
+                float topDepth=(regionHeight+80f-focus.y)/Mathf.Sin(posePitch*Mathf.Deg2Rad);
+                poseDistance=Mathf.Max(poseDistance,screenDepth+topDepth+30f);
+            }
+            OrthographicSetback=lowerView?0:Mathf.Max(0,poseDistance-distance);
             var orientation=Quaternion.Euler(posePitch,yaw,0f);
             var position=focus-orientation*Vector3.forward*poseDistance;
             if(lowerView)
