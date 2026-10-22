@@ -8,8 +8,9 @@ namespace CityForge.CameraSystem
     [RequireComponent(typeof(Camera))]
     public sealed class CityForgeCameraController : MonoBehaviour
     {
+        public const float IsometricPitch = 35.26439f;
         [SerializeField] private Vector3 focus = Vector3.zero;
-        [SerializeField, Range(15f, 85f)] private float pitch = 50f;
+        [SerializeField, Range(15f, IsometricPitch)] private float pitch = IsometricPitch;
         [SerializeField] private float yaw = 45f;
         [SerializeField, Min(5f)] private float distance = 65f;
         [SerializeField, Min(3f)] private float orthographicSize = 32f;
@@ -17,7 +18,13 @@ namespace CityForge.CameraSystem
         [SerializeField, Min(1f)] private float rotationSpeed = 90f;
 
         private bool lowerView;
+        [SerializeField] private float viewTilt=-1;
+        [SerializeField] private float perspectiveFieldOfView=60;
+        public float ViewTilt => viewTilt<0?(lowerView?0:1):viewTilt;
+        public float ViewPitch => Mathf.Lerp(12,Mathf.Clamp(pitch,15f,IsometricPitch),ViewTilt);
+        public void SetViewTilt(float value){viewTilt=Mathf.Clamp01(value);lowerView=viewTilt<1;viewCamera=GetComponent<Camera>();viewCamera.orthographic=!lowerView;ApplyPose();}
         public bool LowerView => lowerView;
+        public float OrthographicSetback {get;private set;}
         public bool FitShadowDepth {get;set;}=true;
         private bool meadowFraming;private float meadowStartSize;
         private Camera viewCamera;
@@ -84,7 +91,7 @@ namespace CityForge.CameraSystem
             if (Input.GetMouseButton(1))
             {
                 yaw += Input.GetAxisRaw("Mouse X") * 4f;
-                pitch = Mathf.Clamp(pitch - Input.GetAxisRaw("Mouse Y") * 4f, 15f, 85f);
+                pitch = Mathf.Clamp(pitch - Input.GetAxisRaw("Mouse Y") * 4f, 15f, IsometricPitch);
             }
 
             }
@@ -115,22 +122,19 @@ namespace CityForge.CameraSystem
             ApplyPose();
         }
 
-        public World.RegionCameraState CaptureRegionState()=>new World.RegionCameraState{focus=focus,pitch=pitch,yaw=yaw,distance=distance,size=orthographicSize,zoom=ZoomLevel,lowerView=lowerView};
+        public World.RegionCameraState CaptureRegionState()=>new World.RegionCameraState{focus=focus,pitch=pitch,yaw=yaw,distance=distance,size=orthographicSize,zoom=ZoomLevel,lowerView=lowerView,hasViewTilt=true,viewTilt=ViewTilt};
         public void RestoreRegionState(World.RegionCameraState state)
         {
             if(state==null)return;
+            if(state.hasViewTilt&&!float.IsFinite(state.viewTilt))throw new System.IO.InvalidDataException("Invalid saved camera tilt.");
             if(!float.IsFinite(state.focus.x)||!float.IsFinite(state.focus.y)||!float.IsFinite(state.focus.z)||!float.IsFinite(state.pitch)||!float.IsFinite(state.yaw)||!float.IsFinite(state.distance)||!float.IsFinite(state.size)||state.size<3||state.distance<5)throw new System.IO.InvalidDataException("Invalid saved camera.");
-            lowerView=state.lowerView;viewCamera=GetComponent<Camera>();viewCamera.orthographic=!lowerView;
-            focus=state.focus;pitch=state.pitch;yaw=state.yaw;distance=state.distance;orthographicSize=state.size;ZoomLevel=Mathf.Clamp(state.zoom,0,5);ApplyPose();ZoomChanged?.Invoke(ZoomLevel);
+            viewTilt=state.hasViewTilt?Mathf.Clamp01(state.viewTilt):(state.lowerView?0:1);lowerView=viewTilt<1;viewCamera=GetComponent<Camera>();viewCamera.orthographic=!lowerView;
+            focus=state.focus;pitch=Mathf.Clamp(state.pitch,15f,IsometricPitch);yaw=state.yaw;distance=state.distance;orthographicSize=state.size;ZoomLevel=Mathf.Clamp(state.zoom,0,5);ApplyPose();ZoomChanged?.Invoke(ZoomLevel);
         }
 
         public void ToggleViewAngle()
         {
-            lowerView = !lowerView;
-            viewCamera = GetComponent<Camera>();
-            viewCamera.orthographic = !lowerView;
-            // Both views share the same focus, heading and six zoom steps.
-            ApplyPose();
+            SetViewTilt(ViewTilt>.5f?0:1);
         }
 
         public void ResetView()
@@ -140,9 +144,9 @@ namespace CityForge.CameraSystem
                 if(meadowFraming)FrameMeadowComparison(regionSide,regionHeight,framedCenter,meadowStartSize);else FrameArea(regionSide, regionHeight, framedCenter);
                 return;
             }
-            lowerView=false;viewCamera.orthographic=true;
+            lowerView=false;viewTilt=-1;viewCamera.orthographic=true;
             focus = Vector3.zero;
-            pitch = 50f;
+            pitch = IsometricPitch;
             yaw = 45f;
             distance = 65f;
             orthographicSize = 32f;
@@ -160,9 +164,23 @@ namespace CityForge.CameraSystem
         public void ApplyPose()
         {
             if (viewCamera == null) viewCamera = GetComponent<Camera>();
+            // Older scenes/saved camera states may contain the former steeper endpoint.
+            pitch=Mathf.Clamp(pitch,15f,IsometricPitch);
             if(viewCamera.orthographicSize!=orthographicSize)viewCamera.orthographicSize=orthographicSize;
-            var posePitch = lowerView ? 12f : pitch;
-            var poseDistance = lowerView ? orthographicSize / Mathf.Tan(viewCamera.fieldOfView * .5f * Mathf.Deg2Rad) : distance;
+            float tilt=ViewTilt;
+            if(regionSide>0){lowerView=tilt<1;viewCamera.orthographic=!lowerView;}
+            var posePitch = Mathf.Lerp(12,pitch,tilt);
+            var lowDistance=orthographicSize/Mathf.Tan(perspectiveFieldOfView*.5f*Mathf.Deg2Rad);
+            var poseDistance=distance;
+            // Orthographic projection is unchanged by retreating along the viewing ray.
+            // Keep tall district terrain in front of the camera at every zoom level.
+            if(tilt>0&&regionSide>0){
+                float screenDepth=orthographicSize/Mathf.Tan(posePitch*Mathf.Deg2Rad);
+                float topDepth=(regionHeight+80f-focus.y)/Mathf.Sin(posePitch*Mathf.Deg2Rad);
+                poseDistance=Mathf.Max(poseDistance,screenDepth+topDepth+30f);
+            }
+            poseDistance=Mathf.Lerp(lowDistance,poseDistance,tilt);
+            OrthographicSetback=tilt==0?0:Mathf.Max(0,poseDistance-distance);
             var orientation=Quaternion.Euler(posePitch,yaw,0f);
             var position=focus-orientation*Vector3.forward*poseDistance;
             if(lowerView)
@@ -206,14 +224,19 @@ namespace CityForge.CameraSystem
             if(viewCamera.nearClipPlane!=near)viewCamera.nearClipPlane=near;
             if(viewCamera.farClipPlane!=far)viewCamera.farClipPlane=far;
             if(transform.position!=position||transform.rotation!=orientation)transform.SetPositionAndRotation(position,orientation);
+            // Standard perspective matrices retain correct URP depth reconstruction.
+            // A narrowing field of view approaches parallel rays while maintaining
+            // the same apparent size at the focus plane; the top uses native ortho.
+            viewCamera.fieldOfView=tilt>0&&tilt<1?2*Mathf.Atan(orthographicSize/poseDistance)*Mathf.Rad2Deg:perspectiveFieldOfView;
+            viewCamera.ResetProjectionMatrix();
         }
 
         public void FrameMeadowComparison(float side,float height,Vector3 center,float size=40)
         {
-            lowerView=false;
+            lowerView=false;viewTilt=-1;
             meadowFraming=true;meadowStartSize=size;
             regionSide=side;regionHeight=height;framedCenter=center;focus=center;
-            pitch=35.26439f;yaw=315;distance=280;farthestSize=size*16;
+            pitch=IsometricPitch;yaw=315;distance=280;farthestSize=size*16;
             viewCamera=GetComponent<Camera>();viewCamera.orthographic=true;SetZoomLevel(1);
         }
 
@@ -238,11 +261,11 @@ namespace CityForge.CameraSystem
 
         public void FrameArea(float side, float height, Vector3 center)
         {
-            lowerView=false;
+            lowerView=false;viewTilt=-1;
             meadowFraming=false;
             regionSide = side; regionHeight = height; framedCenter = center;
             focus = center + new Vector3(0f, height * .0375f, 0f);
-            pitch = 35.264f;
+            pitch = IsometricPitch;
             yaw = 45f;
             distance = side * 1.6f;
             if (viewCamera == null) viewCamera = GetComponent<Camera>();

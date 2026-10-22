@@ -15,6 +15,7 @@ namespace CityForge.World
         public RegionMoisture moisture;
         public RegionVegetation vegetation;
         public string era, period;
+        public bool animals;
         public void Validate()
         {
             if((version!=1&&version!=2&&version!=3&&version!=4&&version!=5)||topography<0||topography>4||rivers<0||rivers>3||streams<0||streams>2||(int)moisture<0||(int)moisture>2||(int)vegetation<0||(int)vegetation>2)
@@ -88,7 +89,7 @@ namespace CityForge.World
             var data=new PrototypeRegionData(recipe.seed,heights,distances){WaterBodies=bodies.ToArray()};
             if(recipe.version>=2)data.Biomes=new RegionBiomeMap(recipe,data);
             return new SavedRegionSnapshot{data=data,info=new SavedRegionInfo{id=Guid.NewGuid().ToString("N"),name=name.Trim(),seed=recipe.seed,size=(int)size,
-                district=-1,terrainHeightRange=recipe.version>=5?PrototypeRegionData.Height:0,districts=data.Biomes?.DescribeDistricts(),meadow=true,waterless=bodies.Count==0,waterBodies=data.WaterBodies,creation=recipe,savedUtc=DateTime.UtcNow.ToString("O")}};
+                district=-1,animals=recipe.animals,terrainHeightRange=recipe.version>=5?PrototypeRegionData.Height:0,districts=data.Biomes?.DescribeDistricts(),meadow=true,waterless=bodies.Count==0,waterBodies=data.WaterBodies,creation=recipe,savedUtc=DateTime.UtcNow.ToString("O")}};
         }
     }
 }

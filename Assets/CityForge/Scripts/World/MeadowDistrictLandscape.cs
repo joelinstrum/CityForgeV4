@@ -25,6 +25,7 @@ namespace CityForge.World
         readonly List<UnityEngine.Object> owned=new();
         readonly Dictionary<Vector2Int,List<Vector2>> canopy=new();
         TerrainData terrainData;float[,] shore;
+        CityForge.CameraSystem.CityForgeCameraController navigationCamera;
         const float RoadCellSide=16;
         readonly Dictionary<Vector2Int,List<int>> roadCells=new();
         float roadQueryLimit;
@@ -143,6 +144,7 @@ namespace CityForge.World
             if(view.Coastline){baseline=Own(Instantiate(baseline));baseline.terrainMaterial=Resources.Load<Material>("Coasts/CoastalTerrain");baseline.generationVersion=201;var coastalLayers=new TerrainLayer[7];Array.Copy(baseline.layers,coastalLayers,5);coastalLayers[5]=Resources.Load<TerrainLayer>("RiverBeds/RichSand");coastalLayers[6]=Resources.Load<TerrainLayer>("Mountains/CliffDark");baseline.layers=coastalLayers;}
             mountainEvergreens=MountainEvergreenMix.LoadPrefabs();
             treeSeason=view.Season;
+            navigationCamera=view.GetComponentInChildren<CityForge.CameraSystem.CityForgeCameraController>();
             View=view;DistrictIndex=regionOverview?-1:view.SelectedDistrict;Baseline=baseline;Side=regionOverview?view.MapSide:view.DistrictSide;Origin=regionOverview?Vector2.one*(-view.MapSide/2):view.DistrictOrigin(view.SelectedDistrict);
             var rng=new System.Random(Seed);SeedOffset=new Vector2(rng.Next(100,10000),rng.Next(100,10000));
             terrainData=Own(new TerrainData {name="Seeded approved meadow district",heightmapResolution=baseline.referenceHeightResolution,alphamapResolution=regionOverview?512:view.MountainTest?1024:Mathf.ClosestPowerOfTwo(Mathf.RoundToInt(Side*2)),baseMapResolution=1024,size=new Vector3(Side,view.GetComponentInChildren<Terrain>().terrainData.size.y,Side)});
@@ -151,16 +153,16 @@ namespace CityForge.World
             var batchTimer=System.Diagnostics.Stopwatch.StartNew();
             for(int z=0;z<resolution;z++){for(int x=0;x<resolution;x++){
                 float gx=regionOverview?x*512f/(resolution-1):(view.SelectedDistrict%view.GridSide)*512f/view.GridSide+x*512f/view.GridSide/(resolution-1),gz=regionOverview?z*512f/(resolution-1):(view.SelectedDistrict/view.GridSide)*512f/view.GridSide+z*512f/view.GridSide/(resolution-1);int ix=Mathf.Min(511,(int)gx),iz=Mathf.Min(511,(int)gz);float fx=gx-ix,fz=gz-iz;
-                heights[z,x]=view.RiverBedVersion>=4?view.Data.SmoothHeight(gx/512,gz/512):Mathf.Lerp(Mathf.Lerp(view.Data.Heights[iz,ix],view.Data.Heights[iz,ix+1],fx),Mathf.Lerp(view.Data.Heights[iz+1,ix],view.Data.Heights[iz+1,ix+1],fx),fz);
+                heights[z,x]=(view.RiverBedVersion>=4||view.CreationSettings?.version>=5)?view.Data.SmoothHeight(gx/512,gz/512):Mathf.Lerp(Mathf.Lerp(view.Data.Heights[iz,ix],view.Data.Heights[iz,ix+1],fx),Mathf.Lerp(view.Data.Heights[iz+1,ix],view.Data.Heights[iz+1,ix+1],fx),fz);
             }
             if(batchTimer.ElapsedMilliseconds>=12){progress?.Invoke("Shaping district terrain",.08f+.12f*z/resolution);yield return null;batchTimer.Restart();}}
             progress?.Invoke("Applying terrain heights",.21f);yield return null;
             terrainData.SetHeights(0,0,heights);terrainData.terrainLayers=baseline.layers;
             var go=Terrain.CreateTerrainGameObject(terrainData);go.name="Runtime Native Meadow Terrain";go.transform.SetParent(transform,false);go.transform.position=new Vector3(Origin.x,0,Origin.y);go.layer=30;
-            DisplayTerrain=go.GetComponent<Terrain>();DisplayTerrain.materialTemplate=baseline.terrainMaterial;DisplayTerrain.drawInstanced=true;DisplayTerrain.basemapDistance=view.MountainTest?10000:2000;DisplayTerrain.heightmapPixelError=10;
+            DisplayTerrain=go.GetComponent<Terrain>();DisplayTerrain.materialTemplate=baseline.terrainMaterial;DisplayTerrain.drawInstanced=true;DisplayTerrain.basemapDistance=view.MountainTest?10000:2000;DisplayTerrain.heightmapPixelError=view.CreationSettings?.version>=5?1:10;
             DisplayTerrain.treeDistance=regionOverview?Mathf.Max(baseline.treeDistance,view.MapSide*3):baseline.treeDistance;DisplayTerrain.treeBillboardDistance=baseline.treeBillboardDistance;DisplayTerrain.treeCrossFadeLength=baseline.treeCrossFadeLength;DisplayTerrain.treeMaximumFullLODCount=baseline.treeMaximumFullLODCount;
             // Avoid competing ray hits; the continuous original collider remains the authoritative gameplay surface.
-            go.GetComponent<TerrainCollider>().enabled=view.RiverBedVersion>=4;
+            go.GetComponent<TerrainCollider>().enabled=view.RiverBedVersion>=4||view.CreationSettings?.version>=5;
             var timings=new System.Text.StringBuilder();
             void Measure(string name,Action action){var timer=System.Diagnostics.Stopwatch.StartNew();action();timings.Append(name+"="+timer.ElapsedMilliseconds+" ms; ");}
             progress?.Invoke("Preparing shorelines",.25f);yield return null;
@@ -182,6 +184,7 @@ namespace CityForge.World
                 yield return BuildControlMapStages(value=>progress?.Invoke("Painting meadow and mountain surfaces",.44f+value*.25f));
                 timings.Append("control map=").Append(paintTimer.ElapsedMilliseconds).Append(" ms; ");
             }
+            if(GeneratedRiverDistrict)yield return PaintGeneratedRiverBanks();
             progress?.Invoke("Building roads and rocks",.7f);yield return null;
             Measure("road mesh",BuildRoadMesh);if(View.MountainTest)Measure("mountain outcrops",()=>gameObject.AddComponent<MountainRockRenderer>().Initialize(this));if(View.RiverBedVersion>=2)Measure("river rocks",()=>gameObject.AddComponent<RiverBedRockRenderer>().Initialize(this));
             progress?.Invoke("Applying landscape lighting",.78f);yield return null;Measure("presentation",BuildPresentation);
@@ -197,6 +200,15 @@ namespace CityForge.World
             SmallPlantsEnabled=true;SetSmallPlantsEnabled(PlayerPrefs.GetInt(SmallPlantsPreference,0)==1);
             RefreshForestSpecies(false);
             SetTreesEnabled(view.Data.Biomes!=null||PlayerPrefs.GetInt(TreesPreference,0)==1);
+            RefreshWildlife();
+        }
+        DistrictWildlife wildlife;
+        public DistrictWildlife Wildlife=>wildlife;
+        public void RefreshWildlife(){
+            if(wildlife){wildlife.gameObject.SetActive(false);Destroy(wildlife.gameObject);wildlife=null;}
+            if(!View.AnimalsEnabled||IsRegionOverview)return;
+            var holder=new GameObject("District temperate wildlife");holder.transform.SetParent(transform,false);
+            wildlife=holder.AddComponent<DistrictWildlife>();wildlife.Initialize(this);
         }
         float[,,] lakeBaseAlphamaps;
         int lakeBedOffset=-1;
@@ -237,7 +249,8 @@ namespace CityForge.World
         {
             Road.AddRange(cached.road);IndexRoad();
             var prototypes=TreePrototypes(Baseline.treePrefabs);terrainData.treePrototypes=prototypes;
-            terrainData.SetTreeInstances(cached.trees,false);
+            // Keep cached placements/species, but seat them on the displayed smooth surface.
+            terrainData.SetTreeInstances(cached.trees,View.CreationSettings?.version>=5);
             foreach(var tree in cached.trees)if(tree.prototypeIndex>=3){
                 var p=Origin+new Vector2(tree.position.x,tree.position.z)*Side;var key=Vector2Int.FloorToInt(p/16);
                 if(!canopy.TryGetValue(key,out var list))canopy[key]=list=new List<Vector2>();list.Add(p);
@@ -405,11 +418,30 @@ namespace CityForge.World
         }
         void BuildRoadMesh()
         {
-            var verts=new Vector3[Road.Count*2];var uv=new Vector2[verts.Length];var tri=new int[(Road.Count-1)*6];float length=0;
-            for(int i=0;i<Road.Count;i++){if(i>0)length+=Vector2.Distance(Road[i],Road[i-1]);var dir=(Road[Mathf.Min(i+1,Road.Count-1)]-Road[Mathf.Max(0,i-1)]).normalized;var n=new Vector2(-dir.y,dir.x);
-                for(int j=0;j<2;j++){var p=Road[i]+n*(j==0?-1:1)*Baseline.roadWidth;verts[i*2+j]=new Vector3(p.x,Height(p)+.012f,p.y);uv[i*2+j]=new Vector2(length/4,j);}
-                if(i<Road.Count-1){int k=i*6,v=i*2;tri[k]=v;tri[k+1]=v+1;tri[k+2]=v+2;tri[k+3]=v+2;tri[k+4]=v+1;tri[k+5]=v+3;}}
-            var mesh=Own(new Mesh {name="Seeded native road ribbon"});mesh.vertices=verts;mesh.uv=uv;mesh.triangles=tri;mesh.RecalculateNormals();mesh.RecalculateBounds();
+            var path=Road;
+            bool smoothDistrict=View.CreationSettings?.version>=5;
+            if(smoothDistrict&&Road.Count>1){
+                path=new List<Vector2>{Road[0]};
+                for(int i=1;i<Road.Count;i++){
+                    int steps=Mathf.Max(1,Mathf.CeilToInt(Vector2.Distance(Road[i-1],Road[i])));
+                    for(int j=1;j<=steps;j++)path.Add(Vector2.Lerp(Road[i-1],Road[i],j/(float)steps));
+                }
+            }
+            int columns=smoothDistrict?3:2;
+            var verts=new Vector3[path.Count*columns];var uv=new Vector2[verts.Length];var tri=new int[Mathf.Max(0,path.Count-1)*(columns-1)*6];float length=0;
+            for(int i=0;i<path.Count;i++){
+                if(i>0)length+=Vector2.Distance(path[i],path[i-1]);
+                var dir=(path[Mathf.Min(i+1,path.Count-1)]-path[Mathf.Max(0,i-1)]).normalized;var normal=new Vector2(-dir.y,dir.x);
+                for(int j=0;j<columns;j++){
+                    float across=j/(float)(columns-1);var p=path[i]+normal*Mathf.Lerp(-Baseline.roadWidth,Baseline.roadWidth,across);
+                    verts[i*columns+j]=new Vector3(p.x,Height(p)+(smoothDistrict?.08f:.012f),p.y);uv[i*columns+j]=new Vector2(length/4,across);
+                }
+                if(i<path.Count-1)for(int j=0;j<columns-1;j++){
+                    int k=(i*(columns-1)+j)*6,v=i*columns+j;
+                    tri[k]=v;tri[k+1]=v+1;tri[k+2]=v+columns;tri[k+3]=v+columns;tri[k+4]=v+1;tri[k+5]=v+columns+1;
+                }
+            }
+            var mesh=Own(new Mesh {name="Seeded native road ribbon",indexFormat=UnityEngine.Rendering.IndexFormat.UInt32});mesh.vertices=verts;mesh.uv=uv;mesh.triangles=tri;mesh.RecalculateNormals();mesh.RecalculateBounds();
             var go=new GameObject("Runtime natural road transitions",typeof(MeshFilter),typeof(MeshRenderer));go.transform.SetParent(transform,false);go.GetComponent<MeshFilter>().sharedMesh=mesh;var r=go.GetComponent<MeshRenderer>();r.sharedMaterial=Baseline.roadMaterial;r.shadowCastingMode=ShadowCastingMode.Off;
         }
         void BuildShoreline()
@@ -607,7 +639,44 @@ namespace CityForge.World
             var input=WaveHarmonic.Crest._Extensions.AddComponent<FlowLodInput>(go,LodInputMode.Texture);
             var data=input.GetData<FlowTextureLodInputData>();data.Texture=texture;data.Multiplier=new Vector4(speed,speed,1,1);data.NegativeValues=false;riverAnimationFlow=texture;riverAnimationStrength=speed;
         }
-        void BuildWater(){if(View.Coastline)BuildCoastalWater();else BuildTypedWater(true);}
+        bool GeneratedRiverDistrict=>!View.Coastline&&View.CreationSettings?.version>=5&&!View.Waterless;
+        IEnumerator PaintGeneratedRiverBanks()
+        {
+            // Also apply to restored caches, without re-laying roads or moving trees.
+            int n=terrainData.alphamapResolution;var maps=terrainData.GetAlphamaps(0,0,n,n);
+            var timer=System.Diagnostics.Stopwatch.StartNew();
+            for(int z=0;z<n;z++){
+                for(int x=0;x<n;x++){
+                    var p=Origin+new Vector2(x/(float)(n-1),z/(float)(n-1))*Side;
+                    float distance=ShoreDistance(p);
+                    float bank=(1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(3,16,Mathf.Max(0,distance))))*.86f;
+                    if(bank<=maps[z,x,0])continue;
+                    float scale=(1-bank)/Mathf.Max(.0001f,1-maps[z,x,0]);
+                    for(int l=1;l<maps.GetLength(2);l++)maps[z,x,l]*=scale;
+                    maps[z,x,0]=bank;
+                }
+                if(timer.ElapsedMilliseconds>12){yield return null;timer.Restart();}
+            }
+            terrainData.SetAlphamaps(0,0,maps);
+        }
+        void BuildWater(){
+            if(View.Coastline)BuildCoastalWater();
+            else if(GeneratedRiverDistrict){
+                var district=new Rect(Origin/View.MapSide+Vector2.one*.5f,Vector2.one*(Side/View.MapSide));
+                bool builtRiver=false;
+                foreach(var body in View.Data.WaterBodies){
+                    if(!builtRiver&&body.kind==WaterBodyKind.River&&LakeWaterRenderer.GeneratedRiverBounds(body).Overlaps(district)){
+                        var surface=new GameObject("Stationary district river — "+body.id);surface.transform.SetParent(transform,false);
+                        surface.AddComponent<LakeWaterRenderer>().InitializeGeneratedRiver(this,body);builtRiver=true;
+                    }
+                    else if(LakeWaterRenderer.Applies(body,View)&&body.Bounds.Overlaps(district)){
+                        var surface=new GameObject("District lake/pond — "+body.id);surface.transform.SetParent(transform,false);
+                        surface.AddComponent<LakeWaterRenderer>().Initialize(this,body);
+                    }
+                }
+            }
+            else BuildTypedWater(true);
+        }
         void BuildWaterLegacy()
         {
             var root=Instantiate(Baseline.waterTemplate,transform);root.name="Runtime approved Crest river";root.SetActive(false);root.transform.position=new Vector3(0,View.SeaLevel,0);root.transform.localScale=Vector3.one;
@@ -636,6 +705,14 @@ namespace CityForge.World
             for(int i=0;i<80;i++){float v=Mathf.Lerp(.62f,.92f,i/79f);for(int sign=-1;sign<=1;sign+=2){var p=new Vector2((View.Data.TributaryRiverCenter(v)-.5f)*View.MapSide+sign*24,(v-.5f)*View.MapSide);if(!Contains(p)||p.x<Origin.x+80||p.x>Origin.x+Side-80||p.y<Origin.y+80||p.y>Origin.y+Side-80||Height(p)<View.SeaLevel+.5f||RoadDistance(p)<6)continue;float s=Woodland(p)+Canopy(p)*.25f;if(s>score){score=s;best=p;}}}
             return new Vector3(best.x,0,best.y);
         }}
+        void LateUpdate()
+        {
+            if(!DisplayTerrain||!Baseline||!navigationCamera)return;
+            // Retreating an orthographic camera must not cull the approved forest.
+            float padding=navigationCamera.OrthographicSetback;
+            DisplayTerrain.treeDistance=(IsRegionOverview?Mathf.Max(Baseline.treeDistance,View.MapSide*3):Baseline.treeDistance)+padding;
+            DisplayTerrain.treeBillboardDistance=Baseline.treeBillboardDistance+padding;
+        }
         void OnEnable(){if(Baseline)ApplyPresentation(true);}
         void OnDisable(){ApplyPresentation(false);}
         void OnDestroy(){ApplyPresentation(false);foreach(var asset in owned)if(asset)Destroy(asset);}
