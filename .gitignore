@@ -184,3 +184,11 @@ venv/
 # Licensed Living Birds assets stay local.
 /Assets/living birds/
 /Assets/living birds.meta
+
+# Authored river preview settings; contains no licensed artwork.
+!/Assets/CityForge/Scripts/Editor/RiverSunGlintPreview.json
+!/Assets/CityForge/Scripts/Editor/RiverSunGlintPreview.json.meta
+
+# Local generated Crest shader experiments; never publish licensed generated source.
+/Assets/CityForge/LocalWaterStudy/
+/Assets/CityForge/LocalWaterStudy.meta

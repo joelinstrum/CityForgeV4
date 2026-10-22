@@ -1,0 +1,14 @@
+{
+  "normal": 0.08,
+  "scale": 4,
+  "smoothness": 0.97,
+  "reflection": 0.25,
+  "specular": 0.008,
+  "sunlightView": false,
+  "shoreView": false,
+  "yaw": 45,
+  "pitch": 35.26439,
+  "bed": false,
+  "normalBlend": 0,
+  "rippleEvolutionSpeed": 2
+}

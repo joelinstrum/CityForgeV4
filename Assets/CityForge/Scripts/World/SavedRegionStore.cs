@@ -10,7 +10,7 @@ namespace CityForge.World
 {
     [Serializable] public sealed class RegionCameraState
     {
-        public Vector3 focus;public float pitch,yaw,distance,size;public int zoom;public bool lowerView;
+        public Vector3 focus;public float pitch,yaw,distance,size;public int zoom;public bool lowerView;public bool hasViewTilt;public float viewTilt;
     }
     [Serializable] public sealed class SavedRegionInfo
     {

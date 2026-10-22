@@ -521,6 +521,7 @@ namespace CityForge.World
             }
             ForestSpeciesControls.Build(this,root.transform,font);
             WildlifeControls.Build(this,root.transform,font);
+            CameraTiltControls.Build(this,root.transform,font);
             SetTestControlsVisible(testControlsVisible);
             RefreshSeasonButtons();
             var diagnostics = gameObject.AddComponent<RegionPreviewDiagnostics>();
