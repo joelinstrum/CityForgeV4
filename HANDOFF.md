@@ -2,6 +2,12 @@
 
 Updated 2026-10-22. Read this before changing terrain, foliage, map creation, or rendering.
 
+## Downloaded maple trial retired — October24, 2026
+
+The user rejected the downloaded maple assets and requested their removal from the game. All import/close-view/population/opaque-cluster/leafy-branch preview scripts, controls, custom foliage shaders and rebuild tools were uncommitted experiments and have been removed from the active project. The unsaved trial was stopped; no trial placements or LOD/shadow overrides remain active. Native meadow/poplar, the pre-existing Silver Maples (mask3), seasons, camera, water settings and player saves are unchanged.
+
+Local imported/generated trial artwork was moved outside Assets to ignored `SourceAssets/MapleTrial/RetiredRuntimeAssets-2026-10-24`; original supplied sources/textures remain in SourceAssets/MapleTrial. Authored trial code and detailed historical reports are archived outside the project in this chat workspace under `work/maple-trial-retired-2026-10-24`. Do not revive any of these candidates as a forest fallback. See `Documentation/Migration/Downloaded_Maple_Trial_Retired.md`. Public Git remains source-only; no licensed artwork, source archives, player saves or builds are committed.
+
 ## Session close — approved water and camera, October22
 
 The user approved the final river appearance and requested a PR and next-session handoff. This section supersedes older statements that the latest selective/evolving treatment is awaiting approval. Branch: `feature/cityforge-next`; base: `main`. The PR also includes checkpoint9e538d8 (district river/terrain fixes and optional wildlife).
