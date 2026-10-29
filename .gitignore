@@ -192,3 +192,6 @@ venv/
 # Local generated Crest shader experiments; never publish licensed generated source.
 /Assets/CityForge/LocalWaterStudy/
 /Assets/CityForge/LocalWaterStudy.meta
+
+# Approved forest checkpoint includes private/licensed textures and derivatives.
+/SourceAssets/ApprovedForest/
