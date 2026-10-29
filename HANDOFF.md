@@ -1,6 +1,16 @@
 # CityForge V4 — main development handoff
 
-Updated 2026-10-22. Read this before changing terrain, foliage, map creation, or rendering.
+Updated 2026-10-28. Read this before changing terrain, foliage, map creation, or rendering.
+
+## Approved authored forest canopy — October 28, 2026
+
+The user approved the authored Tree06 broadleaf forest, its crown/trunk geometry and **refined C** olive palette, and requested a locked checkpoint/PR/handoff. This is distinct from the retired downloaded maples below. See `Documentation/03_Technical/Approved_Forest_Canopy.md` before further foliage/rendering changes.
+
+- Preserve seven variants, accepted scale/crown spread/leaf size, touching canopies, refined C dark-tree hue, slightly warmer/dimmer pale native trees, subtle intra-crown color variation and earthy desaturated grass. The authored recipe is `ApprovedForestColors.cs` and `ApprovedForestCanopy.shader`; normal gameplay is not automatically switched to this local study.
+- Private immutable checkpoint: `SourceAssets/ApprovedForest/RefinedC-2026-10-28/`. Verify/replay using `Tools/Trees/approved_forest_checkpoint.py`. Meshes/licensed textures/derivatives/builds/screenshots stay outside public Git. Missing local art is an explicit error, never permission to restore retired forest assets.
+- Approved performance setting: 80% scene render scale, full visible crown/PBR shading and configured 4K shadow map, coarse authored shadow geometry, depth priming off. The audited **pre-final-color** M1 Max run held ~60 FPS over 90 foreground seconds with 600 authored + 2,070 native mature trees. Final refined C is visually approved but must be remeasured after color baking/streamlining; no full-city guarantee or impostor qualification.
+- Source-only CLI pilot pins Unity Pipeline0.9.1-exp.1 and documents CLI beta14 / Editor6000.1.12f1. Direct Editor/CLI builds work without Hub. Preserve the user's Keychain and credentials; do not revive the beta8 permission-prompt workaround attempts.
+- This checkpoint is the next session's art baseline. Preserve native forest/saves/water/camera, Gamma/Ultra and clean MainMenu. Remaining work: lean production integration, color baking and city/performance validation, not further visual redesign without user direction.
 
 ## Downloaded maple trial retired — October24, 2026
 
