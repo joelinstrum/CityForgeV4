@@ -16,7 +16,7 @@ public sealed partial class MeadowDistrictLandscape {
  const int maskSize=512;var pixels=new Color[maskSize*maskSize];
  for(int z=0;z<maskSize;z++)for(int x=0;x<maskSize;x++){
  var worldX=Origin.x+(x+.5f)*Side/maskSize;var worldZ=Origin.y+(z+.5f)*Side/maskSize;
- bool wet=View.Coastline?worldX<CoastlineTestRegion.ShoreX(worldZ)+12:Height(new Vector2(worldX,worldZ))<View.SeaLevel-.02f;
+ bool wet=CoastalShorelineSwash.Applies(View)?Height(new Vector2(worldX,worldZ))<View.SeaLevel+2:View.Coastline?worldX<CoastlineTestRegion.ShoreX(worldZ)+12:Height(new Vector2(worldX,worldZ))<View.SeaLevel-.02f;
  if(wet&&!View.Coastline&&!(View.CreationSettings?.version>=5)){
  var normalized=new Vector2(worldX/View.MapSide+.5f,worldZ/View.MapSide+.5f);wet=false;
  foreach(var body in View.Data.WaterBodies)if((body.kind==WaterBodyKind.Ocean||body.kind==WaterBodyKind.River)&&body.Bounds.Contains(normalized)&&body.Contains(normalized)){wet=true;break;}
@@ -34,7 +34,10 @@ public sealed partial class MeadowDistrictLandscape {
  var tag=root.AddComponent<RegionWaterBodyTag>();tag.bodyId="coastal-ocean";tag.kind=WaterBodyKind.Ocean;
  var probe=new GameObject("Coastal seabed depth").AddComponent<DepthProbe>();probe.transform.SetParent(holder.transform,false);probe.transform.position=new Vector3(Origin.x+Side/2,View.SeaLevel,Origin.y+Side/2);probe.transform.localScale=new Vector3(Side,1,Side);probe.Type=DepthProbeMode.RealTime;probe.RefreshMode=DepthProbeRefreshMode.ViaScripting;probe.Layers=1<<30;probe.Resolution=1024;probe.SavedTexture=null;probe.CaptureRange=new Vector2(-40,terrainData.size.y+10);probe.GenerateSignedDistanceField=true;
  root.AddComponent<CoastalWaterClock>().Initialize(Water);
- if(View.Coastline)BuildIncomingSurf(holder.transform);else BuildOceanOutlineSurf(holder.transform);
+ if(CoastalShorelineSwash.Applies(View)){
+ surf.ShorelineFoamStrength=0;surf.WaveFoamStrength=.25f;surf.FoamFadeRate=2.5f;
+ var swash=new GameObject("Coastal swash trial");swash.transform.SetParent(holder.transform,false);swash.AddComponent<CoastalShorelineSwash>().Initialize(this);
+ }else if(View.Coastline)BuildIncomingSurf(holder.transform);else BuildOceanOutlineSurf(holder.transform);
  root.AddComponent<CoastalWaterPresentation>().Initialize(Water.Viewer,mat);
  root.SetActive(true);holder.SetActive(true);StartCoroutine(RefreshDepth(probe));
  }

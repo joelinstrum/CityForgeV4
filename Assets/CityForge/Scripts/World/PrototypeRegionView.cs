@@ -49,7 +49,6 @@ namespace CityForge.World
         private bool sampling;
         private string performanceReadout = "Measure at a fixed zoom for comparison.";
         private GameObject overviewButton;
-        private bool testControlsVisible;
         public RegionSeason Season {get;private set;}
         public void SetSeason(RegionSeason season)
         {
@@ -63,24 +62,12 @@ namespace CityForge.World
             foreach(RegionSeason season in System.Enum.GetValues(typeof(RegionSeason)))
             {
                 var button=hud.Find("Season"+season);if(!button)continue;
-                button.gameObject.SetActive(SelectedDistrict>=0&&!testControlsVisible);
+                button.gameObject.SetActive(SelectedDistrict>=0);
                 button.GetComponent<Button>().interactable=approvedDistrict&&approvedDistrict.gameObject.activeSelf;
                 button.GetComponent<Image>().color=season==Season?new Color(.38f,.36f,.29f,.98f):new Color(.13f,.15f,.13f,.95f);
             }
         }
 
-        // Retain the diagnostic controls for future terrain and performance tests.
-        public void SetTestControlsVisible(bool visible)
-        {
-            testControlsVisible=visible;
-            var hud=transform.Find("RegionHud");if(!hud)return;
-            foreach(Transform child in hud)
-            {
-                if(child.name.StartsWith("ZoomLevel")||child.name=="ZoomLabel")child.gameObject.SetActive(visible);
-                if(child.name=="Trees"||child.name=="SmallPlants")child.gameObject.SetActive(visible&&approvedDistrict&&approvedDistrict.gameObject.activeSelf);
-                if(child.name.StartsWith("Season"))child.gameObject.SetActive(!visible);
-            }
-        }
         private Transform waterSurface;
         public LandscapeProfile Landscape { get; private set; }
         public bool NaturalLandscape { get; private set; }
@@ -92,7 +79,6 @@ namespace CityForge.World
         public int LakeWaterVersion {get;private set;}=1;
         public bool MinimalRiverCrest {get;private set;}
         public int RiverBedVersion {get;private set;}
-        private Text landscapeCaption;
         private MeadowDistrictLandscape approvedDistrict;
         private MeadowDistrictLandscape approvedOverview;
         private bool wantsMeadow=true;
@@ -156,11 +142,8 @@ namespace CityForge.World
             var distant=GetComponent<DistantTreeRenderer>();if(distant)distant.enabled=!active;
             if(active)sampling=false;
             var hud=transform.Find("RegionHud");if(hud)foreach(Transform child in hud)if(child.name.StartsWith("Relief"))child.gameObject.SetActive(SelectedDistrict>=0&&!active);
-            var pacingButton=transform.Find("RegionHud/FramePacing");if(pacingButton)pacingButton.gameObject.SetActive(active);
-            var treesButton=transform.Find("RegionHud/Trees");if(treesButton)treesButton.gameObject.SetActive(active&&testControlsVisible);
-            var plantsButton=transform.Find("RegionHud/SmallPlants");if(plantsButton)plantsButton.gameObject.SetActive(active&&testControlsVisible);
             RefreshSeasonButtons();
-            if(landscapeCaption)landscapeCaption.text=SelectedDistrict<0?"REGIONAL RELIEF MAP":active?"LANDSCAPE: MEADOW":CreationSettings!=null?"MEADOW: SELECT A DISTRICT":wantsMeadow&&SelectedDistrict!=3?"MEADOW: SELECT A LAKE DISTRICT":"LANDSCAPE: LEGACY";
+
         }
         public RegionDistrictInfo[] Districts {get;private set;}
         public RegionCreationSettings CreationSettings {get;private set;}
@@ -442,36 +425,16 @@ namespace CityForge.World
             var rig = GetComponentInChildren<CityForgeCameraController>();
             var zoomLabel = HudText(root.transform, "ZoomLabel", font, 16);
             zoomLabel.rectTransform.anchorMin = zoomLabel.rectTransform.anchorMax = zoomLabel.rectTransform.pivot = new Vector2(1,1);
-            zoomLabel.rectTransform.anchoredPosition = new Vector2(-25,-182);
+            zoomLabel.rectTransform.anchoredPosition = new Vector2(-25,-87);
             zoomLabel.rectTransform.sizeDelta = new Vector2(205,28);
             zoomLabel.alignment = TextAnchor.MiddleRight;
-            var zoomButtons = new Button[6];
-            for (var i=0; i<6; i++)
-            {
-                var level = i;
-                var button = new GameObject("ZoomLevel" + level, typeof(RectTransform), typeof(Image), typeof(Button));
-                button.transform.SetParent(root.transform,false);
-                var r = button.GetComponent<RectTransform>();
-                r.anchorMin = r.anchorMax = r.pivot = new Vector2(1,1);
-                r.anchoredPosition = new Vector2(-25-(5-i)*42,-214); r.sizeDelta = new Vector2(37,34);
-                zoomButtons[i] = button.GetComponent<Button>();
-                zoomButtons[i].onClick.AddListener(() => rig.SetZoomLevel(level));
-                var label = HudText(button.transform,"Caption",font,17); label.text = level.ToString();
-                label.alignment = TextAnchor.MiddleCenter;
-                label.rectTransform.anchorMin = Vector2.zero; label.rectTransform.anchorMax = Vector2.one;
-                label.rectTransform.offsetMin = label.rectTransform.offsetMax = Vector2.zero;
-            }
-            System.Action<int> refreshZoom = level => {
-                zoomLabel.text = "ZOOM " + level + " / 5";
-                for (var i=0;i<6;i++) zoomButtons[i].GetComponent<Image>().color = i==level
-                    ? new Color(.38f,.36f,.29f,.98f) : new Color(.13f,.15f,.13f,.95f);
-            };
+            System.Action<int> refreshZoom = level => zoomLabel.text = "ZOOM " + level + " / 5";
             rig.ZoomChanged += refreshZoom; refreshZoom(rig.ZoomLevel);
             overviewButton = new GameObject("RegionOverview",typeof(RectTransform),typeof(Image),typeof(Button));
             overviewButton.transform.SetParent(root.transform,false);
             var overviewRect = overviewButton.GetComponent<RectTransform>();
             overviewRect.anchorMin = overviewRect.anchorMax = overviewRect.pivot = new Vector2(1,1);
-            overviewRect.anchoredPosition = new Vector2(-25,-330); overviewRect.sizeDelta = new Vector2(205,40);
+            overviewRect.anchoredPosition = new Vector2(-25,-280); overviewRect.sizeDelta = new Vector2(205,40);
             overviewButton.GetComponent<Image>().color = new Color(.13f,.15f,.13f,.95f);
             overviewButton.GetComponent<Button>().onClick.AddListener(ShowOverview);
             var overviewText = HudText(overviewButton.transform,"Caption",font,17); overviewText.text="REGION OVERVIEW";
@@ -479,35 +442,7 @@ namespace CityForge.World
             overviewText.rectTransform.anchorMin=Vector2.zero; overviewText.rectTransform.anchorMax=Vector2.one;
             overviewText.rectTransform.offsetMin=overviewText.rectTransform.offsetMax=Vector2.zero;
             overviewButton.SetActive(false);
-            var landscapeButton = new GameObject("LandscapeMode",typeof(RectTransform),typeof(Image),typeof(Button));
-            landscapeButton.transform.SetParent(root.transform,false);
-            var landscapeRect = landscapeButton.GetComponent<RectTransform>();
-            landscapeRect.anchorMin=landscapeRect.anchorMax=landscapeRect.pivot=new Vector2(1,1);
-            landscapeRect.anchoredPosition=new Vector2(-25,-380); landscapeRect.sizeDelta=new Vector2(205,40);
-            landscapeButton.GetComponent<Image>().color=new Color(.13f,.15f,.13f,.95f);
-            landscapeButton.GetComponent<Button>().interactable=Resources.Load<MeadowRuntimeBaseline>("Region/MeadowRuntimeBaseline")!=null;
-            landscapeButton.GetComponent<Button>().onClick.AddListener(()=>SetNaturalLandscape(!wantsMeadow));
-            landscapeCaption=HudText(landscapeButton.transform,"Caption",font,17);
-            landscapeCaption.alignment=TextAnchor.MiddleCenter;
-            landscapeCaption.rectTransform.anchorMin=Vector2.zero; landscapeCaption.rectTransform.anchorMax=Vector2.one;
-            landscapeCaption.rectTransform.offsetMin=landscapeCaption.rectTransform.offsetMax=Vector2.zero;
             UpdateLandscapeMode();
-            var plantButton=new GameObject("SmallPlants",typeof(RectTransform),typeof(Image),typeof(Button));plantButton.transform.SetParent(root.transform,false);
-            var plantRect=plantButton.GetComponent<RectTransform>();plantRect.anchorMin=plantRect.anchorMax=plantRect.pivot=new Vector2(1,1);plantRect.anchoredPosition=new Vector2(-25,-362);plantRect.sizeDelta=new Vector2(205,40);
-            plantButton.GetComponent<Image>().color=new Color(.13f,.15f,.13f,.95f);
-            var plantCaption=HudText(plantButton.transform,"Caption",font,17);plantCaption.text="SMALL PLANTS: OFF";plantCaption.alignment=TextAnchor.MiddleCenter;plantCaption.rectTransform.anchorMin=Vector2.zero;plantCaption.rectTransform.anchorMax=Vector2.one;plantCaption.rectTransform.offsetMin=plantCaption.rectTransform.offsetMax=Vector2.zero;
-            plantButton.GetComponent<Button>().onClick.AddListener(()=>{if(approvedDistrict)approvedDistrict.SetSmallPlantsEnabled(!approvedDistrict.SmallPlantsEnabled,true);});
-            var treeButton=new GameObject("Trees",typeof(RectTransform),typeof(Image),typeof(Button));treeButton.transform.SetParent(root.transform,false);
-            var treeRect=treeButton.GetComponent<RectTransform>();treeRect.anchorMin=treeRect.anchorMax=treeRect.pivot=new Vector2(1,1);treeRect.anchoredPosition=new Vector2(-25,-408);treeRect.sizeDelta=new Vector2(205,40);
-            treeButton.GetComponent<Image>().color=new Color(.13f,.15f,.13f,.95f);
-            var treeCaption=HudText(treeButton.transform,"Caption",font,17);treeCaption.text="TREES: "+(approvedDistrict&&approvedDistrict.TreesEnabled?"ON":"OFF");treeCaption.alignment=TextAnchor.MiddleCenter;treeCaption.rectTransform.anchorMin=Vector2.zero;treeCaption.rectTransform.anchorMax=Vector2.one;treeCaption.rectTransform.offsetMin=treeCaption.rectTransform.offsetMax=Vector2.zero;
-            treeButton.GetComponent<Button>().onClick.AddListener(()=>{if(approvedDistrict)approvedDistrict.SetTreesEnabled(!approvedDistrict.TreesEnabled,true);});
-            var pacingButton=new GameObject("FramePacing",typeof(RectTransform),typeof(Image),typeof(Button));pacingButton.transform.SetParent(root.transform,false);
-            var pacingRect=pacingButton.GetComponent<RectTransform>();pacingRect.anchorMin=pacingRect.anchorMax=pacingRect.pivot=new Vector2(1,1);pacingRect.anchoredPosition=new Vector2(-25,-454);pacingRect.sizeDelta=new Vector2(205,40);
-            pacingButton.GetComponent<Image>().color=new Color(.13f,.15f,.13f,.95f);
-            var pacingCaption=HudText(pacingButton.transform,"Caption",font,15);pacingCaption.text=approvedDistrict&&approvedDistrict.FramePacing60?"FRAME PACE: VSYNC":"FRAME PACE: UNCAPPED";pacingCaption.alignment=TextAnchor.MiddleCenter;pacingCaption.rectTransform.anchorMin=Vector2.zero;pacingCaption.rectTransform.anchorMax=Vector2.one;pacingCaption.rectTransform.offsetMin=pacingCaption.rectTransform.offsetMax=Vector2.zero;
-            pacingButton.GetComponent<Button>().onClick.AddListener(()=>{if(approvedDistrict)approvedDistrict.SetFramePacing60(!approvedDistrict.FramePacing60,true);});
-            // Visual placeholders: seasonal terrain, foliage and weather arrive in the next pass.
             var seasons=new[]{"Summer","Fall","Winter"};
             for(int i=0;i<seasons.Length;i++)
             {
@@ -515,7 +450,7 @@ namespace CityForge.World
                 season.transform.SetParent(root.transform,false);
                 var seasonRect=season.GetComponent<RectTransform>();
                 seasonRect.anchorMin=seasonRect.anchorMax=seasonRect.pivot=new Vector2(1,1);
-                seasonRect.anchoredPosition=new Vector2(-25,-182-i*46);seasonRect.sizeDelta=new Vector2(205,40);
+                seasonRect.anchoredPosition=new Vector2(-25,-132-i*46);seasonRect.sizeDelta=new Vector2(205,40);
                 var choice=(RegionSeason)i;
                 season.GetComponent<Button>().onClick.AddListener(()=>SetSeason(choice));
                 season.GetComponent<Image>().color=new Color(.13f,.15f,.13f,.95f);
@@ -524,14 +459,11 @@ namespace CityForge.World
                 seasonCaption.rectTransform.anchorMin=Vector2.zero;seasonCaption.rectTransform.anchorMax=Vector2.one;
                 seasonCaption.rectTransform.offsetMin=seasonCaption.rectTransform.offsetMax=Vector2.zero;
             }
-            ForestSpeciesControls.Build(this,root.transform,font);
-            WildlifeControls.Build(this,root.transform,font);
             CameraTiltControls.Build(this,root.transform,font);
-            SetTestControlsVisible(testControlsVisible);
             RefreshSeasonButtons();
             var diagnostics = gameObject.AddComponent<RegionPreviewDiagnostics>();
             diagnostics.Initialize(transform.Find("RegionLandCover").GetComponent<MeshRenderer>(),
-                GetComponentsInChildren<LineRenderer>(), root.transform, font, SeaLevel, 10f * MapScale);
+                GetComponentsInChildren<LineRenderer>(), root.transform, font, SeaLevel, 10f * MapScale, false);
         }
 
         private void BuildDistrictSelection(Transform parent,Font font)
@@ -602,14 +534,6 @@ namespace CityForge.World
         {
             if(SelectedDistrict>=0)return;
             var pointer = Event.current;
-            if(!NaturalLandscape&&SelectedDistrict>=0){
-            var panel = new Rect(24, Screen.height-218, 560, 84);
-            GUI.Box(panel, $"TREE PERFORMANCE · {TreeCount} trees · {(GetComponent<DistantTreeRenderer>()?.IsFar == true ? "distant tree silhouettes" : "3D meshes")}");
-            if (GUI.Button(new Rect(34, Screen.height-190, 160, 25), "ADD 320 TREES")) AddTrees(TreeCount+320);
-            if (GUI.Button(new Rect(204, Screen.height-190, 160, 25), "MEASURE 5s")) BeginTreeSample();
-            GUI.Label(new Rect(34, Screen.height-160, 540, 25), sampling ? "Measuring… keep camera still" : "Last sample: "+performanceReadout);
-            if (panel.Contains(pointer.mousePosition)) return;
-            }
             if (SelectedDistrict >= 0 || pointer.type != EventType.MouseDown || pointer.button != 0) return;
             // Use the event coordinates so a click is picked at its actual location,
             // including editor clicks that arrive without a preceding mouse-move event.

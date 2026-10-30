@@ -195,3 +195,10 @@ venv/
 
 # Approved forest checkpoint includes private/licensed textures and derivatives.
 /SourceAssets/ApprovedForest/
+
+# Authored swash input shaders only; coastal artwork and commercial code stay local.
+!/Assets/CityForge/Resources/CoastalSwash/
+!/Assets/CityForge/Resources/CoastalSwash.meta
+!/Assets/CityForge/Resources/CoastalSwash/*.shader
+!/Assets/CityForge/Resources/CoastalSwash/*.hlsl
+!/Assets/CityForge/Resources/CoastalSwash/*.meta
