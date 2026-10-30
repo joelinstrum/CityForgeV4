@@ -13,14 +13,15 @@ namespace CityForge.World
         private Vector3[][] originalLines;
         private float seaLevel = 12f, guideOffset = 10f;
         private Text toggleCaption;
+        bool controlsEnabled;
         private Button[] scaleButtons;
         private Text[] scaleCaptions;
         public bool IsEnabled { get; private set; }
         public int Exaggeration { get; private set; } = 1;
 
-        public void Initialize(MeshRenderer surface, LineRenderer[] lines, Transform hud, Font font, float waterLevel = 12f, float lineOffset = 10f)
+        public void Initialize(MeshRenderer surface, LineRenderer[] lines, Transform hud, Font font, float waterLevel = 12f, float lineOffset = 10f, bool showControls = true)
         {
-            seaLevel = waterLevel; guideOffset = lineOffset;
+            seaLevel = waterLevel; guideOffset = lineOffset;controlsEnabled=showControls;
             land = surface;
             originalMaterial = land.sharedMaterial;
             originalPosition = land.transform.localPosition;
@@ -37,6 +38,7 @@ namespace CityForge.World
                 originalLines[i] = new Vector3[lines[i].positionCount];
                 lines[i].GetPositions(originalLines[i]);
             }
+            if(!showControls){SetDiagnostic(false,1);return;}
             var toggle = MakeButton(hud, font, "ReliefDiagnosticToggle", -86f, -230f, 205f, out toggleCaption);
             toggle.onClick.AddListener(() => SetDiagnostic(!IsEnabled, Exaggeration));
             scaleButtons = new Button[3]; scaleCaptions = new Text[3];
@@ -70,6 +72,7 @@ namespace CityForge.World
                         positions[j].y = seaLevel + (positions[j].y - seaLevel - guideOffset) * scale + guideOffset;
                 districtLines[i].SetPositions(positions);
             }
+            if(!toggleCaption)return;
             toggleCaption.text = enabled ? "GRAY RELIEF: ON  [G]" : "GRAY RELIEF: OFF  [G]";
             for (var i = 0; i < scaleButtons.Length; i++)
             {
@@ -103,6 +106,7 @@ namespace CityForge.World
 
         private void Update()
         {
+            if(!controlsEnabled)return;
             if (Input.GetKeyDown(KeyCode.G)) SetDiagnostic(!IsEnabled, Exaggeration);
             if (!IsEnabled) return;
             if (Input.GetKeyDown(KeyCode.Alpha1)) SetDiagnostic(true, 1);

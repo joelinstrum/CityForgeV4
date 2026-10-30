@@ -35,14 +35,27 @@ namespace CityForge.World
         public bool FramePacing60 {get;private set;}=true;
         const string FramePacingPreference="CityForge.Meadow.FramePacing60";
         int savedFrameRate,savedVSync;
+        double pacingRefresh=-1;
         public void SetFramePacing60(bool enabled,bool remember=false)
         {
             FramePacing60=enabled;
             // Keep the legacy preference/API name so existing saves and tools remain compatible.
-            // Desktop pacing follows display refresh; a software 60 FPS cap can microstutter.
-            if(settingsApplied){QualitySettings.vSyncCount=enabled?1:0;Application.targetFrameRate=-1;}
+            // Synchronize near 60 Hz even on 120 Hz displays; keep hardware VSync instead of a software timer.
+            pacingRefresh=-1;ApplyFramePacing();
             if(remember){PlayerPrefs.SetInt(FramePacingPreference,enabled?1:0);PlayerPrefs.Save();}
             var caption=View.transform.Find("RegionHud/FramePacing/Caption");if(caption)caption.GetComponent<UnityEngine.UI.Text>().text=enabled?"FRAME PACE: VSYNC":"FRAME PACE: UNCAPPED";
+        }
+        void ApplyFramePacing()
+        {
+            if(!settingsApplied)return;
+            double refresh=Screen.currentResolution.refreshRateRatio.value;
+            if(refresh==pacingRefresh)return;
+            pacingRefresh=refresh;int interval=1;
+            if(FramePacing60&&!ApprovedForestAssets.CheckpointReplay&&double.IsFinite(refresh)&&refresh>0){
+                double error=Math.Abs(refresh-60);
+                for(int divisor=2;divisor<=4;divisor++){double candidate=Math.Abs(refresh/divisor-60);if(candidate<error){error=candidate;interval=divisor;}}
+            }
+            QualitySettings.vSyncCount=FramePacing60?interval:0;Application.targetFrameRate=-1;
         }
         public bool TreesEnabled {get;private set;}
         const string TreesPreference="CityForge.Meadow.Trees";
@@ -66,13 +79,25 @@ namespace CityForge.World
         public int BroadleafTreeCount {get;private set;}
         RegionSeason treeSeason;
         bool IsSmallPlant(int prototype)=>prototype<3||(prototype>=11&&prototype<Baseline.treePrefabs.Length);
-        TreePrototype[] TreePrototypes(GameObject[] prefabs)=>ForestTreeMix.Prototypes(prefabs,mountainEvergreens,treeSeason);
+        TreePrototype[] TreePrototypes(GameObject[] prefabs){
+            if(treeSeason==RegionSeason.Summer&&!ApprovedForestAssets.CheckpointReplay){var approved=Resources.Load<ApprovedForestAssets>("ApprovedForest/Forest");if(approved&&approved.nativeSummer!=null&&approved.nativeSummer.Length==prefabs.Length)prefabs=approved.nativeSummer;}
+            return ForestTreeMix.Prototypes(prefabs,mountainEvergreens,treeSeason);
+        }
+        void SetNativePresentation(TreeInstance[] source){
+            if(PanningTestDistricts.TryGetPercent(View.SavedRegionId,out int percent)){
+                // Keep exactly the same mature trees when understory is toggled for a controlled comparison.
+                var selected=new List<TreeInstance>(PanningTestDistricts.Subset(matureTreeInstances,percent));
+                if(source==fullTreeInstances)foreach(var tree in fullTreeInstances)if(IsSmallPlant(tree.prototypeIndex))selected.Add(tree);
+                source=selected.ToArray();
+            }
+            terrainData.SetTreeInstances(ForestTreeMix.Presentation(source,Baseline),false);
+        }
         public void SetSmallPlantsEnabled(bool enabled,bool remember=false)
         {
             if(remember){PlayerPrefs.SetInt(SmallPlantsPreference,enabled?1:0);PlayerPrefs.Save();}
             if(fullTreeInstances==null)return;
             bool changed=enabled!=SmallPlantsEnabled;
-            if(enabled!=SmallPlantsEnabled){terrainData.SetTreeInstances(ForestTreeMix.Presentation(enabled?fullTreeInstances:matureTreeInstances,Baseline),false);SmallPlantsEnabled=enabled;}
+            if(enabled!=SmallPlantsEnabled){SetNativePresentation(enabled?fullTreeInstances:matureTreeInstances);SmallPlantsEnabled=enabled;}
             if(enabled){
                 if(!shorelinePlants){BuildShoreline();shorelinePlants=transform.Find("Seeded shoreline and understory");}
                 if(!groundCover){var go=new GameObject("Streamed small plants");go.transform.SetParent(transform,false);groundCover=go.AddComponent<MeadowRuntimeVegetation>();groundCover.Initialize(this,View.GetComponentInChildren<Camera>());}
@@ -87,7 +112,7 @@ namespace CityForge.World
             if(!terrainData||fullTreeInstances==null)return;
             var library=Resources.Load<SeasonalTreeLibrary>("Seasons/SeasonalTrees");
             terrainData.treePrototypes=TreePrototypes(library.Prefabs(treeSeason));terrainData.RefreshPrototypes();
-            terrainData.SetTreeInstances(ForestTreeMix.Presentation(SmallPlantsEnabled?fullTreeInstances:matureTreeInstances,Baseline),false);DisplayTerrain.Flush();
+            SetNativePresentation(SmallPlantsEnabled?fullTreeInstances:matureTreeInstances);DisplayTerrain.Flush();
             if(refreshEnvironment)RefreshLakeEnvironments();
         }
         public void ApplySeasonShadows(RegionSeason season)
@@ -190,6 +215,9 @@ namespace CityForge.World
             progress?.Invoke("Applying landscape lighting",.78f);yield return null;Measure("presentation",BuildPresentation);
             progress?.Invoke("Preparing water",.84f);yield return null;
             if(View.MinimalRiverCrest)Measure("minimal river Crest",BuildMinimalRiverCrest);else if(!View.Waterless)Measure("water setup",BuildWater);
+            if(!ApprovedForestAssets.CheckpointReplay&&!Water&&!View.Waterless&&!View.MinimalRiverCrest){
+                var approvedWater=ApprovedRiverWater.Initialize(this);while(approvedWater.MoveNext())yield return approvedWater.Current;
+            }
             GenerationTimings=timings.ToString();Debug.Log("Meadow generation stages: "+GenerationTimings);
             progress?.Invoke("Preparing seasonal vegetation",.94f);yield return null;
             if(View.MountainTest)EvergreenTreeCount=MountainEvergreenMix.Apply(terrainData,Baseline.treePrefabs.Length,View.Data.Seed);
@@ -197,9 +225,11 @@ namespace CityForge.World
             fullTreeInstances=terrainData.treeInstances;
             var mature=new List<TreeInstance>();foreach(var tree in fullTreeInstances)if(!IsSmallPlant(tree.prototypeIndex))mature.Add(tree);matureTreeInstances=mature.ToArray();
             // Initial full data remains canonical for painting, snapshots and comparison.
-            SmallPlantsEnabled=true;SetSmallPlantsEnabled(PlayerPrefs.GetInt(SmallPlantsPreference,0)==1);
+            SmallPlantsEnabled=true;SetSmallPlantsEnabled(View.SavedRegionId=="pan-test-coast-50"||(!PanningTestDistricts.TryGetPercent(View.SavedRegionId,out _)&&PlayerPrefs.GetInt(SmallPlantsPreference,0)==1));
             RefreshForestSpecies(false);
-            SetTreesEnabled(view.Data.Biomes!=null||PlayerPrefs.GetInt(TreesPreference,0)==1);
+            SetTreesEnabled(true);
+            progress?.Invoke("Preparing approved forest canopy",.97f);yield return null;
+            if(!ApprovedForestAssets.CheckpointReplay){var forest=gameObject.AddComponent<ApprovedDistrictForest>();forest.Initialize(this);if(PanningTestDistricts.TryGetPercent(View.SavedRegionId,out int percent))forest.SetDiagnosticDensity(percent);}
             RefreshWildlife();
         }
         DistrictWildlife wildlife;
@@ -659,9 +689,22 @@ namespace CityForge.World
             }
             terrainData.SetAlphamaps(0,0,maps);
         }
+        bool HasOcean(){
+            var area=new Rect(Origin/View.MapSide+Vector2.one*.5f,Vector2.one*(Side/View.MapSide));
+            foreach(var body in View.Data.WaterBodies)if(body.kind==WaterBodyKind.Ocean&&body.Bounds.Overlaps(area))return true;
+            return false;
+        }
+        bool HasRiverWithoutOcean(){
+            bool river=false;var area=new Rect(Origin/View.MapSide+Vector2.one*.5f,Vector2.one*(Side/View.MapSide));
+            foreach(var body in View.Data.WaterBodies)if(body.Bounds.Overlaps(area)){
+                if(body.kind==WaterBodyKind.Ocean)return false;
+                if(body.kind==WaterBodyKind.River)river=true;
+            }
+            return river;
+        }
         void BuildWater(){
-            if(View.Coastline)BuildCoastalWater();
-            else if(GeneratedRiverDistrict){
+            if(View.Coastline||(!ApprovedForestAssets.CheckpointReplay&&HasOcean()))BuildCoastalWater();
+            else if(GeneratedRiverDistrict||(!ApprovedForestAssets.CheckpointReplay&&HasRiverWithoutOcean())){
                 var district=new Rect(Origin/View.MapSide+Vector2.one*.5f,Vector2.one*(Side/View.MapSide));
                 bool builtRiver=false;
                 foreach(var body in View.Data.WaterBodies){
@@ -707,6 +750,7 @@ namespace CityForge.World
         }}
         void LateUpdate()
         {
+            ApplyFramePacing();
             if(!DisplayTerrain||!Baseline||!navigationCamera)return;
             // Retreating an orthographic camera must not cull the approved forest.
             float padding=navigationCamera.OrthographicSetback;

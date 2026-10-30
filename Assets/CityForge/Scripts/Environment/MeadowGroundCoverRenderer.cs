@@ -12,6 +12,7 @@ namespace CityForge
     {
         public NativeMeadowBatch[] batches;
         public Camera presentationCamera;
+        public CameraSystem.CameraMotionQuality navigationQuality;
         public bool adaptiveDensity = true;
         [Range(.1f,1f)] public float lod0Density = 1f;
         [Range(.1f,1f)] public float closestZoomDensity = 1f;
@@ -95,6 +96,7 @@ namespace CityForge
         }
         void LateUpdate()
         {
+            if(navigationQuality&&navigationQuality.NavigationWorkSuspended){submittedInstances=submittedBatches=0;submissionMilliseconds=0;submissionAllocatedBytes=0;return;}
             if (batches == null || !presentationCamera) return;
             if(!CacheValid)RebuildDensityCache();
             long start = Stopwatch.GetTimestamp(), allocation = GC.GetAllocatedBytesForCurrentThread();

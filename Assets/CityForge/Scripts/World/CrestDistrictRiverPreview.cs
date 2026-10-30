@@ -1,4 +1,4 @@
-using System.Collections;
+using System.Collections;using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
@@ -34,15 +34,41 @@ namespace CityForge.World
         public bool BoundaryClipEnabled => water && water.ClipLod.Enabled && shoreClip;
         public Bounds WaterDomain => new Bounds(new Vector3(landscape.Origin.x+landscape.Side/2,level,landscape.Origin.y+landscape.Side/2),new Vector3(landscape.Side,1,landscape.Side));
         public Material Settings => master;
+        struct RiverReach { public Vector2 a,b;public float radiusSquared; }
+        const float RiverCellSide=32;
+        readonly Dictionary<Vector2Int,List<RiverReach>> legacyRiverCells=new();
+        // Legacy WaterDistance is unsigned distance to the centerline, not a wet/dry mask.
+        // Index the canonical river widths; broad low meadow must remain dry.
+        void BuildLegacyRiverFootprint(){
+            if(landscape.View.CreationSettings?.version>=5)return;
+            foreach(var body in landscape.View.Data.WaterBodies){
+                if(body.kind!=WaterBodyKind.River||body.centerline==null)continue;
+                float radius=body.halfWidthNormalized*landscape.View.MapSide;
+                for(int i=1;i<body.centerline.Length;i++){
+                    var a=(body.centerline[i-1]-Vector2.one*.5f)*landscape.View.MapSide;var b=(body.centerline[i]-Vector2.one*.5f)*landscape.View.MapSide;
+                    var min=Vector2Int.FloorToInt((Vector2.Min(a,b)-Vector2.one*radius)/RiverCellSide);var max=Vector2Int.FloorToInt((Vector2.Max(a,b)+Vector2.one*radius)/RiverCellSide);
+                    var reach=new RiverReach{a=a,b=b,radiusSquared=radius*radius};
+                    for(int z=min.y;z<=max.y;z++)for(int x=min.x;x<=max.x;x++){var cell=new Vector2Int(x,z);if(!legacyRiverCells.TryGetValue(cell,out var list))legacyRiverCells[cell]=list=new List<RiverReach>();list.Add(reach);}
+                }
+            }
+        }
+        public bool ContainsWetPoint(Vector2 point){
+            if(landscape.Height(point)>=level-.02f)return false;
+            if(landscape.View.CreationSettings?.version>=5)return true;
+            if(!legacyRiverCells.TryGetValue(Vector2Int.FloorToInt(point/RiverCellSide),out var reaches))return false;
+            foreach(var reach in reaches){var delta=reach.b-reach.a;float t=delta.sqrMagnitude>0?Mathf.Clamp01(Vector2.Dot(point-reach.a,delta)/delta.sqrMagnitude):0;if((point-reach.a-delta*t).sqrMagnitude<=reach.radiusSquared)return true;}
+            return false;
+        }
         public int GeneratedRendererCount => engine?engine.GetComponentsInChildren<MeshRenderer>(true).Length:0;
         public int EnabledGeneratedRendererCount {get{int count=0;if(engine)foreach(var renderer in engine.GetComponentsInChildren<MeshRenderer>(true))if(renderer.enabled)count++;return count;}}
-        public IEnumerator Initialize(MeadowDistrictLandscape land, LakeWaterRenderer original)
+        public IEnumerator Initialize(MeadowDistrictLandscape land, LakeWaterRenderer original, Material template=null)
         {
             landscape=land;level=original.SurfaceLevel;viewer=land.View.GetComponentInChildren<Camera>();rig=viewer.GetComponent<CityForgeCameraController>();
+            BuildLegacyRiverFootprint();
             var cameraData=viewer.GetUniversalAdditionalCameraData();oldColor=cameraData.requiresColorTexture;oldDepth=cameraData.requiresDepthTexture;
             cameraData.requiresColorTexture=true;cameraData.requiresDepthTexture=true;
             fallback=original.GetComponent<MeshRenderer>();
-            master=new Material(land.Baseline.waterTemplate.GetComponent<WaterRenderer>().Surface.Material);
+            master=new Material(template?template:land.Baseline.waterTemplate.GetComponent<WaterRenderer>().Surface.Material);
             engine=Instantiate(land.Baseline.waterTemplate,transform);engine.SetActive(false);engine.transform.position=Vector3.up*original.SurfaceLevel;
             water=engine.GetComponent<WaterRenderer>();water.Viewer=viewer;
             viewpoint=new GameObject("River simulation focus").transform;viewpoint.SetParent(transform,false);water.Viewpoint=viewpoint;
@@ -66,7 +92,7 @@ namespace CityForge.World
             for(int z=0;z<clipSize;z++)for(int x=0;x<clipSize;x++){
                 var point=land.Origin-Vector2.one*padding+new Vector2((x+.5f)/clipSize,(z+.5f)/clipSize)*clipSide;
                 bool within=point.x>=land.Origin.x+.5f&&point.x<=land.Origin.x+land.Side-.5f&&point.y>=land.Origin.y+.5f&&point.y<=land.Origin.y+land.Side-.5f;
-                clipPixels[z*clipSize+x]=within&&land.Height(point)<level-.02f?Color.black:Color.white;
+                clipPixels[z*clipSize+x]=within&&ContainsWetPoint(point)?Color.black:Color.white;
             }
             shoreClip=new Texture2D(clipSize,clipSize,TextureFormat.R8,false,true){name="Authoritative river wet footprint",wrapMode=TextureWrapMode.Clamp,filterMode=FilterMode.Bilinear};shoreClip.SetPixels(clipPixels);shoreClip.Apply(false,true);
             var shoreObject=new GameObject("River wet footprint and dry-land exclusion");shoreObject.transform.SetParent(transform,false);shoreObject.transform.position=center;shoreObject.transform.localScale=new Vector3(clipSide,1,clipSide);

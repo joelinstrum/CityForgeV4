@@ -9,7 +9,7 @@ namespace CityForge.World
     public sealed class MeadowRuntimeVegetation : MonoBehaviour
     {
         const float TileSide=32;
-        MeadowDistrictLandscape landscape;Camera camera;
+        MeadowDistrictLandscape landscape;Camera camera;CityForge.CameraSystem.CameraMotionQuality motion;
         readonly Dictionary<Vector2Int,GameObject> tiles=new();
         readonly List<Vector2Int> expired=new();
         readonly List<Vector2Int> pending=new();int nextPending;
@@ -23,10 +23,10 @@ namespace CityForge.World
         public int PendingTiles=>pending.Count-nextPending+(building!=null?1:0);
         Vector2Int lastCell=new(int.MinValue,int.MinValue);int lastRadius;
         public int LoadedTiles=>tiles.Count;
-        public void Initialize(MeadowDistrictLandscape source,Camera view){landscape=source;camera=view;}
+        public void Initialize(MeadowDistrictLandscape source,Camera view){landscape=source;camera=view;motion=view.GetComponent<CityForge.CameraSystem.CameraMotionQuality>();}
         void LateUpdate()
         {
-            if(!landscape||!camera)return;
+            if(!landscape||!camera||(motion&&motion.NavigationWorkSuspended))return;
             var ray=new Ray(camera.transform.position,camera.transform.forward);var plane=new Plane(Vector3.up,Vector3.up*landscape.View.SeaLevel);
             if(!plane.Raycast(ray,out var distance))return;var focus=camera.transform.position+camera.transform.forward*distance;
             var cell=Vector2Int.FloorToInt(new Vector2(focus.x,focus.z)/TileSide);int radius=Mathf.CeilToInt(Mathf.Clamp(camera.orthographicSize*2.4f+32,96,256)/TileSide);
@@ -85,7 +85,7 @@ namespace CityForge.World
             if(BudgetSpent)yield return null;
             var go=new GameObject("Native meadow tile "+cell);go.SetActive(false);go.transform.SetParent(transform,false);bool finished=false;
             try{
-                var renderer=go.AddComponent<MeadowGroundCoverRenderer>();renderer.combineCompatibleBatches=true;renderer.presentationCamera=camera;renderer.lod0Density=baseline.lod0Density;renderer.closestZoomDensity=baseline.closestZoomDensity;renderer.closestOrthographicThreshold=baseline.referenceViewSize*1.35f;renderer.batches=batches.ToArray();
+                var renderer=go.AddComponent<MeadowGroundCoverRenderer>();renderer.combineCompatibleBatches=true;renderer.presentationCamera=camera;renderer.navigationQuality=motion;renderer.lod0Density=baseline.lod0Density;renderer.closestZoomDensity=baseline.closestZoomDensity;renderer.closestOrthographicThreshold=baseline.referenceViewSize*1.35f;renderer.batches=batches.ToArray();
                 var cache=renderer.BuildDensityCache();while(cache.MoveNext())if(BudgetSpent)yield return null;
                 if(BudgetSpent)yield return null;
                 go.SetActive(true);tiles[cell]=go;finished=true;

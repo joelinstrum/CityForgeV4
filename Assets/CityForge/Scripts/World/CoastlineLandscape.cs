@@ -16,7 +16,12 @@ public sealed partial class MeadowDistrictLandscape {
  const int maskSize=512;var pixels=new Color[maskSize*maskSize];
  for(int z=0;z<maskSize;z++)for(int x=0;x<maskSize;x++){
  var worldX=Origin.x+(x+.5f)*Side/maskSize;var worldZ=Origin.y+(z+.5f)*Side/maskSize;
- pixels[z*maskSize+x]=worldX<CoastlineTestRegion.ShoreX(worldZ)+12?Color.black:Color.white;
+ bool wet=CoastalShorelineSwash.Applies(View)?Height(new Vector2(worldX,worldZ))<View.SeaLevel+2:View.Coastline?worldX<CoastlineTestRegion.ShoreX(worldZ)+12:Height(new Vector2(worldX,worldZ))<View.SeaLevel-.02f;
+ if(wet&&!View.Coastline&&!(View.CreationSettings?.version>=5)){
+ var normalized=new Vector2(worldX/View.MapSide+.5f,worldZ/View.MapSide+.5f);wet=false;
+ foreach(var body in View.Data.WaterBodies)if((body.kind==WaterBodyKind.Ocean||body.kind==WaterBodyKind.River)&&body.Bounds.Contains(normalized)&&body.Contains(normalized)){wet=true;break;}
+ }
+ pixels[z*maskSize+x]=wet?Color.black:Color.white;
  }
  var mask=Own(new Texture2D(maskSize,maskSize,TextureFormat.R8,false,true){name="Coastal ocean inclusion mask",wrapMode=TextureWrapMode.Clamp,filterMode=FilterMode.Bilinear});mask.SetPixels(pixels);mask.Apply(false,true);
  var maskObject=new GameObject("Coastal shoreline clipping");maskObject.transform.SetParent(holder.transform,false);maskObject.transform.position=new Vector3(Origin.x+Side/2,View.SeaLevel,Origin.y+Side/2);maskObject.transform.localScale=new Vector3(Side,1,Side);
@@ -29,9 +34,31 @@ public sealed partial class MeadowDistrictLandscape {
  var tag=root.AddComponent<RegionWaterBodyTag>();tag.bodyId="coastal-ocean";tag.kind=WaterBodyKind.Ocean;
  var probe=new GameObject("Coastal seabed depth").AddComponent<DepthProbe>();probe.transform.SetParent(holder.transform,false);probe.transform.position=new Vector3(Origin.x+Side/2,View.SeaLevel,Origin.y+Side/2);probe.transform.localScale=new Vector3(Side,1,Side);probe.Type=DepthProbeMode.RealTime;probe.RefreshMode=DepthProbeRefreshMode.ViaScripting;probe.Layers=1<<30;probe.Resolution=1024;probe.SavedTexture=null;probe.CaptureRange=new Vector2(-40,terrainData.size.y+10);probe.GenerateSignedDistanceField=true;
  root.AddComponent<CoastalWaterClock>().Initialize(Water);
- BuildIncomingSurf(holder.transform);
+ if(CoastalShorelineSwash.Applies(View)){
+ surf.ShorelineFoamStrength=0;surf.WaveFoamStrength=.25f;surf.FoamFadeRate=2.5f;
+ var swash=new GameObject("Coastal swash trial");swash.transform.SetParent(holder.transform,false);swash.AddComponent<CoastalShorelineSwash>().Initialize(this);
+ }else if(View.Coastline)BuildIncomingSurf(holder.transform);else BuildOceanOutlineSurf(holder.transform);
  root.AddComponent<CoastalWaterPresentation>().Initialize(Water.Viewer,mat);
  root.SetActive(true);holder.SetActive(true);StartCoroutine(RefreshDepth(probe));
+ }
+ void BuildOceanOutlineSurf(Transform holder){
+ foreach(var body in View.Data.WaterBodies){if(body.kind!=WaterBodyKind.Ocean||body.outline==null)continue;
+ var vertices=new System.Collections.Generic.List<Vector3>();var uvs=new System.Collections.Generic.List<Vector2>();var triangles=new System.Collections.Generic.List<int>();float length=0;
+ for(int i=1;i<body.outline.Length;i++){
+ var a=body.outline[i-1];var b=body.outline[i];
+ if((a.x==0&&b.x==0)||(a.x==1&&b.x==1)||(a.y==0&&b.y==0)||(a.y==1&&b.y==1))continue;
+ var pa=(a-Vector2.one*.5f)*View.MapSide;var pb=(b-Vector2.one*.5f)*View.MapSide;
+ if(!new Rect(Origin-Vector2.one*40,Vector2.one*(Side+80)).Overlaps(Rect.MinMaxRect(Mathf.Min(pa.x,pb.x)-1,Mathf.Min(pa.y,pb.y)-1,Mathf.Max(pa.x,pb.x)+1,Mathf.Max(pa.y,pb.y)+1)))continue;
+ var direction=(pb-pa).normalized;var sea=new Vector2(-direction.y,direction.x);var midpoint=(a+b)*.5f;
+ if(!body.Contains(midpoint+sea*.001f))sea=-sea;int start=vertices.Count;
+ for(int end=0;end<2;end++)foreach(float offset in new[]{34f,-8f}){var p=end==0?pa:pb;var q=p+sea*offset;vertices.Add(new Vector3(q.x,View.SeaLevel,q.y));uvs.Add(new Vector2(-offset,length+end*Vector2.Distance(pa,pb)));}length+=Vector2.Distance(pa,pb);
+ triangles.AddRange(new[]{start,start+2,start+1,start+1,start+2,start+3});
+ }
+ if(vertices.Count==0)continue;var mesh=Own(new Mesh{name="Saved coastline surf"});mesh.SetVertices(vertices);mesh.SetUVs(0,uvs);mesh.SetTriangles(triangles,0);mesh.RecalculateBounds();
+ var go=new GameObject("Animated saved coastline surf",typeof(MeshFilter),typeof(MeshRenderer));go.transform.SetParent(holder,false);go.GetComponent<MeshFilter>().sharedMesh=mesh;
+ var material=Own(new Material(Resources.Load<Shader>("Coasts/SurfFoam")));material.SetFloat("_Crest_Strength",2.8f);var renderer=go.GetComponent<MeshRenderer>();renderer.sharedMaterial=material;renderer.forceRenderingOff=true;go.AddComponent<CoastalSurfMotion>().Initialize(material);
+ var input=WaveHarmonic.Crest._Extensions.AddComponent<FoamLodInput>(go,LodInputMode.Renderer);input.GetData<FoamRendererLodInputData>().Renderer=renderer;
+ }
  }
  void BuildIncomingSurf(Transform holder){
  const int segments=256;var vertices=new Vector3[(segments+1)*2];var uv=new Vector2[vertices.Length];var triangles=new int[segments*6];

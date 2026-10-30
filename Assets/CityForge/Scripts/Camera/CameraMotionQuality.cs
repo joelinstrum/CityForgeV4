@@ -5,7 +5,7 @@ using UnityEngine.Rendering.Universal;
 namespace CityForge.CameraSystem
 {
     /// <summary>Transient navigation quality; never changes terrain data or authored materials.</summary>
-    [DisallowMultipleComponent, DefaultExecutionOrder(100)]
+    [DisallowMultipleComponent, DefaultExecutionOrder(-100)]
     public sealed class CameraMotionQuality : MonoBehaviour
     {
         const float SettleSeconds = .2f;
@@ -17,6 +17,8 @@ namespace CityForge.CameraSystem
         UniversalRenderPipelineAsset pipeline;
         bool initialized;
         public bool ReducedQuality { get; private set; }
+        public bool SuspendOptionalWork {get;set;}=true;
+        public bool NavigationWorkSuspended=>SuspendOptionalWork&&ReducedQuality;
 
         void OnEnable() { view = GetComponent<Camera>(); initialized = false; }
         void LateUpdate()
