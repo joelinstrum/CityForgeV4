@@ -41,7 +41,7 @@ namespace CityForge.World
         // saved bed up to its real terrain/level intersection, using fixed world geometry.
         public void InitializeGeneratedRiver(MeadowDistrictLandscape land,RegionWaterBody body)
         {
-            if(body.kind!=WaterBodyKind.River||land.View.CreationSettings?.version<5)
+            if(body.kind!=WaterBodyKind.River)
                 throw new System.ArgumentException("Expected a generated regional river.");
             float level=body.hasSurfaceLevel?body.surfaceLevelNormalized*land.DisplayTerrain.terrainData.size.y:land.View.SeaLevel;
             InitializeSurface(land.View,body,new Rect(land.Origin,Vector2.one*land.Side),level,land.Height,

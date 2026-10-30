@@ -2,7 +2,9 @@
 
 The user approved **refined palette C** on October 28, 2026 and requested a locked checkpoint, PR and handoff. Preserve this appearance instead of reopening the earlier tree-shape or blue-green palette experiments.
 
-This is an approved **local visual/replay baseline**, not automatic production forest placement. Normal district loading still uses the native `MeadowRuntimeBaseline`, `MeadowDistrictLandscape` and `SeasonalTreeLibrary`. Do not restore the retired downloaded maple or prototype broadleaf trees.
+**October 30 update:** normal district integration now uses this summer baseline; see `Approved_District_Integration.md` for implementation, limits and verification. The frozen replay retains its original presentation through an explicit replay guard.
+
+At lock, this was an approved **local visual/replay baseline**, not automatic production forest placement. Normal district loading still uses the native `MeadowRuntimeBaseline`, `MeadowDistrictLandscape` and `SeasonalTreeLibrary`. Do not restore the retired downloaded maple or prototype broadleaf trees.
 
 ## Approved appearance
 

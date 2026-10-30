@@ -166,7 +166,7 @@ namespace CityForge.UI
             var label=largeModal.GetComponentInChildren<Text>(true);
             CloseDialog();IsOpeningRegion=true;
             var loading=RegionLoadingOverlay.Show(info.name,label?label.font:null);
-            loading.Begin(info,canvas,()=>IsOpeningRegion=false,error=>{
+            loading.Begin(info,canvas,()=>{IsOpeningRegion=false;if(World.PanningTestDistricts.TryGetPercent(info.id,out _)){var view=FindFirstObjectByType<World.PrototypeRegionView>();if(view)view.RequestDistrict(3);}},error=>{
                 Debug.LogException(error);
                 ShowRegionModal("OPEN REGION","This saved region could not be opened. Your save file has been kept.",new Rect(10f,105f,405f,395f));
             });

@@ -106,6 +106,7 @@ namespace CityForge.World
         public void RegenerateApprovedDistrict()
         {
             SetNaturalLandscape(false);
+            sessionMeadows.Remove(SelectedDistrict);LoadedMeadow=null;
             if(approvedDistrict){Destroy(approvedDistrict.gameObject);approvedDistrict=null;}
             SetNaturalLandscape(true);
         }
@@ -119,12 +120,11 @@ namespace CityForge.World
         private IEnumerator UpdateLandscapeModeStages()
         {
             var baseline=Resources.Load<MeadowRuntimeBaseline>("Region/MeadowRuntimeBaseline");
-            bool lakeDistrict=false;
-            if(SelectedDistrict>=0&&Data?.WaterBodies!=null){var area=RegionBiomeMap.DistrictBounds(SelectedDistrict,GridSide);
-                foreach(var body in Data.WaterBodies)if((body.kind==WaterBodyKind.Lake||body.kind==WaterBodyKind.Pond)&&body.Bounds.Overlaps(area)){lakeDistrict=true;break;}}
-            bool active=SelectedDistrict>=0 && wantsMeadow && baseline!=null && ((Data?.Biomes!=null)||(CreationSettings!=null&&SelectedDistrict>=0)||SelectedDistrict==3||lakeDistrict||(MountainTest&&SelectedDistrict>=0));
+            // Every district uses the approved biome, including original recipe-less saves.
+            // The regional overview remains the lightweight relief renderer.
+            bool active=SelectedDistrict>=0 && wantsMeadow && baseline!=null;
             if(approvedDistrict!=null&&(!active||approvedDistrict.DistrictIndex!=SelectedDistrict)){
-                LoadedMeadow=approvedDistrict.CaptureSnapshot();LoadedMeadowDistrict=approvedDistrict.DistrictIndex;
+                LoadedMeadow=approvedDistrict.CaptureSnapshot();LoadedMeadowDistrict=approvedDistrict.DistrictIndex;sessionMeadows[LoadedMeadowDistrict]=LoadedMeadow;
                 approvedDistrict.ApplyPresentation(false);approvedDistrict.gameObject.SetActive(false);
                 if(Data.Biomes!=null&&approvedDistrict.IsRegionOverview)approvedOverview=approvedDistrict;
                 else Destroy(approvedDistrict.gameObject);
@@ -133,6 +133,7 @@ namespace CityForge.World
             if(active&&approvedDistrict==null&&SelectedDistrict<0&&approvedOverview){approvedDistrict=approvedOverview;approvedDistrict.SetSeason(Season);}
             Shader.SetGlobalFloat("_LandscapeEnabled",0); // Retire the rejected mesh approximation.
             if(active && approvedDistrict==null){
+                if(sessionMeadows.TryGetValue(SelectedDistrict,out var cachedMeadow)){LoadedMeadow=cachedMeadow;LoadedMeadowDistrict=SelectedDistrict;}
                 var go=new GameObject("Approved meadow runtime district");go.transform.SetParent(transform,false);
                 approvedDistrict=go.AddComponent<MeadowDistrictLandscape>();
                 yield return approvedDistrict.BuildStages(this,baseline,Data.Biomes!=null&&SelectedDistrict<0,(stage,value)=>loadingProgress?.Invoke(stage,.4f+value*.55f));
@@ -172,6 +173,9 @@ namespace CityForge.World
 
         public PrototypeRegionData Data { get; private set; }
         public string SavedRegionId {get;private set;}
+        // Session caches preserve the originally loaded district when other cells are visited.
+        // Disk persistence still stores one last district; no save schema change.
+        private readonly Dictionary<int,MeadowRegionSnapshot> sessionMeadows=new();
         public MeadowRegionSnapshot LoadedMeadow {get;private set;}
         public int LoadedMeadowDistrict {get;private set;}=-1;
         public void ReleaseLoadedMeadow(){LoadedMeadow=null;}
@@ -225,6 +229,7 @@ namespace CityForge.World
             {
                 progress?.Invoke("Preparing region",.15f);yield return null;
                 if(snapshot!=null){view.CreationSettings=snapshot.info.creation;view.AnimalsEnabled=snapshot.info.animals;size=(RegionSize)snapshot.info.size;seed=snapshot.info.seed;regionName=snapshot.info.name;view.SavedRegionId=snapshot.info.id;view.Season=(RegionSeason)snapshot.info.season;view.TerrainHeightRange=snapshot.info.terrainHeightRange;view.LoadedMeadow=snapshot.meadow;view.LoadedMeadowDistrict=snapshot.info.meadowCacheDistrict;view.LoadedFromSnapshot=true;view.wantsMeadow=snapshot.info.meadow;view.Waterless=snapshot.info.waterless;view.Coastline=snapshot.info.coastline;view.CoastVersion=snapshot.info.coastVersion;view.MinimalRiverCrest=snapshot.info.minimalRiverCrest;view.StillWater=snapshot.info.stillWater;view.LakeWaterVersion=snapshot.info.lakeWaterVersion<0?-1:1;view.RiverBedVersion=snapshot.info.riverBedVersion;}
+                if(view.LoadedMeadow!=null&&view.LoadedMeadowDistrict>=0)view.sessionMeadows[view.LoadedMeadowDistrict]=view.LoadedMeadow;
                 view.Size = size;
                 view.RegionName = string.IsNullOrWhiteSpace(regionName) ? "Test Region" : regionName.Trim();
                 view.deferLegacyTrees=view.wantsMeadow&&Resources.Load<MeadowRuntimeBaseline>("Region/MeadowRuntimeBaseline")!=null&&(snapshot==null||snapshot.info.district>=0);
