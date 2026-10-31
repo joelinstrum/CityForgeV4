@@ -18,8 +18,11 @@ namespace CityForge.World
         // Missing/zero values in older saves migrate to the accepted lake/pond renderer.
         public int lakeWaterVersion=1;
         public bool animals;
+        // Also supports climate on legacy coastal maps without inventing a creation recipe.
+        public RegionClimate climate;
         public RegionCreationSettings creation;
         public RegionDistrictInfo[] districts;
+        public CombinedDistrictGroup[] combinedDistricts;
         public int meadowCacheDistrict=-1;
         public float terrainHeightRange;
         public RegionWaterBody[] waterBodies;
@@ -82,7 +85,7 @@ namespace CityForge.World
         {
             var baseline=Resources.Load<MeadowRuntimeBaseline>("Region/MeadowRuntimeBaseline");
             var info=new SavedRegionInfo{animals=view.AnimalsEnabled,id=id??view.SavedRegionId??Guid.NewGuid().ToString("N"),name=name??view.RegionName,season=(int)view.Season,terrainHeightRange=view.TerrainHeightRange,seed=view.Data.Seed,size=(int)view.Size,district=view.SelectedDistrict,meadow=view.PrefersMeadow,waterBodies=view.Data.WaterBodies,waterless=view.Waterless,coastline=view.Coastline,coastVersion=view.CoastVersion,minimalRiverCrest=view.MinimalRiverCrest,stillWater=false,lakeWaterVersion=LakeWaterRenderer.UsesCalmWater(view)?1:-1,riverBedVersion=view.RiverBedVersion,savedUtc=DateTime.UtcNow.ToString("O"),baselineVersion=baseline?baseline.generationVersion:0,camera=view.GetComponentInChildren<CameraSystem.CityForgeCameraController>().CaptureRegionState()};
-            info.creation=view.CreationSettings;info.districts=view.Districts;
+            info.climate=view.Climate;info.creation=view.CreationSettings;info.districts=view.Districts;info.combinedDistricts=view.CombinedDistricts;
             var pilot=view.ApprovedDistrict;info.meadowCacheDistrict=pilot?pilot.DistrictIndex:view.LoadedMeadowDistrict;
             return new SavedRegionSnapshot{info=info,data=view.Data,meadow=pilot?pilot.CaptureSnapshot():view.LoadedMeadow};
         }
@@ -95,10 +98,15 @@ namespace CityForge.World
         }
         public static void Write(SavedRegionSnapshot snapshot,string path)
         {
+            DistrictConnections.Validate(snapshot.info.combinedDistricts,snapshot.info.creation?.GridSide??2);
             string temp=path+".tmp";Directory.CreateDirectory(Path.GetDirectoryName(path));
             try{
                 using(var stream=File.Create(temp))using(var gzip=new GZipStream(stream,System.IO.Compression.CompressionLevel.Fastest))using(var writer=new BinaryWriter(gzip)){
-                    writer.Write(Magic);var json=Encoding.UTF8.GetBytes(JsonUtility.ToJson(snapshot.info));writer.Write(json.Length);writer.Write(json);
+                    writer.Write(Magic);var metadata=JsonUtility.ToJson(snapshot.info);
+                    // Unity serializes a null inline class as a default object. Preserve legacy
+                    // maps' absent recipe so saving climate cannot change their grid or scale.
+                    if(snapshot.info.creation==null)metadata=System.Text.RegularExpressions.Regex.Replace(metadata,"\"creation\"\\s*:\\s*\\{[^{}]*\\}","\"creation\":null");
+                    var json=Encoding.UTF8.GetBytes(metadata);if(json.Length>1048576)throw new InvalidDataException("Region metadata exceeds the supported size.");writer.Write(json.Length);writer.Write(json);
                     WriteFloats(writer,snapshot.data.Heights);WriteFloats(writer,snapshot.data.WaterDistance);
                     writer.Write(snapshot.meadow!=null);
                     if(snapshot.meadow!=null){var m=snapshot.meadow;writer.Write(m.version);writer.Write(m.road.Length);foreach(var p in m.road){writer.Write(p.x);writer.Write(p.y);}
@@ -130,12 +138,12 @@ namespace CityForge.World
         static bool Finite(float v)=>!float.IsNaN(v)&&!float.IsInfinity(v);
         static SavedRegionInfo ReadInfo(BinaryReader reader)
         {
-            if(reader.ReadString()!=Magic)throw new InvalidDataException("Unsupported saved region.");int length=Count(reader,2,65536);var bytes=reader.ReadBytes(length);if(bytes.Length!=length)throw new EndOfStreamException();
+            if(reader.ReadString()!=Magic)throw new InvalidDataException("Unsupported saved region.");int length=Count(reader,2,1048576);var bytes=reader.ReadBytes(length);if(bytes.Length!=length)throw new EndOfStreamException();
             var json=Encoding.UTF8.GetString(bytes);var info=JsonUtility.FromJson<SavedRegionInfo>(json);
             // JsonUtility can instantiate a missing nested recipe with current defaults.
             // An old save without a recipe must retain its original grid/vertical scale.
             if(info!=null&&(!json.Contains("\"creation\"")||System.Text.RegularExpressions.Regex.IsMatch(json,"\"creation\"\\s*:\\s*null")))info.creation=null;
-            if(info!=null&&!json.Contains("\"meadowCacheDistrict\""))info.meadowCacheDistrict=info.district>=0?info.district:3;if(info==null||info.schema!=1||info.season<0||info.season>2||info.size<0||info.size>2||!Finite(info.terrainHeightRange)||info.terrainHeightRange<0||info.terrainHeightRange>10000||info.district< -1||info.district>=(info.creation?.GridSide??2)*(info.creation?.GridSide??2)||string.IsNullOrWhiteSpace(info.name))throw new InvalidDataException("Unsupported region metadata.");if(info.creation!=null)info.creation.Validate();return info;
+            if(info!=null&&!json.Contains("\"meadowCacheDistrict\""))info.meadowCacheDistrict=info.district>=0?info.district:3;if(info==null||info.schema!=1||(int)info.climate<0||(int)info.climate>1||info.season<0||info.season>2||info.size<0||info.size>2||!Finite(info.terrainHeightRange)||info.terrainHeightRange<0||info.terrainHeightRange>10000||info.district< -1||info.district>=(info.creation?.GridSide??2)*(info.creation?.GridSide??2)||string.IsNullOrWhiteSpace(info.name))throw new InvalidDataException("Unsupported region metadata.");if(info.creation!=null)info.creation.Validate();DistrictConnections.Validate(info.combinedDistricts,info.creation?.GridSide??2);return info;
         }
         static int Count(BinaryReader reader,int min,int max){int count=reader.ReadInt32();if(count<min||count>max)throw new InvalidDataException("Invalid snapshot dimensions.");return count;}
         static void WriteFloats(BinaryWriter writer,Array values){var buffer=new byte[Buffer.ByteLength(values)];Buffer.BlockCopy(values,0,buffer,0,buffer.Length);writer.Write(buffer);}

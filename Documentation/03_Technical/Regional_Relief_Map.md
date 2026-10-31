@@ -1,3 +1,19 @@
+## Tropical shelf depth and thicker map edges — October31
+
+New default recipe version12 gives Tropical ocean layouts a gradually deepening continental shelf: sea level30m, seabed reaching6m (24m depth) over12% of region width. Land and all explicit water surfaces shift upward18m together, preserving relative relief, river depths and shoreline location. Non-ocean and Temperate generation remains unchanged; versions1–11 and stored heightfields remain authoritative. Existing Tropical maps receive the offshore color presentation without regenerating their geography.
+
+Tropical Crest scattering uses an owned256-square texture sampled in shared regional coordinates, transitioning from aqua nearshore to richer blue offshore. CoastalWaterPresentation applies its existing projection-dependent color multipliers to the input and retains adaptive sun-glare smoothness. Waves, reflection settings, shoreline foam and clipping are retained. Regional relief uses the same shelf blend for ocean colors. The depth probe captures the entire new seabed range.
+
+Native districts now have an earth-colored exterior slab. Edge generation follows original member-cell adjacency, suppresses internal walls, preserves concave L-shaped boundaries and uses one common bottom. Owned meshes/materials are released with the landscape. Regional overview slab depth increases from2.5% to4.5% of map width. These edges are presentation only and do not alter saved terrain or gameplay colliders.
+
+## Combined districts — October31
+
+Region HUD has COMBINE DISTRICTS (gold active state), gold union selection outline and APPLY enabled for2–4 original edge-connected cells. Diagonals, wraparound, disconnected additions/removals and more than4 cells are rejected. Existing groups select atomically and can expand only within the same total4-cell limit. Applied groups use the normal white outer boundaries and hide internal grid lines. Gold is reserved for the pending selection while Combine Districts is active. Turning the mode off discards the pending selection. Apply changes the session; Save Region/Save District persists it.
+
+`CombinedDistrictGroup.cells` is additive saved metadata; original grid IDs, shared geography and recipe are unchanged. Groups validate on both read and write for size/connectivity/uniqueness/overlap. Clicking any member opens the same minimum-ID anchor and full union. Native district terrain samples the canonical shared field across a square enclosing the group, using terrain/collision holes to exclude unselected cells (including L-shapes and strip padding). Tree placement, roads, snowfall/caps and water masks honor the same footprint. Combined terrain control maps are bounded to2048 samples. The merged camera frames the full area at the approved315-degree native view, with depth accommodating absolute terrain height.
+
+Applying a changed group invalidates member terrain caches to match the new geometry; reapplying the same group retains its cache. Existing one-last-district save-cache semantics remain, now keyed by the group anchor. Shader grouping IDs remove internal borders without changing region geometry/picking; HUD shows the resulting logical district count. No saved region is automatically rewritten.
+
 # CityForge V4 — main development handoff
 
 Updated 2026-10-20. Read this before changing terrain, foliage, map creation, or rendering.

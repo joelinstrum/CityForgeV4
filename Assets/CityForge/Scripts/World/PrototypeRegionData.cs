@@ -21,10 +21,7 @@ namespace CityForge.World
                 var a=body.centerline[i-1];var delta=body.centerline[i]-a;float t=delta.sqrMagnitude>0?Mathf.Clamp01(Vector2.Dot(point-a,delta)/delta.sqrMagnitude):0;
                 if(Vector2.Distance(point,a+delta*t)<=body.halfWidthNormalized)return body;
             }
-            foreach(var body in WaterBodies)if(body.outline!=null){bool inside=false;var points=body.outline;
-                for(int i=0,j=points.Length-1;i<points.Length;j=i++)if((points[i].y>point.y)!=(points[j].y>point.y)&&point.x<(points[j].x-points[i].x)*(point.y-points[i].y)/(points[j].y-points[i].y)+points[i].x)inside=!inside;
-                if(inside)return body;
-            }
+            foreach(var body in WaterBodies)if(body.outline!=null&&body.Contains(point))return body;
             return null;
         }
         public bool SmoothRiverHeights;

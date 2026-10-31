@@ -19,3 +19,11 @@ This first candidate removes the broad white stripe and introduces a moving shal
 ## Visual acceptance
 
 The user approved this first coastal swash appearance on2026-10-30 and requested commit/push/PR. Preserve this version as the accepted starting point for subsequent shore refinement. Wet-sand response and a standalone cost comparison remain future work; visual approval does not qualify performance.
+
+## Tropical climate option — October 30
+
+Climate now offers the three existing Temperate moisture choices plus Tropical. `RegionCreationSettings.climate` is independent of moisture; Tropical uses Balanced moisture and leaves the approved vegetation and terrain generation intact. Missing climate metadata defaults to Temperate. Recipes persist climate; legacy maps can store it in `SavedRegionInfo.climate` without adding a recipe or changing their two-by-two grid. `SavedRegionStore.Write` explicitly retains `creation:null` for those maps because Unity otherwise materializes a default inline recipe.
+
+Only coastal Crest materials opt into the Tropical palette, applied to the district-owned material before `CoastalWaterPresentation` captures its perspective baseline. Absorption is `(0.32,0.065,0.035)` and scattering `(0.035,0.24,0.30)`, giving light blue/aqua water under the approved lighting. Existing Temperate materials are untouched. Waves, swash, foam, reflection settings, lighting, terrain and tree assets are unchanged; rivers/lakes/ponds retain their existing profiles. Ocean/river districts still share the coastal surface, so an estuary inherits this palette. The wizard still creates inland geography; climate does not add a coastline generator or tropical vegetation.
+
+Unity compilation passed with zero errors/warnings. Live dropdown mapping, old-recipe Temperate default, recipe and legacy binary save round trips, legacy null-recipe preservation, unchanged Temperate material and Tropical isometric/perspective color restoration passed. The existing coastal test was rebuilt with Tropical in memory for visual inspection; original saves were not rewritten. Player-build qualification was not run for this color-only path.

@@ -12,6 +12,7 @@ namespace CityForge.World
     public sealed partial class MeadowDistrictLandscape : MonoBehaviour
     {
         public PrototypeRegionView View {get;private set;}
+        public bool RockyMountainBorder=>View&&View.CreationSettings?.version==7&&View.CreationSettings.terrainShape==RegionTerrainShape.MountainBorder;
         public MeadowRuntimeBaseline Baseline {get;private set;}
         public Terrain DisplayTerrain {get;private set;}
         public WaterRenderer Water {get;private set;}
@@ -83,6 +84,7 @@ namespace CityForge.World
             if(treeSeason==RegionSeason.Summer&&!ApprovedForestAssets.CheckpointReplay){var approved=Resources.Load<ApprovedForestAssets>("ApprovedForest/Forest");if(approved&&approved.nativeSummer!=null&&approved.nativeSummer.Length==prefabs.Length)prefabs=approved.nativeSummer;}
             return ForestTreeMix.Prototypes(prefabs,mountainEvergreens,treeSeason);
         }
+        public TropicalPalmForest Palms {get;private set;}
         void SetNativePresentation(TreeInstance[] source){
             if(PanningTestDistricts.TryGetPercent(View.SavedRegionId,out int percent)){
                 // Keep exactly the same mature trees when understory is toggled for a controlled comparison.
@@ -90,6 +92,9 @@ namespace CityForge.World
                 if(source==fullTreeInstances)foreach(var tree in fullTreeInstances)if(IsSmallPlant(tree.prototypeIndex))selected.Add(tree);
                 source=selected.ToArray();
             }
+            var approved=GetComponent<ApprovedDistrictForest>();
+            if(approved)source=approved.NativePresentation(source);
+            if(Palms)source=Palms.PresentNative(source);
             terrainData.SetTreeInstances(ForestTreeMix.Presentation(source,Baseline),false);
         }
         public void SetSmallPlantsEnabled(bool enabled,bool remember=false)
@@ -117,6 +122,7 @@ namespace CityForge.World
         }
         public void ApplySeasonShadows(RegionSeason season)
         {
+            if(View.Climate==RegionClimate.Tropical)season=RegionSeason.Summer;
             foreach(var light in GetComponentsInChildren<Light>())
             {
                 if(light.type!=LightType.Directional)continue;
@@ -128,6 +134,7 @@ namespace CityForge.World
         }
         public void SetSeason(RegionSeason season)
         {
+            if(View.Climate==RegionClimate.Tropical)season=RegionSeason.Summer;
             ApplySeasonShadows(season);
             var library=Resources.Load<SeasonalTreeLibrary>("Seasons/SeasonalTrees");
             if(!library)return;
@@ -135,8 +142,9 @@ namespace CityForge.World
             var prefabs=library.Prefabs(season);
             if(prefabs==null||prefabs.Length!=Baseline.treePrefabs.Length)throw new Exception("Season prototype count mismatch");
             var prototypes=TreePrototypes(prefabs);
-            terrainData.treePrototypes=prototypes;terrainData.RefreshPrototypes();DisplayTerrain.Flush();
-            RefreshLakeEnvironments();
+            terrainData.treePrototypes=prototypes;terrainData.RefreshPrototypes();
+            if(fullTreeInstances!=null)SetNativePresentation(SmallPlantsEnabled?fullTreeInstances:matureTreeInstances);
+            DisplayTerrain.Flush();RefreshLakeEnvironments();
         }
         void RefreshLakeEnvironments(){foreach(var lake in GetComponentsInChildren<LakeWaterRenderer>())if(lake.CaptureReady)lake.RefreshEnvironment();}
         public MeadowRegionSnapshot CaptureSnapshot()=>new MeadowRegionSnapshot{version=Baseline.generationVersion,road=Road.ToArray(),trees=fullTreeInstances??terrainData.treeInstances,alphamaps=lakeBaseAlphamaps??terrainData.GetAlphamaps(0,0,terrainData.alphamapResolution,terrainData.alphamapResolution)};
@@ -163,26 +171,28 @@ namespace CityForge.World
                 if(layers.Length==8)layers[7]=Resources.Load<TerrainLayer>("RiverBeds/Moss");
                 foreach(var layer in layers)if(!layer)throw new System.Exception("Missing dry riverbed terrain layer.");baseline.layers=layers;
             }
-            if(view.MountainTest){baseline=Own(Instantiate(baseline));baseline.name="Hills and mountain land";
+            if(view.MountainTest||(view.CreationSettings?.version==7&&view.CreationSettings.terrainShape==RegionTerrainShape.MountainBorder)){baseline=Own(Instantiate(baseline));baseline.name="Hills and mountain land";
                 if(MountainSurfaceTreatment.Enabled){var template=Resources.Load<Material>("Mountains/MountainTerrain");if(!template)throw new Exception("Missing mountain terrain material");var material=Own(Instantiate(template));material.name="Mountain surface with varied world projection";baseline.terrainMaterial=material;}
-                baseline.generationVersion=105;var layers=new TerrainLayer[8];Array.Copy(baseline.layers,layers,5);layers[5]=Resources.Load<TerrainLayer>(MountainSurfaceTreatment.Enabled?"Mountains/VariedCliffDark":"Mountains/CliffDark");layers[6]=Resources.Load<TerrainLayer>(MountainSurfaceTreatment.Enabled?"Mountains/PhotoscannedCliff":"Mountains/CliffBright");layers[7]=Resources.Load<TerrainLayer>("Mountains/Scree");baseline.layers=layers;}
+                baseline.generationVersion=view.MountainTest?105:107;var layers=new TerrainLayer[8];Array.Copy(baseline.layers,layers,5);layers[5]=Resources.Load<TerrainLayer>(MountainSurfaceTreatment.Enabled?"Mountains/VariedCliffDark":"Mountains/CliffDark");layers[6]=Resources.Load<TerrainLayer>(MountainSurfaceTreatment.Enabled?"Mountains/PhotoscannedCliff":"Mountains/CliffBright");layers[7]=Resources.Load<TerrainLayer>("Mountains/Scree");baseline.layers=layers;}
             if(view.Coastline){baseline=Own(Instantiate(baseline));baseline.terrainMaterial=Resources.Load<Material>("Coasts/CoastalTerrain");baseline.generationVersion=201;var coastalLayers=new TerrainLayer[7];Array.Copy(baseline.layers,coastalLayers,5);coastalLayers[5]=Resources.Load<TerrainLayer>("RiverBeds/RichSand");coastalLayers[6]=Resources.Load<TerrainLayer>("Mountains/CliffDark");baseline.layers=coastalLayers;}
             mountainEvergreens=MountainEvergreenMix.LoadPrefabs();
-            treeSeason=view.Season;
+            treeSeason=view.VisualSeason;
             navigationCamera=view.GetComponentInChildren<CityForge.CameraSystem.CityForgeCameraController>();
             View=view;DistrictIndex=regionOverview?-1:view.SelectedDistrict;Baseline=baseline;Side=regionOverview?view.MapSide:view.DistrictSide;Origin=regionOverview?Vector2.one*(-view.MapSide/2):view.DistrictOrigin(view.SelectedDistrict);
+            if(!regionOverview&&view.IsCombinedDistrict){var area=view.ActiveDistrictBounds;Origin=area.min;Side=Mathf.Max(area.width,area.height);}
             var rng=new System.Random(Seed);SeedOffset=new Vector2(rng.Next(100,10000),rng.Next(100,10000));
-            terrainData=Own(new TerrainData {name="Seeded approved meadow district",heightmapResolution=baseline.referenceHeightResolution,alphamapResolution=regionOverview?512:view.MountainTest?1024:Mathf.ClosestPowerOfTwo(Mathf.RoundToInt(Side*2)),baseMapResolution=1024,size=new Vector3(Side,view.GetComponentInChildren<Terrain>().terrainData.size.y,Side)});
+            terrainData=Own(new TerrainData {name="Seeded approved meadow district",heightmapResolution=baseline.referenceHeightResolution,alphamapResolution=regionOverview?512:view.MountainTest?1024:(view.IsCombinedDistrict?Mathf.Clamp(Mathf.ClosestPowerOfTwo(Mathf.RoundToInt(Side)),512,2048):Mathf.ClosestPowerOfTwo(Mathf.RoundToInt(Side*2))),baseMapResolution=1024,size=new Vector3(Side,view.GetComponentInChildren<Terrain>().terrainData.size.y,Side)});
             int resolution=baseline.referenceHeightResolution;var heights=new float[resolution,resolution];
             progress?.Invoke("Shaping district terrain",.08f);yield return null;
             var batchTimer=System.Diagnostics.Stopwatch.StartNew();
             for(int z=0;z<resolution;z++){for(int x=0;x<resolution;x++){
-                float gx=regionOverview?x*512f/(resolution-1):(view.SelectedDistrict%view.GridSide)*512f/view.GridSide+x*512f/view.GridSide/(resolution-1),gz=regionOverview?z*512f/(resolution-1):(view.SelectedDistrict/view.GridSide)*512f/view.GridSide+z*512f/view.GridSide/(resolution-1);int ix=Mathf.Min(511,(int)gx),iz=Mathf.Min(511,(int)gz);float fx=gx-ix,fz=gz-iz;
+                float gx=Mathf.Clamp((Origin.x+Side*x/(resolution-1))/view.MapSide*512+256,0,512),gz=Mathf.Clamp((Origin.y+Side*z/(resolution-1))/view.MapSide*512+256,0,512);int ix=Mathf.Min(511,(int)gx),iz=Mathf.Min(511,(int)gz);float fx=gx-ix,fz=gz-iz;
                 heights[z,x]=(view.RiverBedVersion>=4||view.CreationSettings?.version>=5)?view.Data.SmoothHeight(gx/512,gz/512):Mathf.Lerp(Mathf.Lerp(view.Data.Heights[iz,ix],view.Data.Heights[iz,ix+1],fx),Mathf.Lerp(view.Data.Heights[iz+1,ix],view.Data.Heights[iz+1,ix+1],fx),fz);
             }
             if(batchTimer.ElapsedMilliseconds>=12){progress?.Invoke("Shaping district terrain",.08f+.12f*z/resolution);yield return null;batchTimer.Restart();}}
             progress?.Invoke("Applying terrain heights",.21f);yield return null;
             terrainData.SetHeights(0,0,heights);terrainData.terrainLayers=baseline.layers;
+            if(!regionOverview&&view.IsCombinedDistrict){int holes=terrainData.holesResolution;var solid=new bool[holes,holes];for(int z=0;z<holes;z++)for(int x=0;x<holes;x++)solid[z,x]=view.InActiveDistrict(Origin+new Vector2((x+.5f)/holes,(z+.5f)/holes)*Side);terrainData.enableHolesTextureCompression=false;terrainData.SetHoles(0,0,solid);}
             var go=Terrain.CreateTerrainGameObject(terrainData);go.name="Runtime Native Meadow Terrain";go.transform.SetParent(transform,false);go.transform.position=new Vector3(Origin.x,0,Origin.y);go.layer=30;
             DisplayTerrain=go.GetComponent<Terrain>();DisplayTerrain.materialTemplate=baseline.terrainMaterial;DisplayTerrain.drawInstanced=true;DisplayTerrain.basemapDistance=view.MountainTest?10000:2000;DisplayTerrain.heightmapPixelError=view.CreationSettings?.version>=5?1:10;
             DisplayTerrain.treeDistance=regionOverview?Mathf.Max(baseline.treeDistance,view.MapSide*3):baseline.treeDistance;DisplayTerrain.treeBillboardDistance=baseline.treeBillboardDistance;DisplayTerrain.treeCrossFadeLength=baseline.treeCrossFadeLength;DisplayTerrain.treeMaximumFullLODCount=baseline.treeMaximumFullLODCount;
@@ -191,7 +201,7 @@ namespace CityForge.World
             var timings=new System.Text.StringBuilder();
             void Measure(string name,Action action){var timer=System.Diagnostics.Stopwatch.StartNew();action();timings.Append(name+"="+timer.ElapsedMilliseconds+" ms; ");}
             progress?.Invoke("Preparing shorelines",.25f);yield return null;
-            Measure("shore field",BuildShoreField);var cached=View.LoadedMeadowDistrict==View.SelectedDistrict?View.LoadedMeadow:null;
+            Measure("slab",BuildDistrictSlab);Measure("shore field",BuildShoreField);var cached=View.LoadedMeadowDistrict==View.SelectedDistrict?View.LoadedMeadow:null;
             if(cached!=null&&cached.alphamaps.GetLength(2)==Baseline.layers.Length+3){
                 // Migrate experimental lake caches while retaining their saved road and trees.
                 int count=cached.alphamaps.GetLength(0),layers=Baseline.layers.Length;var canonical=new float[count,count,layers];
@@ -203,7 +213,7 @@ namespace CityForge.World
                 progress?.Invoke("Restoring saved ground and trees",.34f);yield return null;
                 Measure("saved meadow restore",()=>RestoreSnapshot(cached));UsedSavedTerrain=true;
             }else{
-                progress?.Invoke("Laying out roads",.34f);yield return null;Measure("road",BuildRoad);
+                progress?.Invoke("Laying out roads",.34f);yield return null;Measure("road",BuildRoad);if(view.IsCombinedDistrict)TrimCombinedRoad();
                 progress?.Invoke("Planting woodland",.4f);yield return null;Measure("trees",BuildTrees);
                 var paintTimer=System.Diagnostics.Stopwatch.StartNew();
                 yield return BuildControlMapStages(value=>progress?.Invoke("Painting meadow and mountain surfaces",.44f+value*.25f));
@@ -222,6 +232,9 @@ namespace CityForge.World
             progress?.Invoke("Preparing seasonal vegetation",.94f);yield return null;
             if(View.MountainTest)EvergreenTreeCount=MountainEvergreenMix.Apply(terrainData,Baseline.treePrefabs.Length,View.Data.Seed);
             BroadleafTreeCount=ForestTreeMix.Apply(terrainData,View.Data.Seed);
+            if(!ApprovedForestAssets.CheckpointReplay&&!IsRegionOverview&&View.Climate==RegionClimate.Tropical){
+                Palms=gameObject.AddComponent<TropicalPalmForest>();Palms.Initialize(this);
+            }
             fullTreeInstances=terrainData.treeInstances;
             var mature=new List<TreeInstance>();foreach(var tree in fullTreeInstances)if(!IsSmallPlant(tree.prototypeIndex))mature.Add(tree);matureTreeInstances=mature.ToArray();
             // Initial full data remains canonical for painting, snapshots and comparison.
@@ -229,8 +242,10 @@ namespace CityForge.World
             RefreshForestSpecies(false);
             SetTreesEnabled(true);
             progress?.Invoke("Preparing approved forest canopy",.97f);yield return null;
-            if(!ApprovedForestAssets.CheckpointReplay){var forest=gameObject.AddComponent<ApprovedDistrictForest>();forest.Initialize(this);if(PanningTestDistricts.TryGetPercent(View.SavedRegionId,out int percent))forest.SetDiagnosticDensity(percent);}
+            if(!ApprovedForestAssets.CheckpointReplay){var forest=gameObject.AddComponent<ApprovedDistrictForest>();forest.Initialize(this);if(PanningTestDistricts.TryGetPercent(View.SavedRegionId,out int percent))forest.SetDiagnosticDensity(percent);if(forest.ReplacesNativeTrees)SetNativePresentation(SmallPlantsEnabled?fullTreeInstances:matureTreeInstances);}
             RefreshWildlife();
+            if(!IsRegionOverview&&MountainSummitSnow.Applies(View)){var caps=new GameObject("Permanent summit snow");caps.transform.SetParent(transform,false);caps.AddComponent<MountainSummitSnow>().Initialize(this);}
+            if(!IsRegionOverview)gameObject.AddComponent<DistrictWeather>().Initialize(this);
         }
         DistrictWildlife wildlife;
         public DistrictWildlife Wildlife=>wildlife;
@@ -383,7 +398,24 @@ namespace CityForge.World
                 // Shift inland when a path would enter the preserved river footprint.
                 for(int j=0;j<12&&WaterDistance(p)<8;j++)p.x+=4;
                 p.x=Mathf.Min(Origin.x+Side-8,p.x);Road.Add(p);}
+            if(View.IsCombinedDistrict||(View.CreationSettings?.version>=6&&new RegionTerrainLayout(View.CreationSettings).HasOcean)){
+                // A pilot road is a single connected ribbon, never an implicit bridge between islands.
+                var best=new List<Vector2>();var run=new List<Vector2>();
+                bool Dry(Vector2 p)=>Contains(p)&&WaterDistance(p)>Mathf.Max(8,Baseline.roadWidth+3)&&Height(p)>View.SeaLevel+.5f;
+                for(int i=0;i<Road.Count;i++){
+                    bool dry=Dry(Road[i]);if(dry&&run.Count>0){var a=run[run.Count-1];int steps=Mathf.Max(1,Mathf.CeilToInt(Vector2.Distance(a,Road[i])/2));for(int j=1;j<steps;j++)if(!Dry(Vector2.Lerp(a,Road[i],j/(float)steps))){dry=false;break;}}
+                    if(!dry){if(run.Count>best.Count)best=new List<Vector2>(run);run.Clear();continue;}run.Add(Road[i]);
+                }
+                if(run.Count>best.Count)best=run;Road.Clear();if(best.Count>1)Road.AddRange(best);
+            }
             IndexRoad();
+        }
+        void TrimCombinedRoad()
+        {
+            var best=new List<Vector2>();var run=new List<Vector2>();
+            foreach(var point in Road){bool inside=Contains(point);if(inside&&run.Count>0){var start=run[run.Count-1];int steps=Mathf.Max(1,Mathf.CeilToInt(Vector2.Distance(start,point)/2));for(int i=1;i<steps;i++)if(!Contains(Vector2.Lerp(start,point,i/(float)steps))){inside=false;break;}}
+                if(!inside){if(run.Count>best.Count)best=new List<Vector2>(run);run.Clear();}else run.Add(point);}
+            if(run.Count>best.Count)best=run;Road.Clear();if(best.Count>1)Road.AddRange(best);IndexRoad();
         }
         public float MountainSlope(Vector2 p){float dx=(Height(p+Vector2.right*2)-Height(p-Vector2.right*2))/4,dz=(Height(p+Vector2.up*2)-Height(p-Vector2.up*2))/4;return Mathf.Atan(Mathf.Sqrt(dx*dx+dz*dz))*Mathf.Rad2Deg;}
         public float MountainVegetation(Vector2 p)=>!View.MountainTest?1:(1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(115,205,Height(p))))*(1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(22,38,MountainSlope(p))));
@@ -430,7 +462,7 @@ namespace CityForge.World
                 maps[z,x,0]=soil;maps[z,x,1]=grass*(1-forest*.4f)*(1-litter);maps[z,x,2]=grass*forest*.4f*(1-litter);maps[z,x,3]=grass*litter;
             }
             if(batch.ElapsedMilliseconds>=12){progress?.Invoke(.45f*z/n);yield return null;batch.Restart();}}
-            if(View.MountainTest)for(int z=0;z<n;z++){for(int x=0;x<n;x++){
+            if(View.MountainTest||RockyMountainBorder)for(int z=0;z<n;z++){for(int x=0;x<n;x++){
                 var p=Origin+new Vector2(x/(float)(n-1),z/(float)(n-1))*Side;
                 MountainSurface(p,out float rock,out float scree);
                 float light=Mathf.Lerp(.2f,.75f,Noise(p,55,17));
@@ -615,7 +647,7 @@ namespace CityForge.World
             const int n=256;var pixels=new Color[n*n];
             for(int z=0;z<n;z++)for(int x=0;x<n;x++){
                 var point=(Origin+new Vector2((x+.5f)*Side/n,(z+.5f)*Side/n))/View.MapSide+Vector2.one*.5f;
-                pixels[z*n+x]=bodies.Exists(b=>b.Contains(point))?Color.black:Color.white;
+                pixels[z*n+x]=Contains((point-Vector2.one*.5f)*View.MapSide)&&bodies.Exists(b=>b.Contains(point))?Color.black:Color.white;
             }
             var texture=Own(new Texture2D(n,n,TextureFormat.R8,false,true){name="Typed water footprint mask",wrapMode=TextureWrapMode.Clamp,filterMode=FilterMode.Bilinear});texture.SetPixels(pixels);texture.Apply(false,true);
             Water.ClipLod.DefaultClippingState=DefaultClippingState.EverythingClipped;
@@ -691,13 +723,13 @@ namespace CityForge.World
         }
         bool HasOcean(){
             var area=new Rect(Origin/View.MapSide+Vector2.one*.5f,Vector2.one*(Side/View.MapSide));
-            foreach(var body in View.Data.WaterBodies)if(body.kind==WaterBodyKind.Ocean&&body.Bounds.Overlaps(area))return true;
+            foreach(var body in View.Data.WaterBodies)if(body.kind==WaterBodyKind.Ocean&&body.Intersects(area))return true;
             return false;
         }
         bool HasRiverWithoutOcean(){
             bool river=false;var area=new Rect(Origin/View.MapSide+Vector2.one*.5f,Vector2.one*(Side/View.MapSide));
             foreach(var body in View.Data.WaterBodies)if(body.Bounds.Overlaps(area)){
-                if(body.kind==WaterBodyKind.Ocean)return false;
+                if(body.kind==WaterBodyKind.Ocean&&body.Intersects(area))return false;
                 if(body.kind==WaterBodyKind.River)river=true;
             }
             return river;
@@ -741,7 +773,7 @@ namespace CityForge.World
                 var input=WaveHarmonic.Crest._Extensions.AddComponent<FlowLodInput>(go,LodInputMode.Renderer);input.GetData<FlowRendererLodInputData>().Renderer=renderer;renderer.forceRenderingOff=true;
             }
         }
-        public bool Contains(Vector2 p)=>p.x>=Origin.x&&p.y>=Origin.y&&p.x<Origin.x+Side&&p.y<Origin.y+Side;
+        public bool Contains(Vector2 p)=>p.x>=Origin.x&&p.y>=Origin.y&&p.x<Origin.x+Side&&p.y<Origin.y+Side&&(!View.IsCombinedDistrict||View.InActiveDistrict(p));
         public System.Random RandomFor(int x,int z,int salt){unchecked{return new System.Random(Seed ^ x*73856093 ^ z*19349663 ^ salt*83492791);}}
         public Vector3 ComparisonFocus {get {
             Vector2 best=Origin+Vector2.one*(Side*.5f);float score=-1;

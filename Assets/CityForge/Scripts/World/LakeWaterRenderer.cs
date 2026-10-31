@@ -109,7 +109,7 @@ namespace CityForge.World
                 var normalized=p/view.MapSide+Vector2.one*.5f;
                 // v5 rivers share a level and their saved terrain is the authoritative
                 // shoreline. A single network surface avoids doubled alpha at confluences.
-                bool inside = generatedRiver||body.Contains(normalized);
+                bool inside = (view.SelectedDistrict<0||view.InActiveDistrict(p))&&(generatedRiver||body.Contains(normalized));
                 float waterDepth=Mathf.Max(0,level-height(p));
                 float optical=LakeShoreRenderer.EnabledForEvaluation?Mathf.Lerp(.65f,1.4f,noise(p)):1;
                 optical=Mathf.Lerp(optical,1,Mathf.SmoothStep(0,1,Mathf.InverseLerp(1,3,waterDepth)));

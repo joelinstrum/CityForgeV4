@@ -231,6 +231,8 @@ namespace CityForge.CameraSystem
             viewCamera.ResetProjectionMatrix();
         }
 
+        public void SetHeading(float heading){if(!float.IsFinite(heading))throw new System.ArgumentOutOfRangeException(nameof(heading));yaw=heading;ApplyPose();}
+
         public void FrameMeadowComparison(float side,float height,Vector3 center,float size=40)
         {
             lowerView=false;viewTilt=-1;
@@ -257,6 +259,13 @@ namespace CityForge.CameraSystem
             // Fit the actual relief bounds, with room above/below for the HUD.
             orthographicSize=1.25f*Mathf.Max(vertical,horizontal/Mathf.Max(.1f,viewCamera.aspect));
             farthestSize=orthographicSize;ApplyPose();
+        }
+
+        public void FrameDistrictUnion(float side,float absoluteHeight,float low,float high,Vector3 center)
+        {
+            float span=high-low;
+            FrameArea(side,span,new Vector3(center.x,(low+high)/2-span*.0375f,center.z));
+            regionHeight=absoluteHeight;yaw=315;distance=Mathf.Max(side*1.6f,span*2+200);ApplyPose();
         }
 
         public void FrameArea(float side, float height, Vector3 center)

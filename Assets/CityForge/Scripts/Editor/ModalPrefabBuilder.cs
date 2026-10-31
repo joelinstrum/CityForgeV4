@@ -243,7 +243,7 @@ namespace CityForge.Editor
             terrainDescription.text = "Shape the land, water, and climate of your region.";
             TopLeft(terrainDescription.GetComponent<RectTransform>(), 150f, 0f, 620f, 38f);
             CreateTerrainDropdown(terrainIntro.transform, "Climate", font, rounded, 0f, 46f,
-                new[] { "Temperate", "Mediterranean", "Tropical", "Desert", "Arid", "Continental", "Subarctic" });
+                new[] { "Temperate — balanced", "Temperate — dry", "Temperate — wet", "Tropical" });
             var climateNote = Label(terrainIntro.transform, "ClimateNote", font, 12, Gold,
                 TextAnchor.UpperLeft);
             climateNote.text = "This is the default climate, but you can change this for each region.";
@@ -297,10 +297,10 @@ namespace CityForge.Editor
             dividerRect.sizeDelta = new Vector2(1f, 0f);
             divider.AddComponent<Image>().color = new Color(Gold.r, Gold.g, Gold.b, 0.5f);
 
-            var navNames = new[] { "BASIC SETTINGS", "TERRAIN", "NATURAL RESOURCES",
+            var navNames = new[] { "BASIC SETTINGS", "ENVIRONMENT", "TERRAIN",
                 "STARTING TOWN", "DIFFICULTY", "ADVANCED" };
-            var navDescriptions = new[] { "Name and period", "Land, water, climate",
-                "What the land provides", "Initial settlement", "Economic conditions",
+            var navDescriptions = new[] { "Name and period", "Climate and ecology",
+                "Region shape", "Initial settlement", "Economic conditions",
                 "Custom options" };
             var navIconCrops = new[]
             {
