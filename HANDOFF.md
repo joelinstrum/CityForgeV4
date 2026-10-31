@@ -1,6 +1,137 @@
+## Tropical shelf depth and thicker map edges — October31
+
+Verified version12 physical24m shelf depth, unchanged relative land relief, consistent water datum, unchanged inland fields, authoritative temporary save round trip, normal saved-region open, real Crest scattering input and absence of internal walls in a four-cell district. Final region and district captures at45/135/225/315 reviewed in chat outputs/tropical-depth-final. Boundary input padding removes the cyan fallback rim. Compilation and whitespace checks passed; original five user-save hashes unchanged. Unsaved four-cell Tropical shelf preview left open at45 degrees. The fixture uses explicit flat geography; the unchanged MapMagic worker creation path was not requalified in this pass.
+
+New default recipe version12 gives Tropical ocean layouts a gradually deepening continental shelf: sea level30m, seabed reaching6m (24m depth) over12% of region width. Land and all explicit water surfaces shift upward18m together, preserving relative relief, river depths and shoreline location. Non-ocean and Temperate generation remains unchanged; versions1–11 and stored heightfields remain authoritative. Existing Tropical maps receive the offshore color presentation without regenerating their geography.
+
+Tropical Crest scattering uses an owned256-square texture sampled in shared regional coordinates, transitioning from aqua nearshore to richer blue offshore. CoastalWaterPresentation applies its existing projection-dependent color multipliers to the input and retains adaptive sun-glare smoothness. Waves, reflection settings, shoreline foam and clipping are retained. Regional relief uses the same shelf blend for ocean colors. The depth probe captures the entire new seabed range.
+
+Native districts now have an earth-colored exterior slab. Edge generation follows original member-cell adjacency, suppresses internal walls, preserves concave L-shaped boundaries and uses one common bottom. Owned meshes/materials are released with the landscape. Regional overview slab depth increases from2.5% to4.5% of map width. These edges are presentation only and do not alter saved terrain or gameplay colliders.
+
+## Ocean visibility at consistent headings — October31
+
+Final Unity checks passed actual ocean color sampling at45/135/225/315 degrees (all aqua, not white), original.62 gloss at the other three diagonals, adaptive.20 at the glancing-sun45-degree heading, perspective.8 restoration, single/combined orientation checks and actual coastal clipping masks. Captures reviewed in chat outputs/water-heading. Compiled and whitespace checks passed. Corrected coastal district left open. Earlier diagnostic material/light changes were play-only and discarded before final verification.
+
+The45-degree heading fix exposed broad direct sun glare in Crest’s orthographic ocean surface: the whole tile could turn nearly white. CoastalWaterPresentation now smoothly reduces orthographic smoothness from the approved.62 to.20 only as the viewing direction aligns with the reflected directional sun (dot.85→.98). It updates as camera/sun directions change. Other headings retain the original gloss; perspective restores its captured profile. Climate absorption/scattering, reflections, foam, wave settings, lighting and heading preservation remain unchanged. No Crest/package shader or licensed asset edits were made.
+
+## Consistent region/district heading — October31
+
+Unity verification passed single/combined coastal entry at45 degrees, matching east/north camera-space directions, return after deliberate90-degree rotation, and existing coastal footprint checks. Actual captures reviewed in chat outputs/district-orientation. Compiled without errors; whitespace checks passed.
+
+District entry now retains the current overview camera heading after all normal, coastal, mountain and combined framing paths. Return to Region retains the current district heading, including deliberate Q/E rotation. The former45-degree overview vs315-degree meadow/combined default caused east-facing coastlines to appear to rotate90 degrees on entry. Geographic heightfields, water footprints and cardinal axes are unchanged. Camera framing still chooses area-appropriate focus/zoom/depth; transition heading is applied before the preloader completes. Explicit saved camera restoration remains authoritative.
+
+## Combined border colors — October31
+
+Applied groups now use the same normal white border as other districts; only the pending selection is gold during Combine Districts mode. Shared IDs still hide internal edges. Live Unity applied/selection captures reviewed in chat outputs/combine-border-colors; original groups preserved, combine mode left off. Whitespace checks passed.
+
+## Combined districts — October31
+
+Final Unity verification passed selection/Apply, safe deselection, no diagonal/wrap/fifth cell, saved group/cache normal reopen, L terrain holes and native-tree confinement, canonical height agreement, expanded four-cell square, four-cell strip and its excluded padding, no-op cache retention and overlapping metadata rejection. Coastal L checked actual Crest clipping via GPU readback: selected water retained, omitted corner excluded; final315-degree capture reviewed. Evidence: chat outputs/combined-districts and combined-districts-coast. Compiled without errors; whitespace checks passed; all5 existing user-save hashes unchanged. Unsaved combined coastal overview left open.
+
+Region HUD has COMBINE DISTRICTS (gold active state), gold union selection outline and APPLY enabled for2–4 original edge-connected cells. Diagonals, wraparound, disconnected additions/removals and more than4 cells are rejected. Existing groups select atomically and can expand only within the same total4-cell limit. Applied groups use the normal white outer boundaries and hide internal grid lines. Gold is reserved for the pending selection while Combine Districts is active. Turning the mode off discards the pending selection. Apply changes the session; Save Region/Save District persists it.
+
+`CombinedDistrictGroup.cells` is additive saved metadata; original grid IDs, shared geography and recipe are unchanged. Groups validate on both read and write for size/connectivity/uniqueness/overlap. Clicking any member opens the same minimum-ID anchor and full union. Native district terrain samples the canonical shared field across a square enclosing the group, using terrain/collision holes to exclude unselected cells (including L-shapes and strip padding). Tree placement, roads, snowfall/caps and water masks honor the same footprint. Combined terrain control maps are bounded to2048 samples. The merged camera frames the full area at the approved315-degree native view, with depth accommodating absolute terrain height.
+
+Applying a changed group invalidates member terrain caches to match the new geometry; reapplying the same group retains its cache. Existing one-last-district save-cache semantics remain, now keyed by the group anchor. Shader grouping IDs remove internal borders without changing region geometry/picking; HUD shows the resulting logical district count. No saved region is automatically rewritten.
+
+## Seeded Mountain Border variation — October31
+
+Verified normal worker-backed creation for all3 patterns, repeat-seed field equivalence, rear-quarter confinement,1/2/3 cap policies, main district entry, unchanged Land output and temporary save round trips. Single/twin/full overview captures reviewed in chat outputs/mountain-variations. Compiled without errors; whitespace checks passed. Unsaved twin-summit preview left open.
+
+New default recipe version11 adds three seed-selected silhouettes within the approved rear-quarter natural range: a higher wall with one dominant summit, a two-summit ridge, or the approved fuller segmented ridge. Seed controls summit positions/widths and existing noise detail. Cross-range profile, foothill blending and restrained upper-slope uplift remain. Snow caps follow the silhouette (up to1/2/3 separated summits), shared by region and district views. Other shapes and versions1–10 remain unchanged; stored geography is authoritative.
+
+Create Region now assigns a fresh visible seed each time the creator is opened, so consecutive new regions vary without manual seed edits. Navigating wizard pages retains it. Entering the same seed reproduces the same geography; changing an existing save or regenerating on load is not involved.
+
+## Raised summits with permanent snow caps — October31
+
+Verified exact version9 equivalence below the156m lift threshold, restrained summit uplift,3 separated snow caps, snow-free low slopes, deterministic fields, rear-quarter confinement, unchanged Land output, temporary save/load and normal worker creation / detailed district. Peak relief rises339.5→394.5m for the reference seed. Region/district snow captures inspected in chat outputs/snow-capped-border. District overlay receives shadows and survives Clear. Compiled with no errors; whitespace checks passed; preview left on overview.
+
+Default recipe version10 preserves the approved compact rear-quarter range. After MapMagic erosion, only Mountain Border samples above156m of relief receive a30% lift of the amount above that threshold. All lower height samples stay exactly identical to version9; crest placement, reach and foothill transitions remain unchanged. Other shapes and versions1–9 retain their prior geography.
+
+`MountainSummitSnow` chooses up to3 separated high local summits from the stored canonical field, then applies height-limited, irregular snow caps. Overview atlas and detailed terrain overlay share that selection/mask. Caps leave water and lower slopes clear, receive shadows in districts, and remain when temporary weather is cleared. They change presentation only; no canonical map/tree data are painted or rewritten. Runtime meshes/materials/masks are owned and destroyed with their district. Existing saved maps remain untouched.
+
+## Compact mountain reach — October31
+
+Unity checks passed rear-quarter confinement (interior relief7m), deterministic fields, legacy Land equivalence, Flat override, temporary save/load and normal worker creation/district entry. Actual overview visually reviewed in chat outputs/compact-mountain-border. Compiled with no errors; whitespace check passed. Corrected unsaved overview left open.
+
+Default recipes are version9. The approved natural north/back Mountain Border is compressed only across its depth: the previous40%-wide taper envelope is mapped into the rear25% of the region, retaining its along-range shape and amplitude. The creator preview uses the same rear quarter. Versions1–8 and stored maps retain their original geography; other terrain shapes are unchanged.
+
+## Natural Mountain Border correction — October31
+
+Verified version8 deterministic fields, back-edge confinement, unchanged Land output, Flat override, temporary save/load and normal worker-backed creation / detailed district. Actual overview reviewed against the user reference; evidence in chat outputs/natural-mountain-border. Test recipe matches Test Region i seed730421/topography3. Existing user saves remain unchanged; unsaved corrected preview left open on overview. Compilation and whitespace checks passed.
+
+The user rejected the exaggerated version7 ranges. Default recipes now use version8: Mountain Border reuses the approved version5 river-flanking massif formula (same ridge widths, taper, peak variation, mild ribs and normal amplitude), translating the two sections from one side of the river to the north/back edge. It does not use the rejected tall triple-ridge formula. The rest of the map remains gentle; the Terrain preview marks the same north edge. Flat Environment still provides a moderate mountain border. Other terrain shapes are unchanged. Version1–7 and all stored fields remain readable and authoritative.
+
+New version8 districts retain the normal approved meadow presentation used by Test Region 1; version7-only rock/scree and framing changes are isolated to version7. No source save is regenerated or changed.
+
+## Rugged Mountain Border — October31
+
+Verification passed deterministic new fields, one-sided confinement, Flat override, unchanged Land output, version7 temporary save/load, normal worker creation and approved mountain district materials. Seed730421 Small peak rises from321.8m to1029.9m above the regional base; interior relief remains6.4m. Overview and district captures inspected in chat outputs/mountain-border. Source compiled and whitespace checks passed. An unsaved new Mountain Border preview is left open; existing user saves are unchanged.
+
+New recipes default to version7. Only Mountain Border geography changes: three wandering ridge divides with high summits, deep intervening valleys, restrained rocky ribs and lower foothills, all confined to the seeded edge and fading out by32% of the region width. Other shapes retain their version6 geography; versions1–6 and stored maps remain authoritative. MapMagic erosion, worker-backed creation and existing physical1200m terrain range are retained.
+
+New Mountain Border districts use the approved mountain world-projected rock/scree surface layers (runtime baseline version107), with meadow lowlands retained. Entry frames the actual district height range rather than the meadow comparison point, so tall peaks fit. No licensed assets or saved terrain are rewritten.
+
+## Gradual clearing and snow shadows — October31
+
+Clear now tapers emission and existing-particle opacity over4 seconds, eases fog away over4 seconds, and melts full snow cover over10 seconds using shrinking spatial patches. Partial cover melts at the same rate. Selecting Snow during a melt resumes from remaining cover; incompatible season changes use the same clearing transition. District exit still cleans up immediately. `PrecipitationStrength` and `IsClearing` expose transition state for checks. Snow receives directional tree/object shadows with correct URP screen-space shadow coordinates, soft-shadow variants and stronger diffuse shadow contrast. No canonical terrain/tree/save data changes.
+
+Unity checks passed partial melt/taper, fog/particle completion before remaining cover, full melt completion, existing seasonal/water/canonical/navigation checks. Shadow-on/off close captures and midway melt inspected in chat outputs/weather-gradual. Original Tropical district restored in clear weather.
+
+## Temporary district precipitation — October31
+
+Unity verification passed normal saved-region/district loading, invalid weather rejection, seasonal control gating, falling particles, partial coverage at2 seconds, full fog at4 seconds / coverage at10 seconds, water exclusion, canonical tree/height stability, Clear reset, overview cleanup and Tropical winter rain-only. Wide/close captures inspected in chat outputs/weather. Compilation and whitespace checks passed; all four original user-save hashes unchanged. Weather is left clear on the original Tropical district.
+
+`DistrictWeather` owns district-only TEMP WEATHER controls (Rain, Snow, Clear), camera-following procedural particles and a terrain-conforming snow overlay. Snow requires `VisualSeason.Winter`; Rain requires a nonwinter visual season, so Tropical stays rain-only year-round. Season changes stop incompatible weather. Snow fog fades in over4 seconds; dry-land coverage reaches full at10 seconds. Both canonical water distance and actual submerged-shore distance mask the overlay. Clear and district exit restore the previous fog and remove temporary cover; weather never mutates or persists terrain/tree/save data. Resources/Weather contains authored runtime shaders for player retention. Approved base terrain, trees and water remain authoritative.
+
+## District actions and climate seasons — October31
+
+Verified normal saved-region loads for Tropical Winter and Temperate Summer, calendar transitions, disabled/enabled controls, prototype/canonical/palm/shadow stability, saved calendar round trip, top-button district→overview→menu navigation, cache retention and original region restoration. Evidence: chat outputs/district-hud-climate. Source compiled; no user saves rewritten.
+
+District HUD now says SAVE DISTRICT and RETURN TO REGION. Save uses the existing region snapshot including the active district cache, with DISTRICT SAVED feedback. Return opens the same region overview; overview retains SAVE REGION / RETURN TO MENU. The duplicate REGION OVERVIEW district button is hidden. This does not introduce independent per-district save files or change the one-last-district disk-cache contract.
+
+`PrototypeRegionView.Season` remains the persisted calendar state. `VisualSeason` is always Summer for Tropical climate and otherwise equals Season. Tropical Fall/Winter buttons are disabled and dimmed. Native prototypes, authored-canopy visibility/replacement masks, legacy authored palms and seasonal shadow treatment use the visual season, so a winter calendar event or winter save cannot defoliate Tropical forests. Direct landscape seasonal calls also honor climate. Temperate Fall/Winter behavior is retained. No saved canonical trees/maps are rewritten.
+
+## Peninsula north-to-south orientation — October31
+Verified normal Create Map -> north-attached Peninsula -> coastal district61; Crest/palms/dry-road checks and persisted direction passed. Actual overview/preview screenshots reviewed in chat outputs/peninsula-north. Source compiled and whitespace checks passed; existing save hashes unchanged.
+
+New wizard Peninsula maps attach to the north edge and extend south, in both the preview and actual geography. `peninsulaNorthToSouth=true` is stored in new wizard recipes; older recipes without the flag retain their original seeded orientation and stored fields. Coast/Mountain Border orientation remains seed-selected. Terrain choices feed normal worker-backed creation and detailed districts, not just previews. Earlier peninsula seed-orientation statements below are historical.
+
+## Peninsula and Archipelago correction — October31
+Peninsula follow-up validation passed: one land component and exactly one land-connected boundary, sampled shoreline/height agreement, deterministic generation and save round trips for all eight serialized shapes, six current UI labels/mappings, normal Peninsula and renamed Archipelago creation, and a real Peninsula coastal district with Crest/palms/dry-road assertions. Unity captures reviewed; compilation and whitespace checks passed. Private evidence: chat outputs/peninsula. Creator left on Peninsula with Environment defaults restored.
+
+
+Current creator order: Peninsula, Land, Coast, Mountain Border, Pangea, Archipelago. Peninsula replaces the temporary four-large-island choice, with one connected landmass touching exactly one map edge and water on the other three; the seed chooses its orientation. Archipelago is now the renamed nine-small-island option. Pangea remains the renamed single-island option. Serialized IDs are preserved: Peninsula appends7, Archipelago UI maps to SmallIslands=5, and the previous four-island Archipelago=6 remains readable but hidden. No existing terrain/save is reinterpreted. Earlier choice lists below are historical.
+
+## Terrain naming correction — October31
+
+Creator order is now Archipelago, Land, Coast, Mountain Border, Pangea, Small Islands. Current Pangea replaces One Island and uses that existing single-island plan; former broad-continent Pangea is hidden but its serialized ID/geometry remains compatible. New Archipelago is appended enum6 and produces four larger islands; Small Islands still produces nine smaller ones. Do not renumber enum values or reinterpret existing saves. See Region_Terrain_Shapes.md. Previous six-choice lists below are historical.
+
+## October 31 — Region creator Terrain step
+
+Final six-shape recipe/persistence/UI/worker-creation checks passed, with actual coast/island district water/palm/dry-road assertions and reviewed Unity captures. ARM64 release build passed with zero errors; existing three save hashes unchanged. Private evidence: this chat outputs/terrain-step3. Creator left open on step3 (Land/default Environment).
+
+New wizard flow: Basic Settings → Environment → Terrain → Create Map. Terrain offers Pangea, Land (default inland behavior), Coast, Mountain Border (one seeded edge), One Island and Small Islands (nine islands), with seeded outline preview. New recipes are version6; all stored maps/version1–5 behavior remain authoritative. Ocean descriptors support serialized land holes; beaches/surf/palm bands use those shorelines and ocean bounds no longer misclassify fully inland island districts. New ocean-layout pilot roads stop at dry runs instead of crossing water. Metadata cap is bounded1 MiB for archipelago contours. Read Documentation/03_Technical/Region_Terrain_Shapes.md for generation, persistence, checks and limits. Prior statements that the wizard cannot generate coasts are superseded. No save migration or public licensed/generated art; no commit/push authorization.
+
+## October 31 — coherent gameplay canopy
+
+Verified normal cached/uncached Tropical districts, Temperate no-palms, legacy coast/meadow, seasons/save capture, district reentry and corrected fresh-instance disk reload. All three save hashes unchanged. M1 Max standalone at 3434×1728/Ultra/100%: before→after FPS near 57.85→58.60, low 31.67→30.27, distant 40.97→35.81 (15 foreground seconds each, not sustained qualification). Distant performance is a remaining limitation. Crown-bound neighbor coverage after palms 99.69%, ≥3 neighbors 94.59%; 962 broadleaf/1,647 total palms in user district44. Original low view is obstructed; supplementary matched low pair raises focus20 m. Temporary harness removed.
+
+Coherent touching/overlapping refined-C patches are required ordinary forest behavior. Generated districts now grow deterministic crown-aware groups at canonical mature placements within the existing 25% replacement budget, with geography/trunk-spacing checks; random per-tree replacement is superseded. Tropical approved palms prefer fringes/openings at unchanged 30% inland/50% ocean-shore quotas. Native palms and wind remain. The already clustered recipe-less supplemental layout and frozen replay remain compatible. `FoliageBrightness=1.0` restores locked C tint (supersedes the later 1.25 boost); no approved mesh/shader/palette/global lighting edits. See Approved_District_Integration.md for algorithm/limits and private chat canopy-clusters evidence for current validation. No canonical save/terrain rewrite or public licensed/generated art. Performance at current Ultra/100% must be read from the new measurements, not historical 80% trials.
+
 # CityForge V4 — main development handoff
 
-Updated 2026-10-30. Read this before changing terrain, foliage, map creation, or rendering.
+Updated 2026-10-31. Read this before changing terrain, foliage, map creation, or rendering.
+
+## Generated districts — October 31, 2026
+
+The user created Tropical `Test Region i` and reported missing olive crowns/palms. Its saved recipe/climate were correct. Palms were wrongly coastal-only for their intended Tropical-region behavior; the authored canopy used a supplemental central test grove rather than replacing trees throughout generated forests. All detailed Tropical districts now get the30% base palm mix (50% within75 m of actual ocean shoreline). Generated recipe-based districts replace a deterministic25% of mature native placements with approved summer crowns; palms can replace a share of either population. Canonical arrays/caches and saved terrain are preserved, and palms stay fixed across seasons. Recipe-less reference tests retain their approved layouts. See the October31 section in Approved_District_Integration.md and outputs/district-tree-integration in this chat for evidence. The user's existing save is preserved; no recreation is needed. No additional publish/commit/PR authorization was given.
+
+## Tropical coast follow-up — October 30, 2026
+
+The user approved the light aqua Tropical coastal water. Climate now stores Temperate/Tropical independently of moisture, defaulting old maps to Temperate. Coastal material absorption/scattering change only for Tropical; the accepted swash and other environment settings remain intact. The wizard still generates inland maps. See the latest section in `Documentation/03_Technical/Coastal_Shoreline_Trial.md`.
+
+The user then supplied an eight-model coconut pack and approved 30% palm replacements away from shore, rising to 50% within 75 m of semantic ocean shoreline. These coconut variants supersede the initial 20% V3 date-palm trial. All eight have four LODs and share texture atlases; the supplied FBX contains no animation tracks. Canonical tree arrays, save data and the refined-C checkpoint remain untouched. Source/preparation details and verification are in `Documentation/03_Technical/Tropical_Coastal_Palms.md`. The user approved the coconut visuals, then requested wind at the two closest zoom levels. Procedural GPU wind now targets zoom0/1, fading to still palms at zoom2–5; the supplied FBX has no vendor animation clips. See the close-zoom wind section in the palm document. No sustained performance result is claimed. Local work is on `feature/tropical-coastal-water`, based on fetched `origin/main`; no new commit/push/PR has been requested.
 
 ## District entry integration — October 30, 2026
 

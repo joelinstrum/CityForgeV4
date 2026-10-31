@@ -34,6 +34,8 @@ namespace CityForge.UI
         [SerializeField] private Button terrainNextButton;
 
         private InputField generationSeed;
+        GameObject terrainShapePanel;Dropdown terrainShapeChoice;Button createMapButton;Text terrainShapeDescription;RawImage terrainShapePreview;Texture2D terrainShapeTexture;
+        static readonly World.RegionTerrainShape[] TerrainShapes={World.RegionTerrainShape.Peninsula,World.RegionTerrainShape.Land,World.RegionTerrainShape.Coast,World.RegionTerrainShape.MountainBorder,World.RegionTerrainShape.OneIsland,World.RegionTerrainShape.SmallIslands};
         private GameObject savedRegionList;
         private const float NavigationWidth = 270f;
         private int selectedNavigationIndex;
@@ -106,7 +108,7 @@ namespace CityForge.UI
             if (periodNext != null) periodNext.onClick.AddListener(() => ChangePeriod(1));
             if (regionNameInput != null) regionNameInput.onValueChanged.AddListener(_ => RefreshProgression());
             if (nextButton != null) nextButton.onClick.AddListener(() => SelectCreateRegionSection(1));
-            if (terrainNextButton != null) terrainNextButton.onClick.AddListener(CreatePrototypeRegion);
+            if (terrainNextButton != null) terrainNextButton.onClick.AddListener(()=>SelectCreateRegionSection(2));
             RefreshTimeSelection();
             if (navigationButtons != null)
             {
@@ -125,6 +127,7 @@ namespace CityForge.UI
             SetCreateRegionNavigationVisible(false);
             if (createRegionBasicSettings != null) createRegionBasicSettings.SetActive(false);
             if (createRegionTerrainIntro != null) createRegionTerrainIntro.SetActive(false);
+            if(terrainShapePanel)terrainShapePanel.SetActive(false);
             if (bodyLabel != null) bodyLabel.gameObject.SetActive(true);
             if (headerLabel != null) headerLabel.text = header;
             if (bodyLabel != null) bodyLabel.text = body;
@@ -191,6 +194,7 @@ namespace CityForge.UI
             SetCreateRegionNavigationVisible(true);
             if (bodyLabel != null) bodyLabel.gameObject.SetActive(false);
             ConfigureGenerationControls();
+            generationSeed.text=(System.Guid.NewGuid().GetHashCode()&int.MaxValue).ToString();
             RefreshTimeSelection();
             SelectCreateRegionSection(0);
             RefreshProgression();
@@ -243,14 +247,17 @@ namespace CityForge.UI
         {
             if (navigationBackgrounds == null || index < 0 || index >= navigationBackgrounds.Length)
                 return;
-            if (index == 1 && !BasicSettingsComplete) return;
-            if (index > 1) return;
+            if(index>0&&!BasicSettingsComplete)return;
+            if(index>2)return;
+            if(index==2&&generationSeed&&!int.TryParse(generationSeed.text,out _))return;
 
             selectedNavigationIndex = index;
             if (createRegionBasicSettings != null)
                 createRegionBasicSettings.SetActive(index == 0);
             if (createRegionTerrainIntro != null)
                 createRegionTerrainIntro.SetActive(index == 1);
+            if(terrainShapePanel)terrainShapePanel.SetActive(index==2);
+            if(index==2)RefreshTerrainPreview();
             for (var i = 0; i < navigationBackgrounds.Length; i++)
             {
                 var image = navigationBackgrounds[i];
@@ -281,10 +288,11 @@ namespace CityForge.UI
                 var group = nextButton.GetComponent<CanvasGroup>();
                 if (group != null) group.alpha = nameIsValid ? 1f : 0.4f;
             }
+            if(createMapButton)createMapButton.interactable=canCreate;
             if (navigationButtons == null) return;
             for (var i = 0; i < navigationButtons.Length; i++)
             {
-                var unlocked = i == 0 || (i == 1 && nameIsValid);
+                var unlocked=i==0||(i==1&&nameIsValid)||(i==2&&canCreate);
                 if (navigationButtons[i] == null) continue;
                 navigationButtons[i].interactable = unlocked;
                 var group = navigationButtons[i].GetComponent<CanvasGroup>();
@@ -312,7 +320,9 @@ namespace CityForge.UI
         public World.RegionCreationSettings ReadCreationSettings()
         {
             return new World.RegionCreationSettings { seed=generationSeed&&int.TryParse(generationSeed.text,out var seed)?seed:World.PrototypeRegionData.DefaultSeed,
-                moisture=(World.RegionMoisture)TerrainChoice("Climate").value,vegetation=(World.RegionVegetation)TerrainChoice("Land Type").value,
+                terrainShape=terrainShapeChoice?TerrainShapes[terrainShapeChoice.value]:World.RegionTerrainShape.Land,peninsulaNorthToSouth=true,
+                climate=TerrainChoice("Climate").value==3?World.RegionClimate.Tropical:World.RegionClimate.Temperate,
+                moisture=TerrainChoice("Climate").value==3?World.RegionMoisture.Balanced:(World.RegionMoisture)TerrainChoice("Climate").value,vegetation=(World.RegionVegetation)TerrainChoice("Land Type").value,
                 topography=TerrainChoice("Topography").value,rivers=TerrainChoice("Rivers").value,streams=TerrainChoice("Streams").value,
                 animals=generationAnimals&&generationAnimals.value==1,era=SelectedEra.Name,period=SelectedPeriod.Name };
         }
@@ -320,19 +330,23 @@ namespace CityForge.UI
         {
             if(!createRegionTerrainIntro||generationSeed)return;
             var parent=createRegionTerrainIntro.transform;
-            TerrainChoice("Climate").ClearOptions();TerrainChoice("Climate").AddOptions(new System.Collections.Generic.List<string>{"Temperate — balanced", "Temperate — dry", "Temperate — wet"});TerrainChoice("Climate").interactable=true;
+            TerrainChoice("Climate").ClearOptions();TerrainChoice("Climate").AddOptions(new System.Collections.Generic.List<string>{"Temperate — balanced", "Temperate — dry", "Temperate — wet", "Tropical"});TerrainChoice("Climate").interactable=true;
             TerrainChoice("Land Type").ClearOptions();TerrainChoice("Land Type").AddOptions(new System.Collections.Generic.List<string>{"Meadow and woodland", "Open meadow", "Woodland"});TerrainChoice("Land Type").interactable=true;
             parent.Find("ClimateNote").GetComponent<Text>().text="Moisture influences woodland and riverside vegetation.";
             parent.Find("Land TypeLabel").GetComponent<Text>().text="VEGETATION";
             parent.Find("CoastalNote").GetComponent<Text>().text="One inland region, 64 connected districts.";
-            parent.Find("SectionDescription").GetComponent<Text>().text="Shape terrain, waterways, and temperate habitats across an 8 × 8 district grid.";
+            parent.Find("SectionTitle").GetComponent<Text>().text="ENVIRONMENT";
+            parent.Find("SectionTitle").GetComponent<RectTransform>().sizeDelta=new Vector2(240,38);
+            parent.Find("SectionDescription").GetComponent<Text>().text="Climate, vegetation, waterways and relief.";
+            parent.Find("SectionDescription").GetComponent<RectTransform>().anchoredPosition=new Vector2(250,0);
+            parent.Find("SectionDescription").GetComponent<RectTransform>().sizeDelta=new Vector2(525,38);
             var label=Instantiate(parent.Find("StreamsLabel").gameObject,parent);label.name="SeedLabel";label.GetComponent<Text>().text="MAP SEED";
             label.GetComponent<RectTransform>().anchoredPosition=new Vector2(425,-262);
             generationSeed=Instantiate(regionNameInput,parent);generationSeed.name="MapSeedInput";
             var rect=generationSeed.GetComponent<RectTransform>();rect.anchorMin=rect.anchorMax=rect.pivot=new Vector2(0,1);rect.anchoredPosition=new Vector2(425,-296);rect.sizeDelta=new Vector2(350,48);
             generationSeed.onValueChanged=new InputField.OnChangeEvent();generationSeed.onEndEdit=new InputField.EndEditEvent();
             generationSeed.characterValidation=InputField.CharacterValidation.Integer;generationSeed.characterLimit=11;generationSeed.text=World.PrototypeRegionData.DefaultSeed.ToString();
-            generationSeed.onValueChanged.AddListener(_=>RefreshProgression());
+            generationSeed.onValueChanged.AddListener(_=>{RefreshProgression();RefreshTerrainPreview();});
             var animalLabel=Instantiate(parent.Find("StreamsLabel").gameObject,parent);animalLabel.name="AnimalsLabel";animalLabel.GetComponent<Text>().text="ANIMALS";
             animalLabel.GetComponent<RectTransform>().anchoredPosition=new Vector2(0,-372);
             generationAnimals=Instantiate(TerrainChoice("Streams"),parent);generationAnimals.name="AnimalsDropdown";
@@ -345,13 +359,52 @@ namespace CityForge.UI
             }
             parent.Find("Land TypeLabel").GetComponent<RectTransform>().anchoredPosition=new Vector2(0,-262);
             TerrainChoice("Land Type").GetComponent<RectTransform>().anchoredPosition=new Vector2(0,-296);
-            var climateNote=parent.Find("ClimateNote").GetComponent<Text>();climateNote.text="Temperate woodland and riverside habitats.";climateNote.rectTransform.sizeDelta=new Vector2(350,18);
+            var climateNote=parent.Find("ClimateNote").GetComponent<Text>();climateNote.text="Tropical adds light aqua coastal water.";climateNote.rectTransform.sizeDelta=new Vector2(350,18);
+            parent.Find("MountainNote").GetComponent<Text>().text="Overall relief; Terrain can add a mountain border.";
             var mountainNote=parent.Find("MountainNote").GetComponent<RectTransform>();mountainNote.anchoredPosition=new Vector2(0,-242);mountainNote.sizeDelta=new Vector2(350,18);
-            var coastalNote=parent.Find("CoastalNote").GetComponent<RectTransform>();coastalNote.anchoredPosition=new Vector2(0,-350);coastalNote.sizeDelta=new Vector2(350,18);
+            var coastalNote=parent.Find("CoastalNote").GetComponent<RectTransform>();coastalNote.anchoredPosition=new Vector2(0,-350);coastalNote.sizeDelta=new Vector2(350,18);parent.Find("CoastalNote").GetComponent<Text>().text="Choose the region’s shape in Terrain.";
             parent.GetComponent<LayoutElement>().preferredHeight=456;
             terrainNextButton.GetComponent<RectTransform>().anchoredPosition=new Vector2(615,-392);
-            terrainNextButton.GetComponentInChildren<Text>().text="CREATE MAP";
+            terrainNextButton.GetComponentInChildren<Text>().text="NEXT";
+            ConfigureTerrainStep();
         }
+
+        void ConfigureTerrainStep()
+        {
+            if(terrainShapePanel)return;
+            for(int i=0;i<navigationButtons.Length;i++)if(navigationButtons[i])foreach(var text in navigationButtons[i].GetComponentsInChildren<Text>(true)){
+                if(i==1&&(text.text=="TERRAIN"||text.text=="ENVIRONMENT"))text.text="ENVIRONMENT";else if(i==2&&(text.text=="NATURAL RESOURCES"||text.text=="TERRAIN"))text.text="TERRAIN";
+                else if(text.text=="Land, water, climate")text.text="Climate and ecology";else if(text.text=="What the land provides")text.text="Region shape";
+            }
+            terrainShapePanel=new GameObject("CreateRegionTerrainShape",typeof(RectTransform),typeof(LayoutElement));terrainShapePanel.transform.SetParent(createRegionTerrainIntro.transform.parent,false);terrainShapePanel.GetComponent<LayoutElement>().preferredHeight=456;
+            Text CopyText(string template,string name,string value,Vector2 position,Vector2 size){var t=Instantiate(createRegionTerrainIntro.transform.Find(template).GetComponent<Text>(),terrainShapePanel.transform);t.name=name;t.text=value;t.rectTransform.anchoredPosition=position;t.rectTransform.sizeDelta=size;return t;}
+            CopyText("SectionTitle","SectionTitle","TERRAIN",Vector2.zero,new Vector2(300,38));
+            CopyText("SectionDescription","SectionDescription","Choose the outline of your region. Each map contains 64 connected districts.",new Vector2(0,-42),new Vector2(775,42));
+            CopyText("StreamsLabel","ShapeLabel","REGION SHAPE",new Vector2(0,-100),new Vector2(350,30));
+            terrainShapeChoice=Instantiate(TerrainChoice("Land Type"),terrainShapePanel.transform);terrainShapeChoice.name="RegionShapeDropdown";terrainShapeChoice.GetComponent<RectTransform>().anchoredPosition=new Vector2(0,-134);terrainShapeChoice.onValueChanged=new Dropdown.DropdownEvent();terrainShapeChoice.ClearOptions();terrainShapeChoice.AddOptions(new System.Collections.Generic.List<string>{"Peninsula","Land","Coast","Mountain Border","Pangea","Archipelago"});terrainShapeChoice.value=1;terrainShapeChoice.onValueChanged.AddListener(_=>RefreshTerrainPreview());
+            terrainShapeDescription=CopyText("SectionDescription","ShapeDescription","",new Vector2(0,-202),new Vector2(350,140));terrainShapeDescription.alignment=TextAnchor.UpperLeft;terrainShapeDescription.fontSize=19;
+            var preview=new GameObject("ShapePreview",typeof(RectTransform),typeof(RawImage));preview.transform.SetParent(terrainShapePanel.transform,false);terrainShapePreview=preview.GetComponent<RawImage>();var rect=preview.GetComponent<RectTransform>();rect.anchorMin=rect.anchorMax=rect.pivot=new Vector2(0,1);rect.anchoredPosition=new Vector2(425,-100);rect.sizeDelta=new Vector2(280,280);terrainShapePreview.raycastTarget=false;
+            createMapButton=Instantiate(terrainNextButton,terrainShapePanel.transform);createMapButton.name="CreateMapButton";createMapButton.GetComponentInChildren<Text>().text="CREATE MAP";createMapButton.onClick=new Button.ButtonClickedEvent();createMapButton.onClick.AddListener(CreatePrototypeRegion);terrainShapePanel.SetActive(false);RefreshTerrainPreview();
+        }
+        void RefreshTerrainPreview()
+        {
+            if(!terrainShapeChoice||!terrainShapePreview)return;
+            var recipe=ReadCreationSettings();var layout=new World.RegionTerrainLayout(recipe);
+            terrainShapeDescription.text=recipe.terrainShape switch{
+                World.RegionTerrainShape.Peninsula=>"Land extending south from a northern mainland, with water on the other three sides.",
+                World.RegionTerrainShape.Land=>"Inland terrain fills the region. Your rivers and relief shape the landscape.",
+                World.RegionTerrainShape.Coast=>"Open ocean along one side, with a winding coast and a broad mainland.",
+                World.RegionTerrainShape.MountainBorder=>"Mountains along one edge, with gentler land across the rest of the region.",
+                World.RegionTerrainShape.OneIsland=>"One island completely surrounded by ocean, with generous water around it.",
+                _=>"A group of small islands separated by open water."};
+            const int n=160;if(!terrainShapeTexture){terrainShapeTexture=new Texture2D(n,n,TextureFormat.RGBA32,false);terrainShapeTexture.name="Region shape preview";terrainShapePreview.texture=terrainShapeTexture;}
+            var colors=new Color[n*n];for(int z=0;z<n;z++)for(int x=0;x<n;x++){var p=new Vector2(x/(float)(n-1),z/(float)(n-1));float d=layout.LandDistance(p);var color=d<0?new Color(.12f,.31f,.40f):new Color(.43f,.47f,.285f);
+                if(layout.HasOcean&&Mathf.Abs(d)<.007f)color=new Color(.70f,.62f,.43f);
+                if(recipe.terrainShape==World.RegionTerrainShape.MountainBorder&&(recipe.version>=8?p.y>(recipe.version>=9?.75f:.70f):World.RegionTerrainLayout.Orient(p,recipe.seed).x>.75f))color=Color.Lerp(color,new Color(.68f,.60f,.48f),.8f);
+                if(x%20==0||z%20==0)color*=.85f;colors[z*n+x]=color;}
+            terrainShapeTexture.SetPixels(colors);terrainShapeTexture.Apply();
+        }
+        void OnDestroy(){if(terrainShapeTexture)Destroy(terrainShapeTexture);}
 
         private void SetCreateRegionNavigationVisible(bool visible)
         {

@@ -44,7 +44,7 @@ namespace CityForge.World
         public RegionBiomeSample At(Vector2 uv)
         {
             uv=new Vector2(Mathf.Clamp01(uv.x),Mathf.Clamp01(uv.y));
-            float elevation=Sample(data.Heights,uv),bank=Sample(data.WaterDistance,uv)/PrototypeRegionData.Side;
+            float elevation=Sample(data.Heights,uv)-(TropicalOceanDepth.DeepRecipe(recipe)?(TropicalOceanDepth.Sea-12)/PrototypeRegionData.Height:0),bank=Sample(data.WaterDistance,uv)/PrototypeRegionData.Side;
             float regional=Mathf.PerlinNoise(offset.x+uv.x*4.3f,offset.y+uv.y*4.3f);
             float patch=Mathf.PerlinNoise(offset.x+81+uv.x*13,offset.y-23+uv.y*13);
             float river=data.WaterBodies!=null&&data.WaterBodies.Length>0?1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(0,.045f,bank)):0;

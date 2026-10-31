@@ -4,6 +4,7 @@ using UnityEngine;
 namespace CityForge.World
 {
     public enum WaterBodyKind { Unknown=0, River=1, Ocean=2, Lake=3, Pond=4 }
+    [Serializable] public sealed class RegionWaterContour {public Vector2[] points;}
     [Serializable]
     public sealed class RegionWaterBody
     {
@@ -11,6 +12,9 @@ namespace CityForge.World
         public WaterBodyKind kind;
         // Coordinates are normalized over the whole region, independent of district/camera.
         public Vector2[] outline,centerline;
+        // Land holes inside an ocean polygon; absent in legacy saves.
+        public RegionWaterContour[] holes;
+        public IEnumerable<Vector2[]> Contours {get {if(outline!=null)yield return outline;if(holes!=null)foreach(var hole in holes)if(hole?.points!=null)yield return hole.points;}}
         public float halfWidthNormalized,flowSpeed;
         public bool hasSurfaceLevel;public float surfaceLevelNormalized;
         public string appearanceProfile;
@@ -25,9 +29,25 @@ namespace CityForge.World
         public bool Contains(Vector2 point)
         {
             if(centerline!=null&&DistanceToCenterline(point,out _)<=halfWidthNormalized)return true;
-            if(outline==null)return false;bool inside=false;
-            for(int i=0,j=outline.Length-1;i<outline.Length;j=i++)if((outline[i].y>point.y)!=(outline[j].y>point.y)&&point.x<(outline[j].x-outline[i].x)*(point.y-outline[i].y)/(outline[j].y-outline[i].y)+outline[i].x)inside=!inside;
+            if(!PolygonContains(outline,point))return false;
+            if(holes!=null)foreach(var hole in holes)if(PolygonContains(hole?.points,point))return false;
+            return true;
+        }
+        static bool PolygonContains(Vector2[] points,Vector2 p)
+        {
+            if(points==null||points.Length<3)return false;bool inside=false;
+            for(int i=0,j=points.Length-1;i<points.Length;j=i++)if((points[i].y>p.y)!=(points[j].y>p.y)&&p.x<(points[j].x-points[i].x)*(p.y-points[i].y)/(points[j].y-points[i].y)+points[i].x)inside=!inside;
             return inside;
+        }
+        public bool Intersects(Rect area)
+        {
+            if(!Bounds.Overlaps(area))return false;
+            foreach(var p in new[]{area.min,area.max,new Vector2(area.xMin,area.yMax),new Vector2(area.xMax,area.yMin)})if(Contains(p))return true;
+            foreach(var points in Contours)for(int i=0;i<points.Length;i++){
+                var a=points[i];var b=points[(i+1)%points.Length];float lo=0,hi=1;var delta=b-a;
+                bool Clip(float origin,float direction,float min,float max){if(Mathf.Abs(direction)<1e-8f)return origin>=min&&origin<=max;float t0=(min-origin)/direction,t1=(max-origin)/direction;if(t0>t1)(t0,t1)=(t1,t0);lo=Mathf.Max(lo,t0);hi=Mathf.Min(hi,t1);return lo<=hi;}
+                if(Clip(a.x,delta.x,area.xMin,area.xMax)&&Clip(a.y,delta.y,area.yMin,area.yMax))return true;
+            }return false;
         }
         public Rect Bounds
         {

@@ -12,7 +12,7 @@ namespace CityForge.World
     public enum RegionSize { Small, Medium, Large }
 
     /// <summary>Temporary region prototype opened by Terrain's Next button.</summary>
-    public sealed class PrototypeRegionView : MonoBehaviour
+    public sealed partial class PrototypeRegionView : MonoBehaviour
     {
         private readonly List<Object> generatedAssets = new List<Object>();
         private GameObject districtSelection;
@@ -50,21 +50,31 @@ namespace CityForge.World
         private string performanceReadout = "Measure at a fixed zoom for comparison.";
         private GameObject overviewButton;
         public RegionSeason Season {get;private set;}
+        // Calendar state persists independently of a climate's visual seasonal response.
+        public RegionSeason VisualSeason=>Climate==RegionClimate.Tropical?RegionSeason.Summer:Season;
+        bool? hudDistrictMode;
         public void SetSeason(RegionSeason season)
         {
             if(!System.Enum.IsDefined(typeof(RegionSeason),season))throw new System.ArgumentOutOfRangeException(nameof(season));
-            Season=season;if(approvedDistrict)approvedDistrict.SetSeason(season);
+            Season=season;if(approvedDistrict)approvedDistrict.SetSeason(VisualSeason);
             RefreshSeasonButtons();
         }
         void RefreshSeasonButtons()
         {
             var hud=transform.Find("RegionHud");if(!hud)return;
+            bool district=SelectedDistrict>=0;
+            if(hudDistrictMode!=district){hudDistrictMode=district;
+                var back=hud.Find("ReturnToMenu/Caption");if(back)back.GetComponent<Text>().text=district?"RETURN TO REGION":"RETURN TO MENU";
+                var save=hud.Find("SaveRegion/Caption");if(save)save.GetComponent<Text>().text=district?"SAVE DISTRICT":"SAVE REGION";
+            }
             foreach(RegionSeason season in System.Enum.GetValues(typeof(RegionSeason)))
             {
                 var button=hud.Find("Season"+season);if(!button)continue;
                 button.gameObject.SetActive(SelectedDistrict>=0);
-                button.GetComponent<Button>().interactable=approvedDistrict&&approvedDistrict.gameObject.activeSelf;
-                button.GetComponent<Image>().color=season==Season?new Color(.38f,.36f,.29f,.98f):new Color(.13f,.15f,.13f,.95f);
+                bool available=Climate!=RegionClimate.Tropical||season==RegionSeason.Summer;
+                button.GetComponent<Button>().interactable=available&&approvedDistrict&&approvedDistrict.gameObject.activeSelf;
+                button.GetComponentInChildren<Text>().color=available?new Color(.92f,.91f,.82f,1):new Color(.48f,.48f,.43f,.7f);
+                button.GetComponent<Image>().color=season==VisualSeason?new Color(.38f,.36f,.29f,.98f):new Color(.13f,.15f,.13f,.95f);
             }
         }
 
@@ -116,22 +126,23 @@ namespace CityForge.World
                 else Destroy(approvedDistrict.gameObject);
                 approvedDistrict=null;
             }
-            if(active&&approvedDistrict==null&&SelectedDistrict<0&&approvedOverview){approvedDistrict=approvedOverview;approvedDistrict.SetSeason(Season);}
+            if(active&&approvedDistrict==null&&SelectedDistrict<0&&approvedOverview){approvedDistrict=approvedOverview;approvedDistrict.SetSeason(VisualSeason);}
             Shader.SetGlobalFloat("_LandscapeEnabled",0); // Retire the rejected mesh approximation.
             if(active && approvedDistrict==null){
                 if(sessionMeadows.TryGetValue(SelectedDistrict,out var cachedMeadow)){LoadedMeadow=cachedMeadow;LoadedMeadowDistrict=SelectedDistrict;}
                 var go=new GameObject("Approved meadow runtime district");go.transform.SetParent(transform,false);
                 approvedDistrict=go.AddComponent<MeadowDistrictLandscape>();
                 yield return approvedDistrict.BuildStages(this,baseline,Data.Biomes!=null&&SelectedDistrict<0,(stage,value)=>loadingProgress?.Invoke(stage,.4f+value*.55f));
-                approvedDistrict.SetSeason(Season);
+                approvedDistrict.SetSeason(VisualSeason);
             }
             if(!active&&!buildingRegion&&!legacyTreesReady){legacyTreesReady=true;BuildTrees(Data.Seed);}
             NaturalLandscape=active;
-            var continuousCollider=transform.Find("ContinuousRegionTerrain");if(continuousCollider)continuousCollider.GetComponent<TerrainCollider>().enabled=!(active&&(RiverBedVersion>=4||CreationSettings?.version>=5));
+            var continuousCollider=transform.Find("ContinuousRegionTerrain");if(continuousCollider)continuousCollider.GetComponent<TerrainCollider>().enabled=!(active&&(IsCombinedDistrict||RiverBedVersion>=4||CreationSettings?.version>=5));
             if(approvedDistrict!=null){approvedDistrict.ApplyPresentation(active);approvedDistrict.gameObject.SetActive(active);}
             if(active&&Data.Biomes!=null&&SelectedDistrict<0){var camera=GetComponentInChildren<Camera>();camera.farClipPlane=Mathf.Max(camera.farClipPlane,MapSide*10);}
             if(!relief){var map=new GameObject("Regional relief map");map.transform.SetParent(transform,false);relief=map.AddComponent<RegionReliefMap>();yield return relief.BuildStages(this);}
             relief.gameObject.SetActive(SelectedDistrict<0);
+            GetComponent<DistrictCombiner>()?.RefreshBorders();
             var land=transform.Find("RegionLandCover");if(land)land.GetComponent<MeshRenderer>().enabled=!active&&SelectedDistrict>=0;
             var forest=transform.Find("RandomTrees");if(forest)forest.gameObject.SetActive(!active);
             var sun=transform.Find("RegionSun");if(sun)sun.gameObject.SetActive(!active);
@@ -147,6 +158,8 @@ namespace CityForge.World
         }
         public RegionDistrictInfo[] Districts {get;private set;}
         public RegionCreationSettings CreationSettings {get;private set;}
+        public RegionClimate Climate=>CreationSettings?.climate??legacyClimate;
+        RegionClimate legacyClimate;
         public bool AnimalsEnabled {get;private set;}
         public void SetAnimalsEnabled(bool enabled){AnimalsEnabled=enabled;if(approvedDistrict)approvedDistrict.RefreshWildlife();}
         public int SelectedDistrict { get; private set; } = -1;
@@ -166,14 +179,14 @@ namespace CityForge.World
         public void SaveCurrentRegion()
         {
             var button=transform.Find("RegionHud/SaveRegion/Caption").GetComponent<Text>();
-            try{var snapshot=SavedRegionStore.Capture(this);SavedRegionStore.Save(snapshot);SavedRegionId=snapshot.info.id;button.text="REGION SAVED";}
+            try{var snapshot=SavedRegionStore.Capture(this);SavedRegionStore.Save(snapshot);SavedRegionId=snapshot.info.id;button.text=SelectedDistrict>=0?"DISTRICT SAVED":"REGION SAVED";}
             catch(System.Exception e){button.text="SAVE FAILED";Debug.LogException(e);}
         }
         public string RegionName { get; private set; }
         public RegionSize Size { get; private set; }
         public float MapSide => 1024f * Mathf.Pow(2f, (int)Size)*(GridSide/2f);
         public float MapScale => MapSide / PrototypeRegionData.Side;
-        public float SeaLevel => Coastline?CoastlineTestRegion.Sea:CreationSettings?.version>=5?12f:12f * (MapScale/(GridSide/2f));
+        public float SeaLevel => Coastline?CoastlineTestRegion.Sea:CreationSettings?.version>=5?(TropicalOceanDepth.DeepRecipe(CreationSettings)?TropicalOceanDepth.Sea:12f):12f * (MapScale/(GridSide/2f));
         public float TerrainHeightRange {get;private set;}
         public bool MountainTest => SavedRegionId==HillsMountainTestRegion.Id;
         private float VerticalHeight => TerrainHeightRange>0?TerrainHeightRange:PrototypeRegionData.Height * (MapScale/(GridSide/2f));
@@ -211,7 +224,7 @@ namespace CityForge.World
             try
             {
                 progress?.Invoke("Preparing region",.15f);yield return null;
-                if(snapshot!=null){view.CreationSettings=snapshot.info.creation;view.AnimalsEnabled=snapshot.info.animals;size=(RegionSize)snapshot.info.size;seed=snapshot.info.seed;regionName=snapshot.info.name;view.SavedRegionId=snapshot.info.id;view.Season=(RegionSeason)snapshot.info.season;view.TerrainHeightRange=snapshot.info.terrainHeightRange;view.LoadedMeadow=snapshot.meadow;view.LoadedMeadowDistrict=snapshot.info.meadowCacheDistrict;view.LoadedFromSnapshot=true;view.wantsMeadow=snapshot.info.meadow;view.Waterless=snapshot.info.waterless;view.Coastline=snapshot.info.coastline;view.CoastVersion=snapshot.info.coastVersion;view.MinimalRiverCrest=snapshot.info.minimalRiverCrest;view.StillWater=snapshot.info.stillWater;view.LakeWaterVersion=snapshot.info.lakeWaterVersion<0?-1:1;view.RiverBedVersion=snapshot.info.riverBedVersion;}
+                if(snapshot!=null){view.CombinedDistricts=snapshot.info.combinedDistricts??System.Array.Empty<CombinedDistrictGroup>();view.CreationSettings=snapshot.info.creation;view.legacyClimate=snapshot.info.climate;view.AnimalsEnabled=snapshot.info.animals;size=(RegionSize)snapshot.info.size;seed=snapshot.info.seed;regionName=snapshot.info.name;view.SavedRegionId=snapshot.info.id;view.Season=(RegionSeason)snapshot.info.season;view.TerrainHeightRange=snapshot.info.terrainHeightRange;view.LoadedMeadow=snapshot.meadow;view.LoadedMeadowDistrict=snapshot.info.meadowCacheDistrict;view.LoadedFromSnapshot=true;view.wantsMeadow=snapshot.info.meadow;view.Waterless=snapshot.info.waterless;view.Coastline=snapshot.info.coastline;view.CoastVersion=snapshot.info.coastVersion;view.MinimalRiverCrest=snapshot.info.minimalRiverCrest;view.StillWater=snapshot.info.stillWater;view.LakeWaterVersion=snapshot.info.lakeWaterVersion<0?-1:1;view.RiverBedVersion=snapshot.info.riverBedVersion;}
                 if(view.LoadedMeadow!=null&&view.LoadedMeadowDistrict>=0)view.sessionMeadows[view.LoadedMeadowDistrict]=view.LoadedMeadow;
                 view.Size = size;
                 view.RegionName = string.IsNullOrWhiteSpace(regionName) ? "Test Region" : regionName.Trim();
@@ -389,6 +402,7 @@ namespace CityForge.World
             scaler.referenceResolution = new Vector2(1920f, 1080f);
             var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             BuildDistrictSelection(root.transform,font);
+            gameObject.AddComponent<DistrictCombiner>().Initialize(this);
             var title = HudText(root.transform, "RegionTitle", font, 26);
             regionTitle = title;
             title.text = (string.IsNullOrWhiteSpace(regionName) ? "TEST REGION" : regionName)
@@ -411,7 +425,7 @@ namespace CityForge.World
             rect.anchoredPosition = new Vector2(-25f, -25f);
             rect.sizeDelta = new Vector2(205f, 48f);
             back.GetComponent<Image>().color = new Color(.13f, .15f, .13f, .95f);
-            back.GetComponent<Button>().onClick.AddListener(ReturnToMenu);
+            back.GetComponent<Button>().onClick.AddListener(()=>{if(SelectedDistrict>=0)ShowOverview();else ReturnToMenu();});
             var caption = HudText(back.transform, "Caption", font, 19);
             caption.text = "RETURN TO MENU";
             caption.alignment = TextAnchor.MiddleCenter;
@@ -561,6 +575,8 @@ namespace CityForge.World
         {
             if(index<0||index>=DistrictCount)throw new System.ArgumentOutOfRangeException(nameof(index));
             if(districtLoading||SelectedDistrict>=0)return;
+            var combiner=GetComponent<DistrictCombiner>();if(combiner&&combiner.Active){combiner.Select(index);return;}
+            index=DistrictAnchor(index);
             districtLoading=true;var camera=GetComponentInChildren<CityForgeCameraController>();
             bool previousControl=camera.enabled;camera.enabled=false;enabled=false;
             string name=GridSide==2?DistrictNames[index]+" District":$"District {index%GridSide+1}–{index/GridSide+1}";
@@ -578,6 +594,8 @@ namespace CityForge.World
         public IEnumerator EnterDistrictStages(int index,System.Action<string,float> progress=null)
         {
             if(index<0||index>=DistrictCount)throw new System.ArgumentOutOfRangeException(nameof(index));
+            index=DistrictAnchor(index);
+            float entryHeading=GetComponentInChildren<CityForgeCameraController>().CaptureRegionState().yaw;
             var previousProgress=loadingProgress;loadingProgress=progress;
             try{
                 progress?.Invoke("Selecting district",.08f);yield return null;
@@ -605,25 +623,40 @@ namespace CityForge.World
             regionTitle.text=RegionName+"  /  "+(GridSide==2?DistrictNames[index]+" District":$"District {index%GridSide+1}–{index/GridSide+1}");
             regionNote.text=DistrictSide.ToString("N0")+" × "+DistrictSide.ToString("N0")+" m  ·  SEED "+Data.Seed;
             if(Districts!=null)regionNote.text+="  ·  "+RegionBiomeMap.Label(Districts[index].biome);
-            overviewButton.SetActive(true);
+            overviewButton.SetActive(false);
             RefreshTrees();
             yield return UpdateLandscapeModeStages();
+            if(NaturalLandscape&&IsCombinedDistrict){
+                var bounds=ActiveDistrictBounds;var rig=GetComponentInChildren<CityForgeCameraController>();float high=0,low=VerticalHeight;var td=approvedDistrict.DisplayTerrain.terrainData;foreach(float h in td.GetHeights(0,0,td.heightmapResolution,td.heightmapResolution)){high=Mathf.Max(high,h*td.size.y);low=Mathf.Min(low,h*td.size.y);}
+                float span=high-low;rig.FrameDistrictUnion(Mathf.Max(bounds.width,bounds.height),VerticalHeight,low,high,new Vector3(bounds.center.x,0,bounds.center.y));
+                regionTitle.text=RegionName+"  /  COMBINED DISTRICT ("+ActiveDistrictMembers.Length+")";regionNote.text=bounds.width.ToString("N0")+" × "+bounds.height.ToString("N0")+" m · "+ActiveDistrictMembers.Length+" CONNECTED DISTRICTS";
+                progress?.Invoke("Ready",1);yield return null;yield break;
+            }
+            if(NaturalLandscape&&approvedDistrict.RockyMountainBorder){
+                var td=approvedDistrict.DisplayTerrain.terrainData;var h=td.GetHeights(0,0,td.heightmapResolution,td.heightmapResolution);float low=float.PositiveInfinity,high=0;
+                foreach(float sample in h){low=Mathf.Min(low,sample*td.size.y);high=Mathf.Max(high,sample*td.size.y);}
+                float range=high-low;var mountainCenter=new Vector3(approvedDistrict.Origin.x+DistrictSide/2,(low+high)/2-range*.0375f,approvedDistrict.Origin.y+DistrictSide/2);
+                GetComponentInChildren<CityForgeCameraController>().FrameArea(DistrictSide,range,mountainCenter);
+                progress?.Invoke("Ready",1f);yield return null;yield break;
+            }
             if(NaturalLandscape){if(Coastline){var coastalCenter=new Vector3(approvedDistrict.Origin.x+approvedDistrict.Side/2,26,approvedDistrict.Origin.y+approvedDistrict.Side/2);GetComponentInChildren<CityForgeCameraController>().FrameMeadowComparison(DistrictSide,VerticalHeight,coastalCenter,32);GetComponentInChildren<CityForgeCameraController>().SetZoomLevel(5);yield break;}var focus=approvedDistrict.ComparisonFocus;focus.y=approvedDistrict.Height(new Vector2(focus.x,focus.z))+3;
                 GetComponentInChildren<CityForgeCameraController>().FrameMeadowComparison(DistrictSide,VerticalHeight,focus);
                 GetComponentInChildren<CityForgeCameraController>().SetZoomLevel(5);}
                 progress?.Invoke("Ready",1f);yield return null;
-            }finally{loadingProgress=previousProgress;}
+            }finally{GetComponentInChildren<CityForgeCameraController>().SetHeading(entryHeading);loadingProgress=previousProgress;}
         }
 
         public void ShowOverview()
         {
             if(districtLoading)return;
             GetComponent<RegionPreviewDiagnostics>().SetDiagnostic(false,1);
+            float returnHeading=GetComponentInChildren<CityForgeCameraController>().CaptureRegionState().yaw;
             SelectedDistrict=-1;if(districtSelection)districtSelection.SetActive(true);
             transform.Find("RegionLandCover").GetComponent<MeshFilter>().sharedMesh=wholeRegionMesh;
             if(waterSurface){waterSurface.position=Vector3.up*SeaLevel; waterSurface.localScale=Vector3.one*(MapSide/10);}
             foreach (var line in GetComponentsInChildren<LineRenderer>(true)) line.gameObject.SetActive(true);
             GetComponentInChildren<CityForgeCameraController>().FrameRegion(MapSide,VerticalHeight);
+            GetComponentInChildren<CityForgeCameraController>().SetHeading(returnHeading);
             regionTitle.text=RegionName+"  /  "+DistrictCount+" DISTRICTS";
             regionNote.text=Size.ToString().ToUpperInvariant()+"  ·  "+MapSide.ToString("N0")+" × "+MapSide.ToString("N0")+" m  ·  SEED "+Data.Seed;
             overviewButton.SetActive(false); RefreshTrees(); UpdateLandscapeMode();

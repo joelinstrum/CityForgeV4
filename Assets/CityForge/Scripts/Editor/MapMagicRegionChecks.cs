@@ -20,7 +20,7 @@ namespace CityForge.EditorTools
  static void Require(bool b,string message){if(!b)throw new Exception(message);}
  static IEnumerator Check(){
  var old=UnityEngine.Object.FindFirstObjectByType<PrototypeRegionView>();if(old)old.ReturnToMenu();yield return null;yield return null;
- var recipe=new RegionCreationSettings{seed=730424,topography=4,rivers=1,streams=2,vegetation=RegionVegetation.Woodland};Require(recipe.version==5,"New maps use MapMagic recipe5");
+ var recipe=new RegionCreationSettings{version=5,seed=730424,topography=4,rivers=1,streams=2,vegetation=RegionVegetation.Woodland};Require(recipe.version==5,"Legacy MapMagic recipe5 remains available");
  float[,] first;using(var source=new MapMagicRegionGeography(recipe,RegionSize.Medium)){
  Require(source.Graph.generators.Any(g=>g is Noise200)&&source.Graph.generators.Any(g=>g is Levels200)&&source.Graph.generators.Any(g=>g is Erosion200),"Actual installed MapMagic nodes in graph");first=source.Generate();}
  using(var source=new MapMagicRegionGeography(recipe,RegionSize.Medium)){var repeat=source.Generate();for(int z=0;z<513;z+=8)for(int x=0;x<513;x+=8)Require(first[z,x]==repeat[z,x],"Deterministic graph output");}

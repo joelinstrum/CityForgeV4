@@ -1,3 +1,5 @@
+Current default is version6; see Region_Terrain_Shapes.md for the separate Terrain step and ocean/island composition. Version5 and earlier descriptions below remain legacy context. Stored fields are never regenerated on load.
+
 # MapMagic regional geography trial
 
 Current default: version5. See Regional_Ridge_Valley_Trial.md for the physical height correction, constrained ranges/connected rivers, 257-square mesh and terrain atlas. Earlier version4/129-sample descriptions below are historical.
