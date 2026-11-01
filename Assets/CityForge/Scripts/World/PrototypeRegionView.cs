@@ -474,6 +474,7 @@ namespace CityForge.World
                 seasonCaption.rectTransform.offsetMin=seasonCaption.rectTransform.offsetMax=Vector2.zero;
             }
             CameraTiltControls.Build(this,root.transform,font);
+            StreamFishControls.Build(this,root.transform,font);
             RefreshSeasonButtons();
             var diagnostics = gameObject.AddComponent<RegionPreviewDiagnostics>();
             diagnostics.Initialize(transform.Find("RegionLandCover").GetComponent<MeshRenderer>(),

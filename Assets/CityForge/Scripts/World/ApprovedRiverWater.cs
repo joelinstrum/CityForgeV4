@@ -19,6 +19,7 @@ namespace CityForge.World
             var crest=host.AddComponent<CrestDistrictRiverPreview>();var setup=crest.Initialize(land,river,template);
             while(setup.MoveNext())yield return setup.Current;
             Configure(crest.Settings);
+            if(StreamRockTestRegion.Revised(land.View))StreamRockTestRegion.ConfigureWater(crest.Settings,StreamRockTestRegion.Refined(land.View));
         }
         public static void Configure(Material m)
         {
