@@ -61,7 +61,7 @@ namespace CityForge.World
             var counts=new Dictionary<string,int>{{"core",0},{"edge",0},{"outlier",0}};
             foreach(var p in layout.placements){if(counts[p.zone]>=quotas[p.zone])continue;var q=center+new Vector2(p.x,p.z);
                 var local=q-land.Origin;if(local.x<12||local.y<12||local.x>land.Side-12||local.y>land.Side-12)continue;
-                if(!land.Contains(q)||land.WaterDistance(q)<9||land.RoadDistance(q)<5||land.DisplayTerrain.terrainData.GetSteepness(local.x/land.Side,local.y/land.Side)>18||(land.View.CreationSettings?.version>=5&&land.Height(q)<land.View.SeaLevel+.2f))continue;
+                if(land.View.InCampClearing(q,5)||!land.Contains(q)||land.WaterDistance(q)<9||land.RoadDistance(q)<5||land.DisplayTerrain.terrainData.GetSteepness(local.x/land.Side,local.y/land.Side)>18||(land.View.CreationSettings?.version>=5&&land.Height(q)<land.View.SeaLevel+.2f))continue;
                 if(land.View.Data.Biomes!=null&&land.Woodland(q)<.2f)continue;
                 bool occupied=false;var cell=Vector2Int.FloorToInt(q/8);
                 for(int z=-1;z<=1;z++)for(int x=-1;x<=1;x++)if(native.TryGetValue(cell+new Vector2Int(x,z),out var nearby))foreach(var n in nearby)if((n-q).sqrMagnitude<6.25f)occupied=true;

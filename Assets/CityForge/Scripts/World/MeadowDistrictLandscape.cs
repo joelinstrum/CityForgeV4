@@ -127,8 +127,8 @@ namespace CityForge.World
             {
                 if(light.type!=LightType.Directional)continue;
                 light.shadowStrength=season==RegionSeason.Winter?.52f:.62f;
-                // Bare branches retain their silhouette without PCF expansion; leafy seasons stay soft.
-                light.shadows=season==RegionSeason.Winter?LightShadows.Hard:LightShadows.Soft;
+                // Preserve the approved crisp silhouettes through every seasonal refresh.
+                light.shadows=LightShadows.Hard;
                 light.GetUniversalAdditionalLightData().softShadowQuality=SoftShadowQuality.Low;
             }
         }
@@ -147,7 +147,7 @@ namespace CityForge.World
             DisplayTerrain.Flush();RefreshLakeEnvironments();
         }
         void RefreshLakeEnvironments(){foreach(var lake in GetComponentsInChildren<LakeWaterRenderer>())if(lake.CaptureReady)lake.RefreshEnvironment();}
-        public MeadowRegionSnapshot CaptureSnapshot()=>new MeadowRegionSnapshot{version=Baseline.generationVersion,road=Road.ToArray(),trees=fullTreeInstances??terrainData.treeInstances,alphamaps=lakeBaseAlphamaps??terrainData.GetAlphamaps(0,0,terrainData.alphamapResolution,terrainData.alphamapResolution)};
+        public MeadowRegionSnapshot CaptureSnapshot()=>new MeadowRegionSnapshot{version=Baseline.generationVersion,road=Road.ToArray(),trees=fullTreeInstances??terrainData.treeInstances,alphamaps=lakeBaseAlphamaps??campBaseAlphamaps??terrainData.GetAlphamaps(0,0,terrainData.alphamapResolution,terrainData.alphamapResolution)};
 
         AmbientMode savedAmbientMode; Color savedSky,savedEquator,savedGround,savedAmbient;
         Material savedSkybox;float savedIntensity,savedReflection;
@@ -168,6 +168,7 @@ namespace CityForge.World
                 baseline=Own(Instantiate(baseline));baseline.name="Approved meadow river district";
                 var layers=new TerrainLayer[view.RiverBedVersion>=3?8:7];System.Array.Copy(baseline.layers,layers,4);
                 layers[4]=Resources.Load<TerrainLayer>(view.RiverBedVersion>=3?"RiverBeds/RichPebbles":"RiverBeds/Gravel");layers[5]=Resources.Load<TerrainLayer>(view.RiverBedVersion>=3?"RiverBeds/RichSand":"RiverBeds/Sand");layers[6]=Resources.Load<TerrainLayer>(view.RiverBedVersion>=3?"RiverBeds/RichSoil":"RiverBeds/Silt");
+                var riverSoil=Own(Instantiate(layers[6]));if(SharedDirtSurface.Apply(riverSoil,true))layers[6]=riverSoil;
                 if(layers.Length==8)layers[7]=Resources.Load<TerrainLayer>("RiverBeds/Moss");
                 foreach(var layer in layers)if(!layer)throw new System.Exception("Missing dry riverbed terrain layer.");baseline.layers=layers;
             }
@@ -182,6 +183,10 @@ namespace CityForge.World
                 if(StreamRockTestRegion.NaturalSoil(view)){dirt.diffuseTexture=Own(StreamBankBlend.EarthTexture(StreamRockTestRegion.BankTouchup(view)));dirt.diffuseRemapMax=new Vector4(.40f,.32f,.23f,1);dirt.normalMapTexture=null;dirt.tileSize=new Vector2(19.7f,19.7f);}
                 var layers=new TerrainLayer[baseline.layers.Length+1];Array.Copy(baseline.layers,layers,baseline.layers.Length);layers[layers.Length-1]=dirt;baseline.layers=layers;
             }
+            // Runtime palette copies preserve source assets, paint masks and saved geography.
+            baseline=Own(Instantiate(baseline));baseline.layers=(TerrainLayer[])baseline.layers.Clone();
+            var soil=Own(Instantiate(baseline.layers[0]));if(SharedDirtSurface.Apply(soil))baseline.layers[0]=soil;
+            if(StreamRockTestRegion.DirtBanks(view)){var bankDirt=Own(Instantiate(baseline.layers[baseline.layers.Length-1]));if(SharedDirtSurface.Apply(bankDirt,true))baseline.layers[baseline.layers.Length-1]=bankDirt;}
             mountainEvergreens=MountainEvergreenMix.LoadPrefabs();
             treeSeason=view.VisualSeason;
             navigationCamera=view.GetComponentInChildren<CityForge.CameraSystem.CityForgeCameraController>();
@@ -260,6 +265,7 @@ namespace CityForge.World
             SetTreesEnabled(true);
             progress?.Invoke("Preparing approved forest canopy",.97f);yield return null;
             if(!ApprovedForestAssets.CheckpointReplay){var forest=gameObject.AddComponent<ApprovedDistrictForest>();forest.Initialize(this);if(PanningTestDistricts.TryGetPercent(View.SavedRegionId,out int percent))forest.SetDiagnosticDensity(percent);if(forest.ReplacesNativeTrees)SetNativePresentation(SmallPlantsEnabled?fullTreeInstances:matureTreeInstances);}
+            if(!IsRegionOverview&&View.NativeCamps.Length>0){PaintCampCourtyards();gameObject.AddComponent<NativeCampDistrict>().Initialize(this);}
             RefreshWildlife();
             if(!IsRegionOverview&&MountainSummitSnow.Applies(View)){var caps=new GameObject("Permanent summit snow");caps.transform.SetParent(transform,false);caps.AddComponent<MountainSummitSnow>().Initialize(this);}
             if(!IsRegionOverview)gameObject.AddComponent<DistrictWeather>().Initialize(this);
@@ -284,7 +290,7 @@ namespace CityForge.World
             string[] names={"RichPebbles","RichSand","RichSoil"};
             var palette=new[]{new Vector4(.24f,.26f,.22f,1),new Vector4(.32f,.28f,.19f,1),new Vector4(.22f,.19f,.12f,1)};
             for(int i=0;i<3;i++){var layer=Own(Instantiate(Resources.Load<TerrainLayer>("RiverBeds/"+names[i])));
-                layer.name="Lake wet "+names[i];layer.diffuseRemapMax=palette[i];layer.specular=new Color(.035f,.035f,.035f);layer.normalScale=.45f;layers[lakeBedOffset+i]=layer;}
+                layer.name="Lake wet "+names[i];layer.diffuseRemapMax=palette[i];layer.specular=new Color(.035f,.035f,.035f);layer.normalScale=.45f;if(i==2)SharedDirtSurface.Apply(layer,true);layers[lakeBedOffset+i]=layer;}
             terrainData.terrainLayers=layers;return lakeBedOffset;
         }
         readonly Dictionary<string,float[,]> bodyShores=new();
@@ -455,7 +461,7 @@ namespace CityForge.World
             int minX=Mathf.FloorToInt(Origin.x/step),minZ=Mathf.FloorToInt(Origin.y/step),maxX=Mathf.CeilToInt((Origin.x+Side)/step),maxZ=Mathf.CeilToInt((Origin.y+Side)/step);
             for(int z=minZ;z<maxZ;z++)for(int x=minX;x<maxX;x++){
                 var random=RandomFor(x,z,37);float R()=>(float)random.NextDouble();var p=new Vector2((x+R())*step,(z+R())*step);
-                if(!Contains(p)||WaterDistance(p)<3||RoadDistance(p)<Baseline.roadWidth+2||R()>Mathf.Min(1,Woodland(p)*densityNormalization)||Height(p)<View.SeaLevel+.2f)continue;
+                if(View.InCampClearing(p,8)||!Contains(p)||WaterDistance(p)<3||RoadDistance(p)<Baseline.roadWidth+2||R()>Mathf.Min(1,Woodland(p)*densityNormalization)||Height(p)<View.SeaLevel+.2f)continue;
                 if(View.MountainTest&&R()>MountainVegetation(p))continue;
                 if(View.Coastline&&(ShoreDistance(p)<75||MountainSlope(p)>24))continue;
                 float pick=R();int prototype=0;for(int j=0;j<Baseline.treeWeights.Length;j++){pick-=Baseline.treeWeights[j];if(pick<=0){prototype=j;break;}}

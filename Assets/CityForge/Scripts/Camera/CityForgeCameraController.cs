@@ -36,7 +36,8 @@ namespace CityForge.CameraSystem
         public void SetZoomLevel(int level)
         {
             ZoomLevel = Mathf.Clamp(level, 0, 5);
-            if (regionSide > 0f) orthographicSize = farthestSize / Mathf.Pow(2f, 5-ZoomLevel) / (ZoomLevel <= 1 ? 1.25f : 1f);
+            // Halve the visible span at the three nearest steps while preserving the wider region views.
+            if (regionSide > 0f) orthographicSize = farthestSize / Mathf.Pow(2f, 5-ZoomLevel) / (ZoomLevel <= 1 ? 1.25f : 1f) * (ZoomLevel <= 2 ? .5f : 1f);
             ApplyPose(); ZoomChanged?.Invoke(ZoomLevel);
         }
 
