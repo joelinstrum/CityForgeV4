@@ -13,6 +13,8 @@ namespace CityForge.World
     {
         public int version=12, seed=PrototypeRegionData.DefaultSeed, topography, rivers, streams;
         public int districtGrid=8;
+        // Missing from older recipes: no retroactive settlements.
+        public int nativeCampVersion;
         public int GridSide=>version>=3?districtGrid:2;
         public RegionClimate climate;
         public RegionTerrainShape terrainShape;
@@ -26,6 +28,7 @@ namespace CityForge.World
         {
             if((version!=1&&version!=2&&version!=3&&version!=4&&version!=5&&version!=6&&version!=7&&version!=8&&version!=9&&version!=10&&version!=11&&version!=12)||(int)terrainShape<0||(int)terrainShape>7||topography<0||topography>4||rivers<0||rivers>3||streams<0||streams>2||(int)climate<0||(int)climate>1||(int)moisture<0||(int)moisture>2||(int)vegetation<0||(int)vegetation>2)
                 throw new ArgumentException("Unsupported region creation settings.");
+            if(nativeCampVersion<0||nativeCampVersion>1)throw new ArgumentException("Unsupported settlement content version.");
             if(version>=3&&(districtGrid<2||districtGrid>16||512%districtGrid!=0))throw new ArgumentException("Unsupported district grid.");
         }
     }
@@ -107,7 +110,7 @@ namespace CityForge.World
             var data=new PrototypeRegionData(recipe.seed,heights,distances){WaterBodies=bodies.ToArray()};
             if(recipe.version>=2)data.Biomes=new RegionBiomeMap(recipe,data);
             return new SavedRegionSnapshot{data=data,info=new SavedRegionInfo{id=Guid.NewGuid().ToString("N"),name=name.Trim(),seed=recipe.seed,size=(int)size,
-                district=-1,animals=recipe.animals,terrainHeightRange=recipe.version>=5?PrototypeRegionData.Height:0,districts=data.Biomes?.DescribeDistricts(),meadow=true,waterless=bodies.Count==0,waterBodies=data.WaterBodies,creation=recipe,savedUtc=DateTime.UtcNow.ToString("O")}};
+                district=-1,animals=recipe.animals,terrainHeightRange=recipe.version>=5?PrototypeRegionData.Height:0,districts=data.Biomes?.DescribeDistricts(),nativeCamps=NativeCampPlanner.Create(data,recipe,(int)size),meadow=true,waterless=bodies.Count==0,waterBodies=data.WaterBodies,creation=recipe,savedUtc=DateTime.UtcNow.ToString("O")}};
         }
     }
 }

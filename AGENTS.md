@@ -21,3 +21,11 @@ Version5 uses RegionalLandformNode and RegionalRiverNetwork; see Documentation/0
 CombinedDistrictGroup retains original grid cell IDs. Use DistrictMembers/ActiveDistrictMembers and InActiveDistrict rather than assuming every playable district is one square. Enforce2–4 original edge-connected cells, including when expanding existing groups; never fill an L-shaped union’s excluded corner. Group metadata is saved with the region; canonical shared geography is unchanged. Preserve native terrain holes, footprint-filtered trees/roads/snow/water and group-anchor cache identity.
 
 Version12 adds the Tropical ocean shelf and sea30m datum, with all land/water surfaces shifted together. Other recipes keep sea12m. See TropicalOceanDepth. Keep shared-region water colors and union-aware district slab edges; do not regenerate older stored maps.
+
+## Native settlements — new-region content
+
+Geography remains version12. New wizard recipes opt into nativeCampVersion1; missing/zero in older recipes stays off. Persist NativeCampRecord arrays through SavedRegionInfo/PrototypeRegionView/Capture; never generate settlements when opening an old save. Target about20% of original cells, prefer water-adjacent dry sites, and skip unusable ground. Camp records retain original district IDs across combinations; use ActiveDistrictMembers and district-contained footprints. Overview Camp markers must refer to actual records.
+
+NativeCampDistrict renders5–9 horseshoe teepees, one upright central totem and bounded ambient residents using shared NPC actions. Keep residents within their camp leash and structure-safe connected navigation. Preserve the FBX axis conversion on the totem's model child; rotate its wrapper for camp heading. Original/source art, prepared models, materials, textures, controllers, definitions and prefabs remain private/ignored. Existing NPC transient activity is not persistent city population state. See Documentation/03_Technical/Native_Settlements.md.
+
+Persistent shadow default: CityForge_URP uses4096 main-light shadows, four cascades with splits(.50,.68,.85), and Hard directional shadows through all seasons. Preserve camera shadow-distance fitting and navigation quality throttling; do not reintroduce a temporary live-preview pipeline as a gameplay dependency.

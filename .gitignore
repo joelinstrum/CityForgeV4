@@ -202,3 +202,10 @@ venv/
 !/Assets/CityForge/Resources/CoastalSwash/*.shader
 !/Assets/CityForge/Resources/CoastalSwash/*.hlsl
 !/Assets/CityForge/Resources/CoastalSwash/*.meta
+
+# Authored campfire shader only; camp artwork remains private.
+!/Assets/CityForge/Resources/Campfire/
+!/Assets/CityForge/Resources/Campfire.meta
+/Assets/CityForge/Resources/Campfire/*
+!/Assets/CityForge/Resources/Campfire/*.shader
+!/Assets/CityForge/Resources/Campfire/*.shader.meta
