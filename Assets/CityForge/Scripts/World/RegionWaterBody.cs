@@ -16,6 +16,12 @@ namespace CityForge.World
         public RegionWaterContour[] holes;
         public IEnumerable<Vector2[]> Contours {get {if(outline!=null)yield return outline;if(holes!=null)foreach(var hole in holes)if(hole?.points!=null)yield return hole.points;}}
         public float halfWidthNormalized,flowSpeed;
+        // Version-one channels are evaluated continuously, not baked at regional resolution.
+        public int channelVersion;
+        public bool isStream;
+        // New mountain-border routes advance along x, parallel to the rear range.
+        public bool channelAlongX;
+        public float bankWidthNormalized;
         public bool hasSurfaceLevel;public float surfaceLevelNormalized;
         public string appearanceProfile;
         public float DistanceToCenterline(Vector2 point,out Vector2 downstream)
@@ -49,9 +55,14 @@ namespace CityForge.World
                 if(Clip(a.x,delta.x,area.xMin,area.xMax)&&Clip(a.y,delta.y,area.yMin,area.yMax))return true;
             }return false;
         }
+        // Generated channel geometry is immutable after creation/load. Cache only
+        // that opt-in geometry; legacy editable contours retain their old behavior.
+        [NonSerialized] Vector2[] boundsPoints;
+        [NonSerialized] float boundsWidth;
+        [NonSerialized] Rect channelBounds;
         public Rect Bounds
         {
-            get {bool isRiver=centerline!=null&&centerline.Length>1;var points=isRiver?centerline:outline;if(points==null||points.Length==0)return Rect.zero;var min=points[0];var max=min;foreach(var p in points){min=Vector2.Min(min,p);max=Vector2.Max(max,p);}float width=isRiver?halfWidthNormalized:0;return Rect.MinMaxRect(min.x-width,min.y-width,max.x+width,max.y+width);}
+            get {if(channelVersion>=1&&boundsPoints==centerline&&boundsWidth==halfWidthNormalized&&boundsPoints!=null)return channelBounds;bool isRiver=centerline!=null&&centerline.Length>1;var points=isRiver?centerline:outline;if(points==null||points.Length==0)return Rect.zero;var min=points[0];var max=min;foreach(var p in points){min=Vector2.Min(min,p);max=Vector2.Max(max,p);}float width=isRiver?halfWidthNormalized:0;var result=Rect.MinMaxRect(min.x-width,min.y-width,max.x+width,max.y+width);if(channelVersion>=1){channelBounds=result;boundsWidth=halfWidthNormalized;boundsPoints=centerline;}return result;}
         }
         public static RegionWaterBody[] Generate(PrototypeRegionData data,int riverVersion,bool waterless,float side)
         {

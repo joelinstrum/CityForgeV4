@@ -209,3 +209,9 @@ venv/
 /Assets/CityForge/Resources/Campfire/*
 !/Assets/CityForge/Resources/Campfire/*.shader
 !/Assets/CityForge/Resources/Campfire/*.shader.meta
+
+# Authored grass-only configuration and one-time grading shader; no artwork.
+!/Assets/CityForge/Resources/Region/MeadowGrassSettings.asset
+!/Assets/CityForge/Resources/Region/MeadowGrassSettings.asset.meta
+!/Assets/CityForge/Resources/Region/MeadowGrassGrade.shader
+!/Assets/CityForge/Resources/Region/MeadowGrassGrade.shader.meta

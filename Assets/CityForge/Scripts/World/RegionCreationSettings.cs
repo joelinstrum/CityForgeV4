@@ -15,6 +15,8 @@ namespace CityForge.World
         public int districtGrid=8;
         // Missing from older recipes: no retroactive settlements.
         public int nativeCampVersion;
+        // Opt-in only: old recipes retain their connected, broad waterways.
+        public int waterwayVersion;
         public int GridSide=>version>=3?districtGrid:2;
         public RegionClimate climate;
         public RegionTerrainShape terrainShape;
@@ -28,6 +30,7 @@ namespace CityForge.World
         {
             if((version!=1&&version!=2&&version!=3&&version!=4&&version!=5&&version!=6&&version!=7&&version!=8&&version!=9&&version!=10&&version!=11&&version!=12)||(int)terrainShape<0||(int)terrainShape>7||topography<0||topography>4||rivers<0||rivers>3||streams<0||streams>2||(int)climate<0||(int)climate>1||(int)moisture<0||(int)moisture>2||(int)vegetation<0||(int)vegetation>2)
                 throw new ArgumentException("Unsupported region creation settings.");
+            if(waterwayVersion<0||waterwayVersion>5)throw new ArgumentException("Unsupported waterway version.");
             if(nativeCampVersion<0||nativeCampVersion>1)throw new ArgumentException("Unsupported settlement content version.");
             if(version>=3&&(districtGrid<2||districtGrid>16||512%districtGrid!=0))throw new ArgumentException("Unsupported district grid.");
         }
@@ -71,7 +74,7 @@ namespace CityForge.World
                 bodies.Add(new RegionWaterBody{id=(stream?"stream-":"river-")+i,kind=WaterBodyKind.River,centerline=points,
                     halfWidthNormalized=stream?.004f:.012f,flowSpeed=.12f,appearanceProfile="calm-river",hasSurfaceLevel=true,surfaceLevelNormalized=12f/PrototypeRegionData.Height});
             }
-            if(recipe.version>=5)bodies=RegionalRiverNetwork.Create(recipe);
+            if(recipe.version>=5)bodies=recipe.waterwayVersion>=1?RegionalRiverNetwork.CreateSeparated(recipe,NativeCampPlanner.MapSide((int)size,recipe.GridSide)):RegionalRiverNetwork.Create(recipe);
             var layout=recipe.version>=6?new RegionTerrainLayout(recipe):null;var ocean=layout?.CreateOcean();bool deepOcean=TropicalOceanDepth.DeepRecipe(recipe);
             for(int z=0;z<513;z++)for(int x=0;x<513;x++){
                 float u=x/512f,v=z/512f;
@@ -92,7 +95,7 @@ namespace CityForge.World
                     float d=Mathf.Abs(u-cx)-body.halfWidthNormalized;
                     bank=Mathf.Min(bank,d);
                 }
-                if(bodies.Count>0){float blend=Mathf.SmoothStep(0,1,Mathf.InverseLerp(recipe.version>=5?0:-.003f,recipe.version>=5?.065f:.025f,bank));h=Mathf.Lerp(5,h,blend);}
+                if(bodies.Count>0&&recipe.waterwayVersion==0){float blend=Mathf.SmoothStep(0,1,Mathf.InverseLerp(recipe.version>=5?0:-.003f,recipe.version>=5?.065f:.025f,bank));h=Mathf.Lerp(5,h,blend);}
                 if(layout!=null&&layout.HasOcean){float shore=layout.LandDistance(new Vector2(u,v));
                     h=shore>=0?Mathf.Lerp(12,h,Mathf.SmoothStep(0,1,shore/.055f)):Mathf.Lerp(12,2,Mathf.SmoothStep(0,1,-shore/.045f));
                     bank=Mathf.Min(bank,shore);

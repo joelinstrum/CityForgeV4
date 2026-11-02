@@ -76,9 +76,10 @@ public sealed class StreamBankBlend {
   }
   texture.SetPixels32(pixels);texture.Apply(true,true);return texture;
  }
- public static Vector2 VariedCover(MeadowDistrictLandscape land,Vector2 p,float distance){
-  float low=LowMargin(p),side=p.x<StreamRockTestRegion.Center(p.y)?0:79;
-  float exposure=Mathf.SmoothStep(0,1,Mathf.InverseLerp(.30f,.67f,Mathf.PerlinNoise(p.y/11+619,side+47)));
+ public static Vector2 VariedCover(MeadowDistrictLandscape land,Vector2 p,float distance)=>VariedCover(land,p,distance,p);
+ public static Vector2 VariedCover(MeadowDistrictLandscape land,Vector2 p,float distance,Vector2 coordinates){
+  float low=LowMargin(coordinates),side=coordinates.x<StreamRockTestRegion.Center(coordinates.y)?0:79;
+  float exposure=Mathf.SmoothStep(0,1,Mathf.InverseLerp(.30f,.67f,Mathf.PerlinNoise(coordinates.y/11+619,side+47)));
   float flecks=land.Noise(p+new Vector2(13,-37),.85f,163);
   float reach=Mathf.Lerp(.45f,2.5f,exposure)*(1-low*.35f);
   float fringe=1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(-.2f,reach,distance+(flecks-.5f)*1.15f));

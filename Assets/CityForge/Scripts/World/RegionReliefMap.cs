@@ -14,15 +14,18 @@ namespace CityForge.World
             view=source;var layout=source.CreationSettings?.version>=6?new RegionTerrainLayout(source.CreationSettings):null;int n=Samples;var vertices=new Vector3[n*n];var uv=new Vector2[n*n];var triangles=new int[(n-1)*(n-1)*6];
             var snowPeaks=MountainSummitSnow.Applies(source)?MountainSummitSnow.Select(source.Data,MountainBorderVariation.CapCount(source)):System.Array.Empty<MountainSummitSnow.Summit>();
             float height=source.GetComponentInChildren<Terrain>().terrainData.size.y;float sea=source.SeaLevel;
-            float H(float u,float v)=>SmoothRiverSurface.Sample(source.Data.Heights,u,v)*height;
-            float Surface(float u,float v,float h){float water=sea;if(source.Data.WaterBodies!=null)foreach(var body in source.Data.WaterBodies)if((body.kind==WaterBodyKind.Lake||body.kind==WaterBodyKind.Pond)&&body.Bounds.Contains(new Vector2(u,v))&&body.Contains(new Vector2(u,v)))water=body.hasSurfaceLevel?body.surfaceLevelNormalized*height:sea;return Mathf.Max(h,water);}
+            bool continuousChannels=RegionalRiverNetwork.HasContinuousChannels(source.Data);
+            var heightCache=continuousChannels?new RegionalReliefHeightCache(source.Data):null;
+            if(heightCache!=null){var sampling=heightCache.BuildStages();while(sampling.MoveNext())yield return sampling.Current;}
+            float H(float u,float v)=>(heightCache!=null?heightCache.Sample(u,v):SmoothRiverSurface.Sample(source.Data.Heights,u,v))*height;
+            float Surface(float u,float v,float h){float water=sea;if(RegionalRiverNetwork.HasGroundFollowingWater(source.Data)&&RegionalRiverNetwork.SignedDistance(source.Data,new Vector2(u,v))<0)water=Mathf.Max(water,RegionalRiverNetwork.GroundWaterLevel(source.Data,u,v));if(source.Data.WaterBodies!=null)foreach(var body in source.Data.WaterBodies)if((body.kind==WaterBodyKind.Lake||body.kind==WaterBodyKind.Pond)&&body.Bounds.Contains(new Vector2(u,v))&&body.Contains(new Vector2(u,v)))water=body.hasSurfaceLevel?body.surfaceLevelNormalized*height:sea;return Mathf.Max(h,water);}
             for(int z=0;z<n;z++)for(int x=0;x<n;x++){
                 int i=z*n+x;float u=x/(float)(n-1),v=z/(float)(n-1),h=Surface(u,v,H(u,v));
                 vertices[i]=new Vector3((u-.5f)*source.MapSide,sea+(h-sea)*1.25f+1,(v-.5f)*source.MapSide);uv[i]=new Vector2(u,v);
             }
             const int pixels=1025;var colors=new Color[pixels*pixels];float seed=source.Data.Seed%997;
             for(int z=0;z<pixels;z++){for(int x=0;x<pixels;x++){
-                float u=x/(float)(pixels-1),v=z/(float)(pixels-1),h=H(u,v),bank=SmoothRiverSurface.Sample(source.Data.WaterDistance,u,v)/PrototypeRegionData.Side;
+                float u=x/(float)(pixels-1),v=z/(float)(pixels-1),h=H(u,v),bank=continuousChannels?RegionalRiverNetwork.SignedDistance(source.Data,new Vector2(u,v)):SmoothRiverSurface.Sample(source.Data.WaterDistance,u,v)/PrototypeRegionData.Side;
                 bool riverRecipe=source.CreationSettings!=null&&source.CreationSettings.version>=5;
                 bool water=!source.Waterless&&(bank<0||(!riverRecipe&&h<sea+.1f));
                 if(source.Data.WaterBodies!=null)foreach(var body in source.Data.WaterBodies)if((body.kind==WaterBodyKind.Lake||body.kind==WaterBodyKind.Pond)&&body.Bounds.Contains(new Vector2(u,v))&&body.Contains(new Vector2(u,v)))water=true;

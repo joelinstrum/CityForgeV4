@@ -1,3 +1,19 @@
+
+## Wider stream variety — November1,2026
+
+New wizard recipes now use waterwayVersion5: seeded stream full width uniformly6–20feet (1.8288–6.096m), constant per route. Same one RNG draw preserves route seeds; versions0–4 and saved routes keep their widths. Major rivers, bends, shallow banks, settlement dirt, rocks, sediment water and separation/mountain rules retained. Runtime compilation and6480 version5 recipes pass width bounds, counts, disjoint bank envelopes, wet/dry profiles and legacy defaults. Editor check now covers both earlier separated recipes and version5. This supersedes the earlier12ft ceiling for newly generated streams. No saved maps rewritten.
+
+## Stream meanders and sediment — November1,2026
+
+New wizard recipes use waterwayVersion4 (geography remains12). Streams add shorter irregular220–340m bends (up to28m amplitude, capped to20% lane spacing) to the existing broad drift; major rivers unchanged. Variable route sampling at24 segments/cycle; distance windows and GeneratedStreamAppearance now derive segment counts from stored routes. Disjoint lane envelopes preserve separation and mountain front70% clearance. Versions0–3/saved routes retain existing geometry. Bank soil already uses NativeCamps/Courtyard-Dirt, the settlement texture, with damp tint and owned matte-alpha copy. Generated stream-only district water uses absorption(1.65,1.35,1.15) and muted olive sediment scattering(.105,.125,.078), reducing bed visibility; mixed major-river districts retain their water palette. No source art changes or saved-map writes. Runtime compile and6480 version4 recipe checks passed; live generation and cache reopen passed:49 scanned patches,1164 stones/pebbles,47 shrubs, no duplicate shrubs on reopen. Overview37.66s and district12.27s on this run; more detailed curves cost additional generation time. Preview framing now selects an interior bend, away from district slab edges.
+
+Stream white-streak correction (2026-11-01): A/B captures isolated the continuous white line to terrain soil specular, not water glints/reflections. URP Terrain Lit takes diffuse alpha as smoothness even with layer smoothness zero. Stream districts now use one owned runtime copy of shared dirt RGB with alpha8/255 on base soil and dedicated damp bank layers. Source art, water settings, rock placement and grass are unchanged; copy is released with district assets. Six comparison captures live in chat outputs/white-stream-streak.
+## Generated stream integration — November1,2026
+
+GeneratedStreamAppearance carries the approved Pass17 scanned patches, ten individual stone variants, native bank shrubs and varied damp-earth paint onto saved regional isStream/channelVersion>=2 centerlines. Query route-local station/side coordinates for the existing blend rules; never substitute the study's fixed Center(z)/1024m/12m geometry. Stones are seated on displayed terrain, patches scale to stream width, and stable per-route seeds preserve layout on district reopen. Dedicated soil is added to owned baseline/layer copies; older caches gain a zero-weight soil slot while retaining roads and trees. All generated-stream dressing stays outside camp clearings/ocean interiors and within active district placement bounds.
+
+Current new generation retains its20cm water freeboard, shallow bed,12ft stream cap, separated routes and mountain clearance. Pass17 water clarity is used for stream-only inland districts; mixed major-river districts keep their current river material profile. Original study variants and fish opt-in remain independent. Private art references reuse StreamRocks/Rocks and IndividualStreamRocks/Stones; no licensed artwork is added to public Git.
+
 # Stream rock study — October 31, 2026
 
 ## Current accepted state

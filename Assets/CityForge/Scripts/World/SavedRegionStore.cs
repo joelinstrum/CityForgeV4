@@ -92,10 +92,20 @@ namespace CityForge.World
         }
         public static string Save(SavedRegionSnapshot snapshot)
         {
+            var path=SavePath(snapshot);Write(snapshot,path);return path;
+        }
+        public static System.Threading.Tasks.Task<string> SaveAsync(SavedRegionSnapshot snapshot)
+        {
+            // Resolve Unity's persistentDataPath on the main thread before starting file work.
+            var path=SavePath(snapshot);
+            return System.Threading.Tasks.Task.Run(()=>{Write(snapshot,path);return path;});
+        }
+        static string SavePath(SavedRegionSnapshot snapshot)
+        {
             Directory.CreateDirectory(DirectoryPath);
             // IDs are names, never paths supplied by a save file.
             if(string.IsNullOrEmpty(snapshot.info.id)||snapshot.info.id.Any(c=>!char.IsLetterOrDigit(c)&&c!='-'))throw new InvalidDataException("Invalid region ID.");
-            var path=Path.Combine(DirectoryPath,snapshot.info.id+".cfregion");Write(snapshot,path);return path;
+            return Path.Combine(DirectoryPath,snapshot.info.id+".cfregion");
         }
         public static void Write(SavedRegionSnapshot snapshot,string path)
         {

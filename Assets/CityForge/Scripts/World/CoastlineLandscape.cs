@@ -21,6 +21,10 @@ public sealed partial class MeadowDistrictLandscape {
  var normalized=new Vector2(worldX/View.MapSide+.5f,worldZ/View.MapSide+.5f);wet=false;
  foreach(var body in View.Data.WaterBodies)if((body.kind==WaterBodyKind.Ocean||body.kind==WaterBodyKind.River)&&body.Bounds.Contains(normalized)&&body.Contains(normalized)){wet=true;break;}
  }
+ if(RegionalRiverNetwork.HasGroundFollowingWater(View.Data)){
+ var uv=new Vector2(worldX/View.MapSide+.5f,worldZ/View.MapSide+.5f);
+ if(RegionalRiverNetwork.SignedDistance(View.Data,uv)<0)wet=true;
+ }
  pixels[z*maskSize+x]=wet&&Contains(new Vector2(worldX,worldZ))?Color.black:Color.white;
  }
  var mask=Own(new Texture2D(maskSize,maskSize,TextureFormat.R8,false,true){name="Coastal ocean inclusion mask",wrapMode=TextureWrapMode.Clamp,filterMode=FilterMode.Bilinear});mask.SetPixels(pixels);mask.Apply(false,true);
@@ -28,6 +32,10 @@ public sealed partial class MeadowDistrictLandscape {
  var clip=WaveHarmonic.Crest._Extensions.AddComponent<ClipLodInput>(maskObject,LodInputMode.Texture);clip.GetData<ClipTextureLodInputData>().Texture=mask;
  Water.Reflections.Enabled=true;Water.Reflections.Resolution=256;Water.Reflections.DisableShadows=true;Water.Reflections.RenderOnlySingleCamera=true;Water.Reflections.Layers=~(1<<4);Water.Underwater.Enabled=false;
  Water.Surface.Material=CreateTypedWaterMaterial(WaterBodyKind.Ocean);
+ if(RegionalRiverNetwork.HasGroundFollowingWater(View.Data)){
+ var levels=new GameObject("Ground-following river levels beside ocean");levels.transform.SetParent(holder.transform,false);levels.AddComponent<GroundFollowingWaterLevels>().Initialize(this,Water,View.SeaLevel);
+ }
+
  var mat=Water.Surface.Material;mat.SetFloat("_Crest_FoamEnabled",1);mat.SetTexture("_Crest_FoamTexture",Resources.Load<Texture2D>("Coasts/CoastalFoam"));mat.SetFloat("_Crest_FoamFeather",.65f);mat.SetFloat("_Crest_FoamScale",5);mat.SetFloat("_Crest_FoamIntensityAlbedo",1);mat.SetFloat("_Crest_PlanarReflectionsEnabled",1);mat.SetFloat("_Crest_PlanarReflectionsApplySmoothness",1);mat.SetFloat("_Crest_Smoothness",.8f);mat.SetFloat("_Crest_SmoothnessFar",.8f);mat.SetFloat("_Crest_PlanarReflectionsIntensity",.65f);
  if(Baseline.fftTemplate){var go=Instantiate(Baseline.fftTemplate,root.transform);go.transform.position=Vector3.up*View.SeaLevel;var fft=go.GetComponent<ShapeFFT>();fft.Weight=.55f;fft.OverrideGlobalWindSpeed=true;fft.WindSpeed=18;fft.OverrideGlobalWindDirection=true;fft.WaveDirectionHeadingAngle=0;fft.OverrideGlobalWindTurbulence=true;fft.WindTurbulence=.015f;fft.WindAlignment=.95f;}
  var swellObject=new GameObject("Incoming coastal swell");swellObject.transform.SetParent(root.transform,false);var swell=WaveHarmonic.Crest._Extensions.AddComponent<ShapeGerstner>(swellObject,LodInputMode.Global);swell.Swell=true;swell.ReverseWaveWeight=0;swell.Weight=.3f;swell.OverrideGlobalWindSpeed=true;swell.WindSpeed=30;swell.OverrideGlobalWindDirection=true;swell.WaveDirectionHeadingAngle=0;

@@ -20,6 +20,13 @@ namespace CityForge.World
             while(setup.MoveNext())yield return setup.Current;
             Configure(crest.Settings);
             if(StreamRockTestRegion.Revised(land.View))StreamRockTestRegion.ConfigureWater(crest.Settings,StreamRockTestRegion.Refined(land.View));
+            else if(GeneratedStreamAppearance.Applies(land.View)&&GeneratedStreamAppearance.StreamOnlyDistrict(land)){
+                StreamRockTestRegion.ConfigureWater(crest.Settings,true);
+                // Mild suspended sediment: attenuate the bed and shift scattering
+                // toward muted olive-brown, retaining readable shallow-edge stones.
+                crest.Settings.SetVector("_Crest_Absorption",new Vector4(1.65f,1.35f,1.15f,0));
+                crest.Settings.SetColor("_Crest_Scattering",new Color(.105f,.125f,.078f,1));
+            }
         }
         public static void Configure(Material m)
         {
@@ -28,9 +35,9 @@ namespace CityForge.World
             m.SetFloat("_Crest_NormalMapStrength",.08f);m.SetFloat("_Crest_NormalMapScale",4);
             m.SetFloat("_Crest_Smoothness",.97f);m.SetFloat("_Crest_SmoothnessFar",.97f);
             m.SetFloat("_Crest_PlanarReflectionsIntensity",.25f);m.SetFloat("_Crest_Specular",.35f);
-            // October 30 art direction: retain blue/teal separation over the very shallow grassy legacy bed.
-            m.SetVector("_Crest_Absorption",new Vector4(1.8f,1f,.32f,0));
-            m.SetColor("_Crest_Scattering",new Color(.024f,.24f,.44f,1));
+            // November 1 reference: muted teal depth with neutral, bed-visible shallows.
+            m.SetVector("_Crest_Absorption",new Vector4(.55f,.38f,.40f,0));
+            m.SetColor("_Crest_Scattering",new Color(.14f,.31f,.32f,1));
             m.SetFloat("_WorkflowMode",0);m.EnableKeyword("_SPECULAR_SETUP");
             m.EnableKeyword("_ALPHATEST_ON");m.EnableKeyword("_CREST_FLOW_LOD");
         }
