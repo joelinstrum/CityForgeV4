@@ -172,12 +172,21 @@ namespace CityForge.CameraSystem
             if(regionSide>0){lowerView=tilt<1;viewCamera.orthographic=!lowerView;}
             var posePitch = Mathf.Lerp(12,pitch,tilt);
             var lowDistance=orthographicSize/Mathf.Tan(perspectiveFieldOfView*.5f*Mathf.Deg2Rad);
+            // TerrainData.size.y is the storage range (often 1200m), not the ground height.
+            // Fit detailed districts to their actual bounds so ordinary camera paths retain
+            // the same shadow precision as close studies, with the existing canopy clearance.
+            float shadowTerrainHeight=regionHeight;
+            var district=GetComponentInParent<World.PrototypeRegionView>()?.ApprovedDistrict;
+            if(district&&district.DisplayTerrain){
+                var terrain=district.DisplayTerrain;
+                shadowTerrainHeight=terrain.transform.position.y+terrain.terrainData.bounds.max.y;
+            }
             var poseDistance=distance;
             // Orthographic projection is unchanged by retreating along the viewing ray.
             // Keep tall district terrain in front of the camera at every zoom level.
             if(tilt>0&&regionSide>0){
                 float screenDepth=orthographicSize/Mathf.Tan(posePitch*Mathf.Deg2Rad);
-                float topDepth=(regionHeight+80f-focus.y)/Mathf.Sin(posePitch*Mathf.Deg2Rad);
+                float topDepth=(shadowTerrainHeight+80f-focus.y)/Mathf.Sin(posePitch*Mathf.Deg2Rad);
                 poseDistance=Mathf.Max(poseDistance,screenDepth+topDepth+30f);
             }
             poseDistance=Mathf.Lerp(lowDistance,poseDistance,tilt);
@@ -207,7 +216,7 @@ namespace CityForge.CameraSystem
             {
                 // Fit the depth range to the terrain currently on screen. Huge empty
                 // foreground/background ranges waste directional shadow texels.
-                var depthMargin = orthographicSize * 2f + regionHeight;
+                var depthMargin = orthographicSize * 2f + shadowTerrainHeight;
                 near=lowerView ? .5f : Mathf.Max(1f,poseDistance-depthMargin);far=poseDistance+depthMargin;
                 if(FitShadowDepth&&!lowerView)
                 {
@@ -216,7 +225,7 @@ namespace CityForge.CameraSystem
                     // Include roots below ground and 80m of canopy/building clearance.
                     var sin=Mathf.Sin(posePitch*Mathf.Deg2Rad);
                     var screenDepth=orthographicSize/Mathf.Tan(posePitch*Mathf.Deg2Rad);
-                    near=Mathf.Max(1f,poseDistance-screenDepth-(regionHeight+80f-focus.y)/sin-20f);
+                    near=Mathf.Max(1f,poseDistance-screenDepth-(shadowTerrainHeight+80f-focus.y)/sin-20f);
                     far=Mathf.Max(near+10f,poseDistance+screenDepth+(focus.y+10f)/sin+20f);
                 }
                 if(GraphicsSettings.currentRenderPipeline is UniversalRenderPipelineAsset pipeline&&pipeline.shadowDistance!=far)

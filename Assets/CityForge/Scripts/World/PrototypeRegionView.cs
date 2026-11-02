@@ -176,11 +176,46 @@ namespace CityForge.World
         public int LoadedMeadowDistrict {get;private set;}=-1;
         public void ReleaseLoadedMeadow(){LoadedMeadow=null;}
         public bool LoadedFromSnapshot {get;private set;}
+        public bool IsSaving {get;private set;}
         public void SaveCurrentRegion()
         {
-            var button=transform.Find("RegionHud/SaveRegion/Caption").GetComponent<Text>();
-            try{var snapshot=SavedRegionStore.Capture(this);SavedRegionStore.Save(snapshot);SavedRegionId=snapshot.info.id;button.text=SelectedDistrict>=0?"DISTRICT SAVED":"REGION SAVED";}
-            catch(System.Exception e){button.text="SAVE FAILED";Debug.LogException(e);}
+            if(IsSaving||DistrictLoading||returning)return;
+            StartCoroutine(SaveWithFeedback());
+        }
+        IEnumerator SaveWithFeedback()
+        {
+            IsSaving=true;
+            var button=transform.Find("RegionHud/SaveRegion").GetComponent<Button>();
+            var caption=button.transform.Find("Caption").GetComponent<Text>();
+            var back=transform.Find("RegionHud/ReturnToMenu").GetComponent<Button>();
+            bool backEnabled=back.interactable;
+            bool district=SelectedDistrict>=0;
+            var progress=button.transform.Find("SaveProgress").gameObject;
+            var fill=progress.transform.Find("Fill").GetComponent<RectTransform>();
+            button.interactable=false;back.interactable=false;caption.text="SAVING…";progress.SetActive(true);
+            try{
+                // Let the disabled caption/bar reach the screen before Unity terrain readback.
+                yield return null;yield return null;
+                SavedRegionSnapshot snapshot=null;
+                System.Threading.Tasks.Task<string> write=null;
+                System.Exception failure=null;
+                try{snapshot=SavedRegionStore.Capture(this);write=SavedRegionStore.SaveAsync(snapshot);}
+                catch(System.Exception error){failure=error;}
+                while(write!=null&&!write.IsCompleted){
+                    float position=Mathf.PingPong(Time.unscaledTime*.8f,.75f);
+                    fill.anchorMin=new Vector2(position,0);fill.anchorMax=new Vector2(position+.25f,1);
+                    yield return null;
+                }
+                if(write!=null&&write.IsFaulted)failure=write.Exception.GetBaseException();
+                if(write!=null&&write.IsCanceled)failure=new System.OperationCanceledException("Save canceled.");
+                if(failure!=null){caption.text="SAVE FAILED";Debug.LogException(failure);}
+                else{SavedRegionId=snapshot.info.id;caption.text=district?"DISTRICT SAVED":"REGION SAVED";}
+            }finally{
+                IsSaving=false;
+                if(progress)progress.SetActive(false);
+                if(button)button.interactable=true;
+                if(back)back.interactable=backEnabled;
+            }
         }
         public string RegionName { get; private set; }
         public RegionSize Size { get; private set; }
@@ -437,6 +472,12 @@ namespace CityForge.World
             var saveRect=save.GetComponent<RectTransform>();saveRect.anchorMin=saveRect.anchorMax=saveRect.pivot=new Vector2(1,1);saveRect.anchoredPosition=new Vector2(-245,-25);saveRect.sizeDelta=new Vector2(205,48);
             save.GetComponent<Image>().color=new Color(.13f,.15f,.13f,.95f);save.GetComponent<Button>().onClick.AddListener(SaveCurrentRegion);
             var saveCaption=HudText(save.transform,"Caption",font,19);saveCaption.text="SAVE REGION";saveCaption.alignment=TextAnchor.MiddleCenter;saveCaption.rectTransform.anchorMin=Vector2.zero;saveCaption.rectTransform.anchorMax=Vector2.one;saveCaption.rectTransform.offsetMin=saveCaption.rectTransform.offsetMax=Vector2.zero;
+            var saveProgress=new GameObject("SaveProgress",typeof(RectTransform),typeof(Image));saveProgress.transform.SetParent(save.transform,false);
+            var progressRect=saveProgress.GetComponent<RectTransform>();progressRect.anchorMin=new Vector2(0,0);progressRect.anchorMax=new Vector2(1,0);progressRect.pivot=new Vector2(.5f,0);progressRect.offsetMin=new Vector2(12,5);progressRect.offsetMax=new Vector2(-12,9);
+            saveProgress.GetComponent<Image>().color=new Color(.35f,.36f,.29f,.7f);saveProgress.GetComponent<Image>().raycastTarget=false;
+            var saveFill=new GameObject("Fill",typeof(RectTransform),typeof(Image));saveFill.transform.SetParent(saveProgress.transform,false);
+            var fillRect=saveFill.GetComponent<RectTransform>();fillRect.anchorMin=Vector2.zero;fillRect.anchorMax=new Vector2(.25f,1);fillRect.offsetMin=fillRect.offsetMax=Vector2.zero;
+            saveFill.GetComponent<Image>().color=new Color(.92f,.84f,.54f);saveFill.GetComponent<Image>().raycastTarget=false;saveProgress.SetActive(false);
             var rig = GetComponentInChildren<CityForgeCameraController>();
             var zoomLabel = HudText(root.transform, "ZoomLabel", font, 16);
             zoomLabel.rectTransform.anchorMin = zoomLabel.rectTransform.anchorMax = zoomLabel.rectTransform.pivot = new Vector2(1,1);
@@ -576,7 +617,7 @@ namespace CityForge.World
         public void RequestDistrict(int index)
         {
             if(index<0||index>=DistrictCount)throw new System.ArgumentOutOfRangeException(nameof(index));
-            if(districtLoading||SelectedDistrict>=0)return;
+            if(IsSaving||districtLoading||SelectedDistrict>=0)return;
             var combiner=GetComponent<DistrictCombiner>();if(combiner&&combiner.Active){combiner.Select(index);return;}
             index=DistrictAnchor(index);
             districtLoading=true;var camera=GetComponentInChildren<CityForgeCameraController>();
@@ -650,6 +691,7 @@ namespace CityForge.World
 
         public void ShowOverview()
         {
+            if(IsSaving)return;
             if(districtLoading)return;
             GetComponent<RegionPreviewDiagnostics>().SetDiagnostic(false,1);
             float returnHeading=GetComponentInChildren<CityForgeCameraController>().CaptureRegionState().yaw;
@@ -719,7 +761,7 @@ namespace CityForge.World
         }
         public void ReturnToMenu()
         {
-            if (returning) return;
+            if (returning||IsSaving) return;
             returning = true;
             gameObject.SetActive(false);
             if (menuCanvas != null) menuCanvas.gameObject.SetActive(true);

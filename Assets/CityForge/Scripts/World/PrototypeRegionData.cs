@@ -36,7 +36,7 @@ namespace CityForge.World
             DryRiverBedMigration.Channel(this,riverSide,u,v,out float d,out float width,out float depth,2);
             return depth*(1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(width*.28f,width,d)));
         }
-        public float SmoothHeight(float u,float v)=>riverGrade!=null?SmoothRiverSurface.Sample(riverGrade,u,v)-RiverIncision(u,v)/riverVertical:SmoothRiverSurface.Sample(Heights,u,v);
+        public float SmoothHeight(float u,float v)=>RegionalRiverNetwork.ContinuousHeight(this,u,v,riverGrade!=null?SmoothRiverSurface.Sample(riverGrade,u,v)-RiverIncision(u,v)/riverVertical:SmoothRiverSurface.Sample(Heights,u,v));
         public readonly float[,] Heights;
         public readonly float[,] WaterDistance;
 

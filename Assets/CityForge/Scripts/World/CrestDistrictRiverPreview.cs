@@ -53,7 +53,9 @@ namespace CityForge.World
             }
         }
         public bool ContainsWetPoint(Vector2 point){
-            if(landscape.Height(point)>=level-.02f)return false;
+            if(RegionalRiverNetwork.HasContinuousChannels(landscape.View.Data)&&RegionalRiverNetwork.SignedDistance(landscape.View.Data,point/landscape.View.MapSide+Vector2.one*.5f)>0)return false;
+            float localLevel=RegionalRiverNetwork.HasGroundFollowingWater(landscape.View.Data)?RegionalRiverNetwork.GroundWaterLevel(landscape.View.Data,point.x/landscape.View.MapSide+.5f,point.y/landscape.View.MapSide+.5f):level;
+            if(landscape.Height(point)>=localLevel-.02f)return false;
             if(landscape.View.CreationSettings?.version>=5)return true;
             if(!legacyRiverCells.TryGetValue(Vector2Int.FloorToInt(point/RiverCellSide),out var reaches))return false;
             foreach(var reach in reaches){var delta=reach.b-reach.a;float t=delta.sqrMagnitude>0?Mathf.Clamp01(Vector2.Dot(point-reach.a,delta)/delta.sqrMagnitude):0;if((point-reach.a-delta*t).sqrMagnitude<=reach.radiusSquared)return true;}
@@ -73,6 +75,10 @@ namespace CityForge.World
             water=engine.GetComponent<WaterRenderer>();water.Viewer=viewer;
             viewpoint=new GameObject("River simulation focus").transform;viewpoint.SetParent(transform,false);water.Viewpoint=viewpoint;
             water.Surface.Material=master;water.Surface.SupportCustomRenderers=true;
+            // A single oblique sea-level clip plane is invalid for raised,
+            // ground-following channels and can make Crest's horizon unproject singular.
+            // Use Crest's supported regular-frustum path for these inland channels.
+            water.Reflections.UseObliqueMatrix=!RegionalRiverNetwork.HasGroundFollowingWater(land.View.Data);
             water.Reflections.Enabled=true;water.Reflections.Resolution=512;water.Reflections.AllowMSAA=false;water.Reflections.DisableShadows=true;water.Reflections.RenderOnlySingleCamera=true;water.Reflections.Layers=~(1<<4);
             water.Underwater.Enabled=false;water.AnimatedWavesLod.Enabled=false;water.DynamicWavesLod.Enabled=false;water.FoamLod.Enabled=false;water.ShadowLod.Enabled=false;water.LevelLod.Enabled=false;water.AlbedoLod.Enabled=false;water.AbsorptionLod.Enabled=false;water.ClipLod.Enabled=true;water.ClipLod.Resolution=1024;water.ClipLod.DefaultClippingState=DefaultClippingState.EverythingClipped;
             water.FlowLod.Enabled=true;water.FlowLod.Resolution=128;water.DepthLod.Enabled=true;water.DepthLod.Resolution=128;
@@ -92,9 +98,12 @@ namespace CityForge.World
             for(int z=0;z<clipSize;z++)for(int x=0;x<clipSize;x++){
                 var point=land.Origin-Vector2.one*padding+new Vector2((x+.5f)/clipSize,(z+.5f)/clipSize)*clipSide;
                 bool within=point.x>=land.Origin.x+.5f&&point.x<=land.Origin.x+land.Side-.5f&&point.y>=land.Origin.y+.5f&&point.y<=land.Origin.y+land.Side-.5f;
-                clipPixels[z*clipSize+x]=within&&ContainsWetPoint(point)?Color.black:Color.white;
+                if(within&&RegionalRiverNetwork.HasContinuousChannels(land.View.Data)&&land.View.InActiveDistrict(point)){
+                    float d=RegionalRiverNetwork.SignedDistance(land.View.Data,point/land.View.MapSide+Vector2.one*.5f)*land.View.MapSide;
+                    float value=Mathf.Clamp01(.5f+d/8f);clipPixels[z*clipSize+x]=new Color(value,value,value,1);
+                }else clipPixels[z*clipSize+x]=within&&ContainsWetPoint(point)?Color.black:Color.white;
             }
-            shoreClip=new Texture2D(clipSize,clipSize,TextureFormat.R8,false,true){name="Authoritative river wet footprint",wrapMode=TextureWrapMode.Clamp,filterMode=FilterMode.Bilinear};shoreClip.SetPixels(clipPixels);shoreClip.Apply(false,true);
+            shoreClip=new Texture2D(clipSize,clipSize,RegionalRiverNetwork.HasContinuousChannels(land.View.Data)?TextureFormat.RHalf:TextureFormat.R8,false,true){name="Authoritative river wet footprint",wrapMode=TextureWrapMode.Clamp,filterMode=FilterMode.Bilinear};shoreClip.SetPixels(clipPixels);shoreClip.Apply(false,true);
             var shoreObject=new GameObject("River wet footprint and dry-land exclusion");shoreObject.transform.SetParent(transform,false);shoreObject.transform.position=center;shoreObject.transform.localScale=new Vector3(clipSide,1,clipSide);
             var shoreInput=WaveHarmonic.Crest._Extensions.AddComponent<ClipLodInput>(shoreObject,LodInputMode.Texture);shoreInput.Queue=10;shoreInput.GetData<ClipTextureLodInputData>().Texture=shoreClip;
             var inputObject=new GameObject("Seeded downstream current");inputObject.transform.SetParent(transform,false);inputObject.transform.position=center;inputObject.transform.localScale=new Vector3(land.Side,1,land.Side);
@@ -102,6 +111,10 @@ namespace CityForge.World
             for(int z=0;z<size;z++)for(int x=0;x<size;x++){var p=land.Origin+new Vector2((x+.5f)/size,(z+.5f)/size)*land.Side;var direction=LakeWaterRenderer.RiverCurrentCoordinates(land.View.Data,land.View.MapSide,p);pixels[z*size+x]=new Color(direction.z*.5f+.5f,direction.w*.5f+.5f,0,1);}
             flow.SetPixels(pixels);flow.Apply();var input=WaveHarmonic.Crest._Extensions.AddComponent<FlowLodInput>(inputObject,LodInputMode.Texture);var data=input.GetData<FlowTextureLodInputData>();data.Texture=flow;data.Multiplier=new Vector4(.55f,.55f,1,1);data.NegativeValues=false;
             var probe=new GameObject("River bed depth").AddComponent<DepthProbe>();probe.transform.SetParent(transform,false);probe.transform.position=center;probe.transform.localScale=new Vector3(land.Side,1,land.Side);probe.Type=DepthProbeMode.RealTime;probe.RefreshMode=DepthProbeRefreshMode.ViaScripting;probe.Layers=1<<30;probe.Resolution=512;probe.SavedTexture=null;probe.CaptureRange=new Vector2(-15,land.DisplayTerrain.terrainData.size.y+10);probe.GenerateSignedDistanceField=false;
+            if(RegionalRiverNetwork.HasGroundFollowingWater(land.View.Data)){
+                var levelsObject=new GameObject("Local meadow water elevation");levelsObject.transform.SetParent(transform,false);
+                levelsObject.AddComponent<GroundFollowingWaterLevels>().Initialize(land,water,level);
+            }
             Configure(0);LateUpdate();engine.SetActive(true);fallback.enabled=false;
             yield return null;
             var current=gameObject.AddComponent<RiverFlowAnimation>();current.water=water;current.flowMap=flow;current.flowRegion=new Vector4(land.Origin.x,land.Origin.y,1/land.Side,.55f);current.visualSpeedMultiplier=1;

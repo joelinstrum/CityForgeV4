@@ -35,8 +35,8 @@ namespace CityForge.World
         bool[] presentationMask,palmMask;
         public int PresentedTreeCount {get;private set;}
         public void SetDiagnosticDensity(int percent){presentationMask=PanningTestDistricts.Mask(trees.Count,percent);PresentedTreeCount=trees.Count*percent/100;RefreshPalms();}
-        // Use the locked refined-C instance tint without the later brightness boost.
-        public float FoliageBrightness {get;set;}=1f;
+        // Lift the dark authored crowns while retaining their palette, shading and cast shadows.
+        public float FoliageBrightness {get;set;}=1.5f;
         public int CoreCount {get;private set;}
         public int EdgeCount {get;private set;}
         public int OutlierCount {get;private set;}
@@ -78,8 +78,16 @@ namespace CityForge.World
             var capacity=new int[7];foreach(var tree in trees)capacity[tree.variant]++;
             for(int i=0;i<batches.Length;i++)batches[i]=new List<Tree>(capacity[i/5]);
             var layers=land.DisplayTerrain.terrainData.terrainLayers;
-            foreach(int i in new[]{1,2}){var layer=Instantiate(layers[i]);layer.diffuseTexture=i==1?assets.grass1:assets.grass2;layer.diffuseRemapMin=Vector4.zero;layer.diffuseRemapMax=Vector4.one;layers[i]=layer;ownedLayers.Add(layer);}
+            foreach(int i in new[]{1,2}){
+                var layer=Instantiate(layers[i]);layer.diffuseTexture=i==1?assets.grass1:assets.grass2;
+                layer.diffuseRemapMin=Vector4.zero;
+                // Lift and mute the meadow below the green crowns. Existing layer weights
+                // blend a fresher olive with a warmer, subtly straw-toned grass treatment.
+                layer.diffuseRemapMax=i==1?new Vector4(1.25f,1.12f,1.20f,1):new Vector4(1.42f,1.18f,1.18f,1);
+                layers[i]=layer;ownedLayers.Add(layer);
+            }
             land.DisplayTerrain.terrainData.terrainLayers=layers;
+            land.gameObject.AddComponent<MeadowGrassAppearance>().Initialize(land.DisplayTerrain);
         }
         struct Candidate
         {

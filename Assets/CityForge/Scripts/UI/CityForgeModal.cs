@@ -315,11 +315,11 @@ namespace CityForge.UI
             if (controller != null) controller.CreatePrototypeRegion(RegionName, SelectedSize, ReadCreationSettings());
         }
 
-        Dropdown generationAnimals;
+        Dropdown generationAnimals, generationCamps;
         Dropdown TerrainChoice(string name) => createRegionTerrainIntro.transform.Find(name+"Dropdown").GetComponent<Dropdown>();
         public World.RegionCreationSettings ReadCreationSettings()
         {
-            return new World.RegionCreationSettings { nativeCampVersion=1,seed=generationSeed&&int.TryParse(generationSeed.text,out var seed)?seed:World.PrototypeRegionData.DefaultSeed,
+            return new World.RegionCreationSettings { waterwayVersion=5,nativeCampVersion=generationCamps&&generationCamps.value==1?1:0,seed=generationSeed&&int.TryParse(generationSeed.text,out var seed)?seed:World.PrototypeRegionData.DefaultSeed,
                 terrainShape=terrainShapeChoice?TerrainShapes[terrainShapeChoice.value]:World.RegionTerrainShape.Land,peninsulaNorthToSouth=true,
                 climate=TerrainChoice("Climate").value==3?World.RegionClimate.Tropical:World.RegionClimate.Temperate,
                 moisture=TerrainChoice("Climate").value==3?World.RegionMoisture.Balanced:(World.RegionMoisture)TerrainChoice("Climate").value,vegetation=(World.RegionVegetation)TerrainChoice("Land Type").value,
@@ -353,6 +353,12 @@ namespace CityForge.UI
             generationAnimals.GetComponent<RectTransform>().anchoredPosition=new Vector2(0,-406);
             generationAnimals.onValueChanged=new Dropdown.DropdownEvent();generationAnimals.ClearOptions();
             generationAnimals.AddOptions(new System.Collections.Generic.List<string>{"None","Temperate wildlife"});generationAnimals.value=1;generationAnimals.interactable=true;
+            var campLabel=Instantiate(parent.Find("StreamsLabel").gameObject,parent);campLabel.name="IndigenousCampsLabel";campLabel.GetComponent<Text>().text="INDIGENOUS CAMPS";
+            campLabel.GetComponent<RectTransform>().anchoredPosition=new Vector2(425,-372);
+            generationCamps=Instantiate(TerrainChoice("Streams"),parent);generationCamps.name="IndigenousCampsDropdown";
+            generationCamps.GetComponent<RectTransform>().anchoredPosition=new Vector2(425,-406);
+            generationCamps.onValueChanged=new Dropdown.DropdownEvent();generationCamps.ClearOptions();
+            generationCamps.AddOptions(new System.Collections.Generic.List<string>{"Off","On — 2–3 camps"});generationCamps.value=0;generationCamps.interactable=true;
             foreach(var choice in new[]{"Topography","Streams"}){
                 parent.Find(choice+"Label").GetComponent<RectTransform>().anchoredPosition=new Vector2(choice=="Streams"?425:0,-154);
                 TerrainChoice(choice).GetComponent<RectTransform>().anchoredPosition=new Vector2(choice=="Streams"?425:0,-188);
@@ -363,8 +369,8 @@ namespace CityForge.UI
             parent.Find("MountainNote").GetComponent<Text>().text="Overall relief; Terrain can add a mountain border.";
             var mountainNote=parent.Find("MountainNote").GetComponent<RectTransform>();mountainNote.anchoredPosition=new Vector2(0,-242);mountainNote.sizeDelta=new Vector2(350,18);
             var coastalNote=parent.Find("CoastalNote").GetComponent<RectTransform>();coastalNote.anchoredPosition=new Vector2(0,-350);coastalNote.sizeDelta=new Vector2(350,18);parent.Find("CoastalNote").GetComponent<Text>().text="Choose the region’s shape in Terrain.";
-            parent.GetComponent<LayoutElement>().preferredHeight=456;
-            terrainNextButton.GetComponent<RectTransform>().anchoredPosition=new Vector2(615,-392);
+            parent.GetComponent<LayoutElement>().preferredHeight=520;
+            terrainNextButton.GetComponent<RectTransform>().anchoredPosition=new Vector2(615,-472);
             terrainNextButton.GetComponentInChildren<Text>().text="NEXT";
             ConfigureTerrainStep();
         }

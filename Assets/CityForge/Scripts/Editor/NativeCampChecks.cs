@@ -20,9 +20,16 @@ namespace CityForge.Editor
             for(int z=0;z<513;z++)for(int x=0;x<513;x++){heights[z,x]=(Mathf.Abs(x-256)<3?5f:15f)/PrototypeRegionData.Height;water[z,x]=Mathf.Abs(x-256)*8;}
             var data=new PrototypeRegionData(76142,heights,water){WaterBodies=new[]{new RegionWaterBody{kind=WaterBodyKind.River,centerline=new[]{new Vector2(.5f,0),new Vector2(.5f,1)},halfWidthNormalized=.005f}}};
             var recipe=new RegionCreationSettings{seed=data.Seed,nativeCampVersion=1,districtGrid=8};var camps=NativeCampPlanner.Create(data,recipe,0);
-            Require(camps.Length==13,"Approximately 20 percent of 64 districts");Require(camps.All(c=>c.teepees>=5&&c.teepees<=9)&&camps.Select(c=>c.district).Distinct().Count()==13,"Counts and unique districts");
-            Require(camps.Count(c=>c.nearWater)>=10,"Water-first site selection");Require(Json(camps)==Json(NativeCampPlanner.Create(data,recipe,0)),"Deterministic complete camp metadata");
+            Require(camps.Length>=2&&camps.Length<=3,"Two or three camps per region");Require(camps.All(c=>c.teepees>=5&&c.teepees<=9)&&camps.Select(c=>c.district).Distinct().Count()==camps.Length,"Counts and unique districts");
+            Require(camps.All(c=>c.nearWater),"Water-first site selection");Require(Json(camps)==Json(NativeCampPlanner.Create(data,recipe,0)),"Deterministic complete camp metadata");
             NativeCampPlanner.Validate(camps,8,4096);
+            var counts=new System.Collections.Generic.HashSet<int>();
+            foreach(int grid in new[]{2,4,8,16})foreach(int seed in new[]{1,2,3,4,5,76142}){
+                var variant=new RegionCreationSettings{seed=seed,districtGrid=grid,nativeCampVersion=1};
+                var generated=NativeCampPlanner.Create(data,variant,0);
+                Require(generated.Length>=2&&generated.Length<=3,"Camp cap across seeds and grid sizes");counts.Add(generated.Length);
+            }
+            Require(counts.SetEquals(new[]{2,3}),"Seeded targets include both two and three camps");
             foreach(var camp in camps){for(int i=0;i<camp.teepees;i++){
                 var p=camp.TeepeePosition(i);Require(Mathf.Abs(Vector2.Distance(p,camp.center)-camp.Radius)<.01f,"Horseshoe radius");
                 for(int j=i+1;j<camp.teepees;j++)Require(Vector2.Distance(p,camp.TeepeePosition(j))>6.5f,"Teepee separation");
@@ -38,7 +45,7 @@ namespace CityForge.Editor
             var control=RegionMapGenerator.Generate("Control",RegionSize.Small,controlRecipe,geography);controlRecipe.nativeCampVersion=1;
             var withCamps=RegionMapGenerator.Generate("Camps",RegionSize.Small,controlRecipe,geography);
             Require(control.data.Heights.Cast<float>().SequenceEqual(withCamps.data.Heights.Cast<float>())&&control.data.WaterDistance.Cast<float>().SequenceEqual(withCamps.data.WaterDistance.Cast<float>()),"Camp content does not change canonical geography");
-            File.WriteAllText(Path.Combine(output,"Unit-Checks.txt"),"PASS seeded 13/64 districts; 5–9 separated horseshoe teepees; water-first placement; complete deterministic records; content flag defaults off for legacy JSON; metadata validation/save roundtrip; all-water map produces zero camps; camp flag leaves geography/water fields identical.\n");
+            File.WriteAllText(Path.Combine(output,"Unit-Checks.txt"),"PASS seeded 2–3 camps per region; 5–9 separated horseshoe teepees; water-first placement; complete deterministic records; content flag defaults off for legacy JSON; metadata validation/save roundtrip; all-water map produces zero camps; camp flag leaves geography/water fields identical.\n");
         }
         public static void Run(string output)=>EditorCoroutineRunner.Begin(Guard(output));
         static IEnumerator Guard(string output){

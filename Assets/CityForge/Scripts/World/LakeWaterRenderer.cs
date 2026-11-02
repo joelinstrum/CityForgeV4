@@ -109,8 +109,9 @@ namespace CityForge.World
                 var normalized=p/view.MapSide+Vector2.one*.5f;
                 // v5 rivers share a level and their saved terrain is the authoritative
                 // shoreline. A single network surface avoids doubled alpha at confluences.
-                bool inside = (view.SelectedDistrict<0||view.InActiveDistrict(p))&&(generatedRiver||body.Contains(normalized));
-                float waterDepth=Mathf.Max(0,level-height(p));
+                bool inside = (view.SelectedDistrict<0||view.InActiveDistrict(p))&&(generatedRiver?(RegionalRiverNetwork.HasContinuousChannels(view.Data)?RegionalRiverNetwork.SignedDistance(view.Data,normalized)<=0:true):body.Contains(normalized));
+                float sampleLevel=generatedRiver&&RegionalRiverNetwork.HasGroundFollowingWater(view.Data)?RegionalRiverNetwork.GroundWaterLevel(view.Data,normalized.x,normalized.y):level;
+                float waterDepth=Mathf.Max(0,sampleLevel-height(p));
                 float optical=LakeShoreRenderer.EnabledForEvaluation?Mathf.Lerp(.65f,1.4f,noise(p)):1;
                 optical=Mathf.Lerp(optical,1,Mathf.SmoothStep(0,1,Mathf.InverseLerp(1,3,waterDepth)));
                 pixels[z * resolution + x] = new Color(waterDepth, inside ? 1 : 0, optical, 1);
@@ -126,6 +127,15 @@ namespace CityForge.World
             mesh = new Mesh { name = "Bounded lake/pond" };
             mesh.vertices = new[] { new Vector3(min.x, level, min.y), new Vector3(min.x, level, max.y), new Vector3(max.x, level, min.y), new Vector3(max.x, level, max.y) };
             mesh.triangles = new[] { 0, 1, 2, 2, 1, 3 }; mesh.RecalculateBounds();
+            if(generatedRiver&&RegionalRiverNetwork.HasGroundFollowingWater(view.Data)){
+                const int n=257;var vertices=new Vector3[n*n];var triangles=new int[(n-1)*(n-1)*6];int t=0;
+                for(int z=0;z<n;z++)for(int x=0;x<n;x++){
+                    var p=min+Vector2.Scale(new Vector2(x/(float)(n-1),z/(float)(n-1)),size);var uv=p/view.MapSide+Vector2.one*.5f;
+                    vertices[z*n+x]=new Vector3(p.x,RegionalRiverNetwork.GroundWaterLevel(view.Data,uv.x,uv.y),p.y);
+                    if(x<n-1&&z<n-1){int i=z*n+x;triangles[t++]=i;triangles[t++]=i+n;triangles[t++]=i+1;triangles[t++]=i+1;triangles[t++]=i+n;triangles[t++]=i+n+1;}
+                }
+                mesh.Clear();mesh.indexFormat=UnityEngine.Rendering.IndexFormat.UInt32;mesh.vertices=vertices;mesh.triangles=triangles;mesh.RecalculateBounds();
+            }
             gameObject.layer = 4;
             gameObject.AddComponent<MeshFilter>().sharedMesh = mesh;
             var renderer = gameObject.AddComponent<MeshRenderer>(); renderer.sharedMaterial = material;

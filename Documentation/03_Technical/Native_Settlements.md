@@ -4,9 +4,9 @@ Accepted local implementation, November 1, 2026. Geography remains recipe12; set
 
 ## Creation and persistence
 
-The new-region wizard sets `nativeCampVersion=1`. The existing worker generation calls NativeCampPlanner after geography/biomes. Its independent seeded random stream targets round(original district count ×0.20) unique cells (13 of64 by default). It prefers naturally dry sites within120m of water; unsuitable/water-only terrain can leave the target unmet. No water or terrain is reshaped for camps.
+The new-region wizard offers **Indigenous Camps**, Off by default. On sets `nativeCampVersion=1`; Off sets zero. The existing worker generation calls NativeCampPlanner after geography/biomes. Its independent seeded random stream targets a seeded two or three unique cells per region, independent of region size or district count. It prefers naturally dry sites within120m of water; unsuitable/water-only terrain can leave the target unmet. No water or terrain is reshaped for camps.
 
-NativeCampRecord persists original cell ID, center, heading, seed,5–9 teepees, nearby-water point and preference result. Metadata validation rejects invalid counts, duplicate IDs, nonfinite values and footprints outside their original cells. Missing/zero content version in older recipes produces no new settlements; opening a save never backfills camps. Saved records remain authoritative. Combined districts filter by ActiveDistrictMembers, preserving original ownership and excluded L-shaped corners.
+NativeCampRecord persists original cell ID, center, heading, seed,5–9 teepees, nearby-water point and preference result. Metadata validation rejects invalid counts, duplicate IDs, nonfinite values and footprints outside their original cells. Missing/zero content version in older recipes produces no new settlements; opening a save never backfills camps. Saved records remain authoritative, including older regions with the former 13-camp allocation. Combined districts filter by ActiveDistrictMembers, preserving original ownership and excluded L-shaped corners.
 
 Individual NPC positions/activities are transient and restart when the district loads. This is ambient content, without economic simulation, combat, diplomacy or a settlement editor.
 
@@ -41,7 +41,7 @@ Missing required local camp assets raises an explicit preparation error when ent
 
 ## Persistent rendering
 
-CityForge_URP stores the approved4096 main-light atlas with four cascades and splits(.50,.68,.85). Directional sun shadows remain Hard through Summer/Fall/Winter refreshes; seasonal shadow strength is retained. Camera shadow-distance fitting and navigation quality throttling remain active. No live-preview clone is needed. Four cascades add rendering work; this is visually accepted, without a standalone hardware performance qualification.
+CityForge_URP stores the approved4096 main-light atlas with four cascades and splits(.50,.68,.85). Directional sun shadows remain Hard through Summer/Fall/Winter refreshes; seasonal shadow strength is retained. Camera shadow-distance fitting uses the actual detailed terrain bounds maximum rather than its 1200m storage range, preserving the 80m canopy/building clearance; navigation quality throttling remains active. No live-preview clone is needed. Four cascades add rendering work; this is visually accepted, without a standalone hardware performance qualification.
 
 The three closest zoom levels0–2 use half their previous visible width/height;3–5 retain their previous spans. Explicit saved camera poses retain their saved size until a new zoom action.
 

@@ -155,6 +155,20 @@ namespace CityForge.World
         bool settingsApplied;
         Camera savedCamera;string savedPipelineSettings;
         T Own<T>(T asset) where T:UnityEngine.Object {owned.Add(asset);return asset;}
+        static Texture2D MatteStreamSoil(Texture2D source)
+        {
+            var rt=RenderTexture.GetTemporary(source.width,source.height,0,RenderTextureFormat.ARGB32,RenderTextureReadWrite.sRGB);
+            var previous=RenderTexture.active;
+            try {
+                Graphics.Blit(source,rt);RenderTexture.active=rt;
+                var copy=new Texture2D(source.width,source.height,TextureFormat.RGBA32,true,false){name="Matte stream soil",wrapMode=source.wrapMode,filterMode=source.filterMode,anisoLevel=source.anisoLevel};
+                copy.ReadPixels(new Rect(0,0,source.width,source.height),0,0);
+                var pixels=copy.GetPixels32();for(int i=0;i<pixels.Length;i++)pixels[i].a=8;
+                copy.SetPixels32(pixels);copy.Apply(true,true);return copy;
+            }
+            finally {RenderTexture.active=previous;RenderTexture.ReleaseTemporary(rt);}
+        }
+
         public void Build(PrototypeRegionView view,MeadowRuntimeBaseline baseline,bool regionOverview=false)
         {RegionBuildSteps.Complete(BuildStages(view,baseline,regionOverview));}
         public IEnumerator BuildStages(PrototypeRegionView view,MeadowRuntimeBaseline baseline,bool regionOverview=false,Action<string,float> progress=null)
@@ -177,24 +191,35 @@ namespace CityForge.World
                 baseline.generationVersion=view.MountainTest?105:107;var layers=new TerrainLayer[8];Array.Copy(baseline.layers,layers,5);layers[5]=Resources.Load<TerrainLayer>(MountainSurfaceTreatment.Enabled?"Mountains/VariedCliffDark":"Mountains/CliffDark");layers[6]=Resources.Load<TerrainLayer>(MountainSurfaceTreatment.Enabled?"Mountains/PhotoscannedCliff":"Mountains/CliffBright");layers[7]=Resources.Load<TerrainLayer>("Mountains/Scree");baseline.layers=layers;}
             if(view.Coastline){baseline=Own(Instantiate(baseline));baseline.terrainMaterial=Resources.Load<Material>("Coasts/CoastalTerrain");baseline.generationVersion=201;var coastalLayers=new TerrainLayer[7];Array.Copy(baseline.layers,coastalLayers,5);coastalLayers[5]=Resources.Load<TerrainLayer>("RiverBeds/RichSand");coastalLayers[6]=Resources.Load<TerrainLayer>("Mountains/CliffDark");baseline.layers=coastalLayers;}
             if(StreamRockTestRegion.Revised(view)){baseline=Own(Instantiate(baseline));baseline.shorelineWidth*=.75f;}
-            if(StreamRockTestRegion.DirtBanks(view)){
+            if(StreamRockTestRegion.DirtBanks(view)||GeneratedStreamAppearance.Applies(view)){
+                // The study already owns a baseline copy; generated streams must
+                // also isolate appended layers from the shared Resources asset.
+                baseline=Own(Instantiate(baseline));
                 var source=Resources.Load<TerrainLayer>("RiverBeds/RichSoil");if(!source)throw new Exception("Existing stream soil texture missing.");
                 var dirt=Own(Instantiate(source));dirt.name="Damp earth stream bank";dirt.diffuseRemapMin=Vector4.zero;dirt.diffuseRemapMax=new Vector4(.38f,.29f,.20f,1);dirt.specular=new Color(.03f,.03f,.03f);dirt.smoothness=.06f;dirt.normalScale=.55f;
-                if(StreamRockTestRegion.NaturalSoil(view)){dirt.diffuseTexture=Own(StreamBankBlend.EarthTexture(StreamRockTestRegion.BankTouchup(view)));dirt.diffuseRemapMax=new Vector4(.40f,.32f,.23f,1);dirt.normalMapTexture=null;dirt.tileSize=new Vector2(19.7f,19.7f);}
+                if(StreamRockTestRegion.NaturalSoil(view)||GeneratedStreamAppearance.Applies(view)){dirt.diffuseTexture=Own(StreamBankBlend.EarthTexture(StreamRockTestRegion.BankTouchup(view)||GeneratedStreamAppearance.Applies(view)));dirt.diffuseRemapMax=new Vector4(.40f,.32f,.23f,1);dirt.normalMapTexture=null;dirt.tileSize=new Vector2(19.7f,19.7f);}
                 var layers=new TerrainLayer[baseline.layers.Length+1];Array.Copy(baseline.layers,layers,baseline.layers.Length);layers[layers.Length-1]=dirt;baseline.layers=layers;
             }
             // Runtime palette copies preserve source assets, paint masks and saved geography.
             baseline=Own(Instantiate(baseline));baseline.layers=(TerrainLayer[])baseline.layers.Clone();
             var soil=Own(Instantiate(baseline.layers[0]));if(SharedDirtSurface.Apply(soil))baseline.layers[0]=soil;
-            if(StreamRockTestRegion.DirtBanks(view)){var bankDirt=Own(Instantiate(baseline.layers[baseline.layers.Length-1]));if(SharedDirtSurface.Apply(bankDirt,true))baseline.layers[baseline.layers.Length-1]=bankDirt;}
+            if(StreamRockTestRegion.DirtBanks(view)||GeneratedStreamAppearance.Applies(view)){var bankDirt=Own(Instantiate(baseline.layers[baseline.layers.Length-1]));if(SharedDirtSurface.Apply(bankDirt,true))baseline.layers[baseline.layers.Length-1]=bankDirt;}
+            if(StreamRockTestRegion.DirtBanks(view)||GeneratedStreamAppearance.Applies(view)){
+                // URP uses diffuse alpha as smoothness, overriding the layer slider.
+                // Keep the private dirt RGB intact but restore the approved matte bed.
+                var matte=Own(MatteStreamSoil(baseline.layers[0].diffuseTexture));
+                baseline.layers[0].diffuseTexture=matte;
+                baseline.layers[baseline.layers.Length-1].diffuseTexture=matte;
+            }
             mountainEvergreens=MountainEvergreenMix.LoadPrefabs();
             treeSeason=view.VisualSeason;
             navigationCamera=view.GetComponentInChildren<CityForge.CameraSystem.CityForgeCameraController>();
             View=view;DistrictIndex=regionOverview?-1:view.SelectedDistrict;Baseline=baseline;Side=regionOverview?view.MapSide:view.DistrictSide;Origin=regionOverview?Vector2.one*(-view.MapSide/2):view.DistrictOrigin(view.SelectedDistrict);
             if(!regionOverview&&view.IsCombinedDistrict){var area=view.ActiveDistrictBounds;Origin=area.min;Side=Mathf.Max(area.width,area.height);}
             var rng=new System.Random(Seed);SeedOffset=new Vector2(rng.Next(100,10000),rng.Next(100,10000));
-            terrainData=Own(new TerrainData {name="Seeded approved meadow district",heightmapResolution=baseline.referenceHeightResolution,alphamapResolution=regionOverview?512:view.MountainTest?1024:(view.IsCombinedDistrict?Mathf.Clamp(Mathf.ClosestPowerOfTwo(Mathf.RoundToInt(Side)),512,2048):Mathf.ClosestPowerOfTwo(Mathf.RoundToInt(Side*2))),baseMapResolution=1024,size=new Vector3(Side,view.GetComponentInChildren<Terrain>().terrainData.size.y,Side)});
-            int resolution=baseline.referenceHeightResolution;var heights=new float[resolution,resolution];
+            int channelResolution=RegionalRiverNetwork.HasContinuousChannels(view.Data)?Mathf.Min(4097,Mathf.NextPowerOfTwo(Mathf.CeilToInt(Side))+1):baseline.referenceHeightResolution;
+            terrainData=Own(new TerrainData {name="Seeded approved meadow district",heightmapResolution=channelResolution,alphamapResolution=regionOverview?512:view.MountainTest?1024:(view.IsCombinedDistrict?Mathf.Clamp(Mathf.ClosestPowerOfTwo(Mathf.RoundToInt(Side)),512,2048):Mathf.ClosestPowerOfTwo(Mathf.RoundToInt(Side*2))),baseMapResolution=1024,size=new Vector3(Side,view.GetComponentInChildren<Terrain>().terrainData.size.y,Side)});
+            int resolution=channelResolution;var heights=new float[resolution,resolution];
             var rockHeights=StreamRockTestRegion.NaturalSoil(view)?new float[resolution,resolution]:null;
             var rockBankBlend=rockHeights!=null?new StreamBankBlend(view.Data):null;
             var streamBankBlend=StreamRockTestRegion.SoftBanks(view)?new StreamBankBlend(view.Data,StreamRockTestRegion.NaturalSoil(view),StreamRockTestRegion.VariedBanks(view),StreamRockTestRegion.NarrowBanks(view),StreamRockTestRegion.VariedSlopes(view),StreamRockTestRegion.LowerBanks(view),StreamRockTestRegion.BankTouchup(view),StreamRockTestRegion.FinalBankLift(view)?1.1f:1):null;
@@ -221,6 +246,12 @@ namespace CityForge.World
             void Measure(string name,Action action){var timer=System.Diagnostics.Stopwatch.StartNew();action();timings.Append(name+"="+timer.ElapsedMilliseconds+" ms; ");}
             progress?.Invoke("Preparing shorelines",.25f);yield return null;
             Measure("slab",BuildDistrictSlab);Measure("shore field",BuildShoreField);var cached=View.LoadedMeadowDistrict==View.SelectedDistrict?View.LoadedMeadow:null;
+            if(GeneratedStreamAppearance.Applies(View)&&cached!=null&&cached.alphamaps.GetLength(2)==Baseline.layers.Length-1){
+                // Add the dedicated stream soil slot without rebuilding saved roads/trees.
+                int n=cached.alphamaps.GetLength(0),oldLayers=cached.alphamaps.GetLength(2);var expanded=new float[n,n,oldLayers+1];
+                for(int z=0;z<n;z++)for(int x=0;x<n;x++)for(int l=0;l<oldLayers;l++)expanded[z,x,l]=cached.alphamaps[z,x,l];
+                cached=new MeadowRegionSnapshot{version=cached.version,road=cached.road,trees=cached.trees,alphamaps=expanded};
+            }
             if(cached!=null&&cached.alphamaps.GetLength(2)==Baseline.layers.Length+3){
                 // Migrate experimental lake caches while retaining their saved road and trees.
                 int count=cached.alphamaps.GetLength(0),layers=Baseline.layers.Length;var canonical=new float[count,count,layers];
@@ -247,6 +278,7 @@ namespace CityForge.World
             if(!ApprovedForestAssets.CheckpointReplay&&!Water&&!View.Waterless&&!View.MinimalRiverCrest){
                 var approvedWater=ApprovedRiverWater.Initialize(this);while(approvedWater.MoveNext())yield return approvedWater.Current;
             }
+            if(GeneratedStreamAppearance.Applies(View)&&!IsRegionOverview){var decoration=gameObject.AddComponent<GeneratedStreamAppearance>();var setup=decoration.InitializeStages(this);while(setup.MoveNext())yield return setup.Current;}
             if(StreamRockTestRegion.Applies(View)&&!IsRegionOverview)Measure("stream rock study",()=>gameObject.AddComponent<StreamRockStudy>().Initialize(this));
             if(StreamRockTestRegion.DeeperBed(View)&&!IsRegionOverview)Measure("deeper stream bed",()=>gameObject.AddComponent<StreamBedDepthStudy>().Initialize(this));
             if(StreamRockTestRegion.StockedFish(View)&&!IsRegionOverview)Measure("bluegill stocking",()=>gameObject.AddComponent<StreamFishOption>().Initialize(this));
@@ -336,6 +368,7 @@ namespace CityForge.World
         public float Height(Vector2 p) => DisplayTerrain.SampleHeight(new Vector3(p.x,0,p.y));
         public float WaterDistance(Vector2 p)
         {
+            if(RegionalRiverNetwork.HasContinuousChannels(View.Data)&&!View.Coastline)return RegionalRiverNetwork.SignedDistance(View.Data,p/View.MapSide+Vector2.one*.5f)*View.MapSide;
             float gx=Mathf.Clamp((p.x/View.MapSide+.5f)*512,0,511.999f),gz=Mathf.Clamp((p.y/View.MapSide+.5f)*512,0,511.999f);int x=(int)gx,z=(int)gz;
             return Mathf.Lerp(Mathf.Lerp(View.Data.WaterDistance[z,x],View.Data.WaterDistance[z,x+1],gx-x),Mathf.Lerp(View.Data.WaterDistance[z+1,x],View.Data.WaterDistance[z+1,x+1],gx-x),gz-z)*View.MapScale;
         }
@@ -354,6 +387,7 @@ namespace CityForge.World
         }
         public float ShoreDistance(Vector2 p)
         {
+            if(RegionalRiverNetwork.HasContinuousChannels(View.Data)&&!View.Coastline)return WaterDistance(p);
             int last=shore.GetLength(0)-1;float gx=Mathf.Clamp((p.x-Origin.x)/Side*last,0,last-.001f),gz=Mathf.Clamp((p.y-Origin.y)/Side*last,0,last-.001f);int x=(int)gx,z=(int)gz;
             return Mathf.Lerp(Mathf.Lerp(shore[z,x],shore[z,x+1],gx-x),Mathf.Lerp(shore[z+1,x],shore[z+1,x+1],gx-x),gz-z);
         }
@@ -564,20 +598,43 @@ namespace CityForge.World
         }
         void BuildPresentation()
         {
-            if(Baseline.sunTemplate){var sun=Instantiate(Baseline.sunTemplate,transform);if(View.RiverBedVersion>=5)foreach(var light in sun.GetComponentsInChildren<Light>()){light.shadowBias=.15f;light.shadowNormalBias=.5f;}}
+            if(Baseline.sunTemplate){
+                var sun=Instantiate(Baseline.sunTemplate,transform);
+                foreach(var light in sun.GetComponentsInChildren<Light>()){
+                    // Neutral summer daylight retains a little warmth without the strong yellow cast.
+                    if(light.type==LightType.Directional)light.color=new Color(1,.98f,.93f);
+                    if(View.RiverBedVersion>=5){light.shadowBias=.15f;light.shadowNormalBias=.5f;}
+                }
+            }
             if(Baseline.windTemplate)Instantiate(Baseline.windTemplate,transform);
             var volume=new GameObject("Approved meadow volume").AddComponent<Volume>();volume.transform.SetParent(transform,false);volume.isGlobal=true;volume.priority=30;volume.sharedProfile=Baseline.volume;
         }
         public void ApplyPresentation(bool enabled)
         {
             if(enabled&&!settingsApplied){
+                // OnEnable also runs during script reload, before transient region
+                // data is restored. Do not snapshot or change global settings yet.
+                if(!Baseline||!View||View.Data==null)return;
+                var controller=View.GetComponentInChildren<CityForge.CameraSystem.CityForgeCameraController>();
+                var camera=controller?controller.GetComponent<Camera>():null;
+                if(!camera)return;
                 savedFrameRate=Application.targetFrameRate;savedVSync=QualitySettings.vSyncCount;
-                var camera=View.GetComponentInChildren<CityForge.CameraSystem.CityForgeCameraController>().GetComponent<Camera>();
                 if(Baseline.cameraSettingsTemplate){var backup=new GameObject("Legacy camera settings");backup.transform.SetParent(transform,false);savedCamera=backup.AddComponent<Camera>();savedCamera.CopyFrom(camera);savedCamera.enabled=false;savedPipelineSettings=JsonUtility.ToJson(camera.GetUniversalAdditionalCameraData());var wasEnabled=camera.enabled;var ortho=camera.orthographic;var size=camera.orthographicSize;camera.CopyFrom(Baseline.cameraSettingsTemplate.GetComponent<Camera>());camera.enabled=wasEnabled;camera.orthographic=ortho;camera.orthographicSize=size;JsonUtility.FromJsonOverwrite(Baseline.cameraPipelineSettings,camera.GetUniversalAdditionalCameraData());if(View.Data.Biomes!=null){camera.ResetWorldToCameraMatrix();camera.ResetProjectionMatrix();camera.enabled=true;camera.targetTexture=null;camera.rect=new Rect(0,0,1,1);}}
                 savedAmbientMode=RenderSettings.ambientMode;savedSky=RenderSettings.ambientSkyColor;savedEquator=RenderSettings.ambientEquatorColor;savedGround=RenderSettings.ambientGroundColor;savedAmbient=RenderSettings.ambientLight;savedIntensity=RenderSettings.ambientIntensity;savedReflection=RenderSettings.reflectionIntensity;savedSkybox=RenderSettings.skybox;savedProbe=RenderSettings.ambientProbe;settingsApplied=true;SetFramePacing60(FramePacing60);
-                RenderSettings.ambientMode=Baseline.ambientMode;RenderSettings.ambientSkyColor=Baseline.ambientSky;RenderSettings.ambientEquatorColor=Baseline.ambientEquator;RenderSettings.ambientGroundColor=Baseline.ambientGround;RenderSettings.ambientLight=Baseline.ambientLight;RenderSettings.ambientIntensity=Baseline.ambientIntensity;RenderSettings.reflectionIntensity=Baseline.reflectionIntensity;RenderSettings.skybox=Baseline.skybox;var irradiance=new SphericalHarmonicsL2();for(int c=0;c<3;c++)for(int i=0;i<9;i++)irradiance[c,i]=Baseline.ambientSH[c*9+i];RenderSettings.ambientProbe=irradiance;RenderSettings.fog=false;
+                RenderSettings.ambientMode=Baseline.ambientMode;RenderSettings.ambientSkyColor=Baseline.ambientSky;RenderSettings.ambientEquatorColor=Baseline.ambientEquator;RenderSettings.ambientGroundColor=Baseline.ambientGround;RenderSettings.ambientLight=Baseline.ambientLight;RenderSettings.ambientIntensity=Baseline.ambientIntensity*1.20f;RenderSettings.reflectionIntensity=Baseline.reflectionIntensity;RenderSettings.skybox=Baseline.skybox;
+                // The baseline uses a custom SH probe: changing ambientIntensity alone does
+                // not lift its shaded foliage. Scale the original coefficients once per entry.
+                var irradiance=new SphericalHarmonicsL2();
+                for(int c=0;c<3;c++)for(int i=0;i<9;i++)
+                    irradiance[c,i]=Baseline.ambientSH[c*9+i]*(c==2?1.28f:1.20f);
+                RenderSettings.ambientProbe=irradiance;RenderSettings.fog=false;
             } else if(!enabled&&settingsApplied){RenderSettings.ambientMode=savedAmbientMode;RenderSettings.ambientSkyColor=savedSky;RenderSettings.ambientEquatorColor=savedEquator;RenderSettings.ambientGroundColor=savedGround;RenderSettings.ambientLight=savedAmbient;RenderSettings.ambientIntensity=savedIntensity;RenderSettings.reflectionIntensity=savedReflection;RenderSettings.skybox=savedSkybox;RenderSettings.ambientProbe=savedProbe;settingsApplied=false;Application.targetFrameRate=savedFrameRate;QualitySettings.vSyncCount=savedVSync;
-                if(savedCamera){var camera=View.GetComponentInChildren<CityForge.CameraSystem.CityForgeCameraController>().GetComponent<Camera>();var ortho=camera.orthographic;var size=camera.orthographicSize;camera.CopyFrom(savedCamera);camera.orthographic=ortho;camera.orthographicSize=size;JsonUtility.FromJsonOverwrite(savedPipelineSettings,camera.GetUniversalAdditionalCameraData());if(View.Data.Biomes!=null){camera.ResetWorldToCameraMatrix();camera.ResetProjectionMatrix();camera.enabled=true;camera.targetTexture=null;camera.rect=new Rect(0,0,1,1);}Destroy(savedCamera.gameObject);savedCamera=null;}
+                if(savedCamera){
+                    var controller=View?View.GetComponentInChildren<CityForge.CameraSystem.CityForgeCameraController>():null;
+                    var camera=controller?controller.GetComponent<Camera>():null;
+                    if(camera){var ortho=camera.orthographic;var size=camera.orthographicSize;camera.CopyFrom(savedCamera);camera.orthographic=ortho;camera.orthographicSize=size;JsonUtility.FromJsonOverwrite(savedPipelineSettings,camera.GetUniversalAdditionalCameraData());if(View.Data!=null&&View.Data.Biomes!=null){camera.ResetWorldToCameraMatrix();camera.ResetProjectionMatrix();camera.enabled=true;camera.targetTexture=null;camera.rect=new Rect(0,0,1,1);}}
+                    Destroy(savedCamera.gameObject);savedCamera=null;
+                }
             }
         }
         void BuildMinimalRiverCrest()=>BuildTypedWater(false);
@@ -730,19 +787,24 @@ namespace CityForge.World
         {
             // Also apply to restored caches, without re-laying roads or moving trees.
             int n=terrainData.alphamapResolution;var maps=terrainData.GetAlphamaps(0,0,n,n);
+            bool generatedProfile=GeneratedStreamAppearance.Applies(View);
             var timer=System.Diagnostics.Stopwatch.StartNew();
             for(int z=0;z<n;z++){
                 for(int x=0;x<n;x++){
                     var p=Origin+new Vector2(x/(float)(n-1),z/(float)(n-1))*Side;
-                    float distance=ShoreDistance(p);
+                    float distance=ShoreDistance(p);Vector2 coordinates=default;float streamDistance=0;
+                    bool generatedStream=generatedProfile&&GeneratedStreamAppearance.Near(View,p,out coordinates,out streamDistance);
+                    if(generatedStream)distance=streamDistance;
                     if(StreamRockTestRegion.NarrowBanks(View)&&distance>0)distance*=2;
                     float bank=(1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(StreamRockTestRegion.Revised(View)?.75f:StreamRockTestRegion.Applies(View)?1:3,StreamRockTestRegion.Revised(View)?3.75f:StreamRockTestRegion.Applies(View)?5:16,Mathf.Max(0,distance))))*.86f;
+                    if(RegionalRiverNetwork.HasGroundFollowingWater(View.Data))bank=(1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(.15f,1.25f,Mathf.Max(0,distance))))*.55f;
                     if(StreamRockTestRegion.SoftBanks(View))bank=StreamBankBlend.Soil(this,p,distance);
                     else if(StreamRockTestRegion.Refined(View))bank*=distance>0?Mathf.Lerp(.28f,.60f,Noise(p,6,453)):.80f;
-                    if(StreamRockTestRegion.DirtBanks(View)){
+                    if(generatedStream)bank=StreamBankBlend.Soil(this,p,distance);
+                    if(StreamRockTestRegion.DirtBanks(View)||generatedStream){
                         int dirt=maps.GetLength(2)-1;float weight=StreamBankBlend.Dirt(this,p,distance);
-                        bool variety=StreamRockTestRegion.VariedBanks(View);
-                        if(variety){var cover=StreamBankBlend.VariedCover(this,p,distance);float dry=Mathf.SmoothStep(0,1,Mathf.InverseLerp(-.10f,.20f,distance));bank=Mathf.Lerp(bank,cover.x,dry);weight=Mathf.Lerp(weight,cover.y,dry);}
+                        bool variety=StreamRockTestRegion.VariedBanks(View)||generatedStream;
+                        if(variety){var cover=generatedStream?GeneratedStreamAppearance.Cover(this,p,distance,coordinates):StreamBankBlend.VariedCover(this,p,distance);float dry=Mathf.SmoothStep(0,1,Mathf.InverseLerp(-.10f,.20f,distance));bank=Mathf.Lerp(bank,cover.x,dry);weight=Mathf.Lerp(weight,cover.y,dry);}
                         // Recover base weights before repainting a restored dirt-bank cache.
                         float soil=Mathf.Max(bank,maps[z,x,0]/Mathf.Max(.0001f,1-maps[z,x,dirt]));soil=Mathf.Clamp01(soil);
                         if(variety)soil=Mathf.Lerp(soil,bank,1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(3,6,Mathf.Max(0,distance))));

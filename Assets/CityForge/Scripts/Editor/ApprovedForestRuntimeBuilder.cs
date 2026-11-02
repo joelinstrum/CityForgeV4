@@ -67,7 +67,7 @@ namespace CityForge.EditorTools
                     var shared=renderer.sharedMaterials;
                     for(int j=0;j<shared.Length;j++){var source=shared[j];if(!source||!source.HasProperty("_HealthyColor")||!source.HasProperty("_DryColor"))continue;
                         if(!materials.TryGetValue(source,out var warm)){warm=new Material(source);if(warm.isVariant)warm.parent=null;
-                            warm.SetColor("_HealthyColor",ApprovedForestColors.WarmPale(source.GetColor("_HealthyColor")));warm.SetColor("_DryColor",ApprovedForestColors.WarmPale(source.GetColor("_DryColor")));
+                            warm.SetColor("_HealthyColor",i<11?ApprovedForestColors.MeadowTreeGreen(source.GetColor("_HealthyColor")):ApprovedForestColors.WarmPale(source.GetColor("_HealthyColor")));warm.SetColor("_DryColor",i<11?ApprovedForestColors.MeadowTreeGreen(source.GetColor("_DryColor")):ApprovedForestColors.WarmPale(source.GetColor("_DryColor")));
                             AssetDatabase.CreateAsset(warm,folder+"/Material"+materials.Count+".mat");materials[source]=warm;}
                         shared[j]=warm;
                     }
@@ -77,6 +77,39 @@ namespace CityForge.EditorTools
             }
             EditorUtility.SetDirty(result);AssetDatabase.SaveAssets();
         }
+        [MenuItem("CityForge/Forest/Refresh meadow tree greens")]
+        public static void RefreshMeadowTreeGreens()
+        {
+            if(EditorApplication.isPlaying)throw new InvalidOperationException("Refresh tree colors in Edit mode.");
+            var assets=Resources.Load<ApprovedForestAssets>("ApprovedForest/Forest");
+            var library=Resources.Load<SeasonalTreeLibrary>("Seasons/SeasonalTrees");
+            if(!assets||assets.nativeSummer==null||assets.nativeSummer.Length<11||!library)
+                throw new InvalidOperationException("Prepare the approved native summer tree assets first.");
+            var sources=new Dictionary<Material,Material>();
+            for(int i=0;i<11;i++){
+                var source=library.summer[i].GetComponentsInChildren<Renderer>(true);
+                var target=assets.nativeSummer[i].GetComponentsInChildren<Renderer>(true);
+                if(source.Length!=target.Length)throw new InvalidOperationException("Native tree renderer layout differs.");
+                for(int r=0;r<source.Length;r++){
+                    var from=source[r].sharedMaterials;var to=target[r].sharedMaterials;
+                    if(from.Length!=to.Length)throw new InvalidOperationException("Native tree material layout differs.");
+                    for(int m=0;m<from.Length;m++){
+                        if(!from[m]||!from[m].HasProperty("_HealthyColor")||!from[m].HasProperty("_DryColor"))continue;
+                        if(!to[m]||to[m]==from[m]||!AssetDatabase.GetAssetPath(to[m]).StartsWith(Output+"/NativeSummer/",StringComparison.Ordinal))
+                            throw new InvalidOperationException("Only prepared summer copies may be recolored.");
+                        sources[to[m]]=from[m];
+                    }
+                }
+            }
+            foreach(var pair in sources){
+                pair.Key.SetColor("_HealthyColor",ApprovedForestColors.MeadowTreeGreen(pair.Value.GetColor("_HealthyColor")));
+                pair.Key.SetColor("_DryColor",ApprovedForestColors.MeadowTreeGreen(pair.Value.GetColor("_DryColor")));
+                EditorUtility.SetDirty(pair.Key);
+            }
+            AssetDatabase.SaveAssets();
+            Debug.Log("Refreshed "+sources.Count+" meadow tree leaf materials from original colors.");
+        }
+
         [MenuItem("CityForge/Forest/Build approved runtime assets")]
         public static void Build()
         {

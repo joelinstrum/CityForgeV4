@@ -1,3 +1,11 @@
+## Nearly flush stream and river banks — November1
+
+New wizard waterwayVersion3 uses ground-following channelVersion2 water. Water surface is20cm below the original shared ground, stream bed45cm below water, major river bed2m below water. Adjacent meadow stays at its original height instead of descending into an80m-wide valley. The bank soil paint fades over1.25m instead of16m. Both overview mesh and detailed Crest LevelLod follow the local surface; existing ocean datum remains the lower limit on ocean layouts. Previous saved waterways retain their prior profile. Mountain avoidance and the12ft stream cap remain.
+
+## Mountain-clear waterways — November1
+
+New Region Creator waterwayVersion2 recipes keep current Mountain Border waterways in the front70% of the map, parallel to the rear-quarter range, with seeded gentle bends and separate complete bank envelopes. No channels or bank grading enter the mountain zone. The stream12-foot ceiling and no-crossing rules remain. Geography stays version12; saved channels retain their coordinates. Other terrain shapes retain their prior routing. Per-body channelAlongX persists the route sampling axis for detail terrain, clipping and overview queries.
+
 ## Tropical shelf depth and thicker map edges — October31
 
 New default recipe version12 gives Tropical ocean layouts a gradually deepening continental shelf: sea level30m, seabed reaching6m (24m depth) over12% of region width. Land and all explicit water surfaces shift upward18m together, preserving relative relief, river depths and shoreline location. Non-ocean and Temperate generation remains unchanged; versions1–11 and stored heightfields remain authoritative. Existing Tropical maps receive the offshore color presentation without regenerating their geography.

@@ -44,6 +44,16 @@ namespace CityForge.World
             return result;
         }
 
+        /// <summary>Muted olive summer poplar greens, coordinated with grass and authored crowns.</summary>
+        public static Color MeadowTreeGreen(Color original)
+        {
+            Color.RGBToHSV(original,out float hue,out float saturation,out float value);
+            var result=Color.HSVToRGB(Mathf.Lerp(hue,.235f,.65f),
+                Mathf.Min(.65f,saturation*1.05f+.015f),value*.84f);
+            result.a=original.a;
+            return result;
+        }
+
         /// <summary>
         /// Input is the existing sRGB grass texel multiplied by its current terrain tint.
         /// Bake this result to a separate texture and use a unit diffuse-remap scale.
