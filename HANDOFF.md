@@ -1,3 +1,84 @@
+# Approved mixed woodland integrated — November 3, 2026
+
+User approved the chestnut/locust/larch appearance and requested normal new-region
+integration plus a source commit. The forest is now part of the game, not just an
+in-memory preview. See `Documentation/03_Technical/Approved_Mixed_Forest.md`.
+
+- Wizard and default main-menu creation set `forestAppearanceVersion=1` for new
+  recipes. New temperate summer districts use the approved five chestnuts, locust,
+  and two larches, with their dark palette and fuller distance meshes.
+- Missing/zero forest versions preserve existing forests. Geography stays12;
+  regional relief, tropical palms, mountain fir slots and native fall/winter
+  presentation are retained. No existing player maps were migrated or overwritten.
+- `MixedDistrictForest` selects existing canonical mature woodland points with a
+  deterministic10m cell limit, respecting native ecology, water/road/camp clearances,
+  slopes and active combined-district boundaries. It does not force the70% stress
+  layout onto normal maps. Canonical planar positions/species/rotations/scales remain
+  stored; displayed trees are grounded against current terrain.
+- `SpatialForestRenderer` is the production name of the former trial renderer.
+  It uses original LODGroups in close views and128m spatial instancing in views
+  of size200 or larger. Top-down panning reuses LOD matrices. Distant shadow meshes
+  are submitted separately from unchanged visible crowns. These are static captures;
+  editing/moving trees requires rebuilding them. Water-reflection visual QA remains
+  separate; submissions retain per-camera culling/shadow behavior.
+- `PerspectiveMeadowBatches` combines selected ground-cover matrices for both
+  camera projections. Matrix density/positions, navigation throttling and off-camera
+  reflection submissions remain unchanged. Showcase opt-outs remain direct.
+- Approved district zoom steps are[8,16,40,80,160,320] for the common640 reference;
+  overview zooms retain their prior behavior. L4 pan multiplier is1.3 (+30%).
+- The accepted grass is slightly less saturated and the conspicuous canopy litter
+  stamps are removed from grass blending. Source shaders/settings are committed;
+  material/texture artwork remains private.
+
+## Private assets and recovery
+
+Runtime library: `Assets/CityForge/Resources/Trees/ApprovedMixedForest/V1/Library.asset`.
+Its compact eight prefabs reference private art under
+`Assets/CityForge/Art/Trees/ForestTrees1Trial/`. Both stay ignored in public Git.
+Builder: **CityForge / Forest / Build approved mixed forest library**. A private
+35MB `Approved-Mixed-Forest-PrivateAssets.unitypackage` backup was exported to this
+chat's outputs, including the library dependencies, excluding the huge test layouts
+and Crest. Never add that package/art to public Git. New-region loading preflights
+the library and reports missing private content rather than restoring retired trees.
+
+Original approved stress fixture remains private: `HugeForest70PercentTrial.prefab`,
+~202MB,8,165 trees across70% of planting cells in a1024m district. Loading/saving it
+may require Unity Pipeline `--timeout180`. Do not overwrite it with disabled source
+renderers from an active instancing experiment. New production regions need only
+V1's compact library, not that fixture or the480-tree authoring layout.
+
+The last user preview was checkpointed to ignored
+`Library/BeforeMixedForestIntegration.cfregion`; earlier private assets are intact.
+The current editor shows a fresh normally created verification region (seed70331),
+not the stress-test overlay. No normal Regions-directory files were modified.
+
+## Verification and measured limits
+
+`MixedForestIntegrationChecks.Begin()` passed actual main-menu generation, grounded
+placement, water/road/camp exclusion, tree/understory toggles, native fall/winter and
+summer restoration, neighbor/cache reopening, disk round trip, legacy recipe behavior,
+and an L-shaped union with its excluded corner empty. New overview8.82s; first512m
+district5.01s with2,260 trees; placement signature788453d361dc1471. Native Y values
+may re-seat against quantized terrain on cache load; planar ecology and mixed-tree
+signature were preserved exactly. Reports/snapshots are under ignored `Library/`.
+
+Previous8165-tree tests demonstrated the limits of batching: distant instancing
+reduced median CPU frame time but close grouping regressed, hence the hybrid cutoff.
+Simpler distant shadows reduced repeated L5 panning p95 from92.95ms to42.63ms while
+median remained~39ms. These were editor observations, not player/FPS guarantees;
+absolute frame times across sessions/resolutions are not comparable. User accepted
+the appearance and the more consistent L5 result. Preserve those visual decisions.
+
+Region creation/district loading optimizations from this session are also retained:
+exact indexed route distances/current coordinates, bounded bank work, worker control
+map sampling and skipping snow meshes outside summit footprints. See
+`Documentation/03_Technical/Region_Loading.md` and `LoadingPerformanceChecks`.
+
+Detailed experimental logs are retained locally in the chat workspace's
+`work/mixed-forest-integration/Handoff-Experimental-Archive.txt`; old trial scripts
+may reference the former `SpatialForestTrialRenderer` name and must not be rerun
+blindly against the production integration.
+
 # Session checkpoint — November 1, 2026
 
 Read this section before the chronological notes below. Current approved result: Indigenous Camps option (off by default; seeded2–3 when enabled), restored camera-fitted shadows, muted teal water, asynchronous Save District feedback, balanced tree colors and configurable richer meadow grass. New region wizard uses geography version12 plus independent waterwayVersion5. Streams are seeded6–20feet wide per route (no along-route width modulation), with irregular bends, separated corridors, mountain avoidance, near-ground water, Pass17 rocks/pebbles/shrubs, settlement dirt banks and mildly sedimented water. Older saved routes retain geometry/width; appearance integration applies to new-style streams on load.

@@ -15,6 +15,8 @@ namespace CityForge.World
         public int districtGrid=8;
         // Missing from older recipes: no retroactive settlements.
         public int nativeCampVersion;
+        // New wizard recipes opt in; missing/zero keeps existing saved forests.
+        public int forestAppearanceVersion;
         // Opt-in only: old recipes retain their connected, broad waterways.
         public int waterwayVersion;
         public int GridSide=>version>=3?districtGrid:2;
@@ -31,6 +33,7 @@ namespace CityForge.World
             if((version!=1&&version!=2&&version!=3&&version!=4&&version!=5&&version!=6&&version!=7&&version!=8&&version!=9&&version!=10&&version!=11&&version!=12)||(int)terrainShape<0||(int)terrainShape>7||topography<0||topography>4||rivers<0||rivers>3||streams<0||streams>2||(int)climate<0||(int)climate>1||(int)moisture<0||(int)moisture>2||(int)vegetation<0||(int)vegetation>2)
                 throw new ArgumentException("Unsupported region creation settings.");
             if(waterwayVersion<0||waterwayVersion>5)throw new ArgumentException("Unsupported waterway version.");
+            if(forestAppearanceVersion<0||forestAppearanceVersion>1)throw new ArgumentException("Unsupported forest appearance version.");
             if(nativeCampVersion<0||nativeCampVersion>1)throw new ArgumentException("Unsupported settlement content version.");
             if(version>=3&&(districtGrid<2||districtGrid>16||512%districtGrid!=0))throw new ArgumentException("Unsupported district grid.");
         }
@@ -40,7 +43,7 @@ namespace CityForge.World
     {
         public static IEnumerator GenerateStages(string name,RegionSize size,RegionCreationSettings settings,Action<SavedRegionSnapshot> complete,Action<string,float> progress)
         {
-            settings.Validate();var recipe=JsonUtility.FromJson<RegionCreationSettings>(JsonUtility.ToJson(settings));float[,] geography=null;
+            var generationTimer=System.Diagnostics.Stopwatch.StartNew();settings.Validate();var recipe=JsonUtility.FromJson<RegionCreationSettings>(JsonUtility.ToJson(settings));float[,] geography=null;
             if(recipe.version>=4){
                 progress?.Invoke("Preparing MapMagic geography graph",.04f);yield return null;
                 using(var source=new MapMagicRegionGeography(recipe,size)){
@@ -49,10 +52,11 @@ namespace CityForge.World
                     if(task.IsFaulted)throw task.Exception.GetBaseException();geography=task.Result;
                 }
             }
+            Debug.Log("Region generation profile: MapMagic="+generationTimer.Elapsed.TotalMilliseconds.ToString("F1")+"ms");generationTimer.Restart();
             progress?.Invoke("Connecting waterways and biomes",.13f);yield return null;
             var composition=Task.Run(()=>Generate(name,size,recipe,geography));
             while(!composition.IsCompleted)yield return null;
-            if(composition.IsFaulted)throw composition.Exception.GetBaseException();complete(composition.Result);
+            if(composition.IsFaulted)throw composition.Exception.GetBaseException();Debug.Log("Region generation profile: composition="+generationTimer.Elapsed.TotalMilliseconds.ToString("F1")+"ms");complete(composition.Result);
         }
         public static SavedRegionSnapshot Generate(string name,RegionSize size,RegionCreationSettings settings,float[,] geography=null)
         {

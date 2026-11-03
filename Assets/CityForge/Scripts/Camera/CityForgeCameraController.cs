@@ -36,8 +36,12 @@ namespace CityForge.CameraSystem
         public void SetZoomLevel(int level)
         {
             ZoomLevel = Mathf.Clamp(level, 0, 5);
-            // Halve the visible span at the three nearest steps while preserving the wider region views.
-            if (regionSide > 0f) orthographicSize = farthestSize / Mathf.Pow(2f, 5-ZoomLevel) / (ZoomLevel <= 1 ? 1.25f : 1f) * (ZoomLevel <= 2 ? .5f : 1f);
+            if (regionSide > 0f) {
+                orthographicSize = farthestSize / Mathf.Pow(2f, 5-ZoomLevel) / (ZoomLevel <= 1 ? 1.25f : 1f) * (ZoomLevel <= 2 ? .5f : 1f);
+                // District navigation has even 2x steps beyond level 2; keep relief-map framing unchanged.
+                var region = GetComponentInParent<World.PrototypeRegionView>();
+                if (ZoomLevel >= 3 && (meadowFraming || (region && region.SelectedDistrict >= 0))) orthographicSize *= .5f;
+            }
             ApplyPose(); ZoomChanged?.Invoke(ZoomLevel);
         }
 
@@ -53,7 +57,7 @@ namespace CityForge.CameraSystem
             get
             {
                 if (regionSide <= 0f) return 1f;
-                float multiplier = ZoomLevel <= 1 ? 1.69f : 1f;
+                float multiplier = ZoomLevel == 4 ? 1.3f : ZoomLevel <= 1 ? 1.69f : 1f;
                 // Close navigation: the original 2x boost, plus the requested further 25%.
                 return ZoomLevel >= 1 && ZoomLevel <= 3 ? multiplier * 2.5f : multiplier;
             }

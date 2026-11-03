@@ -4,6 +4,13 @@ Read `HANDOFF.md` before changing map generation, terrain, foliage, or rendering
 
 Never restore the retired prototype broadleaf forest or its distant silhouettes as a fallback. Use `MeadowRuntimeBaseline`, `MeadowDistrictLandscape`, and `SeasonalTreeLibrary`; preserve approved material/shader appearance and ocean settings. Historical asset evaluation/import scripts are not gameplay baselines.
 
+New wizard/default main-menu temperate recipes use forestAppearanceVersion1 and the
+approved private MixedForestLibrary at Trees/ApprovedMixedForest/V1/Library. Preserve
+its chestnut/locust/larch palette, fuller distance crowns, cheap distant shadows and
+hybrid near/instanced rendering. Missing/zero forest versions keep existing forests;
+native fall/winter and tropical vegetation remain authoritative. Read
+Documentation/03_Technical/Approved_Mixed_Forest.md before changing this integration.
+
 The Git repository is public and source-only. Do not add licensed artwork, imported asset packs, Crest package source, builds, or saved maps.
 
 ## Regional overview and expanded grid

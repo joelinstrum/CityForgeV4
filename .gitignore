@@ -215,3 +215,7 @@ venv/
 !/Assets/CityForge/Resources/Region/MeadowGrassSettings.asset.meta
 !/Assets/CityForge/Resources/Region/MeadowGrassGrade.shader
 !/Assets/CityForge/Resources/Region/MeadowGrassGrade.shader.meta
+
+# Approved purchased mixed-forest runtime library and prefabs remain private.
+/Assets/CityForge/Resources/Trees/ApprovedMixedForest/
+/Assets/CityForge/Resources/Trees/ApprovedMixedForest.meta

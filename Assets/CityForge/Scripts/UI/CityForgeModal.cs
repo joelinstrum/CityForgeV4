@@ -319,7 +319,7 @@ namespace CityForge.UI
         Dropdown TerrainChoice(string name) => createRegionTerrainIntro.transform.Find(name+"Dropdown").GetComponent<Dropdown>();
         public World.RegionCreationSettings ReadCreationSettings()
         {
-            return new World.RegionCreationSettings { waterwayVersion=5,nativeCampVersion=generationCamps&&generationCamps.value==1?1:0,seed=generationSeed&&int.TryParse(generationSeed.text,out var seed)?seed:World.PrototypeRegionData.DefaultSeed,
+            return new World.RegionCreationSettings { forestAppearanceVersion=1,waterwayVersion=5,nativeCampVersion=generationCamps&&generationCamps.value==1?1:0,seed=generationSeed&&int.TryParse(generationSeed.text,out var seed)?seed:World.PrototypeRegionData.DefaultSeed,
                 terrainShape=terrainShapeChoice?TerrainShapes[terrainShapeChoice.value]:World.RegionTerrainShape.Land,peninsulaNorthToSouth=true,
                 climate=TerrainChoice("Climate").value==3?World.RegionClimate.Tropical:World.RegionClimate.Temperate,
                 moisture=TerrainChoice("Climate").value==3?World.RegionMoisture.Balanced:(World.RegionMoisture)TerrainChoice("Climate").value,vegetation=(World.RegionVegetation)TerrainChoice("Land Type").value,

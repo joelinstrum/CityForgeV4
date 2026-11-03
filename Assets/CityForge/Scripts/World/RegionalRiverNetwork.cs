@@ -131,6 +131,7 @@ namespace CityForge.World
         }
         public static float BankDistance(RegionWaterBody body,float u,float v)
         {
+            if(body.channelVersion>=1)return body.IndexedCenterlineDistance(new Vector2(u,v))-body.halfWidthNormalized;
             var points=body.centerline;float distance=float.PositiveInfinity;var point=new Vector2(u,v);for(int k=0;k<points.Length-1;k++){var a=points[k];var delta=points[k+1]-a;float t=Mathf.Clamp01(Vector2.Dot(point-a,delta)/delta.sqrMagnitude);distance=Mathf.Min(distance,Vector2.Distance(point,a+delta*t));}return distance-body.halfWidthNormalized;
         }
     }

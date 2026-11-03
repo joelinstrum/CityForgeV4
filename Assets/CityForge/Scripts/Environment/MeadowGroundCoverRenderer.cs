@@ -132,7 +132,9 @@ namespace CityForge
                 // Leave per-camera frustum culling to Unity so Crest reflections retain their own visibility.
                 var parameters = new RenderParams(batch.material) { worldBounds = batch.bounds,
                     shadowCastingMode = ShadowCastingMode.Off, receiveShadows = true };
-                Graphics.RenderMeshInstanced(parameters, batch.mesh, batch.submesh, matrices);
+                if(combineCompatibleBatches && Application.isPlaying)
+                    PerspectiveMeadowBatches.Queue(batch,matrices);
+                else Graphics.RenderMeshInstanced(parameters, batch.mesh, batch.submesh, matrices);
                 submittedInstances += matrices.Length; submittedBatches++;
             }
             submissionMilliseconds = (Stopwatch.GetTimestamp() - start) * 1000.0 / Stopwatch.Frequency;
