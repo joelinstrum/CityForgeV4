@@ -59,12 +59,14 @@ namespace CityForge.World
             QualitySettings.vSyncCount=FramePacing60?interval:0;Application.targetFrameRate=-1;
         }
         public bool TreesEnabled {get;private set;}
+        public MixedDistrictForest MixedForest {get;private set;}
         const string TreesPreference="CityForge.Meadow.Trees";
         public void SetTreesEnabled(bool enabled,bool remember=false)
         {
             bool changed=TreesEnabled!=enabled;TreesEnabled=enabled;
             if(DisplayTerrain)DisplayTerrain.drawTreesAndFoliage=enabled;
             if(remember){PlayerPrefs.SetInt(TreesPreference,enabled?1:0);PlayerPrefs.Save();}
+            if(MixedForest)MixedForest.RefreshVisibility();
             if(changed)RefreshLakeEnvironments();
             var caption=View.transform.Find("RegionHud/Trees/Caption");if(caption)caption.GetComponent<UnityEngine.UI.Text>().text="TREES: "+(enabled?"ON":"OFF");
         }
@@ -94,6 +96,7 @@ namespace CityForge.World
             }
             var approved=GetComponent<ApprovedDistrictForest>();
             if(approved)source=approved.NativePresentation(source);
+            if(MixedForest)source=MixedForest.NativePresentation(source);
             if(Palms)source=Palms.PresentNative(source);
             terrainData.SetTreeInstances(ForestTreeMix.Presentation(source,Baseline),false);
         }
@@ -144,6 +147,7 @@ namespace CityForge.World
             var prototypes=TreePrototypes(prefabs);
             terrainData.treePrototypes=prototypes;terrainData.RefreshPrototypes();
             if(fullTreeInstances!=null)SetNativePresentation(SmallPlantsEnabled?fullTreeInstances:matureTreeInstances);
+            if(MixedForest)MixedForest.RefreshVisibility();
             DisplayTerrain.Flush();RefreshLakeEnvironments();
         }
         void RefreshLakeEnvironments(){foreach(var lake in GetComponentsInChildren<LakeWaterRenderer>())if(lake.CaptureReady)lake.RefreshEnvironment();}
@@ -269,7 +273,7 @@ namespace CityForge.World
                 yield return BuildControlMapStages(value=>progress?.Invoke("Painting meadow and mountain surfaces",.44f+value*.25f));
                 timings.Append("control map=").Append(paintTimer.ElapsedMilliseconds).Append(" ms; ");
             }
-            if(GeneratedRiverDistrict)yield return PaintGeneratedRiverBanks();
+            if(GeneratedRiverDistrict){progress?.Invoke("Painting generated stream banks",.69f);yield return PaintGeneratedRiverBanks();}
             progress?.Invoke("Building roads and rocks",.7f);yield return null;
             Measure("road mesh",BuildRoadMesh);if(View.MountainTest)Measure("mountain outcrops",()=>gameObject.AddComponent<MountainRockRenderer>().Initialize(this));if(View.RiverBedVersion>=2)Measure("river rocks",()=>gameObject.AddComponent<RiverBedRockRenderer>().Initialize(this));
             progress?.Invoke("Applying landscape lighting",.78f);yield return null;Measure("presentation",BuildPresentation);
@@ -278,7 +282,7 @@ namespace CityForge.World
             if(!ApprovedForestAssets.CheckpointReplay&&!Water&&!View.Waterless&&!View.MinimalRiverCrest){
                 var approvedWater=ApprovedRiverWater.Initialize(this);while(approvedWater.MoveNext())yield return approvedWater.Current;
             }
-            if(GeneratedStreamAppearance.Applies(View)&&!IsRegionOverview){var decoration=gameObject.AddComponent<GeneratedStreamAppearance>();var setup=decoration.InitializeStages(this);while(setup.MoveNext())yield return setup.Current;}
+            if(GeneratedStreamAppearance.Applies(View)&&!IsRegionOverview){progress?.Invoke("Placing stream stones and shrubs",.90f);yield return null;var decoration=gameObject.AddComponent<GeneratedStreamAppearance>();var setup=decoration.InitializeStages(this);while(setup.MoveNext())yield return setup.Current;}
             if(StreamRockTestRegion.Applies(View)&&!IsRegionOverview)Measure("stream rock study",()=>gameObject.AddComponent<StreamRockStudy>().Initialize(this));
             if(StreamRockTestRegion.DeeperBed(View)&&!IsRegionOverview)Measure("deeper stream bed",()=>gameObject.AddComponent<StreamBedDepthStudy>().Initialize(this));
             if(StreamRockTestRegion.StockedFish(View)&&!IsRegionOverview)Measure("bluegill stocking",()=>gameObject.AddComponent<StreamFishOption>().Initialize(this));
@@ -296,11 +300,19 @@ namespace CityForge.World
             RefreshForestSpecies(false);
             SetTreesEnabled(true);
             progress?.Invoke("Preparing approved forest canopy",.97f);yield return null;
-            if(!ApprovedForestAssets.CheckpointReplay){var forest=gameObject.AddComponent<ApprovedDistrictForest>();forest.Initialize(this);if(PanningTestDistricts.TryGetPercent(View.SavedRegionId,out int percent))forest.SetDiagnosticDensity(percent);if(forest.ReplacesNativeTrees)SetNativePresentation(SmallPlantsEnabled?fullTreeInstances:matureTreeInstances);}
+            if(!ApprovedForestAssets.CheckpointReplay){
+                var forest=gameObject.AddComponent<ApprovedDistrictForest>();forest.Initialize(this);
+                if(PanningTestDistricts.TryGetPercent(View.SavedRegionId,out int percent))forest.SetDiagnosticDensity(percent);
+                if(MixedDistrictForest.Applies(this)){
+                    MixedForest=gameObject.AddComponent<MixedDistrictForest>();
+                    var mixed=MixedForest.InitializeStages(this);while(mixed.MoveNext())yield return mixed.Current;
+                }
+                if(forest.ReplacesNativeTrees)SetNativePresentation(SmallPlantsEnabled?fullTreeInstances:matureTreeInstances);
+            }
             if(!IsRegionOverview&&View.NativeCamps.Length>0){PaintCampCourtyards();gameObject.AddComponent<NativeCampDistrict>().Initialize(this);}
             RefreshWildlife();
-            if(!IsRegionOverview&&MountainSummitSnow.Applies(View)){var caps=new GameObject("Permanent summit snow");caps.transform.SetParent(transform,false);caps.AddComponent<MountainSummitSnow>().Initialize(this);}
-            if(!IsRegionOverview)gameObject.AddComponent<DistrictWeather>().Initialize(this);
+            if(!IsRegionOverview&&MountainSummitSnow.Applies(View)){progress?.Invoke("Preparing summit snow",.98f);yield return null;var caps=new GameObject("Permanent summit snow");caps.transform.SetParent(transform,false);caps.AddComponent<MountainSummitSnow>().Initialize(this);}
+            if(!IsRegionOverview){progress?.Invoke("Preparing district weather",.99f);yield return null;gameObject.AddComponent<DistrictWeather>().Initialize(this);}
         }
         DistrictWildlife wildlife;
         public DistrictWildlife Wildlife=>wildlife;
@@ -402,7 +414,8 @@ namespace CityForge.World
         // All placement/painting callers only need distances within this radius. The
         // segment AABBs are expanded by that radius, so skipped segments cannot affect
         // any road transition or exclusion. Return a saturated distance outside it.
-        public float RoadDistance(Vector2 p)
+        public float RoadDistance(Vector2 p)=>SampleRoad(p,roadCells,Road,roadQueryLimit);
+        static float SampleRoad(Vector2 p,Dictionary<Vector2Int,List<int>> roadCells,List<Vector2> Road,float roadQueryLimit)
         {
             if(!roadCells.TryGetValue(Vector2Int.FloorToInt(p/RoadCellSide),out var segments))return roadQueryLimit;
             float best=roadQueryLimit*roadQueryLimit;
@@ -435,9 +448,10 @@ namespace CityForge.World
             for(int dz=-1;dz<=1;dz++)for(int dx=-1;dx<=1;dx++)if(canopy.TryGetValue(cell+new Vector2Int(dx,dz),out var list))foreach(var tree in list){float d=Vector2.Distance(p,tree)/Baseline.canopyRadius;if(d<1)value+=Mathf.SmoothStep(0,1,1-d)*.6f;}
             return Mathf.Clamp01(value);
         }
-        public float Canopy(Vector2 p)
+        public float Canopy(Vector2 p)=>SampleCanopy(p,canopy,Baseline.canopyRadius);
+        static float SampleCanopy(Vector2 p,Dictionary<Vector2Int,List<Vector2>> canopy,float radius)
         {
-            float radius=Baseline.canopyRadius,radiusSquared=radius*radius,value=0;
+            float radiusSquared=radius*radius,value=0;
             var original=Vector2Int.FloorToInt(p/16);
             var low=Vector2Int.Max(original-Vector2Int.one,Vector2Int.FloorToInt((p-Vector2.one*radius)/16));
             var high=Vector2Int.Min(original+Vector2Int.one,Vector2Int.FloorToInt((p+Vector2.one*radius)/16));
@@ -506,16 +520,50 @@ namespace CityForge.World
             }
             terrainData.SetTreeInstances(trees.ToArray(),true);
         }
+        sealed class ControlMapSampling
+        {
+            public int n;public float[,,] maps;public Vector2 origin,offset;public float side,mapSide,roadWidth,shoreWidth,canopyRadius,roadLimit;
+            public PrototypeRegionData data;public RegionBiomeMap biomes;
+            public Dictionary<Vector2Int,List<Vector2>> canopy;
+            public Dictionary<Vector2Int,List<int>> roadCells;public List<Vector2> road;
+            public void FillRow(int z){for(int x=0;x<n;x++){
+                var p=origin+new Vector2(x/(float)(n-1),z/(float)(n-1))*side;
+                var ecology=biomes.At(p/mapSide+Vector2.one*.5f);
+                float forest=ecology.woodland,can=SampleCanopy(p,canopy,canopyRadius),patch=Mathf.PerlinNoise(p.x/13+offset.x+8,p.y/13+offset.y-8);
+                float roadMask=1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(roadWidth*.35f,roadWidth,SampleRoad(p,roadCells,road,roadLimit)));
+                float distance=RegionalRiverNetwork.SignedDistance(data,p/mapSide+Vector2.one*.5f)*mapSide;
+                float bank=(1-Mathf.SmoothStep(0,1,Mathf.Abs(distance)/shoreWidth))*Mathf.SmoothStep(0,1,Mathf.InverseLerp(.58f,.78f,patch));
+                float soil=roadMask*.12f+bank*.23f+ecology.dryness*.08f,grass=Mathf.Max(0,1-soil),litter=can*(.5f+patch*.25f);
+                maps[z,x,0]=soil;maps[z,x,1]=grass*(1-forest*.4f)*(1-litter);maps[z,x,2]=grass*forest*.4f*(1-litter);maps[z,x,3]=grass*litter;
+            }}
+        }
+        ControlMapSampling CreateControlMapSampling(int n,float[,,] maps){
+            var trees=new Dictionary<Vector2Int,List<Vector2>>();foreach(var entry in canopy)trees.Add(entry.Key,new List<Vector2>(entry.Value));
+            var cells=new Dictionary<Vector2Int,List<int>>();foreach(var entry in roadCells)cells.Add(entry.Key,new List<int>(entry.Value));
+            // Warm the immutable bounds cache before concurrent readers start.
+            foreach(var body in View.Data.WaterBodies){var bounds=body.Bounds;}
+            return new ControlMapSampling{n=n,maps=maps,origin=Origin,offset=SeedOffset,side=Side,mapSide=View.MapSide,roadWidth=Baseline.roadWidth,shoreWidth=Baseline.shorelineWidth,canopyRadius=Baseline.canopyRadius,roadLimit=roadQueryLimit,data=View.Data,biomes=View.Data.Biomes,canopy=trees,roadCells=cells,road=new List<Vector2>(Road)};
+        }
         void BuildControlMap(){RegionBuildSteps.Complete(BuildControlMapStages());}
         IEnumerator BuildControlMapStages(Action<float> progress=null)
         {
-            int n=terrainData.alphamapResolution;var maps=new float[n,n,Baseline.layers.Length];
+            int n=terrainData.alphamapResolution;var maps=new float[n,n,Baseline.layers.Length];progress?.Invoke(0);
             var batch=System.Diagnostics.Stopwatch.StartNew();
-            for(int z=0;z<n;z++){for(int x=0;x<n;x++){
+            // Generated inland maps use immutable managed sampling inputs. Keep
+            // TerrainData, resource access and uploads on the Unity thread.
+            if(View.Data.Biomes!=null&&RegionalRiverNetwork.HasContinuousChannels(View.Data)&&!View.Coastline&&Application.isPlaying){
+                var sampling=CreateControlMapSampling(n,maps);
+                using(var cancel=new System.Threading.CancellationTokenSource()){
+                    var task=System.Threading.Tasks.Task.Run(()=>System.Threading.Tasks.Parallel.For(0,n,new System.Threading.Tasks.ParallelOptions{MaxDegreeOfParallelism=Mathf.Clamp(System.Environment.ProcessorCount-2,1,8),CancellationToken=cancel.Token},sampling.FillRow));
+                    try{while(!task.IsCompleted){yield return null;}if(task.IsFaulted)throw task.Exception.GetBaseException();}
+                    finally{cancel.Cancel();}
+                }
+            }else for(int z=0;z<n;z++){for(int x=0;x<n;x++){
                 var p=Origin+new Vector2(x/(float)(n-1),z/(float)(n-1))*Side;
-                float forest=Woodland(p),can=Canopy(p),patch=Noise(p,13,8),road=1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(Baseline.roadWidth*.35f,Baseline.roadWidth,RoadDistance(p)));
+                var ecology=View.Data.Biomes?.At(p/View.MapSide+Vector2.one*.5f);
+                float forest=ecology?.woodland??Woodland(p),can=Canopy(p),patch=Noise(p,13,8),road=1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(Baseline.roadWidth*.35f,Baseline.roadWidth,RoadDistance(p)));
                 float bank=(1-Mathf.SmoothStep(0,1,Mathf.Abs(ShoreDistance(p))/Baseline.shorelineWidth))*Mathf.SmoothStep(0,1,Mathf.InverseLerp(.58f,.78f,patch));
-                float dry=View.Data.Biomes!=null?View.Data.Biomes.At(p/View.MapSide+Vector2.one*.5f).dryness:0;
+                float dry=ecology?.dryness??0;
                 float soil=road*.12f+bank*.23f+dry*.08f;float grass=Mathf.Max(0,1-soil);float litter=can*(.5f+patch*.25f);
                 maps[z,x,0]=soil;maps[z,x,1]=grass*(1-forest*.4f)*(1-litter);maps[z,x,2]=grass*forest*.4f*(1-litter);maps[z,x,3]=grass*litter;
             }
@@ -783,14 +831,36 @@ namespace CityForge.World
             var data=input.GetData<FlowTextureLodInputData>();data.Texture=texture;data.Multiplier=new Vector4(speed,speed,1,1);data.NegativeValues=false;riverAnimationFlow=texture;riverAnimationStrength=speed;
         }
         bool GeneratedRiverDistrict=>!View.Coastline&&View.CreationSettings?.version>=5&&!View.Waterless;
-        IEnumerator PaintGeneratedRiverBanks()
+        IEnumerator PaintGeneratedRiverBanks(bool restrictRows=true)
         {
             // Also apply to restored caches, without re-laying roads or moving trees.
             int n=terrainData.alphamapResolution;var maps=terrainData.GetAlphamaps(0,0,n,n);
             bool generatedProfile=GeneratedStreamAppearance.Applies(View);
             var timer=System.Diagnostics.Stopwatch.StartNew();
+            // Every generated bank formula is zero beyond16m (stream dressing
+            // is bounded to5m). Restrict work to conservative route bounds instead
+            // of querying every texel in the entire district. Study fixtures retain
+            // their independent appearance rules and full scan.
+            bool bounded=restrictRows&&RegionalRiverNetwork.HasContinuousChannels(View.Data)&&!StreamRockTestRegion.Applies(View);
+            int[] rowFirst=null,rowLast=null;
+            if(bounded){
+                rowFirst=new int[n];rowLast=new int[n];for(int z=0;z<n;z++){rowFirst[z]=n;rowLast[z]=-1;}
+                float margin=(RegionalRiverNetwork.HasGroundFollowingWater(View.Data)?5f:16f)/View.MapSide;
+                void Include(Rect bounds){
+                    int low=Mathf.Max(0,Mathf.FloorToInt(((bounds.yMin-.5f)*View.MapSide-Origin.y)/Side*(n-1))),high=Mathf.Min(n-1,Mathf.CeilToInt(((bounds.yMax-.5f)*View.MapSide-Origin.y)/Side*(n-1)));
+                    int left=Mathf.Max(0,Mathf.FloorToInt(((bounds.xMin-.5f)*View.MapSide-Origin.x)/Side*(n-1))),right=Mathf.Min(n-1,Mathf.CeilToInt(((bounds.xMax-.5f)*View.MapSide-Origin.x)/Side*(n-1)));
+                    if(left>right)return;for(int z=low;z<=high;z++){rowFirst[z]=Mathf.Min(rowFirst[z],left);rowLast[z]=Mathf.Max(rowLast[z],right);}
+                }
+                foreach(var body in View.Data.WaterBodies){
+                    if(body.channelVersion>=1&&body.centerline!=null){
+                        float reach=body.halfWidthNormalized+margin;var padding=Vector2.one*reach;
+                        for(int i=1;i<body.centerline.Length;i++){var a=body.centerline[i-1];var b=body.centerline[i];Include(Rect.MinMaxRect(Mathf.Min(a.x,b.x)-padding.x,Mathf.Min(a.y,b.y)-padding.y,Mathf.Max(a.x,b.x)+padding.x,Mathf.Max(a.y,b.y)+padding.y));}
+                    }else{var bounds=body.Bounds;bounds.min-=Vector2.one*margin;bounds.max+=Vector2.one*margin;Include(bounds);}
+                }
+            }
             for(int z=0;z<n;z++){
-                for(int x=0;x<n;x++){
+                int first=bounded?rowFirst[z]:0,last=bounded?rowLast[z]:n-1;
+                for(int x=first;x<=last;x++){
                     var p=Origin+new Vector2(x/(float)(n-1),z/(float)(n-1))*Side;
                     float distance=ShoreDistance(p);Vector2 coordinates=default;float streamDistance=0;
                     bool generatedStream=generatedProfile&&GeneratedStreamAppearance.Near(View,p,out coordinates,out streamDistance);

@@ -19,6 +19,16 @@ namespace CityForge.UI
         Action completed;Action<Exception> failed;
         readonly Stack<IEnumerator> steps=new();
         bool finished;
+        readonly System.Diagnostics.Stopwatch loadTimer=System.Diagnostics.Stopwatch.StartNew();
+        readonly Dictionary<string,double> stageWork=new();
+        readonly Dictionary<string,double> stageWall=new();
+        double stageStarted;
+        void RecordStageWall(){if(Stage!=null){stageWall.TryGetValue(Stage,out double value);stageWall[Stage]=value+loadTimer.Elapsed.TotalMilliseconds-stageStarted;}stageStarted=loadTimer.Elapsed.TotalMilliseconds;}
+        string TimingReport(){
+            RecordStageWall();var report=new System.Text.StringBuilder("Loading profile: total=").Append(loadTimer.Elapsed.TotalSeconds.ToString("F3")).Append("s");
+            foreach(var entry in stageWall){stageWork.TryGetValue(entry.Key,out double work);report.Append("\n  ").Append(entry.Key).Append(": wall=").Append(entry.Value.ToString("F1")).Append("ms, main-thread steps=").Append(work.ToString("F1")).Append("ms");}
+            return report.ToString();
+        }
         public static RegionLoadingOverlay Show(string regionName,Font font,bool district=false)
         {
             var root=new GameObject("RegionLoadingOverlay",typeof(RectTransform),typeof(Canvas),typeof(CanvasScaler),typeof(GraphicRaycaster));
@@ -43,7 +53,7 @@ namespace CityForge.UI
         {
             if(IsLoading)return;IsLoading=true;completed=onComplete;failed=onFailure;StartCoroutine(Load(info,menu));
         }
-        void Advance(string stage,float progress){Stage=stage;Progress=Mathf.Max(Progress,Mathf.Clamp01(progress));fill.anchorMax=new Vector2(Progress,1);stageLabel.text=stage;}
+        void Advance(string stage,float progress){if(Stage!=stage)RecordStageWall();Stage=stage;Progress=Mathf.Max(Progress,Mathf.Clamp01(progress));fill.anchorMax=new Vector2(Progress,1);stageLabel.text=stage;}
         void Update(){if(IsLoading&&stageLabel)stageLabel.text=Stage+new string('.',(int)(Time.unscaledTime*2)%4);}
         IEnumerator Load(SavedRegionInfo info,Canvas menu)
         {
@@ -77,7 +87,7 @@ namespace CityForge.UI
                 var current=steps.Peek();bool more=false;object yielded=null;var timer=System.Diagnostics.Stopwatch.StartNew();string stage=Stage;
                 try{more=current.MoveNext();if(more)yielded=current.Current;}
                 catch(Exception e){error=e;break;}
-                finally{if(timer.ElapsedMilliseconds>LongestStepMilliseconds){LongestStepMilliseconds=timer.ElapsedMilliseconds;LongestStepStage=stage;}}
+                finally{string key=stage??"Preparing";stageWork.TryGetValue(key,out double work);stageWork[key]=work+timer.Elapsed.TotalMilliseconds;if(timer.ElapsedMilliseconds>LongestStepMilliseconds){LongestStepMilliseconds=timer.ElapsedMilliseconds;LongestStepStage=stage;}}
                 if(!more){steps.Pop();(current as IDisposable)?.Dispose();continue;}
                 if(yielded is IEnumerator nested){steps.Push(nested);continue;}
                 yield return yielded;
@@ -86,7 +96,7 @@ namespace CityForge.UI
             Advance("Ready",1);yield return null;yield return null;Finish(null);
         }
         void DisposeSteps(){while(steps.Count>0){try{(steps.Pop() as IDisposable)?.Dispose();}catch(Exception error){Debug.LogException(error);}}}
-        void Finish(Exception error){IsLoading=false;finished=true;completed?.Invoke();if(error!=null)failed?.Invoke(error);Destroy(gameObject);}
+        void Finish(Exception error){Debug.Log(TimingReport());IsLoading=false;finished=true;completed?.Invoke();if(error!=null)failed?.Invoke(error);Destroy(gameObject);}
         void OnDestroy(){DisposeSteps();if(!finished)completed?.Invoke();}
     }
 }

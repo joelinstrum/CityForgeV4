@@ -30,10 +30,16 @@ namespace CityForge.World
         Mesh mesh;Material material;Texture2D mask;
         public void Initialize(MeadowDistrictLandscape land)
         {
-            var peaks=Select(land.View.Data,MountainBorderVariation.CapCount(land.View));var td=land.DisplayTerrain.terrainData;int n=td.heightmapResolution;
+            var peaks=Select(land.View.Data,MountainBorderVariation.CapCount(land.View));
+            var district=new Rect(land.Origin/land.View.MapSide+Vector2.one*.5f,Vector2.one*(land.Side/land.View.MapSide));
+            bool possible=false;foreach(var peak in peaks){var influence=new Rect(peak.uv-Vector2.one*.075f,Vector2.one*.15f);if(district.Overlaps(influence)){possible=true;break;}}
+            // Cover is identically zero outside the selected summit footprints.
+            // Lowland districts must not build and reject a million-vertex snow slab.
+            if(!possible){Destroy(gameObject);return;}
+            var td=land.DisplayTerrain.terrainData;int n=td.heightmapResolution;
             var heights=td.GetHeights(0,0,n,n);var vertices=new Vector3[n*n];var uv=new Vector2[n*n];var pixels=new Color[n*n];var triangles=new int[(n-1)*(n-1)*6];int t=0;bool any=false;
             for(int z=0;z<n;z++)for(int x=0;x<n;x++){int i=z*n+x;float u=x/(float)(n-1),v=z/(float)(n-1);var p=land.Origin+new Vector2(u,v)*land.Side;var regional=p/land.View.MapSide+Vector2.one*.5f;
-                float cover=Cover(peaks,regional,heights[z,x],land.Seed);bool dry=land.Contains(p)&&land.WaterDistance(p)>1.2f&&land.ShoreDistance(p)>.6f;bool snowy=dry&&cover>.4f;any|=snowy;pixels[i]=snowy?Color.white:Color.black;
+                float cover=Cover(peaks,regional,heights[z,x],land.Seed);bool snowy=cover>.4f&&land.Contains(p)&&land.WaterDistance(p)>1.2f&&land.ShoreDistance(p)>.6f;any|=snowy;pixels[i]=snowy?Color.white:Color.black;
                 vertices[i]=new Vector3(u*land.Side,heights[z,x]*td.size.y+.025f,v*land.Side);uv[i]=new Vector2(u,v);
                 if(x<n-1&&z<n-1){triangles[t++]=i;triangles[t++]=i+n;triangles[t++]=i+1;triangles[t++]=i+1;triangles[t++]=i+n;triangles[t++]=i+n+1;}
             }

@@ -32,6 +32,68 @@ namespace CityForge.World
                 if(distance<best){best=distance;downstream=-delta.normalized;}}
             return best;
         }
+        // An exact segment hierarchy for immutable generated routes. This changes
+        // query cost, not the stored curve or the distance field's resolution.
+        [NonSerialized] CenterlineIndex distanceIndex;
+        public float IndexedCenterlineDistance(Vector2 point)
+        {
+            if(centerline==null||centerline.Length<2)return float.PositiveInfinity;
+            if(distanceIndex==null||distanceIndex.Points!=centerline)distanceIndex=new CenterlineIndex(centerline);
+            return distanceIndex.Distance(point);
+        }
+        public bool IndexedCurrentCoordinates(Vector2 point,float side,ref float best,out Vector4 result)
+        {
+            if(centerline==null||centerline.Length<2){result=default;return false;}
+            if(distanceIndex==null||distanceIndex.Points!=centerline)distanceIndex=new CenterlineIndex(centerline);
+            return distanceIndex.CurrentCoordinates(point,side,ref best,out result);
+        }
+        sealed class CenterlineIndex
+        {
+            public readonly Vector2[] Points;
+            struct Node {public Vector2 min,max;public int first,count,left,right;}
+            readonly Node[] nodes;readonly float[] lengths,stations;int used;
+            public CenterlineIndex(Vector2[] points){
+                Points=points;nodes=new Node[points.Length*2];lengths=new float[points.Length-1];stations=new float[points.Length-1];float station=0;
+                for(int i=0;i<lengths.Length;i++){stations[i]=station;lengths[i]=(points[i+1]-points[i]).magnitude;if(lengths[i]>=.000001f)station+=lengths[i];}
+                Build(0,points.Length-1);
+            }
+            int Build(int first,int count){
+                int index=used++;var min=Points[first];var max=min;
+                for(int i=first+1;i<=first+count;i++){min=Vector2.Min(min,Points[i]);max=Vector2.Max(max,Points[i]);}
+                var node=new Node{min=min,max=max,first=first,count=count,left=-1,right=-1};
+                if(count>8){int half=count/2;node.left=Build(first,half);node.right=Build(first+half,count-half);}
+                nodes[index]=node;return index;
+            }
+            static float LowerBound(Node node,Vector2 p){float x=Mathf.Max(0,Mathf.Max(node.min.x-p.x,p.x-node.max.x)),y=Mathf.Max(0,Mathf.Max(node.min.y-p.y,p.y-node.max.y));return x*x+y*y;}
+            public float Distance(Vector2 point){float best=float.PositiveInfinity;Search(0,point,ref best);return Mathf.Sqrt(best);}
+            public bool CurrentCoordinates(Vector2 point,float side,ref float best,out Vector4 result){
+                int segment=-1;float t=0;SearchCurrent(0,point,ref best,ref segment,ref t);result=default;if(segment<0)return false;
+                var delta=Points[segment+1]-Points[segment];var offset=point-Points[segment]-delta*t;var downstream=-delta/lengths[segment];var cross=new Vector2(-downstream.y,downstream.x);
+                result=new Vector4(-(stations[segment]+t*lengths[segment])*side,Vector2.Dot(offset,cross)*side,downstream.x,downstream.y);return true;
+            }
+            void SearchCurrent(int index,Vector2 point,ref float best,ref int segment,ref float fraction){
+                var node=nodes[index];if(LowerBound(node,point)>best)return;
+                if(node.left<0){for(int i=node.first;i<node.first+node.count;i++){
+                    float length=lengths[i];if(length<.000001f)continue;var a=Points[i];var delta=Points[i+1]-a;
+                    float t=Mathf.Clamp01(Vector2.Dot(point-a,delta)/(length*length));float distance=(point-a-delta*t).sqrMagnitude;
+                    if(distance<best||(distance==best&&segment>=0&&i<segment)){best=distance;segment=i;fraction=t;}
+                }return;}
+                float left=LowerBound(nodes[node.left],point),right=LowerBound(nodes[node.right],point);
+                if(left<=right){SearchCurrent(node.left,point,ref best,ref segment,ref fraction);SearchCurrent(node.right,point,ref best,ref segment,ref fraction);}
+                else{SearchCurrent(node.right,point,ref best,ref segment,ref fraction);SearchCurrent(node.left,point,ref best,ref segment,ref fraction);}
+            }
+            void Search(int index,Vector2 point,ref float best){
+                var node=nodes[index];if(LowerBound(node,point)>best)return;
+                if(node.left<0){for(int i=node.first;i<node.first+node.count;i++){
+                    var a=Points[i];var delta=Points[i+1]-a;float t=delta.sqrMagnitude>0?Mathf.Clamp01(Vector2.Dot(point-a,delta)/delta.sqrMagnitude):0;
+                    // Match the original projection expression (including rounding).
+                    best=Mathf.Min(best,(point-(a+delta*t)).sqrMagnitude);
+                }return;}
+                float left=LowerBound(nodes[node.left],point),right=LowerBound(nodes[node.right],point);
+                if(left<=right){Search(node.left,point,ref best);Search(node.right,point,ref best);}
+                else{Search(node.right,point,ref best);Search(node.left,point,ref best);}
+            }
+        }
         public bool Contains(Vector2 point)
         {
             if(centerline!=null&&DistanceToCenterline(point,out _)<=halfWidthNormalized)return true;

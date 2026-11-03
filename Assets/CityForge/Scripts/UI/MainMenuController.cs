@@ -189,11 +189,12 @@ namespace CityForge.UI
             if(IsOpeningRegion)return;
             var menu=largeModal.GetComponentInParent<Canvas>();
             var overlay=RegionLoadingOverlay.Show(regionName,null);IsOpeningRegion=true;
-            overlay.BeginDistrict(CreateRegionStages(regionName,size,settings??new World.RegionCreationSettings(),menu,overlay.Report),()=>{if(this)IsOpeningRegion=false;},error=>{Debug.LogException(error);ShowRegionModal("CREATE REGION","The region could not be generated. Please try again.",new Rect(10f,105f,405f,395f));},"Preparing new region");
+            overlay.BeginDistrict(CreateRegionStages(regionName,size,settings??new World.RegionCreationSettings{forestAppearanceVersion=1},menu,overlay.Report),()=>{if(this)IsOpeningRegion=false;},error=>{Debug.LogException(error);ShowRegionModal("CREATE REGION","The region could not be generated. Please try again.",new Rect(10f,105f,405f,395f));},"Preparing new region");
             CloseDialog();
         }
         private System.Collections.IEnumerator CreateRegionStages(string name,World.RegionSize size,World.RegionCreationSettings settings,Canvas menu,System.Action<string,float> progress)
         {
+            if(settings.forestAppearanceVersion==1&&settings.climate==World.RegionClimate.Temperate)World.MixedForestLibrary.Load();
             World.SavedRegionSnapshot snapshot=null;
             yield return World.RegionMapGenerator.GenerateStages(name,size,settings,value=>snapshot=value,progress);
             yield return World.PrototypeRegionView.OpenStages(name,menu,snapshot:snapshot,progress:progress);

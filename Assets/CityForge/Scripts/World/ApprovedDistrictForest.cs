@@ -42,12 +42,16 @@ namespace CityForge.World
         public int OutlierCount {get;private set;}
         public void Initialize(MeadowDistrictLandscape landscape)
         {
+            var loadTimer=System.Diagnostics.Stopwatch.StartNew();var loadProfile=new System.Text.StringBuilder();
+            void Mark(string name){loadProfile.Append(name).Append('=').Append(loadTimer.ElapsedMilliseconds).Append("ms; ");loadTimer.Restart();}
             block=new MaterialPropertyBlock();land=landscape;viewerCamera=land.View.GetComponentInChildren<Camera>();
             assets=Resources.Load<ApprovedForestAssets>("ApprovedForest/Forest");
             if(!assets||assets.meshes==null||assets.meshes.Length!=70||!assets.layout||!assets.leaf||!assets.wood)
                 throw new InvalidOperationException("Approved forest runtime assets are missing. Build the verified local checkpoint using CityForge/Forest/Build approved runtime assets.");
             var sh=new SphericalHarmonicsL2();for(int c=0;c<3;c++)for(int i=0;i<9;i++)sh[c,i]=land.Baseline.ambientSH[c*9+i];
             for(int i=0;i<1023;i++)probes[i]=sh;
+            Mark("resources");
+            if(!MixedDistrictForest.Applies(land)){
             if(ReplacesNativeTrees)BuildNativeReplacements();
             else {
             var native=new Dictionary<Vector2Int,List<Vector2>>();
@@ -73,7 +77,8 @@ namespace CityForge.World
             }
             CoreCount=counts["core"];EdgeCount=counts["edge"];OutlierCount=counts["outlier"];
             }
-            RefreshPalms();
+            }
+            Mark("tree presentation");RefreshPalms();
             PresentedTreeCount=trees.Count;
             var capacity=new int[7];foreach(var tree in trees)capacity[tree.variant]++;
             for(int i=0;i<batches.Length;i++)batches[i]=new List<Tree>(capacity[i/5]);
@@ -87,7 +92,7 @@ namespace CityForge.World
                 layers[i]=layer;ownedLayers.Add(layer);
             }
             land.DisplayTerrain.terrainData.terrainLayers=layers;
-            land.gameObject.AddComponent<MeadowGrassAppearance>().Initialize(land.DisplayTerrain);
+            Mark("terrain layers");land.gameObject.AddComponent<MeadowGrassAppearance>().Initialize(land.DisplayTerrain);Mark("grass grading");Debug.Log("Forest load profile: "+loadProfile);
         }
         struct Candidate
         {
@@ -156,7 +161,7 @@ namespace CityForge.World
         void LateUpdate()
         {
             // The accepted authored family is a summer baseline. Native seasonal trees remain authoritative in fall/winter.
-            if(PresentedTreeCount==0||!land||!viewerCamera||!assets||!land.TreesEnabled||land.View.VisualSeason!=RegionSeason.Summer)return;
+            if(PresentedTreeCount==0||!land||!viewerCamera||!assets||!land.TreesEnabled||land.View==null||land.View.Data==null||batches[0]==null||land.View.VisualSeason!=RegionSeason.Summer)return;
             GeometryUtility.CalculateFrustumPlanes(viewerCamera,planes);foreach(var batch in batches)batch.Clear();
             for(int treeIndex=0;treeIndex<trees.Count;treeIndex++){if((presentationMask!=null&&!presentationMask[treeIndex])||(palmMask!=null&&palmMask[treeIndex]))continue;var t=trees[treeIndex];if(!GeometryUtility.TestPlanesAABB(planes,new Bounds(t.center,Vector3.one*t.height*1.5f)))continue;
                 float denominator=viewerCamera.orthographic?2*viewerCamera.orthographicSize:2*Mathf.Max(.01f,Vector3.Dot(t.center-viewerCamera.transform.position,viewerCamera.transform.forward))*Mathf.Tan(viewerCamera.fieldOfView*Mathf.Deg2Rad*.5f);

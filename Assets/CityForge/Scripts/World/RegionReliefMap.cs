@@ -9,8 +9,9 @@ namespace CityForge.World
         Mesh mesh;Material material;Texture2D atlas;MeshCollider picker;PrototypeRegionView view;
         const int Samples=513;
         public void Build(PrototypeRegionView source)=>RegionBuildSteps.Complete(BuildStages(source));
-        public System.Collections.IEnumerator BuildStages(PrototypeRegionView source)
+        public System.Collections.IEnumerator BuildStages(PrototypeRegionView source,System.Action<string,float> progress=null)
         {
+            progress?.Invoke("Sampling regional relief",0);yield return null;
             view=source;var layout=source.CreationSettings?.version>=6?new RegionTerrainLayout(source.CreationSettings):null;int n=Samples;var vertices=new Vector3[n*n];var uv=new Vector2[n*n];var triangles=new int[(n-1)*(n-1)*6];
             var snowPeaks=MountainSummitSnow.Applies(source)?MountainSummitSnow.Select(source.Data,MountainBorderVariation.CapCount(source)):System.Array.Empty<MountainSummitSnow.Summit>();
             float height=source.GetComponentInChildren<Terrain>().terrainData.size.y;float sea=source.SeaLevel;
@@ -19,10 +20,12 @@ namespace CityForge.World
             if(heightCache!=null){var sampling=heightCache.BuildStages();while(sampling.MoveNext())yield return sampling.Current;}
             float H(float u,float v)=>(heightCache!=null?heightCache.Sample(u,v):SmoothRiverSurface.Sample(source.Data.Heights,u,v))*height;
             float Surface(float u,float v,float h){float water=sea;if(RegionalRiverNetwork.HasGroundFollowingWater(source.Data)&&RegionalRiverNetwork.SignedDistance(source.Data,new Vector2(u,v))<0)water=Mathf.Max(water,RegionalRiverNetwork.GroundWaterLevel(source.Data,u,v));if(source.Data.WaterBodies!=null)foreach(var body in source.Data.WaterBodies)if((body.kind==WaterBodyKind.Lake||body.kind==WaterBodyKind.Pond)&&body.Bounds.Contains(new Vector2(u,v))&&body.Contains(new Vector2(u,v)))water=body.hasSurfaceLevel?body.surfaceLevelNormalized*height:sea;return Mathf.Max(h,water);}
+            progress?.Invoke("Building regional relief mesh",.20f);yield return null;
             for(int z=0;z<n;z++)for(int x=0;x<n;x++){
                 int i=z*n+x;float u=x/(float)(n-1),v=z/(float)(n-1),h=Surface(u,v,H(u,v));
                 vertices[i]=new Vector3((u-.5f)*source.MapSide,sea+(h-sea)*1.25f+1,(v-.5f)*source.MapSide);uv[i]=new Vector2(u,v);
             }
+            progress?.Invoke("Shading regional relief atlas",.30f);yield return null;
             const int pixels=1025;var colors=new Color[pixels*pixels];float seed=source.Data.Seed%997;
             for(int z=0;z<pixels;z++){for(int x=0;x<pixels;x++){
                 float u=x/(float)(pixels-1),v=z/(float)(pixels-1),h=H(u,v),bank=continuousChannels?RegionalRiverNetwork.SignedDistance(source.Data,new Vector2(u,v)):SmoothRiverSurface.Sample(source.Data.WaterDistance,u,v)/PrototypeRegionData.Side;
@@ -53,6 +56,7 @@ namespace CityForge.World
                 float fine=.97f+.06f*Mathf.PerlinNoise(seed+u*190,v*190);color*=shade*fine;color.a=1;colors[z*pixels+x]=color;
             }
             if(z%8==0)yield return null;}
+            progress?.Invoke("Uploading regional relief",.95f);yield return null;
             atlas=new Texture2D(pixels,pixels,TextureFormat.RGBA32,true){name="Regional shaded relief atlas",wrapMode=TextureWrapMode.Clamp,filterMode=FilterMode.Trilinear};atlas.SetPixels(colors);atlas.Apply(true,true);
             int t=0;for(int z=0;z<n-1;z++)for(int x=0;x<n-1;x++){int i=z*n+x;triangles[t++]=i;triangles[t++]=i+n;triangles[t++]=i+1;triangles[t++]=i+1;triangles[t++]=i+n;triangles[t++]=i+n+1;}
             mesh=new Mesh{name="Regional relief — 513 samples",indexFormat=IndexFormat.UInt32};mesh.vertices=vertices;mesh.uv=uv;mesh.triangles=triangles;mesh.RecalculateBounds();

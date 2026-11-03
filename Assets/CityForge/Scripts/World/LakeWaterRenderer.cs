@@ -58,6 +58,7 @@ namespace CityForge.World
             float best=float.PositiveInfinity;Vector4 result=new Vector4(0,0,0,-1);
             var point=world/side+Vector2.one*.5f;
             foreach(var river in data.WaterBodies){if(river.kind!=WaterBodyKind.River||river.centerline==null)continue;
+                if(river.channelVersion>=1){if(river.IndexedCurrentCoordinates(point,side,ref best,out var current))result=current;continue;}
                 float length=0;
                 for(int i=1;i<river.centerline.Length;i++){
                     var a=river.centerline[i-1];var delta=river.centerline[i]-a;float segment=delta.magnitude;if(segment<.000001f)continue;

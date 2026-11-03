@@ -140,7 +140,7 @@ namespace CityForge.World
             var continuousCollider=transform.Find("ContinuousRegionTerrain");if(continuousCollider)continuousCollider.GetComponent<TerrainCollider>().enabled=!(active&&(IsCombinedDistrict||RiverBedVersion>=4||CreationSettings?.version>=5));
             if(approvedDistrict!=null){approvedDistrict.ApplyPresentation(active);approvedDistrict.gameObject.SetActive(active);}
             if(active&&Data.Biomes!=null&&SelectedDistrict<0){var camera=GetComponentInChildren<Camera>();camera.farClipPlane=Mathf.Max(camera.farClipPlane,MapSide*10);}
-            if(!relief){var map=new GameObject("Regional relief map");map.transform.SetParent(transform,false);relief=map.AddComponent<RegionReliefMap>();yield return relief.BuildStages(this);}
+            if(!relief){var map=new GameObject("Regional relief map");map.transform.SetParent(transform,false);relief=map.AddComponent<RegionReliefMap>();yield return relief.BuildStages(this,(stage,value)=>loadingProgress?.Invoke(stage,.4f+value*.55f));}
             relief.gameObject.SetActive(SelectedDistrict<0);
             GetComponent<DistrictCombiner>()?.RefreshBorders();
             var land=transform.Find("RegionLandCover");if(land)land.GetComponent<MeshRenderer>().enabled=!active&&SelectedDistrict>=0;

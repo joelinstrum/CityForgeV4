@@ -142,13 +142,28 @@ void InitializeBakedGIData(Varyings IN, inout InputData inputData)
 
 #ifndef TERRAIN_SPLAT_BASEPASS
 
+// Smooth, non-periodic world-space variation avoids a repeating meadow checkerboard.
+float MeadowPatchHash(float2 p)
+{
+    float3 q=frac(float3(p.x,p.y,p.x)*.1031);
+    q+=dot(q,q.yzx+33.33);
+    return frac((q.x+q.y)*q.z);
+}
+float MeadowPatchNoise(float2 p)
+{
+    float2 cell=floor(p), f=frac(p);
+    f=f*f*f*(f*(f*6-15)+10);
+    return lerp(lerp(MeadowPatchHash(cell),MeadowPatchHash(cell+float2(1,0)),f.x),
+                lerp(MeadowPatchHash(cell+float2(0,1)),MeadowPatchHash(cell+1),f.x),f.y)*2-1;
+}
+
 void NormalMapMix(float4 uvSplat01, float4 uvSplat23, inout half4 splatControl, inout half3 mixedNormal)
 {
     #if defined(_NORMALMAP)
         half3 nrm = half(0.0);
         nrm += splatControl.r * UnpackNormalScale(SAMPLE_TEXTURE2D(_Normal0, sampler_Normal0, uvSplat01.xy), _NormalScale0);
-        nrm += splatControl.g * UnpackNormalScale(SAMPLE_TEXTURE2D(_Normal1, sampler_Normal0, uvSplat01.zw), _NormalScale1);
-        nrm += splatControl.b * UnpackNormalScale(SAMPLE_TEXTURE2D(_Normal2, sampler_Normal0, uvSplat23.xy), _NormalScale2);
+        nrm += splatControl.g * UnpackNormalScale(SAMPLE_TEXTURE2D_BIAS(_Normal1, sampler_Normal0, uvSplat01.zw, 4.5), _NormalScale1 * .3h);
+        nrm += splatControl.b * UnpackNormalScale(SAMPLE_TEXTURE2D_BIAS(_Normal2, sampler_Normal0, uvSplat23.xy, 4.5), _NormalScale2 * .3h);
         nrm += splatControl.a * UnpackNormalScale(SAMPLE_TEXTURE2D(_Normal3, sampler_Normal0, uvSplat23.zw), _NormalScale3);
 
         // avoid risk of NaN when normalizing.
@@ -167,8 +182,9 @@ void SplatmapMix(float4 uvMainAndLM, float4 uvSplat01, float4 uvSplat23, inout h
     half4 diffAlbedo[4];
 
     diffAlbedo[0] = SAMPLE_TEXTURE2D(_Splat0, sampler_Splat0, uvSplat01.xy);
-    diffAlbedo[1] = SAMPLE_TEXTURE2D_BIAS(_Splat1, sampler_Splat0, uvSplat01.zw, 2.5);
-    diffAlbedo[2] = SAMPLE_TEXTURE2D_BIAS(_Splat2, sampler_Splat0, uvSplat23.xy, 2.5);
+    // Keep grass detail subordinate to the broad meadow color at playing zoom.
+    diffAlbedo[1] = SAMPLE_TEXTURE2D_BIAS(_Splat1, sampler_Splat0, uvSplat01.zw, 4.5);
+    diffAlbedo[2] = SAMPLE_TEXTURE2D_BIAS(_Splat2, sampler_Splat0, uvSplat23.xy, 4.5);
     diffAlbedo[3] = SAMPLE_TEXTURE2D(_Splat3, sampler_Splat0, uvSplat23.zw);
 
     // This might be a bit of a gamble -- the assumption here is that if the diffuseMap has no
@@ -423,6 +439,16 @@ void SplatmapFragment(
     half weight;
     half4 mixedDiffuse;
     half4 defaultSmoothness;
+#if !defined(TERRAIN_SPLAT_BASEPASS) && !defined(TERRAIN_SPLAT_ADDPASS)
+    // Remove canopy litter patches: redistribute their paint to surrounding grass.
+    // Do this before all albedo/normal/mask mixing so canopy weights cannot reveal
+    // a different brightness through the grass-only distance treatment.
+    half grassTotal=splatControl.g+splatControl.b;
+    half freshShare=grassTotal>.0001h?splatControl.g/grassTotal:1.0h;
+    splatControl.g+=splatControl.a*freshShare;
+    splatControl.b+=splatControl.a*(1-freshShare);
+    splatControl.a=0;
+#endif
     SplatmapMix(IN.uvMainAndLM, IN.uvSplat01, IN.uvSplat23, splatControl, weight, mixedDiffuse, defaultSmoothness, normalTS);
     half3 albedo = mixedDiffuse.rgb;
 
@@ -443,16 +469,23 @@ void SplatmapFragment(
     half occlusion = dot(splatControl, defaultOcclusion);
 #endif
 
+    // Meadow and canopy litter are matte. Imported diffuse/mask alpha can
+    // otherwise create bright rectangular specular patches around tree paint.
+#if !defined(TERRAIN_SPLAT_BASEPASS) && !defined(TERRAIN_SPLAT_ADDPASS)
+    half meadowMatte=saturate(splatControl.g+splatControl.b+splatControl.a);
+    smoothness=lerp(smoothness,.035h,meadowMatte);
+    metallic=lerp(metallic,0.0h,meadowMatte);
+#endif
     InputData inputData;
     InitializeInputData(IN, normalTS, inputData);
     SetupTerrainDebugTextureData(inputData, IN.uvMainAndLM.xy);
 #if !defined(TERRAIN_SPLAT_BASEPASS) && !defined(TERRAIN_SPLAT_ADDPASS)
     float2 meadowP=inputData.positionWS.xz;
-    float broad=sin(meadowP.x*.065+sin(meadowP.y*.049))*sin(meadowP.y*.072);
-    float secondary=sin(meadowP.x*.56+sin(meadowP.y*.41))*sin(meadowP.y*.67);
-    half3 calm=lerp(half3(.135,.205,.072),half3(.158,.197,.087),saturate(broad)*.22)*(1+broad*.075+secondary*.012);
+    float broad=MeadowPatchNoise(float2(meadowP.x*.016+meadowP.y*.009,meadowP.y*.017-meadowP.x*.008));
+    float secondary=MeadowPatchNoise(meadowP*.043+float2(17.3,51.7));
+    half3 calm=lerp(half3(.135,.205,.072),half3(.158,.197,.087),saturate(broad)*.22)*(1+broad*.095+secondary*.004);
     float distant=saturate((distance(inputData.positionWS,_WorldSpaceCameraPos)-20)/90);
-    albedo=lerp(albedo,calm,saturate(splatControl.g+splatControl.b)*lerp(.48,.78,distant));
+    albedo=lerp(albedo,calm,saturate(splatControl.g+splatControl.b)*lerp(.72,.90,distant));
 #endif
 
 #if defined(_DBUFFER)
