@@ -177,6 +177,12 @@ venv/
 !/Assets/CityForge/Resources/Region/RegionalSlab.shader
 !/Assets/CityForge/Resources/Region/RegionalSlab.shader.meta
 
+# Authored foam exclusion only; private water materials remain excluded.
+!/Assets/CityForge/Resources/Water/
+!/Assets/CityForge/Resources/Water.meta
+!/Assets/CityForge/Resources/Water/InlandFoamExclusion.shader
+!/Assets/CityForge/Resources/Water/InlandFoamExclusion.shader.meta
+
 # Licensed Animal Pack Deluxe and generated wildlife art stay local.
 /Assets/Animal pack deluxe/
 /Assets/Animal pack deluxe.meta

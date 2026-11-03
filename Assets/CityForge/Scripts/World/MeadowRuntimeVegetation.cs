@@ -61,6 +61,7 @@ namespace CityForge.World
                 if(k%32==0&&BudgetSpent)yield return null;
                 var p=new Vector2((cell.x+R())*TileSide,(cell.y+R())*TileSide);
                 if(landscape.View.InCampClearing(p)||landscape.MountainVegetation(p)<.35f||!landscape.Contains(p)||landscape.WaterDistance(p)<.3f||landscape.ExposedRiverBed(p)||landscape.Height(p)<landscape.View.SeaLevel+.12f||landscape.RoadDistance(p)<baseline.roadWidth+.4f)continue;
+                if(landscape.CoastalBeachWeight(p)>.5f)continue;
                 if(landscape.View.Coastline&&(landscape.Height(p)<landscape.View.SeaLevel+7||landscape.MountainSlope(p)>24))continue;
                 float forest=landscape.Canopy(p),density=Mathf.Lerp(.75f,.18f,forest)*(.8f+.2f*landscape.Noise(p,31));if(R()>density)continue;
                 int type=R()<.52f?0:1;if(R()<.045f+.12f*forest)type=2;

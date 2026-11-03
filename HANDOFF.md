@@ -1,3 +1,71 @@
+# Approved coastal streams and beaches — November 3, 2026
+
+The user approved the restored stream water, reduced shoreline shimmer, sandy ocean
+floor, and softer grass/sand transition with a restrained existing dirt blend.
+These changes are integrated into normal new/cached coastal district loading.
+
+## Production behavior
+
+- CoastalWaterClock centers ground-following Crest detail on the camera rig's ground
+  focus. Following the distant isometric camera's own XZ had put visible streams in
+  coarse cascades, leaving apparently dry beds.
+- Coastal clipping uses an RHalf signed-distance mask, up to2048 samples for
+  ground-following districts. The previous512-square binary mask used4m texels in
+  the2,048m combined district and clipped61 of192 sampled stream centers.
+- GroundFollowingWaterLevels preserves ocean surf while an owned foam renderer input
+  suppresses ocean foam on elevated inland channels. InlandFoamExclusion.shader is
+  original integration source; purchased water/terrain art and Crest source stay
+  private. Do not use FoamLodInput Minimum blend: Crest validation rejects it.
+- Coastal ground-following water uses regular-frustum reflections, as raised rivers
+  already do. CoastalWaterPresentation caps existing TAA jitterScale at .125 and
+  restores its previous value on disable. Other initial AA modes remain untouched.
+  Switching to SMAA/FXAA darkened this renderer's output and was rejected.
+- CoastalBeachSurface uses the existing private RichSand layer. The ocean floor is
+  full sand at all depths; the earlier4–12m offshore fade exposed grass and was
+  rejected. Dry beach width varies26–40m with multiple noise scales and a small
+  irregular edge offset. Blending starts at28% of local width. The dry upper beach
+  mixes approved matte courtyard/settlement dirt from existing soil layer0.
+- Camp clearings, roads and combined-district exclusions are protected. Runtime
+  meadow grass avoids the beach core. The dedicated coastline-test treatment is
+  retained. Water palette, wave weights, sea level, heights and tree placement remain.
+- Beach/camp/lake presentation rebuilds over canonical ground. CaptureSnapshot uses
+  coastalBaseAlphamaps so the extra sand layer and dirt mixing do not shift saved
+  soil indices or require cache migration. Normal player saves were not overwritten.
+
+## Verification and practical limits
+
+Unity compilation and whitespace checks pass. The seed109894062 combined district
+retains2,647 approved mixed trees and placement signature d480c2f6d077b2e1.
+All192 sampled stream centers are unclipped and below intended water level; minimum
+depth .4399m. Foam exclusion is active, ocean FFT and reflections remain enabled.
+TAA jitter transitions .125 -> .5 on presentation disable -> .125 on re-enable.
+All6,351 sampled submerged ocean cells have sand weight1 and grass weight0. The
+approved dry blend affects51,824 samples. Saved ground remains six layers and passes
+a disk round trip; sampled canonical base paint differences are zero.
+
+A full cached reload completed terrain/bank/water initialization. Later focused
+reload checks reused already-painted banks and skipped redundant bank repainting.
+Reports and approved captures are in the November3 chat workspace outputs directory.
+Coastal cached loading remains slow: bank repainting took several minutes and the
+higher-resolution water setup measured about40s locally. This is not a player/FPS
+or universal loading guarantee. Full coastal visual QA across views/seasons and
+elimination of every shimmer remain unproven. User accepted the observed improvement.
+
+## Private recovery and delivery
+
+Library/BeforeApprovedBeachTransition.cfregion preserves the latest pre-integration
+region/camera. Other private checkpoints include BeforeSandySeabed.cfregion,
+BeforeCoastalFlickerFix.cfregion and the validated StreamFix-VerifiedRecovery.cfregion.
+Do not use BeforeStreamMaskFix.cfregion as a normal save: an early domain-reload
+checkpoint has an incomplete road cache. Runtime-only region data was reconstructed
+from the same seed/recipe during recovery; the approved tree signature was retained.
+
+Historical preview scripts in this chat's work directory are one-shot experiments;
+do not reapply them over initialized production beaches. The approved transition is
+now source behavior. Source-only changes are recorded on the feature branch; no PR
+merge was requested. Purchased artwork, maps, private packages and snapshots remain
+excluded from public Git.
+
 # Approved mixed woodland integrated — November 3, 2026
 
 User approved the chestnut/locust/larch appearance and requested normal new-region

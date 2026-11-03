@@ -151,7 +151,7 @@ namespace CityForge.World
             DisplayTerrain.Flush();RefreshLakeEnvironments();
         }
         void RefreshLakeEnvironments(){foreach(var lake in GetComponentsInChildren<LakeWaterRenderer>())if(lake.CaptureReady)lake.RefreshEnvironment();}
-        public MeadowRegionSnapshot CaptureSnapshot()=>new MeadowRegionSnapshot{version=Baseline.generationVersion,road=Road.ToArray(),trees=fullTreeInstances??terrainData.treeInstances,alphamaps=lakeBaseAlphamaps??campBaseAlphamaps??terrainData.GetAlphamaps(0,0,terrainData.alphamapResolution,terrainData.alphamapResolution)};
+        public MeadowRegionSnapshot CaptureSnapshot()=>new MeadowRegionSnapshot{version=Baseline.generationVersion,road=Road.ToArray(),trees=fullTreeInstances??terrainData.treeInstances,alphamaps=coastalBaseAlphamaps??lakeBaseAlphamaps??campBaseAlphamaps??terrainData.GetAlphamaps(0,0,terrainData.alphamapResolution,terrainData.alphamapResolution)};
 
         AmbientMode savedAmbientMode; Color savedSky,savedEquator,savedGround,savedAmbient;
         Material savedSkybox;float savedIntensity,savedReflection;
@@ -274,6 +274,7 @@ namespace CityForge.World
                 timings.Append("control map=").Append(paintTimer.ElapsedMilliseconds).Append(" ms; ");
             }
             if(GeneratedRiverDistrict){progress?.Invoke("Painting generated stream banks",.69f);yield return PaintGeneratedRiverBanks();}
+            yield return PaintCoastalBeachStages();
             progress?.Invoke("Building roads and rocks",.7f);yield return null;
             Measure("road mesh",BuildRoadMesh);if(View.MountainTest)Measure("mountain outcrops",()=>gameObject.AddComponent<MountainRockRenderer>().Initialize(this));if(View.RiverBedVersion>=2)Measure("river rocks",()=>gameObject.AddComponent<RiverBedRockRenderer>().Initialize(this));
             progress?.Invoke("Applying landscape lighting",.78f);yield return null;Measure("presentation",BuildPresentation);
