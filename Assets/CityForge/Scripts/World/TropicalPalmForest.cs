@@ -117,7 +117,7 @@ namespace CityForge.World
         }
         void Collect(List<Palm> trees)
         {
-            foreach(var palm in trees){var matrix=palm.matrix;var bounds=assets.variants[palm.variant].lods[0].bounds;
+            foreach(var palm in trees){var matrix=palm.matrix;if(land.View.IsForestRemoved(new Vector2(matrix.m03,matrix.m23)))continue;var bounds=assets.variants[palm.variant].lods[0].bounds;
                 var center=matrix.MultiplyPoint3x4(bounds.center);float scale=matrix.lossyScale.x;
                 if(!GeometryUtility.TestPlanesAABB(planes,new Bounds(center,bounds.size*scale+Vector3.one*.9f)))continue;
                 float denominator=viewer.orthographic?2*viewer.orthographicSize:2*Mathf.Max(.01f,Vector3.Dot(center-viewer.transform.position,viewer.transform.forward))*Mathf.Tan(viewer.fieldOfView*Mathf.Deg2Rad*.5f);

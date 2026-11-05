@@ -54,7 +54,7 @@ namespace CityForge.EditorTools
                 Require((allowed.Contains(species.id)||species.id.StartsWith("bird-"))&&species.prefab,"Allowlist and prefab");
                 var animator=species.prefab.GetComponentInChildren<Animator>();Require(animator&&!animator.applyRootMotion,"Bounded code-driven movement");
                 var controller=(AnimatorController)animator.runtimeAnimatorController;Require(controller,species.id+" local controller loaded");
-                Require(controller.layers[0].stateMachine.states.All(s=>s.state.name=="Idle"||s.state.name=="Walk"),"No demo combat/death cycles");
+                Require(controller.layers[0].stateMachine.states.All(s=>s.state.name=="Idle"||s.state.name=="Walk"||species.id=="deer"&&s.state.name=="Drink"),"No demo combat/death cycles");
                 Require(controller.animationClips.All(c=>AnimationUtility.GetAnimationClipSettings(c).loopTime),"Looping authored clips");
                 foreach(var renderer in species.prefab.GetComponentsInChildren<Renderer>())foreach(var material in renderer.sharedMaterials)Require(material.shader.name=="Universal Render Pipeline/Lit"&&material.GetTexture("_BaseMap"),"URP textured animal");
             }
@@ -86,7 +86,7 @@ namespace CityForge.EditorTools
             Require(fingerprint.SequenceEqual(wildlife.Animals.Select(a=>a.species.id+":"+a.root.position.ToString("F4"))),"Seeded placements stable on re-enable");
             view.GetComponentInChildren<CityForgeCameraController>().SetZoomLevel(1);wildlife.UpdateVisibility();
             float time=Time.time;var positions=wildlife.Animals.Select(a=>a.root.position).ToArray();
-            while(Time.time<time+15){foreach(var a in wildlife.Animals)Require(wildlife.Suitable(a.species,new Vector2(a.root.position.x,a.root.position.z),out _),"Wander remains in habitat");yield return null;}
+            while(Time.time<time+15){foreach(var a in wildlife.Animals)Require(wildlife.Suitable(a.species,new Vector2(a.root.position.x,a.root.position.z),out _,a.activity==WildlifeActivity.ApproachingWater||a.activity==WildlifeActivity.Drinking||a.activity==WildlifeActivity.ReturningHome),"Movement remains safe for its activity");yield return null;}
             Require(wildlife.Animals.Where((a,i)=>(a.root.position-positions[i]).sqrMagnitude>.01f).Any(),"Ambient animals actually wander");
             Require(wildlife.Animals.All(a=>a.animator&&a.animator.GetCurrentAnimatorStateInfo(0).normalizedTime>0),"Animations advance");
             var path=Path.Combine(Application.temporaryCachePath,"wildlife-"+Guid.NewGuid().ToString("N")+".cfregion");

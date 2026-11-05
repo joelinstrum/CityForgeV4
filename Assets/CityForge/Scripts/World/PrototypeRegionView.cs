@@ -70,7 +70,7 @@ namespace CityForge.World
             foreach(RegionSeason season in System.Enum.GetValues(typeof(RegionSeason)))
             {
                 var button=hud.Find("Season"+season);if(!button)continue;
-                button.gameObject.SetActive(SelectedDistrict>=0);
+                button.gameObject.SetActive(SelectedDistrict>=0&&!GetComponent<CityForge.UI.NatureToolbar>());
                 bool available=Climate!=RegionClimate.Tropical||season==RegionSeason.Summer;
                 button.GetComponent<Button>().interactable=available&&approvedDistrict&&approvedDistrict.gameObject.activeSelf;
                 button.GetComponentInChildren<Text>().color=available?new Color(.92f,.91f,.82f,1):new Color(.48f,.48f,.43f,.7f);
@@ -259,7 +259,7 @@ namespace CityForge.World
             try
             {
                 progress?.Invoke("Preparing region",.15f);yield return null;
-                if(snapshot!=null){view.NativeCamps=snapshot.info.nativeCamps??System.Array.Empty<NativeCampRecord>();view.CombinedDistricts=snapshot.info.combinedDistricts??System.Array.Empty<CombinedDistrictGroup>();view.CreationSettings=snapshot.info.creation;view.legacyClimate=snapshot.info.climate;view.AnimalsEnabled=snapshot.info.animals;size=(RegionSize)snapshot.info.size;seed=snapshot.info.seed;regionName=snapshot.info.name;view.SavedRegionId=snapshot.info.id;view.Season=(RegionSeason)snapshot.info.season;view.TerrainHeightRange=snapshot.info.terrainHeightRange;view.LoadedMeadow=snapshot.meadow;view.LoadedMeadowDistrict=snapshot.info.meadowCacheDistrict;view.LoadedFromSnapshot=true;view.wantsMeadow=snapshot.info.meadow;view.Waterless=snapshot.info.waterless;view.Coastline=snapshot.info.coastline;view.CoastVersion=snapshot.info.coastVersion;view.MinimalRiverCrest=snapshot.info.minimalRiverCrest;view.StillWater=snapshot.info.stillWater;view.LakeWaterVersion=snapshot.info.lakeWaterVersion<0?-1:1;view.RiverBedVersion=snapshot.info.riverBedVersion;}
+                if(snapshot!=null){view.ForestAdditions=snapshot.info.forestAdditions??System.Array.Empty<ForestAdditionRecord>();view.ForestRemovals=snapshot.info.forestRemovals??System.Array.Empty<ForestRemovalStroke>();view.NativeCamps=snapshot.info.nativeCamps??System.Array.Empty<NativeCampRecord>();view.CombinedDistricts=snapshot.info.combinedDistricts??System.Array.Empty<CombinedDistrictGroup>();view.CreationSettings=snapshot.info.creation;view.legacyClimate=snapshot.info.climate;view.AnimalsEnabled=snapshot.info.animals;size=(RegionSize)snapshot.info.size;seed=snapshot.info.seed;regionName=snapshot.info.name;view.SavedRegionId=snapshot.info.id;view.Season=(RegionSeason)snapshot.info.season;view.TerrainHeightRange=snapshot.info.terrainHeightRange;view.LoadedMeadow=snapshot.meadow;view.LoadedMeadowDistrict=snapshot.info.meadowCacheDistrict;view.LoadedFromSnapshot=true;view.wantsMeadow=snapshot.info.meadow;view.Waterless=snapshot.info.waterless;view.Coastline=snapshot.info.coastline;view.CoastVersion=snapshot.info.coastVersion;view.MinimalRiverCrest=snapshot.info.minimalRiverCrest;view.StillWater=snapshot.info.stillWater;view.LakeWaterVersion=snapshot.info.lakeWaterVersion<0?-1:1;view.RiverBedVersion=snapshot.info.riverBedVersion;}
                 if(view.LoadedMeadow!=null&&view.LoadedMeadowDistrict>=0)view.sessionMeadows[view.LoadedMeadowDistrict]=view.LoadedMeadow;
                 view.Size = size;
                 view.RegionName = string.IsNullOrWhiteSpace(regionName) ? "Test Region" : regionName.Trim();
@@ -517,6 +517,7 @@ namespace CityForge.World
             }
             CameraTiltControls.Build(this,root.transform,font);
             StreamFishControls.Build(this,root.transform,font);
+            gameObject.AddComponent<CityForge.UI.NatureToolbar>().Initialize(this,root.transform);
             RefreshSeasonButtons();
             var diagnostics = gameObject.AddComponent<RegionPreviewDiagnostics>();
             diagnostics.Initialize(transform.Find("RegionLandCover").GetComponent<MeshRenderer>(),
@@ -566,7 +567,7 @@ namespace CityForge.World
         private void Update()
         {
             if (Input.GetKeyDown(KeyCode.Escape))
-            { if (SelectedDistrict >= 0) ShowOverview(); else ReturnToMenu(); }
+            { var toolbar=GetComponent<CityForge.UI.NatureToolbar>();if(!toolbar||!toolbar.Dismiss()){if (SelectedDistrict >= 0) ShowOverview(); else ReturnToMenu();} }
             if (sampling && Time.realtimeSinceStartup >= sampleStart)
             {
                 sampleElapsed += Time.unscaledDeltaTime;

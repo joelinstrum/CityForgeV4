@@ -15,7 +15,7 @@ namespace CityForge.World
         public static bool UsesCalmWater(PrototypeRegionView view)=>evaluationOverride==0?view.LakeWaterVersion>0:evaluationOverride>0;
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetEvaluation() { evaluationOverride=0;LakeShoreRenderer.EnabledForEvaluation=true; }
-        public static bool Applies(RegionWaterBody body,PrototypeRegionView view) => UsesCalmWater(view) &&
+        public static bool Applies(RegionWaterBody body,PrototypeRegionView view) => (body.playerCreated||UsesCalmWater(view)) &&
             (body.kind == WaterBodyKind.Lake || body.kind == WaterBodyKind.Pond);
         Mesh mesh;
         Material material;
@@ -50,14 +50,21 @@ namespace CityForge.World
             BuildRiverCurrentField(land.View,land);
             land.View.GetComponentInChildren<Camera>().GetUniversalAdditionalCameraData().requiresDepthTexture=true;
             material.SetFloat("_RiverSceneDepth",1);material.SetFloat("_CurrentPreviewTime",-1);
-            material.SetColor("_Deep",new Color(.025f,.095f,.16f,1));
-            material.SetColor("_Shallow",new Color(.065f,.16f,.19f,1));
+            material.SetColor("_Deep",new Color(.035f,.14f,.19f,1));
+            material.SetColor("_Shallow",new Color(.10f,.22f,.23f,1));
+        }
+        public void InitializePlayerChannel(MeadowDistrictLandscape land,RegionWaterBody body)
+        {
+            if(!body.playerChannel)throw new System.ArgumentException("Expected a player waterway.");
+            InitializeSurface(land.View,body,new Rect(land.Origin,Vector2.one*land.Side),body.playerChannelLevels[0],land.Height,p=>land.Noise(p,18,252),true);
+            BuildRiverCurrentField(land.View,land,body);material.name=body.isStream?"Player stream currents":"Player river currents";
+            land.View.GetComponentInChildren<Camera>().GetUniversalAdditionalCameraData().requiresDepthTexture=true;material.SetFloat("_RiverSceneDepth",1);material.SetFloat("_CurrentPreviewTime",-1);
         }
         // Match RegionWaterBody.DistanceToCenterline: downstream is opposite centerline order.
         public static Vector4 RiverCurrentCoordinates(PrototypeRegionData data,float side,Vector2 world){
             float best=float.PositiveInfinity;Vector4 result=new Vector4(0,0,0,-1);
             var point=world/side+Vector2.one*.5f;
-            foreach(var river in data.WaterBodies){if(river.kind!=WaterBodyKind.River||river.centerline==null)continue;
+            foreach(var river in data.WaterBodies){if(river.kind!=WaterBodyKind.River||river.playerChannel||river.centerline==null)continue;
                 if(river.channelVersion>=1){if(river.IndexedCurrentCoordinates(point,side,ref best,out var current))result=current;continue;}
                 float length=0;
                 for(int i=1;i<river.centerline.Length;i++){
@@ -70,11 +77,13 @@ namespace CityForge.World
             }
             return result;
         }
-        void BuildRiverCurrentField(PrototypeRegionView view,MeadowDistrictLandscape land){
+        void BuildRiverCurrentField(PrototypeRegionView view,MeadowDistrictLandscape land,RegionWaterBody body=null){
             const int resolution=128;var pixels=new Color[resolution*resolution];
+            var origin=land.Origin;var size=Vector2.one*land.Side;
+            if(body!=null&&body.playerChannel){origin=Vector2.Max((body.Bounds.min-Vector2.one*.5f)*view.MapSide,land.Origin);size=Vector2.Min((body.Bounds.max-Vector2.one*.5f)*view.MapSide,land.Origin+Vector2.one*land.Side)-origin;}
             for(int z=0;z<resolution;z++)for(int x=0;x<resolution;x++){
-                var point=land.Origin+new Vector2((x+.5f)/resolution,(z+.5f)/resolution)*land.Side;
-                var flow=RiverCurrentCoordinates(view.Data,view.MapSide,point);pixels[z*resolution+x]=new Color(flow.x,flow.y,flow.z,flow.w);
+                var point=origin+Vector2.Scale(new Vector2((x+.5f)/resolution,(z+.5f)/resolution),size);
+                var flow=body!=null&&body.playerChannel?PlayerChannelGeometry.Current(body,point,view.MapSide):RiverCurrentCoordinates(view.Data,view.MapSide,point);pixels[z*resolution+x]=new Color(flow.x,flow.y,flow.z,flow.w);
             }
             riverFlow=new Texture2D(resolution,resolution,TextureFormat.RGBAFloat,false,true){name="River lengthwise current coordinates",wrapMode=TextureWrapMode.Clamp,filterMode=FilterMode.Bilinear};
             riverFlow.SetPixels(pixels);riverFlow.Apply(false,true);material.SetTexture("_RiverFlow",riverFlow);material.SetFloat("_CurrentSpeed",1.1f);
@@ -98,7 +107,7 @@ namespace CityForge.World
         void InitializeSurface(PrototypeRegionView view,RegionWaterBody body,Rect region,float level,System.Func<Vector2,float> height,System.Func<Vector2,float> noise,bool generatedRiver=false)
         {
             var start=Time.realtimeSinceStartup;SurfaceLevel=level;BodyId=body.id;
-            var bounds=generatedRiver?new Rect(region.min/view.MapSide+Vector2.one*.5f,region.size/view.MapSide):body.Bounds;
+            var bounds=generatedRiver&&!body.playerChannel?new Rect(region.min/view.MapSide+Vector2.one*.5f,region.size/view.MapSide):body.Bounds;
             var min=Vector2.Max((bounds.min-Vector2.one*.5f)*view.MapSide,region.min);
             var max=Vector2.Min((bounds.max-Vector2.one*.5f)*view.MapSide,region.max);
             var size = max - min;
@@ -110,8 +119,8 @@ namespace CityForge.World
                 var normalized=p/view.MapSide+Vector2.one*.5f;
                 // v5 rivers share a level and their saved terrain is the authoritative
                 // shoreline. A single network surface avoids doubled alpha at confluences.
-                bool inside = (view.SelectedDistrict<0||view.InActiveDistrict(p))&&(generatedRiver?(RegionalRiverNetwork.HasContinuousChannels(view.Data)?RegionalRiverNetwork.SignedDistance(view.Data,normalized)<=0:true):body.Contains(normalized));
-                float sampleLevel=generatedRiver&&RegionalRiverNetwork.HasGroundFollowingWater(view.Data)?RegionalRiverNetwork.GroundWaterLevel(view.Data,normalized.x,normalized.y):level;
+                bool inside = (view.SelectedDistrict<0||view.InActiveDistrict(p))&&(generatedRiver?(body.playerChannel?body.Contains(normalized):(RegionalRiverNetwork.HasContinuousChannels(view.Data)?RegionalRiverNetwork.SignedDistance(view.Data,normalized)<=0:true)):body.Contains(normalized));
+                float sampleLevel=body.playerChannel?PlayerChannelGeometry.Level(body,p,view.MapSide):generatedRiver&&RegionalRiverNetwork.HasGroundFollowingWater(view.Data)?RegionalRiverNetwork.GroundWaterLevel(view.Data,normalized.x,normalized.y):level;
                 float waterDepth=Mathf.Max(0,sampleLevel-height(p));
                 float optical=LakeShoreRenderer.EnabledForEvaluation?Mathf.Lerp(.65f,1.4f,noise(p)):1;
                 optical=Mathf.Lerp(optical,1,Mathf.SmoothStep(0,1,Mathf.InverseLerp(1,3,waterDepth)));
@@ -128,11 +137,11 @@ namespace CityForge.World
             mesh = new Mesh { name = "Bounded lake/pond" };
             mesh.vertices = new[] { new Vector3(min.x, level, min.y), new Vector3(min.x, level, max.y), new Vector3(max.x, level, min.y), new Vector3(max.x, level, max.y) };
             mesh.triangles = new[] { 0, 1, 2, 2, 1, 3 }; mesh.RecalculateBounds();
-            if(generatedRiver&&RegionalRiverNetwork.HasGroundFollowingWater(view.Data)){
+            if(body.playerChannel||generatedRiver&&RegionalRiverNetwork.HasGroundFollowingWater(view.Data)){
                 const int n=257;var vertices=new Vector3[n*n];var triangles=new int[(n-1)*(n-1)*6];int t=0;
                 for(int z=0;z<n;z++)for(int x=0;x<n;x++){
                     var p=min+Vector2.Scale(new Vector2(x/(float)(n-1),z/(float)(n-1)),size);var uv=p/view.MapSide+Vector2.one*.5f;
-                    vertices[z*n+x]=new Vector3(p.x,RegionalRiverNetwork.GroundWaterLevel(view.Data,uv.x,uv.y),p.y);
+                    vertices[z*n+x]=new Vector3(p.x,body.playerChannel?PlayerChannelGeometry.Level(body,p,view.MapSide):RegionalRiverNetwork.GroundWaterLevel(view.Data,uv.x,uv.y),p.y);
                     if(x<n-1&&z<n-1){int i=z*n+x;triangles[t++]=i;triangles[t++]=i+n;triangles[t++]=i+1;triangles[t++]=i+1;triangles[t++]=i+n;triangles[t++]=i+n+1;}
                 }
                 mesh.Clear();mesh.indexFormat=UnityEngine.Rendering.IndexFormat.UInt32;mesh.vertices=vertices;mesh.triangles=triangles;mesh.RecalculateBounds();

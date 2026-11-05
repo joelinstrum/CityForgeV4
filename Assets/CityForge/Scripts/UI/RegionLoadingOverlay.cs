@@ -46,6 +46,14 @@ namespace CityForge.UI
             Label(panel,"Hint",district?"Please wait while your district is prepared.":"Please wait while your region is prepared.",font,18,new Vector2(35,-219),new Vector2(780,35));
             return loader;
         }
+        public static RegionLoadingOverlay ShowOperation(string title)
+        {
+            var loader=Show(title,null,true);
+            loader.transform.Find("Panel/Title").GetComponent<Text>().text=title.ToUpperInvariant();
+            loader.transform.Find("Panel/Hint").GetComponent<Text>().text="Please wait while the terrain, water and vegetation are updated.";
+            loader.transform.Find("Backdrop").GetComponent<Image>().color=new Color(.035f,.05f,.04f,.55f);
+            return loader;
+        }
         static RectTransform Box(Transform parent,string name,Color color){var go=new GameObject(name,typeof(RectTransform),typeof(Image));go.transform.SetParent(parent,false);go.GetComponent<Image>().color=color;return go.GetComponent<RectTransform>();}
         static void Stretch(RectTransform rect){rect.anchorMin=Vector2.zero;rect.anchorMax=Vector2.one;rect.offsetMin=rect.offsetMax=Vector2.zero;}
         static Text Label(Transform parent,string name,string value,Font font,int size,Vector2 position,Vector2 dimensions){var go=new GameObject(name,typeof(RectTransform),typeof(Text));go.transform.SetParent(parent,false);var text=go.GetComponent<Text>();text.font=font;text.fontSize=size;text.text=value;text.color=new Color(.89f,.87f,.74f);text.supportRichText=false;text.raycastTarget=false;var rect=text.rectTransform;rect.anchorMin=rect.anchorMax=rect.pivot=new Vector2(0,1);rect.anchoredPosition=position;rect.sizeDelta=dimensions;return text;}

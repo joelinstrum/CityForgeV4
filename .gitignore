@@ -225,3 +225,9 @@ venv/
 # Approved purchased mixed-forest runtime library and prefabs remain private.
 /Assets/CityForge/Resources/Trees/ApprovedMixedForest/
 /Assets/CityForge/Resources/Trees/ApprovedMixedForest.meta
+
+# Original nature-editor shader source; generated UI artwork remains local.
+!/Assets/CityForge/Resources/UI/
+!/Assets/CityForge/Resources/UI.meta
+!/Assets/CityForge/Resources/UI/ForestRemovalCircle.shader
+!/Assets/CityForge/Resources/UI/ForestRemovalCircle.shader.meta

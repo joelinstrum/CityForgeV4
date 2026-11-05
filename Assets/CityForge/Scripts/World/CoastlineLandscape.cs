@@ -21,7 +21,7 @@ public sealed partial class MeadowDistrictLandscape {
  bool wet=CoastalShorelineSwash.Applies(View)?Height(new Vector2(worldX,worldZ))<View.SeaLevel+2:View.Coastline?worldX<CoastlineTestRegion.ShoreX(worldZ)+12:Height(new Vector2(worldX,worldZ))<View.SeaLevel-.02f;
  if(wet&&!View.Coastline&&!(View.CreationSettings?.version>=5)){
  var normalized=new Vector2(worldX/View.MapSide+.5f,worldZ/View.MapSide+.5f);wet=false;
- foreach(var body in View.Data.WaterBodies)if((body.kind==WaterBodyKind.Ocean||body.kind==WaterBodyKind.River)&&body.Bounds.Contains(normalized)&&body.Contains(normalized)){wet=true;break;}
+ foreach(var body in View.Data.WaterBodies)if(!body.playerChannel&&(body.kind==WaterBodyKind.Ocean||body.kind==WaterBodyKind.River)&&body.Bounds.Contains(normalized)&&body.Contains(normalized)){wet=true;break;}
  }
  float clipValue=wet?0:1;
  if(groundFollowing){

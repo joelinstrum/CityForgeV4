@@ -4,12 +4,15 @@ using UnityEngine;
 namespace CityForge.World
 {
     /// <summary>Seeded ambient wildlife, isolated to one district. No combat, farming or simulation.</summary>
-    public sealed class DistrictWildlife:MonoBehaviour
+    public sealed partial class DistrictWildlife:MonoBehaviour
     {
         [Serializable] public sealed class Animal
         {
             public WildlifeSpecies species;public Transform root;public Animator animator;
             public Vector2 home,target;public float wait;public bool moving;
+            public WildlifeActivity activity;public float thirst;public Vector2 drinkOrigin,waterFacing;
+            public bool canDrink;
+            internal Vector2? lastDryPosition;
         }
         [SerializeField] List<Animal> animals=new();
         public IReadOnlyList<Animal> Animals=>animals;
@@ -23,7 +26,7 @@ namespace CityForge.World
             bool visible=camera&&camera.ZoomLevel<=2;
             if(renderers==null||visible==shown)return;shown=visible;
             foreach(var renderer in renderers)if(renderer)renderer.enabled=visible;
-            foreach(var animal in animals)if(animal.animator)animal.animator.enabled=visible;
+            foreach(var animal in animals)if(animal.animator){animal.animator.enabled=visible;if(visible&&animal.activity==WildlifeActivity.Drinking)Animate(animal,false,true);}
         }
         public void FindAnimal(){
             if(!camera||animals.Count==0)return;
@@ -43,7 +46,7 @@ namespace CityForge.World
         float R()=>(float)random.NextDouble();
         public void Initialize(MeadowDistrictLandscape land)
         {
-            Land=land;random=new System.Random(unchecked(land.Seed^land.DistrictIndex*73856093^15485863));
+            Land=land;WaterAccess=new WildlifeWaterAccess(land);waterRevision=land.View.WoodlandRevision;random=new System.Random(unchecked(land.Seed^land.DistrictIndex*73856093^15485863));
             var library=Resources.Load<WildlifeLibrary>("Wildlife/TemperateWildlife");
             if(!library){Debug.LogWarning("Animal Pack Deluxe wildlife library is missing. Build local wildlife assets before enabling animals.");return;}
             IndexTrees();
@@ -77,27 +80,23 @@ namespace CityForge.World
                 bool occupied=false;foreach(var a in animals)if((a.home-p).sqrMagnitude<(aquatic||crabs?4:36)){occupied=true;break;}if(occupied)continue;
                 var go=Instantiate(species.prefab,new Vector3(p.x,y,p.y),Quaternion.Euler(0,R()*360,0),transform);
                 go.name=species.id;var animator=go.GetComponentInChildren<Animator>();
-                if(animator){animator.applyRootMotion=false;animator.cullingMode=AnimatorCullingMode.CullUpdateTransforms;animator.Play("Idle",0,R());}
-                animals.Add(new Animal{species=species,root=go.transform,animator=animator,home=p,target=p,wait=species.habitat==WildlifeHabitat.FlyingBird?0:2+R()*8});return;
+                if(animator){animator.applyRootMotion=false;animator.keepAnimatorStateOnDisable=true;animator.cullingMode=AnimatorCullingMode.CullUpdateTransforms;animator.Play("Idle",0,R());}
+                animals.Add(new Animal{species=species,root=go.transform,animator=animator,home=p,target=p,wait=species.habitat==WildlifeHabitat.FlyingBird?0:2+R()*8,
+                    thirst=Mathf.Lerp(12,45,Mathf.Repeat(p.x*.123f+p.y*.217f,1)),canDrink=species.id=="deer"&&animator&&animator.HasState(0,Animator.StringToHash("Base Layer.Drink"))});return;
             }
         }
-        public bool Suitable(WildlifeSpecies species,Vector2 p,out float y)
+        public bool Suitable(WildlifeSpecies species,Vector2 p,out float y,bool waterVisit=false)
         {
             y=0;if(!Land.Contains(p)||p.x<Land.Origin.x+2||p.y<Land.Origin.y+2||p.x>Land.Origin.x+Land.Side-2||p.y>Land.Origin.y+Land.Side-2)return false;
             float ground=Land.Height(p);var uv=p/Land.View.MapSide+Vector2.one*.5f;
             bool aquatic=species.habitat==WildlifeHabitat.Freshwater||species.habitat==WildlifeHabitat.River;
-            RegionWaterBody freshwater=null;float water=Land.View.SeaLevel;
-            foreach(var body in Land.View.Data.WaterBodies){
-                if(body.kind!=WaterBodyKind.River&&body.kind!=WaterBodyKind.Lake&&body.kind!=WaterBodyKind.Pond)continue;
-                if(body.Bounds.Contains(uv)&&body.Contains(uv)){freshwater=body;water=body.hasSurfaceLevel?body.surfaceLevelNormalized*Land.DisplayTerrain.terrainData.size.y:Land.View.SeaLevel;break;}
-            }
             if(species.habitat==WildlifeHabitat.RiverBankShallows){
                 bool riverNearby=false;
                 foreach(var body in Land.View.Data.WaterBodies){if(body.kind!=WaterBodyKind.River)continue;
                     var bounds=Land.View.CreationSettings?.version>=5?LakeWaterRenderer.GeneratedRiverBounds(body):body.Bounds;
                     bounds.min-=Vector2.one*(6/Land.View.MapSide);bounds.max+=Vector2.one*(6/Land.View.MapSide);
                     if(!bounds.Contains(uv))continue;
-                    float level=body.hasSurfaceLevel?body.surfaceLevelNormalized*Land.DisplayTerrain.terrainData.size.y:Land.View.SeaLevel;
+                    float level=WaterAccess.Level(body,p);
                     if(ground>=level-.65f&&ground<=level+.9f){riverNearby=true;break;}
                 }
                 if(!riverNearby||Mathf.Abs(Land.ShoreDistance(p))>6||Land.MountainSlope(p)>30||Land.RoadDistance(p)<Land.Baseline.roadWidth+2)return false;
@@ -108,14 +107,18 @@ namespace CityForge.World
                 y=ground+32;return true;
             }
             if(aquatic){
-                if(freshwater==null||species.habitat==WildlifeHabitat.River&&freshwater.kind!=WaterBodyKind.River)return false;
+                if (!WaterAccess.Wet(p, ground, out var freshwater, out float water) ||
+                    freshwater.kind == WaterBodyKind.Ocean ||
+                    (species.habitat == WildlifeHabitat.River && freshwater.kind != WaterBodyKind.River)) return false;
                 float depth=water-ground;if(depth<.65f)return false;
                 y=water-.22f;return true;
             }
-            if(ground<=Land.View.SeaLevel+.5f||freshwater!=null&&ground<water+.5f||Land.ShoreDistance(p)<2||Land.RoadDistance(p)<Land.Baseline.roadWidth+4||Land.MountainSlope(p)>23)return false;
+            if (ground <= Land.View.SeaLevel + .12f || (!waterVisit && Land.ShoreDistance(p) < 2) ||
+                Land.RoadDistance(p) < Land.Baseline.roadWidth + 4 || Land.MountainSlope(p) > 23 ||
+                !WaterAccess.DryFootprint(p, ground)) return false;
             float woodland=Land.Woodland(p);
-            if(species.habitat==WildlifeHabitat.WoodlandBird&&(woodland<.1f||Land.Canopy(p)>.35f))return false;
-            if(species.habitat==WildlifeHabitat.Woodland&&woodland<.4f||species.habitat==WildlifeHabitat.WoodlandEdge&&(woodland<.15f||woodland>.8f))return false;
+            if(!waterVisit&&species.habitat==WildlifeHabitat.WoodlandBird&&(woodland<.1f||Land.Canopy(p)>.35f))return false;
+            if(!waterVisit&&(species.habitat==WildlifeHabitat.Woodland&&woodland<.4f||species.habitat==WildlifeHabitat.WoodlandEdge&&(woodland<.15f||woodland>.8f)))return false;
             if(species.habitat==WildlifeHabitat.FreshwaterBank){
                 if(Land.ShoreDistance(p)>10)return false;
                 bool nearby=false;foreach(var body in Land.View.Data.WaterBodies){if(body.kind!=WaterBodyKind.River&&body.kind!=WaterBodyKind.Lake&&body.kind!=WaterBodyKind.Pond)continue;
@@ -128,26 +131,9 @@ namespace CityForge.World
         }
         void Update()
         {
-            if(random==null)random=new System.Random(unchecked(Land.Seed^Land.DistrictIndex*73856093^15485863));
+            if(!Land)return;
             UpdateVisibility();if(!shown)return;
-            float dt=Mathf.Min(Time.deltaTime,.1f);
-            foreach(var animal in animals){
-                if(!animal.root)continue;
-                if(!animal.moving){animal.wait-=dt;if(animal.wait>0||animal.species.speed<=0)continue;
-                    bool flying=animal.species.habitat==WildlifeHabitat.FlyingBird;
-                    var destination=animal.home+new Vector2(R()-.5f,R()-.5f)*(flying?100:18);
-                    if(!Suitable(animal.species,destination,out _)){animal.wait=2+R()*4;continue;}
-                    animal.target=destination;animal.moving=true;if(animal.animator)animal.animator.SetBool("Moving",true);
-                }
-                var p=new Vector2(animal.root.position.x,animal.root.position.z);var delta=animal.target-p;
-                var next=Vector2.MoveTowards(p,animal.target,animal.species.speed*dt);
-                // Validate each small step; endpoints alone can cross a bank, road or district edge.
-                if(delta.sqrMagnitude<.04f||!Suitable(animal.species,next,out float y)){
-                    animal.moving=false;animal.wait=animal.species.habitat==WildlifeHabitat.FlyingBird?0:3+R()*9;if(animal.animator)animal.animator.SetBool("Moving",false);continue;
-                }
-                animal.root.position=new Vector3(next.x,y,next.y);
-                animal.root.rotation=Quaternion.RotateTowards(animal.root.rotation,Quaternion.LookRotation(new Vector3(delta.x,0,delta.y)),100*dt);
-            }
+            Tick(Mathf.Min(Time.deltaTime,.1f));
         }
     }
 }

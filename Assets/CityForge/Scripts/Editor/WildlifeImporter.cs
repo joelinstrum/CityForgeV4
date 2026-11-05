@@ -17,7 +17,7 @@ namespace CityForge.EditorTools
         static WildlifeImporter(){EditorApplication.update+=Poll;}
         static void Poll(){const string request="Library/WildlifeImport.request";if(EditorApplication.isCompiling||EditorApplication.isUpdating||!File.Exists(request))return;
             if(EditorApplication.isPlaying){EditorApplication.isPlaying=false;return;}File.Delete(request);
-            try{Build();File.WriteAllText("Library/WildlifeImport.result","PASS: curated temperate mammals, fish and Living Birds; local URP materials; idle/walk-only looping controllers; original licensed assets unchanged.");}
+            try{Build();File.WriteAllText("Library/WildlifeImport.result","PASS: curated temperate mammals, fish and Living Birds; local URP materials; idle/walk and deer drinking looping controllers; original licensed assets unchanged.");}
             catch(Exception e){File.WriteAllText("Library/WildlifeImport.result","FAIL: "+e);Debug.LogException(e);}}
         [MenuItem("CityForge/Animals/Build Local Temperate Wildlife")]
         public static void Build(){
@@ -64,6 +64,7 @@ namespace CityForge.EditorTools
                     still.motion=Clip(id+"-idle",idle,pack);moving.motion=Clip(id+"-walk",walk,pack);machine.defaultState=still;
                     var start=still.AddTransition(moving);start.hasExitTime=false;start.duration=.2f;start.AddCondition(AnimatorConditionMode.If,0,"Moving");
                     var stop=moving.AddTransition(still);stop.hasExitTime=false;stop.duration=.2f;stop.AddCondition(AnimatorConditionMode.IfNot,0,"Moving");
+                    if(id=="deer")ConfigureDeerDrinking(controller);
                     animator.runtimeAnimatorController=controller;animator.applyRootMotion=false;
                     var renderers=instance.GetComponentsInChildren<Renderer>(true);if(renderers.Length==0)throw new Exception(id+" has no renderer");
                     var bounds=renderers[0].bounds;foreach(var r in renderers)bounds.Encapsulate(r.bounds);
@@ -76,6 +77,25 @@ namespace CityForge.EditorTools
                     finally{UnityEngine.Object.DestroyImmediate(wrapper);instance=null;}
                 }finally{if(instance)UnityEngine.Object.DestroyImmediate(instance);}
             }
+        }
+        [MenuItem("CityForge/Animals/Add Local Deer Drinking Animation")]
+        public static void PrepareDeerDrinking(){
+            var controller=AssetDatabase.LoadAssetAtPath<AnimatorController>(Output+"deer.controller");
+            if(!controller)throw new FileNotFoundException("Build the local deer first.");
+            ConfigureDeerDrinking(controller);AssetDatabase.SaveAssets();
+        }
+        static void ConfigureDeerDrinking(AnimatorController controller){
+            if(!controller.parameters.Any(p=>p.name=="Drinking"))controller.AddParameter("Drinking",AnimatorControllerParameterType.Bool);
+            var machine=controller.layers[0].stateMachine;
+            var state=machine.states.Select(s=>s.state).FirstOrDefault(s=>s.name=="Drink")??machine.AddState("Drink");
+            state.motion=Clip("deer-drink","Deer_Eat.fbx",Pack);
+            if(!machine.anyStateTransitions.Any(t=>t.destinationState==state)){
+                var enter=machine.AddAnyStateTransition(state);enter.hasExitTime=false;enter.duration=.25f;enter.canTransitionToSelf=false;enter.AddCondition(AnimatorConditionMode.If,0,"Drinking");
+            }
+            if(!state.transitions.Any()){
+                var idle=machine.states.First(s=>s.state.name=="Idle").state;var exit=state.AddTransition(idle);exit.hasExitTime=false;exit.duration=.2f;exit.AddCondition(AnimatorConditionMode.IfNot,0,"Drinking");
+            }
+            EditorUtility.SetDirty(controller);
         }
         static AnimationClip Clip(string name,string file,string pack){
             var source=AssetDatabase.LoadAllAssetsAtPath(pack+(pack==Pack?"Animations/":"animations/")+file).OfType<AnimationClip>().FirstOrDefault(c=>!c.name.StartsWith("__preview__"));

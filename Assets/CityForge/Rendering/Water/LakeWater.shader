@@ -109,7 +109,7 @@ Shader "CityForge/Calm Lake Water"
     if(_EnvironmentReady>.5) environment=DecodeHDREnvironment(SAMPLE_TEXTURECUBE_LOD(_Environment,sampler_Environment,direction,_ReflectionMip),_EnvironmentHDR);
     if(_RiverSurface>.5)environment=GlossyEnvironmentReflection(skyDirection,i.world,_RiverRoughness,1,GetNormalizedScreenSpaceUV(i.position.xy));
     // Premultiplied absorption leaves the real bed visible; Fresnel adds soft, approximate environment reflection.
-    float reflectionWeight=(_RiverSurface>.5?saturate(.025+fresnel*.8):saturate(fresnel+_ReflectionStrength))*smoothstep(0,.25,depth);
+    float reflectionWeight=(_RiverSurface>.5?saturate(.025+fresnel*.8):saturate(fresnel+_ReflectionStrength*lerp(.2,1,smoothstep(.5,3,depth))))*smoothstep(0,.25,depth);
     float edge=smoothstep(0,.12,depth);
     float alpha=(absorption+(1-absorption)*reflectionWeight)*edge;
     half3 color=(scattering*absorption*(1-reflectionWeight)+environment*reflectionWeight)*edge;

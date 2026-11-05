@@ -107,6 +107,7 @@ namespace CityForge.World
         {
             float distance=.02f;
             if(data.WaterBodies!=null)foreach(var body in data.WaterBodies){
+                if(body.playerChannel)continue;
                 if(distance<=0)return distance;
                 if(body.centerline!=null){var bounds=body.Bounds;if(point.x<bounds.xMin-distance||point.x>bounds.xMax+distance||point.y<bounds.yMin-distance||point.y>bounds.yMax+distance)continue;distance=Mathf.Min(distance,body.channelVersion>=1?ChannelDistance(body,point,distance+body.halfWidthNormalized)-body.halfWidthNormalized:body.DistanceToCenterline(point,out _)-body.halfWidthNormalized);}
                 else if(body.kind==WaterBodyKind.Ocean&&body.Contains(point))return -1;

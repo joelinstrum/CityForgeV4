@@ -24,6 +24,8 @@ namespace CityForge.World
         public RegionDistrictInfo[] districts;
         public NativeCampRecord[] nativeCamps;
         public CombinedDistrictGroup[] combinedDistricts;
+        public ForestRemovalStroke[] forestRemovals;
+        public ForestAdditionRecord[] forestAdditions;
         public int meadowCacheDistrict=-1;
         public float terrainHeightRange;
         public RegionWaterBody[] waterBodies;
@@ -86,7 +88,7 @@ namespace CityForge.World
         {
             var baseline=Resources.Load<MeadowRuntimeBaseline>("Region/MeadowRuntimeBaseline");
             var info=new SavedRegionInfo{animals=view.AnimalsEnabled,id=id??view.SavedRegionId??Guid.NewGuid().ToString("N"),name=name??view.RegionName,season=(int)view.Season,terrainHeightRange=view.TerrainHeightRange,seed=view.Data.Seed,size=(int)view.Size,district=view.SelectedDistrict,meadow=view.PrefersMeadow,waterBodies=view.Data.WaterBodies,waterless=view.Waterless,coastline=view.Coastline,coastVersion=view.CoastVersion,minimalRiverCrest=view.MinimalRiverCrest,stillWater=false,lakeWaterVersion=LakeWaterRenderer.UsesCalmWater(view)?1:-1,riverBedVersion=view.RiverBedVersion,savedUtc=DateTime.UtcNow.ToString("O"),baselineVersion=baseline?baseline.generationVersion:0,camera=view.GetComponentInChildren<CameraSystem.CityForgeCameraController>().CaptureRegionState()};
-            info.climate=view.Climate;info.creation=view.CreationSettings;info.districts=view.Districts;info.combinedDistricts=view.CombinedDistricts;info.nativeCamps=view.NativeCamps;
+            info.climate=view.Climate;info.creation=view.CreationSettings;info.districts=view.Districts;info.combinedDistricts=view.CombinedDistricts;info.nativeCamps=view.NativeCamps;info.forestRemovals=view.ForestRemovals;info.forestAdditions=view.ForestAdditions;
             var pilot=view.ApprovedDistrict;info.meadowCacheDistrict=pilot?pilot.DistrictIndex:view.LoadedMeadowDistrict;
             return new SavedRegionSnapshot{info=info,data=view.Data,meadow=pilot?pilot.CaptureSnapshot():view.LoadedMeadow};
         }
@@ -109,6 +111,9 @@ namespace CityForge.World
         }
         public static void Write(SavedRegionSnapshot snapshot,string path)
         {
+            PlayerLakeGeometry.Validate(snapshot.info.waterBodies);PlayerChannelGeometry.Validate(snapshot.info.waterBodies);
+            ForestAdditionValidation.Validate(snapshot.info.forestAdditions,snapshot.info.creation?.GridSide??2,NativeCampPlanner.MapSide(snapshot.info.size,snapshot.info.creation?.GridSide??2));
+            ForestRemovalValidation.Validate(snapshot.info.forestRemovals,snapshot.info.creation?.GridSide??2);
             DistrictConnections.Validate(snapshot.info.combinedDistricts,snapshot.info.creation?.GridSide??2);
             NativeCampPlanner.Validate(snapshot.info.nativeCamps,snapshot.info.creation?.GridSide??2,NativeCampPlanner.MapSide(snapshot.info.size,snapshot.info.creation?.GridSide??2));
             string temp=path+".tmp";Directory.CreateDirectory(Path.GetDirectoryName(path));
@@ -118,7 +123,7 @@ namespace CityForge.World
                     // Unity serializes a null inline class as a default object. Preserve legacy
                     // maps' absent recipe so saving climate cannot change their grid or scale.
                     if(snapshot.info.creation==null)metadata=System.Text.RegularExpressions.Regex.Replace(metadata,"\"creation\"\\s*:\\s*\\{[^{}]*\\}","\"creation\":null");
-                    var json=Encoding.UTF8.GetBytes(metadata);if(json.Length>1048576)throw new InvalidDataException("Region metadata exceeds the supported size.");writer.Write(json.Length);writer.Write(json);
+                    var json=Encoding.UTF8.GetBytes(metadata);if(json.Length>16777216)throw new InvalidDataException("Region metadata exceeds the supported size.");writer.Write(json.Length);writer.Write(json);
                     WriteFloats(writer,snapshot.data.Heights);WriteFloats(writer,snapshot.data.WaterDistance);
                     writer.Write(snapshot.meadow!=null);
                     if(snapshot.meadow!=null){var m=snapshot.meadow;writer.Write(m.version);writer.Write(m.road.Length);foreach(var p in m.road){writer.Write(p.x);writer.Write(p.y);}
@@ -138,7 +143,7 @@ namespace CityForge.World
             foreach(float d in water)if(float.IsNaN(d)||float.IsInfinity(d))throw new InvalidDataException("Invalid water distances.");
             var result=new SavedRegionSnapshot{info=info,data=new PrototypeRegionData(info.seed,heights,water){WaterBodies=info.waterBodies}};
             if(reader.ReadBoolean()){
-                var m=new MeadowRegionSnapshot{version=reader.ReadInt32()};int roads=Count(reader,2,1024);m.road=new Vector2[roads];for(int i=0;i<roads;i++){m.road[i]=new Vector2(reader.ReadSingle(),reader.ReadSingle());if(!Finite(m.road[i].x)||!Finite(m.road[i].y)||(i>0&&m.road[i]==m.road[i-1]))throw new InvalidDataException("Invalid saved road.");}
+                var m=new MeadowRegionSnapshot{version=reader.ReadInt32()};int roads=Count(reader,0,1024);m.road=new Vector2[roads];for(int i=0;i<roads;i++){m.road[i]=new Vector2(reader.ReadSingle(),reader.ReadSingle());if(!Finite(m.road[i].x)||!Finite(m.road[i].y)||(i>0&&m.road[i]==m.road[i-1]))throw new InvalidDataException("Invalid saved road.");}
                 int trees=Count(reader,0,200000);m.trees=new TreeInstance[trees];for(int i=0;i<trees;i++){
                     var t=new TreeInstance{position=new Vector3(reader.ReadSingle(),reader.ReadSingle(),reader.ReadSingle()),widthScale=reader.ReadSingle(),heightScale=reader.ReadSingle(),rotation=reader.ReadSingle(),prototypeIndex=reader.ReadInt32(),color=ReadColor(reader),lightmapColor=ReadColor(reader)};
                     if(!Finite(t.position.x)||!Finite(t.position.y)||!Finite(t.position.z)||t.position.x<0||t.position.x>1||t.position.z<0||t.position.z>1||!Finite(t.widthScale)||!Finite(t.heightScale)||!Finite(t.rotation)||t.widthScale<=0||t.heightScale<=0||!ForestTreeMix.IsValidPrototype(t.prototypeIndex,info.id==HillsMountainTestRegion.Id))throw new InvalidDataException("Invalid saved tree.");m.trees[i]=t;
@@ -150,12 +155,12 @@ namespace CityForge.World
         static bool Finite(float v)=>!float.IsNaN(v)&&!float.IsInfinity(v);
         static SavedRegionInfo ReadInfo(BinaryReader reader)
         {
-            if(reader.ReadString()!=Magic)throw new InvalidDataException("Unsupported saved region.");int length=Count(reader,2,1048576);var bytes=reader.ReadBytes(length);if(bytes.Length!=length)throw new EndOfStreamException();
+            if(reader.ReadString()!=Magic)throw new InvalidDataException("Unsupported saved region.");int length=Count(reader,2,16777216);var bytes=reader.ReadBytes(length);if(bytes.Length!=length)throw new EndOfStreamException();
             var json=Encoding.UTF8.GetString(bytes);var info=JsonUtility.FromJson<SavedRegionInfo>(json);
             // JsonUtility can instantiate a missing nested recipe with current defaults.
             // An old save without a recipe must retain its original grid/vertical scale.
             if(info!=null&&(!json.Contains("\"creation\"")||System.Text.RegularExpressions.Regex.IsMatch(json,"\"creation\"\\s*:\\s*null")))info.creation=null;
-            if(info!=null&&!json.Contains("\"meadowCacheDistrict\""))info.meadowCacheDistrict=info.district>=0?info.district:3;if(info==null||info.schema!=1||(int)info.climate<0||(int)info.climate>1||info.season<0||info.season>2||info.size<0||info.size>2||!Finite(info.terrainHeightRange)||info.terrainHeightRange<0||info.terrainHeightRange>10000||info.district< -1||info.district>=(info.creation?.GridSide??2)*(info.creation?.GridSide??2)||string.IsNullOrWhiteSpace(info.name))throw new InvalidDataException("Unsupported region metadata.");if(info.creation!=null)info.creation.Validate();DistrictConnections.Validate(info.combinedDistricts,info.creation?.GridSide??2);NativeCampPlanner.Validate(info.nativeCamps,info.creation?.GridSide??2,NativeCampPlanner.MapSide(info.size,info.creation?.GridSide??2));return info;
+            if(info!=null&&!json.Contains("\"meadowCacheDistrict\""))info.meadowCacheDistrict=info.district>=0?info.district:3;if(info==null||info.schema!=1||(int)info.climate<0||(int)info.climate>1||info.season<0||info.season>2||info.size<0||info.size>2||!Finite(info.terrainHeightRange)||info.terrainHeightRange<0||info.terrainHeightRange>10000||info.district< -1||info.district>=(info.creation?.GridSide??2)*(info.creation?.GridSide??2)||string.IsNullOrWhiteSpace(info.name))throw new InvalidDataException("Unsupported region metadata.");if(info.creation!=null)info.creation.Validate();PlayerLakeGeometry.Validate(info.waterBodies);PlayerChannelGeometry.Validate(info.waterBodies);ForestAdditionValidation.Validate(info.forestAdditions,info.creation?.GridSide??2,NativeCampPlanner.MapSide(info.size,info.creation?.GridSide??2));ForestRemovalValidation.Validate(info.forestRemovals,info.creation?.GridSide??2);DistrictConnections.Validate(info.combinedDistricts,info.creation?.GridSide??2);NativeCampPlanner.Validate(info.nativeCamps,info.creation?.GridSide??2,NativeCampPlanner.MapSide(info.size,info.creation?.GridSide??2));return info;
         }
         static int Count(BinaryReader reader,int min,int max){int count=reader.ReadInt32();if(count<min||count>max)throw new InvalidDataException("Invalid snapshot dimensions.");return count;}
         static void WriteFloats(BinaryWriter writer,Array values){var buffer=new byte[Buffer.ByteLength(values)];Buffer.BlockCopy(values,0,buffer,0,buffer.Length);writer.Write(buffer);}

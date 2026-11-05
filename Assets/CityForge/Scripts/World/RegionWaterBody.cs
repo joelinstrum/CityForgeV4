@@ -24,6 +24,8 @@ namespace CityForge.World
         public float bankWidthNormalized;
         public bool hasSurfaceLevel;public float surfaceLevelNormalized;
         public string appearanceProfile;
+        public bool playerChannel;public float[] playerChannelLevels;public Vector2[] playerChannelGuides;public float playerChannelDepth;
+        public bool playerCreated;public float playerDepth,playerBankWidth,playerOuterBankWidth;
         public float DistanceToCenterline(Vector2 point,out Vector2 downstream)
         {
             float best=float.PositiveInfinity;downstream=Vector2.zero;
@@ -35,6 +37,7 @@ namespace CityForge.World
         // An exact segment hierarchy for immutable generated routes. This changes
         // query cost, not the stored curve or the distance field's resolution.
         [NonSerialized] CenterlineIndex distanceIndex;
+        [NonSerialized] internal PlayerChannelSampler playerSampler;
         public float IndexedCenterlineDistance(Vector2 point)
         {
             if(centerline==null||centerline.Length<2)return float.PositiveInfinity;
@@ -96,7 +99,7 @@ namespace CityForge.World
         }
         public bool Contains(Vector2 point)
         {
-            if(centerline!=null&&DistanceToCenterline(point,out _)<=halfWidthNormalized)return true;
+            if(centerline!=null&&(playerChannel?IndexedCenterlineDistance(point):DistanceToCenterline(point,out _))<=halfWidthNormalized)return true;
             if(!PolygonContains(outline,point))return false;
             if(holes!=null)foreach(var hole in holes)if(PolygonContains(hole?.points,point))return false;
             return true;
@@ -124,7 +127,7 @@ namespace CityForge.World
         [NonSerialized] Rect channelBounds;
         public Rect Bounds
         {
-            get {if(channelVersion>=1&&boundsPoints==centerline&&boundsWidth==halfWidthNormalized&&boundsPoints!=null)return channelBounds;bool isRiver=centerline!=null&&centerline.Length>1;var points=isRiver?centerline:outline;if(points==null||points.Length==0)return Rect.zero;var min=points[0];var max=min;foreach(var p in points){min=Vector2.Min(min,p);max=Vector2.Max(max,p);}float width=isRiver?halfWidthNormalized:0;var result=Rect.MinMaxRect(min.x-width,min.y-width,max.x+width,max.y+width);if(channelVersion>=1){channelBounds=result;boundsWidth=halfWidthNormalized;boundsPoints=centerline;}return result;}
+            get {if((channelVersion>=1||playerChannel)&&boundsPoints==centerline&&boundsWidth==halfWidthNormalized&&boundsPoints!=null)return channelBounds;bool isRiver=centerline!=null&&centerline.Length>1;var points=isRiver?centerline:outline;if(points==null||points.Length==0)return Rect.zero;var min=points[0];var max=min;foreach(var p in points){min=Vector2.Min(min,p);max=Vector2.Max(max,p);}float width=isRiver?halfWidthNormalized:0;var result=Rect.MinMaxRect(min.x-width,min.y-width,max.x+width,max.y+width);if(channelVersion>=1||playerChannel){channelBounds=result;boundsWidth=halfWidthNormalized;boundsPoints=centerline;}return result;}
         }
         public static RegionWaterBody[] Generate(PrototypeRegionData data,int riverVersion,bool waterless,float side)
         {
