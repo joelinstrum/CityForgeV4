@@ -8,10 +8,53 @@ New wizard/default main-menu temperate recipes use forestAppearanceVersion1 and 
 approved private MixedForestLibrary at Trees/ApprovedMixedForest/V1/Library. Preserve
 its chestnut/locust/larch palette, fuller distance crowns, cheap distant shadows and
 hybrid near/instanced rendering. Missing/zero forest versions keep existing forests;
-native fall/winter and tropical vegetation remain authoritative. Read
+native fall/winter and tropical vegetation remain authoritative. New wizard/default
+recipes also opt into treeCoverageVersion1: per-original-district 25/50/75%
+plantable-ground woodland footprints, default50%, approximately9.48m internal
+spacing. Missing/zero coverage versions retain existing ecology/planting. Combined
+districts keep individual member choices; do not apply the legacy10m thinning to
+coverage-version-one mixed trees. Read
 Documentation/03_Technical/Approved_Mixed_Forest.md before changing this integration.
 
 The Git repository is public and source-only. Do not add licensed artwork, imported asset packs, Crest package source, builds, or saved maps.
+
+## PointWire and player lakes
+
+Use PointWirePath/PointWireSurface/PointWireTool and PointWireGeometry for reusable
+marker/string outlines; keep consumer mutations in adapters. Read
+Documentation/03_Technical/PointWire.md and Player_Lakes.md. User lake footprints,
+levels/depth/bank widths persist in RegionWaterBody. Replay basins before district
+terrain application; filter trees after original-ground coverage ranking, including
+stale caches and explicit additions. Preserve original lake/water rendering. Closing
+a valid lake guide commits water; cancelling its sketch does not undo the lake.
+
+Player streams/rivers use RegionWaterBody.playerChannel and shared normalized
+centerlines plus world-height station grades. Read Player_Waterways.md. Keep them
+out of native generated-water evaluators and coverage ranking. Rebuild bounded
+channels in any intersecting district from the same record; never independently
+regenerate a boundary's level. Extensions append to the same ID and preserve old
+stations. PointWire OpenPath/CompletePath is the Enter-to-finish interaction.
+
+Generated riverbank PAINT must require HasNaturalRiverBanks, not merely a generated
+watery district; otherwise lakes inherit a broad soil halo. Keep water renderer routing
+separate. LakeMeadowRepair handles polluted lake caches locally before bed capture;
+preserve native banks, camps, roads, channel paint and authoritative geography.
+
+## Forest editing
+
+Forest removal is persisted in additive SavedRegionInfo.forestRemovals metadata, scoped
+by original district IDs. Preserve masks through Capture/OpenStages and filter stale
+caches/fresh generation so cleared trees cannot regrow; never re-rank coverage after
+clearing. RemoveForest synchronizes canonical/native/mixed trees and spatial batches.
+Brush sizes200/400m are circumference, not diameter. Hold/drag uses distance-sampled
+positions and a single batched mutation per frame; do not reintroduce per-frame
+stationary edits or one terrain rebuild per sample. Read
+Documentation/03_Technical/Forest_Removal.md before changing forest editing.
+
+Preserve SavedRegionInfo.forestAdditions through capture/open. Merge explicit planted
+records after base removal masks; additions override older removals, and later removal
+deletes addition records. Cached/fresh merges must be idempotent. Preserve existing
+forest objects when appending. Read Documentation/03_Technical/Forest_Planting.md.
 
 ## Regional overview and expanded grid
 
@@ -38,3 +81,10 @@ NativeCampDistrict renders5–9 horseshoe teepees, one upright central totem and
 Persistent shadow default: CityForge_URP uses4096 main-light shadows, four cascades with splits(.50,.68,.85), and Hard directional shadows through all seasons. Preserve camera shadow-distance fitting and navigation quality throttling; do not reintroduce a temporary live-preview pipeline as a gameplay dependency.
 
 Generated narrow streams (isStream/channelVersion>=2) use GeneratedStreamAppearance to carry the approved Pass17 scanned rocks, ten individual stone variants, native bank shrubs and blended damp-earth appearance onto saved regional routes. Preserve this integration and its cache padding/deduplication. Do not use the study-only fixed Center(z),1024m domain or12m water plane as generated geography; use route-local coordinates and GroundWaterLevel. Preserve original Pass17 fixture gates and current shallow-bank/width/mountain-avoidance rules.
+
+Land wildlife uses WildlifeWaterAccess (actual lake/ocean levels and saved player-channel
+grades) as a physical movement barrier. Preserve per-step and full-path checks, aquatic /
+flying exceptions, and close-zoom simulation pause. Deer freshwater visits use the local
+head-down Drink clip, dry bank targets, stationary drinking and return-to-roaming states.
+Do not let habitat exceptions for drinking bypass water or tree/road safety. See
+Documentation/03_Technical/Wildlife_Water_Behavior.md. No persistent animal activity schema.

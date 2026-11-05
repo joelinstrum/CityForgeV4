@@ -1,3 +1,47 @@
+# Larch foliage tint — November 3, 2026
+
+User requested a slight lift to evergreen brightness. Both private prepared larch
+branch foliage LOD materials now use RGB(.32,.36,.30), previously(.27,.30,.25).
+Source textures, bark, broadleaf palette and global lighting retain their settings.
+Runtime library/source larch prefabs share these saved materials.
+
+# Per-district tree coverage — November 3, 2026
+
+New wizard/default-menu recipes now opt into `treeCoverageVersion=1`, with a 50%
+default and optional `districtTreeCoverage` array indexed by original district ID.
+Each entry is 25, 50 or 75. In Create Region / Terrain, Set All Districts changes the
+whole grid; clicking an individual cell cycles its percentage. North is at the top.
+The old global Vegetation control is replaced by this explicit coverage selection.
+Empty/missing arrays use the default percentage. Missing/zero coverage versions keep
+existing ecology/planting. Existing saved regions are not migrated or rewritten.
+
+`DistrictTreeCoverage` adapts the approved 70% forest fixture's broad/fine noise
+ranking (.82/.18) and approximately 9.48m jittered spacing. Each original district
+ranks eligible planting cells and selects the requested fraction, giving contiguous
+woodland patches and meadow clearings rather than uniformly thinning trees. This is
+plantable-ground occupancy, not a measured canopy-area percentage. Water (9m buffer),
+steep slopes (>25 degrees), below-sea ground and camp clearings are excluded before
+ranking. Species, private art, lighting and rendering are retained. Native seasonal
+positions use this same plan; the mixed summer presentation no longer applies its
+legacy 10m thinning or ecology rejection to coverage-version-one trees.
+
+Combined districts concatenate their original member-cell plans and retain individual
+coverage percentages; L-shaped padding remains empty. Recipe copies and normal region
+saves persist all entries. Cached planting remains authoritative. The overview and
+ground ecology use the same seeded noise with sampled per-cell percentile thresholds;
+these are approximate previews while detailed planting uses exact eligible-cell ranks.
+The temperate summer palette remains five chestnuts, locust and two larches. Tropical
+presentation keeps its existing palm/native family, and native Fall/Winter remains.
+
+`DistrictTreeCoverageChecks.Planner()` covers exact ranks/exclusions, repeatability,
+nested footprints, independent cells, recipe round trip, invalid choices and legacy
+opt-out. `BeginLive()` explicitly creates a disposable region and verifies all three
+coverages, mixed/native populations, grounding, an L-shaped union, cached reopening,
+private disk round trip and season stability. All files are ignored Library content.
+
+The earlier integration notes below describe coverage-version-zero planting, which
+remains authoritative for pre-existing regions.
+
 # Approved mixed woodland — November 3, 2026
 
 New temperate regions created through the wizard or default main-menu creation use

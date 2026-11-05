@@ -177,6 +177,12 @@ venv/
 !/Assets/CityForge/Resources/Region/RegionalSlab.shader
 !/Assets/CityForge/Resources/Region/RegionalSlab.shader.meta
 
+# Authored foam exclusion only; private water materials remain excluded.
+!/Assets/CityForge/Resources/Water/
+!/Assets/CityForge/Resources/Water.meta
+!/Assets/CityForge/Resources/Water/InlandFoamExclusion.shader
+!/Assets/CityForge/Resources/Water/InlandFoamExclusion.shader.meta
+
 # Licensed Animal Pack Deluxe and generated wildlife art stay local.
 /Assets/Animal pack deluxe/
 /Assets/Animal pack deluxe.meta
@@ -219,3 +225,9 @@ venv/
 # Approved purchased mixed-forest runtime library and prefabs remain private.
 /Assets/CityForge/Resources/Trees/ApprovedMixedForest/
 /Assets/CityForge/Resources/Trees/ApprovedMixedForest.meta
+
+# Original nature-editor shader source; generated UI artwork remains local.
+!/Assets/CityForge/Resources/UI/
+!/Assets/CityForge/Resources/UI.meta
+!/Assets/CityForge/Resources/UI/ForestRemovalCircle.shader
+!/Assets/CityForge/Resources/UI/ForestRemovalCircle.shader.meta

@@ -17,6 +17,11 @@ namespace CityForge.World
         public int nativeCampVersion;
         // New wizard recipes opt in; missing/zero keeps existing saved forests.
         public int forestAppearanceVersion;
+        // Missing/zero preserves legacy ecology and saved planting.
+        public int treeCoverageVersion,treeCoveragePercent=50;
+        public int[] districtTreeCoverage;
+        public int TreeCoverage(int district)=>districtTreeCoverage!=null&&district<districtTreeCoverage.Length&&district>=0?districtTreeCoverage[district]:treeCoveragePercent;
+        static bool ValidCoverage(int percent)=>percent==25||percent==50||percent==75;
         // Opt-in only: old recipes retain their connected, broad waterways.
         public int waterwayVersion;
         public int GridSide=>version>=3?districtGrid:2;
@@ -32,6 +37,14 @@ namespace CityForge.World
         {
             if((version!=1&&version!=2&&version!=3&&version!=4&&version!=5&&version!=6&&version!=7&&version!=8&&version!=9&&version!=10&&version!=11&&version!=12)||(int)terrainShape<0||(int)terrainShape>7||topography<0||topography>4||rivers<0||rivers>3||streams<0||streams>2||(int)climate<0||(int)climate>1||(int)moisture<0||(int)moisture>2||(int)vegetation<0||(int)vegetation>2)
                 throw new ArgumentException("Unsupported region creation settings.");
+            if(treeCoverageVersion<0||treeCoverageVersion>1)throw new ArgumentException("Unsupported tree coverage version.");
+            if(treeCoverageVersion==1){
+                if(!ValidCoverage(treeCoveragePercent))throw new ArgumentException("Tree coverage must be 25%, 50% or 75%.");
+                if(districtTreeCoverage!=null&&districtTreeCoverage.Length>0){
+                    if(districtTreeCoverage.Length!=GridSide*GridSide)throw new ArgumentException("Tree coverage needs one value per original district.");
+                    foreach(int coverage in districtTreeCoverage)if(!ValidCoverage(coverage))throw new ArgumentException("Invalid district tree coverage.");
+                }
+            }
             if(waterwayVersion<0||waterwayVersion>5)throw new ArgumentException("Unsupported waterway version.");
             if(forestAppearanceVersion<0||forestAppearanceVersion>1)throw new ArgumentException("Unsupported forest appearance version.");
             if(nativeCampVersion<0||nativeCampVersion>1)throw new ArgumentException("Unsupported settlement content version.");

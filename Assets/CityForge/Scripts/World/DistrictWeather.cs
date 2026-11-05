@@ -51,6 +51,7 @@ namespace CityForge.World
             var rect=menu.GetComponent<RectTransform>();rect.anchorMin=rect.anchorMax=rect.pivot=Vector2.one;rect.anchoredPosition=new Vector2(-25,-292);rect.sizeDelta=new Vector2(205,178);
             status=Label(menu.transform,"TEMP WEATHER",16);status.rectTransform.anchorMin=new Vector2(0,1);status.rectTransform.anchorMax=Vector2.one;status.rectTransform.pivot=Vector2.up;status.rectTransform.anchoredPosition=Vector2.zero;status.rectTransform.sizeDelta=new Vector2(0,28);
             rainButton=MakeButton("Rain",34,()=>SetWeather(WeatherKind.Rain));snowButton=MakeButton("Snow",80,()=>SetWeather(WeatherKind.Snow));MakeButton("Clear",126,()=>SetWeather(WeatherKind.Clear));
+            menu.SetActive(!landscape.View.GetComponent<CityForge.UI.NatureToolbar>());
         }
         static Text Label(Transform parent,string text,int size)
         {

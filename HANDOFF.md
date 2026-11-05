@@ -1,3 +1,756 @@
+# District nature editing handoff — November 5, 2026
+
+The working district is Tree Coverage Preview, District 4–3 (index 19), in Unity Play
+mode. The latest working snapshot is `Library/BeforeCloseZoomOptimization.cfregion`.
+It retains four water records, including both player streams, and 5,936 canonical tree
+instances. The district was reopened with its original camera and 375 animals. Use this
+checkpoint for local recovery. Earlier checkpoints contain fewer player streams.
+
+District creation supports per-district woodland coverage. The Nature toolbar provides
+forest painting and removal, lake outlines, and stream and river routes. Waterway routes
+can continue into neighboring districts. Player streams reuse approved stone and shrub
+dressing and clear their channel of grass and trees. Land wildlife respects water
+barriers, and deer visit reachable freshwater banks to drink. Coastal sharks are ambient
+patrols. See the feature notes under `Documentation/03_Technical` for behavior and limits.
+
+The latest performance pass caches water bounds, skips repeat dry-footprint checks,
+and groups stream dressing into 48 m render batches. In the live Unity Editor district,
+zoom 0 stationary median frame time fell from 74.04 to 11.27 ms and p95 from 85.19 to
+11.95 ms. Scripted pan p95 was 10.77, 12.73, and 13.58 ms at zooms 0–2. These are local
+Editor measurements. Wildlife checks covered 559 wet samples, 55,500 land-animal
+positions, a controlled stream crossing, drinking and return, and zoom transitions.
+Raw timings are in `Library/CloseZoomBefore.txt` and `Library/CloseZoomFinal.txt`.
+The meadow sun uses lower shadow bias to bring hoof shadows closer to the ground.
+
+The public repo carries source and integration documentation. Restore the private
+runtime assets for a full visual check, including the approved mixed forest, stream
+rock meshes, UI atlas at `Resources/UI/NatureToolbarIcons.png`, shark assets, and wildlife.
+The local deer controller includes the drinking clip prepared by WildlifeImporter.
+The private assets and checkpoint are available in the existing local checkout.
+Use the current Unity project version from `ProjectSettings/ProjectVersion.txt`.
+
+# Wildlife water barriers / deer drinking — November 5, 2026
+
+Latest ORIGINAL checkpoint: Library/BeforeWildlifeWaterBehavior.cfregion. User had added
+another stream before this request:4 original water descriptors. Do not restore older
+3-body checkpoints. Original map/camera/season/animal setting restored after tests;
+no normal save/commit/push. Wildlife activities/positions are transient and restart.
+
+DistrictWildlife is now partial; WildlifeWaterBehavior.cs owns WildlifeWaterAccess,
+physical dry-path sampling and animal activities. All land mammals/ground birds stay
+out of water using actual footprints/levels (including immutable player stream grades),
+a0.5m clearance ring and <=0.4m path steps. Proposed paths and per-frame steps are checked.
+Fish/flying birds/shallow-bank crabs retain distinct habitat rules. Existing animals
+covered by newly created water recover to a safe dry bank; bounded failure hides/retries.
+WoodlandRevision refreshes trunk indices after water/forest edits.
+
+Deer with the local Drink state occasionally seek a reachable freshwater bank within64m,
+walk safely toward it, stop/face water, lower heads for6–10sec, then return to their prior
+roaming position. Only ecology restrictions relax for a water visit; water/tree/road/
+slope safety stays. Ocean banks are not drinking targets. Cooldown65–135sec; unsuccessful
+search retry20–45sec; initial12–45sec. One bank search per tick. No pathfinding/swimming,
+health/economy/thirst UI or persistent activity schema. Far zoom still pauses simulation;
+drinking animation resumes correctly when showing wildlife again.
+
+Private deer controller/clip prepared with WildlifeImporter.PrepareDeerDrinking using
+existing Animal Pack Deluxe Deer_Eat.fbx as the authored head-down motion. Adds looping
+Resources/Wildlife/deer-drink.anim and Drink/Drinking to local controller, keeping original
+FBX untouched and ignored assets out of public source. Normal wildlife builder includes
+this upgrade. Existing WildlifeChecks permits the deer-only state and checks safe movement
+in the relevant activity. Other species keep their original animations.
+
+Actual-map tests passed559 wet lake/channel samples, controlled stream crossing (dry
+endpoints blocked with water, same path accepted without that water), saltwater rejection,
+recovery after water occupies an animal,55500 land positions over30 simulated population
+seconds, natural deer approach/drink/return, stationary dry feet,1152 actual moving Walk
+animation samples, head lowering1.489m ->0.471m relative to feet, and zoom hide/show.
+Source compile and git diff checks pass. Work scripts under current chat work/, report
+Library/WildlifeWaterChecks.txt; outputs/Deer-Drinking.png and Wildlife-Water-Checks.txt.
+Read Documentation/03_Technical/Wildlife_Water_Behavior.md before extending.
+
+# Player stream appearance / creation feedback — November 5, 2026
+
+Latest ORIGINAL user checkpoint: Library/BeforePlayerStreamRefinement.cfregion. User had
+added one player stream;3 water descriptors total. Original working map/camera/season
+restored after all checks; no normal player save, commit or push. Test streams exist
+only in Library/PlayerStreamRefinementRoundtrip.cfregion. Keep the latest original
+checkpoint; older lake checkpoints would lose the user's new stream.
+
+Player streams now use GeneratedStreamAppearance optional player-route adapter:
+Pass17 scanned patches,10 individual stones, native seasonal shrub prefabs, actual
+cumulative route stations and immutable player grades. Player shrubs use independent
+instanced mesh/material batches (runtime material copies), never canonical tree caches.
+Fall/Winter/Summer refresh rebuilds this dressing without changing route or stone seats.
+Actual existing stream has103 patches/2286 stones/95 shrubs in summer.
+
+PlayerChannelEdits paints full bed coverage (no4% grass residual), approved sparse
+StreamBankBlend coverage on dry shoulders and earth on exposed excavated bank faces.
+Existing route geometry, levels, width/depth, native generated routing and lakes stay
+unchanged. Root clearing includes banks plus2m buffer. Existing canonical/mixed removal
+is retained, streamed small-plant tiles now invalidate after creation and exclude the
+corridor on rebuild. After editing, player water surfaces/dressing rebuild together so
+older bank shrubs aren't lost during forest refresh and extensions don't duplicate.
+
+RiverRouteTool opts into PointWireTool.DeferCompletion. Enter restores normal cursor
+immediately, hides sketch, presents Creating stream/river overlay for two frames before
+work, blocks map/camera keyboard input, rejects repeat Enter. Validation failure keeps
+editable sketch; success clears it; cancellation/teardown releases pending work and
+input. Reuses RegionLoadingOverlay.ShowOperation. Closed/lake completion stays synchronous.
+
+Checks passed immediate feedback before mutation, duplicate Enter, invalid route,
+success and cancellation cleanup, canonical/mixed root clearing,300 bed samples without
+meadow paint, one surface/approved dressing per stream, exact forest/dressing after disk
+and injected stale-tree-cache reopening, no-cache generation, seasonal dressing refresh,
+original-water-descriptor preservation and source compile/diff checks.6010 original
+canonical instances remain after corridor filtering; exact positions outside it retained.
+Current chat outputs/Player-Stream-Refinement.png, Stream-Creation-Feedback.png and
+Player-Stream-Refinement-Checks.txt contain preview and evidence. Read Player_Waterways.md.
+
+# Steeper player lake basins — November 5, 2026
+
+PlayerLakeGeometry.Apply uses underwaterRun=max(2, saved bank width *0.45). Same maximum depth, outline, waterline, outer dry grading and approved grass/dirt paint. Applies on replay to existing and new player lakes; stored descriptors unchanged. Typical35m run now15.75m. Synthetic terrain probe confirms >3m depth8m offshore and full6m by16m, waterline/distant dry terrain intact. Actual map roundtrip passes unchanged descriptor, forest and basin after reopening. Latest original checkpoint Library/BeforeSteeperLakes.cfregion; map restored from it, temporary roundtrip in Library only; original camera restored. No normal saves or commit. Preview outputs/Steeper-Lake.png.
+
+# Softer lake bank revision — November 5, 2026
+
+User rejected previous water tint and angular dry-bank edge. Removed shallow RGB channel clamp, brightened calm lake scattering to deep (.035,.14,.19), shallow (.10,.22,.23). Shallow reflection now20% strength ramping to full over0.5–3m. Player dry feather3.5–5.5m at lower24–56% weight, using7/19m noise instead of sub-texel strong edging. Original map checkpoint Library/BeforeSoftLakeBank.cfregion restored; camera restored after preview. Compile/shader and full terrain weight normalization checks passed;6116 trees unchanged. No normal save/commit. Supersedes color/feather settings below.
+
+# Restrained lake-edge reference refinement — November 5, 2026
+
+User reference requests less violet at the shallow edge and a thin earthy/pebbled
+shore with occasional visible stones and grass tufts. LakeWater.shader now ramps
+the constant calm-water reflection strength over0.15–1.5m depth, and gently limits
+red/blue-heavy captured highlights below1.75m. Deep calm water and the separate river
+branch retain their prior color/reflection formulas. No lighting/material asset edits.
+
+Player-lake dry paint narrows0.9–3.4m to0.7–2.2m; gravel fraction slightly increased.
+Random stones now stay within4m submerged /1.3m dry distance. A separate seeded
+accent sequence places occasional1.6–2.4m shoreline stones, with the total2048-rock
+limit retained. Small grass clumps slightly larger; intermittent placement retained.
+No new art or changes to contour, basin, water level, forest or PointWire behavior.
+
+Shader compilation/render checked on actual user's lake. Adapted work check
+LakeEdgeRefinementChecks.cs passed halo/native-bank guard, paint normalization,
+unchanged geography/forest and deterministic painting/dressing after disk reopening.
+Current dressing117 rocks /41 plant clumps. Full preview inspected. Latest original
+user checkpoint: Library/BeforeLakeEdgeRefinement.cfregion. Original working map
+and camera restored after checks.
+No normal saves written; all current and prior work remains uncommitted.
+
+Final lake-bank restoration: original working map and camera reopened from
+Library/BeforeLakeBankRework.cfregion;6,116 trees and2 original water descriptors,
+new local bank repair applied,196 rocks/42 plant clumps. Play running, no tools armed.
+Actual lake full/close previews and reopen report copied to current task outputs.
+No normal player saves written; user can review before accepting this appearance.
+
+# Lake bank quality rework — November 4, 2026
+
+User rejected the broad blurred tan/neon-green banks. Root cause: GeneratedRiverDistrict
+was enabling PaintGeneratedRiverBanks for any generated watery district, including
+lake-only districts. It injected a broad soil0 band (e.g.76% at8m outside the real
+shore) underneath lake painting and into canonical saved meadow caches. Width/tint
+changes to LakeShoreRenderer alone could not remove it.
+
+Gate ONLY the riverbank PAINT call with HasNaturalRiverBanks (non-player River bounds
+overlap); keep GeneratedRiverDistrict water-render routing unchanged, or the general
+typed-water fallback can introduce an unwanted ocean surface. Recognition uses bounds,
+not RegionWaterBody.Intersects, because centerline-only rivers have no contour edges.
+Native river qualification was tested explicitly; player channels remain separate.
+
+New LakeMeadowRepair partial repairs ONLY the24m area around player lakes before
+wet-bed layers are captured/painted. Reconstructs normal meadow dry/grass/litter from
+existing ecology/canopy, retains extra terrain layers, protects native water, camps,
+roads, other lakes and player channels, and updates canonical lake-base maps. It
+removes old cached river-soil contamination without rebuilding trees or geometry.
+
+Player lake dressing now has an irregular0.9–3.4m dry edge with small spatial edge
+breakup, darker damp shared dirt at5m texture scale, existing pebble/sand textures,
+sparser rock clusters and intermittent small reed/grass stands. No new textures or
+source-art changes. Water shader/reflections/outline/level/depth/forest unchanged.
+Natural lake dressing population retains its previous density; runtime wet-soil
+palette is darker. Actual user's lake is used for review, not the oval test fixture.
+
+Work/LakeBankReworkChecks.cs passed: native river guard; old halo gone8–22m out;
+nonnegative/normalized paint; unchanged water descriptors, bed and6,116 trees; saved
+painting and seeded dressing fingerprint survive disk reopening without accumulation.
+Current lake:196 rocks,42 plant clumps. Full and close renders visually inspected.
+Latest ORIGINAL user checkpoint: Library/BeforeLakeBankRework.cfregion. Disposable
+roundtrip fixture: Library/LakeBankReworkRoundtrip.cfregion. Restore original user
+checkpoint after checks, letting local repair run. No normal player saves written;
+all changes remain uncommitted.
+
+# Narrower visible lake banks — November 4, 2026
+
+LakeShoreRenderer dry earth/grass feather reduced to40% of its prior width (60%
+reduction): typical player lake20m ->8m; natural lake12m ->4.8m, with the same subtle
+noise/falloff. Paint rectangle follows that width. Underwater wet-bed coverage,
+water outline/level, basin, forest and seeded shore-detail layout unchanged.
+Latest user checkpoint: Library/BeforeNarrowLakeBanks.cfregion; restored after checks.
+Runtime width8m verified (prior20m), preview inspected. No normal saves written.
+
+Final player-channel restoration: original working map/camera reopened from
+Library/BeforeLakeGrassTransition.cfregion, district19,6,116 trees,2 existing bodies;
+no test waterways retained. Water / Add body-type choices open, tools unarmed.
+PlayerChannelChecks passed again after boundary guards; rendered ribbon/hint and
+created stream/river inspected. Normal save files untouched; skill validated.
+
+# Open PointWire streams/rivers and district continuation — November 4, 2026
+
+Water / Add / Stream and River are now live via RiverRouteTool. PointWire OpenPath
+uses Enter (or keypad Enter) to finish after2+ markers, with Finished separate from
+Closed; lakes still close to their starting marker. RibbonWidth previews6m streams
+and18m rivers; hint explains click/Enter/Backspace/Escape and district/end snapping.
+Success clears the guides and restores default cursor. Completion errors retain them.
+
+Routes live in RegionWaterBody.playerChannel (not the lake's playerCreated flag).
+Normalized centerline and world-height station grades persist globally. Exterior
+union edges snap within20m and add64m into a neighbor. Open that district to see it;
+start within16m of its downstream endpoint to extend the same body ID/type. Old
+stations/grades are immutable. Regional outer borders and internal combined edges
+do not create portals; curves cannot cut across excluded union corners.
+
+PlayerChannelSampler shares exact route/grade queries across tiles. Bounded basin
+replay and forest/bank exclusion apply on every district/cache/fresh load; baseline
+coverage ranking remains unedited. Dedicated bounded moving-water surface uses
+matching per-body depth/flow UV domains and grade mesh. Native generated river and
+ocean routing explicitly excludes player channels; legacy lake appearance retained.
+Relief atlas/mesh include the new water. Read Player_Waterways.md and PointWire.md.
+Skill cityforge-pointwire updated for this usage. New sources are private-art-free.
+
+Checks: open/closed lifecycle, actual menu completion cleanup, river19->20 seam
+bed32.8145m on each side and identical water grade, one surface, downstream snapping,
+identity/station-preserving extension, separate Stream, disk/stale-cache/fresh load
+with exact surviving forest positions and no regrowth. No physical input injection
+claimed. Work/PlayerChannelCheck.cs and PlayerChannelReopenCheck.cs reproduce them;
+Library/PlayerChannelChecks.txt holds results. Saved fixtures are under Library/.
+
+Unity was closed when this turn began (no live map to checkpoint); started the
+existing MainMenu scene and tested disposable copies of the latest user checkpoint
+Library/BeforeLakeGrassTransition.cfregion. No normal player saves written. Restore
+that checkpoint/camera after tests (final restoration recorded below). New work and earlier nature changes uncommitted.
+Limitations: downstream-only same-type extension, no confluences/natural-water joins,
+removal/width controls or hydraulics. Routes must avoid camps/roads and deep uphill
+trenches; shared station/metadata limits are enforced before committing.
+
+# Subtle lake grass transition — November 4, 2026
+
+LakeShoreRenderer no longer adds the ungraded fifth native terrain layer as moss.
+Earth/pebble/sand weights retain original meadow through a wider smooth feather,
+scaled to outer bank width+6m for player lakes,12m for natural lakes, with restrained
+noise rather than a high-contrast threshold. Painting bounds alone expand; keep the
+original detail-placement bounds/RNG so rocks/plants/leaves retain their layout.
+No height, shoreline geometry, water settings, forest or source assets changed.
+Visual preview verified a softer transition without the vivid green ring; sampled
+terrain weights remain nonnegative/normalized. Current user checkpoint is
+Library/BeforeLakeGrassTransition.cfregion; user map/camera restored after checks
+(6,116 trees,2 bodies), Play running. No normal saves written.
+
+November4 final visual: matte base-soil alpha resolved the bright white banks.
+Approved-profile reference and final comparison inspected; normal water settings
+retained. Source assets untouched. New profile save/stale-cache/fresh replay passed
+with identical remaining tree positions. User map restored from
+Library/ApprovedLakeLookCurrent.cfregion; its one player lake has approved profile,
+unchanged polygon/level. No normal player saves written; use Save District to persist.
+
+Lake visual follow-up: bright white shore highlights came from opaque diffuse-alpha
+smoothness in the base soil exposed by shoreline painting. Lake setup now makes
+owned matte RGB-preserving copies of base soil and wet-bed diffuse textures, leaving
+source materials/textures untouched. Visual diagnostic confirmed the white rim is
+removed; do not rely on TerrainLayer.smoothness=0 alone in URP.
+
+# Approved lake appearance alignment — November 4, 2026
+
+Located October12 Lakes-And-Ponds-Final-Report and Lake-Final-Editor-Zoom1 reference
+in that session outputs. Player lakes already use the accepted LakeWaterRenderer,
+Water/LakeWater material, LakeShoreRenderer and sharp local cubemap settings. The
+first-pass3m/8m basin differs from the accepted6m/35m inward shelf /14m outside blend.
+New lake creation now scales toward that accepted6/35/14m basin (small ponds scale
+down), stamps calm-lake appearanceProfile, and separates playerOuterBankWidth from
+inner slope width. Existing saved lake geometry is retained (outer width0 preserves
+legacy behavior). Tree clearing follows the actual outside bank width; coverage
+ranking remains against original ground. Shared shader/material settings unchanged.
+Pre-change checkpoint: Library/BeforeApprovedLakeLook.cfregion. The current user's
+one drawn lake was explicitly reprofiled without changing outline/level; no normal
+save written. Current checkpoint: Library/ApprovedLakeLookCurrent.cfregion.
+New-profile creation, stale-cache and fresh generation checks pass with exact
+remaining forest positions (6,091 trees in disposable fixture). Runtime confirms
+CityForge/Calm Lake Water, reflection0.20, normal detail0.008 and LakeShoreRenderer.
+Forest planting also rejects the whole stored bank clearing, preventing trees that
+would disappear on reopening. Original shader and material assets unchanged.
+
+# Lake completion cleanup — November 3, 2026
+
+Successful lake closure now dismisses the lake tool through Wire.Completed in the
+LakeOutlineTool adapter. It clears markers, border/string and hint, restores the
+normal cursor and collider state, and retains the created lake. Rejected completion
+stays armed/editable. Generic PointWire completion behavior is unchanged.
+Latest user checkpoint: Library/BeforeLakeAutoFinish.cfregion; preserve its lakes.
+
+# Curved player lakes + reusable PointWire — November 3, 2026
+
+Lake / Pond now commits a rounded lake when the guide loop closes: three Chaikin
+passes,3m default basin,8m blended banks, approved calm water and shore materials.
+A four-marker guide produces32 shoreline points. Smaller bodies (<5,000m²) are Pond.
+New RegionWaterBody.playerCreated/playerDepth/playerBankWidth plus normalized
+outline/surface level persist through normal saves. Basins replay before district
+terrain application; caches do not own them. Existing water recipes unchanged.
+
+The interaction is now generic PointWirePath / abstract PointWireSurface /
+PointWireTool / PointWireGraphic, with PointWireGeometry for consumer-independent
+polygon operations. LakeOutlineTool only adapts toolbar/surface/completion. Call it
+PointWire; installed and validated skill: ~/.codex/skills/cityforge-pointwire/SKILL.md.
+Read Documentation/03_Technical/PointWire.md and Player_Lakes.md. Completed lake undo
+is disabled: Backspace edits an uncommitted sketch, Escape clears sketch only.
+
+Validation: simple/noncrossing guide and curve,3–64 lake markers,100m² minimum,
+30% district maximum,32 lakes/region,9m district margin,12m existing-water margin,
+road/camp clearance,12m maximum shoreline height span. Invalid closure stays editable.
+No water merging/removal, configurable depth/level or domain undo yet.
+
+Preserve original-ground woodland coverage ranking: retain pre-lake terrain for
+coverage eligibility; filter the8m lake/bank clearing after ranking. A test exposed
+extra forest loss if lake water/slopes entered percentile eligibility; corrected.
+Disk/stale-cache and fresh generation now both retain exact remaining positions
+(6,096 trees in disposable fixture). Native field data itself stays unchanged; user
+basins replay from descriptors. Live forest roots outside the clearing retained.
+Typed lakes also appear on regional relief at their own water elevation.
+
+Checks pass: pure path lifecycle, invalid guide without mutation, actual menu/wire
+completion,32-point lake,>2m water depth, distant terrain unchanged, tree exclusion,
+water distance, disk/stale-cache/fresh regeneration, separate small Pond and two-body
+reopening. Filled lake and live-string renders inspected. Latest actual user state
+checkpoint Library/BeforeCurvedLakes.cfregion (6,116 trees); test lakes are disposable.
+Original user checkpoint and camera restored:6,116 trees,967 explicit additions,
+59 removal records; Water / Lake-Pond menu ready, unarmed. No normal saves written;
+changes uncommitted.
+
+# Lake / pond outline utility — November 3, 2026
+
+Add Water Bodies > Lake / Pond now arms LakeOutlineTool. Blue arrow, click terrain
+to place markers; live string follows pointer; click first marker within24 screen
+pixels after3 markers to close. Larger starting ring. Backspace removes the last
+marker or reopens a completed loop; Escape/tool change/overview cancels and clears.
+Toolbar selection alone is unarmed. Cursor/collider states are restored on cancel.
+UI/focus/save/loading guards prevent accidental placement. Boundary max256 markers;
+terrain drape samples cap32 per edge, keeping the UI mesh below vertex limits.
+
+Transient sketch only: no terrain, water, forest or normal save changes. Closed
+sketch remains visible until cancellation, not persisted. Expose Points/Closed for
+future lake creation; no basin, water fill, polygon validation or editing backend
+is included. Streams/rivers/removal remain menu-only. Boundary uses a code-native
+LakeOutlineGraphic overlay (CanvasRenderer required) so strings remain visible over
+crowns; marker rings reuse the private-free forest circle shader.
+
+Checks passed: menu arms only Add Lake/Pond, marker placement, duplicates and early
+close rejected, close/reopen/undo, cancel/collider cleanup, unchanged forest. Closed
+and live-string screenshots visually verified. Original checkpoint is
+Library/BeforeLakeOutline.cfregion; camera/test sketch restored/cleared afterward.
+No normal saves written; uncommitted. See Documentation/03_Technical/Lake_Outline.md.
+
+# Water editing menu foundation — November 3, 2026
+
+Water now offers Add Water Bodies / Remove Water Bodies, plus/X badges. Clicking
+an option or Choose a water body opens Lake / Stream / River choices with Back.
+WaterTypesOpen/WaterBody expose transient selection; WaterBodySelected(add,kind)
+is a dedicated future backend hook. No water/terrain mutation is implemented yet;
+selection feedback makes that clear. Oceans are excluded. Forest callbacks unchanged.
+
+# Woodland option labels and order — November 3, 2026
+
+Forests now lists Add Woodlands first, Remove Woodlands second, Add trees third.
+Plus/X badges, help text and brush callbacks follow the new order (add0/remove1).
+Forest editor checks updated to match.
+
+# Woodland painting — November 3, 2026
+
+Add Woodlands is live: green tree-plus cursor, shared200/400m circumference brush,
+Tab toggle and click/hold/drag. Individual Add trees remains future work. Planting
+uses the approved mixed palette, deterministic9.48m district lattice and4.2m minimum
+trunk separation; water, steep slopes, roads and camp clearings stay open. Existing
+forest objects are preserved; SpatialForestRenderer.Append captures new trees only.
+
+SavedRegionInfo.forestAdditions stores explicit original-district placements, scales,
+rotation and selected variant. Merge these after base removal filtering: additions
+override older masks; later removal deletes addition records. Merge is idempotent
+for cached and fresh generation. Limits:65,536 additions,200,000 canonical trees,
+16MiB metadata. Never re-rank the base woodland footprint after editing. Native
+legacy/tropical families retain native rendering; that fallback was not separately
+visually qualified. See Documentation/03_Technical/Forest_Planting.md.
+
+ForestAdditionChecks passed:36 trees with200m circle,105 more with400m,76 by drag;
+no overlap stacking/stationary edits; existing objects retained; typed Larch,
+remove/replant ordering, seasons, disk/stale-cache reopen and fresh regeneration
+preserve exact populations/signatures. Before/after clump render inspected. Latest
+user checkpoint BeforeWoodlandVisual.cfregion preserves5,149 trees and prior user
+clearings. No normal player saves written. Changes remain uncommitted.
+
+# Larger continuous forest-removal brush — November 3, 2026
+
+User requested double both brush circles and hold/drag clearing. Default is now200m
+circumference (radius31.831m), Tab400m (radius63.662m); old saved masks retain their
+original physical radii. Popup help/cursor readout updated. Brush arms only through
+Remove, starts a drag only on valid landscape left-down, continues while held and
+stops on release. UI-started drags cannot erase on entering terrain; crossing UI or
+invalid terrain resets the interpolation anchor, so painting does not join across
+blocked intervals. Losing app focus/cancel ends the drag. Tab while held resets the
+anchor and applies the new radius at the current pointer.
+
+ForestRemovalBrush.BeginDrag/ContinueDrag/EndDrag share the runtime input path. Motion
+is sampled at radius×.25 intervals, interpolating skipped positions during fast moves;
+release stamps the endpoint. Holding stationary is a no-op. All samples for one frame
+are committed together via batched RemoveForest/RemoveWithin overloads: one canonical
+filter, canopy/native refresh, signature/batch invalidation and WoodlandRevision update.
+Metadata circle records remain compatible with prior saves. Empty canonical/mixed
+changes skip terrain refresh, and circle limits are applied before deletion so every
+cleared sample can persist. Save/reopen, stale-cache and regeneration behavior retained.
+
+Disposable checks passed:200/400 toggles,36 then84 trees removed, fast drag7 additional,
+no corridor gaps, no stationary edit accumulation, one data revision for a multi-sample
+jump, release stopping edits, outside-tree preservation, seasonal/distant rendering,
+full disk/stale-cache reopen and no-cache regeneration. Extra CUA native mouse check
+was inconclusive: automated clicks/drags generated no Unity Input mouse-button frames
+(Watch log empty). Do not claim a physical/native mouse-input test passed. Cursor and
+larger ring rendered correctly; code/input-state path and brush APIs tested live.
+
+Private original checkpoint Library/BeforeForestDrag.cfregion captured the user's
+existing manual clearings:5782 trees,7 removal masks (prior5832 baseline minus50).
+Do NOT restore the earlier unedited checkpoint and discard those edits. Disposable
+input-test copy is discarded; latest original restored via staged initialization and
+original camera. Current Forests popup open, Remove unarmed. No normal player save
+written; work uncommitted. Report Library/ForestRemovalChecks.txt; prior100/200m
+section below is historical and superseded for new brush sizes/gestures.
+
+# Forest removal brush and doubled popups — November 3, 2026
+
+User requested popup windows twice their prior size, Forest choices Remove / Add
+Woodlands / Add trees, and a functional Remove brush with tree+X cursor, red ground
+circle, click removal, Tab toggling100m/200m CIRCUMFERENCE. Implemented. Popup local
+scale2 doubles its prior580×350 dimensions. Forests opens without arming; explicitly
+clicking Remove publishes OptionInvoked, arms ForestRemovalBrush and hides the popup.
+Clicking Trees again reopens configuration/cancels painting. Other category selection,
+Escape, overview/loading/disable restore the normal cursor. Add tools remain settings
+only. This supersedes the earlier all-settings-only popup limitation for Remove.
+
+Brush radius=C/(2π):15.9155m or31.831m. One left click removes woody canonical trees
+whose bases lie inside the circle; no drag painting. Existing approved mixed forest
+is individual trees, so no whole-cluster deletion is needed. Native shrub slots11–14,
+streamed grass, terrain and existing ground paint stay intact. UI raycasts block
+painting; activating Remove cannot fall through into the landscape. Cursor overlays
+a gold tree group with redX/size label, hides system cursor only on valid focused
+terrain, and restores it over UI/on exit. Red ring conforms to terrain, uses a
+main-camera-only overlay shader so it stays visible through crowns and avoids Crest
+reflection captures. Temporarily enables the district TerrainCollider while armed
+for older maps, then restores its prior state.
+
+MeadowDistrictLandscape.RemoveForest updates canonical full/mature arrays, canopy,
+native seasonal presentation and MixedDistrictForest placements/signature. The
+SpatialForestRenderer removes captured tree entries and invalidates spatial batches
+instead of recapturing/replacing the whole forest. Legacy approved/palm draw paths
+also honor cleared areas. Clearing records are additive SavedRegionInfo.forestRemovals
+metadata (world center/radius and original member district IDs), validated on read/
+write. Old saves default empty. Save District/Region persists edits across districts;
+stale caches and fresh generation filter the same masks BEFORE presentation. Rank
+coverage first, then filter selected trees, so clearing cannot refill from alternate
+candidates. Terrain and ground paint are not regenerated. No undo/add-placement is
+implemented yet. See Documentation/03_Technical/Forest_Removal.md.
+
+Resources/UI/ForestRemovalCircle.shader + meta are original source explicitly allowed
+through .gitignore; the existing generated icon bitmap remains private/ignored.
+New files: UI/ForestRemovalBrush.cs, World/ForestRemovalEdits.cs, Editor/ForestRemovalChecks.cs.
+
+Verification on a disposable clone:100m removed9 trees;200m removed27 additional;
+unchanged outside trees; immediate distant submissions and native/mixed counts;
+season changes; metadata round trip; full reopen with deliberately stale cache; and
+regeneration with no cache all passed. Distant check explicitly uses camera size300
+(zoom4 on a1024m cell is below the instancing cutoff). Live native keyboard Tab
+100→200→100, red circle, redX cursor and enlarged popup visually verified. Report
+Library/ForestRemovalChecks.txt. Private test files under Library/ForestRemoval*.cfregion.
+Original Library/BeforeForestRemoval.cfregion restored: current user Tree Coverage
+Preview seed642890401 district19 retains5832 trees and ZERO removal edits. Forests
+popup is open, Remove unarmed. No normal saves written; source/shader compilation
+and whitespace pass. All work remains uncommitted. Legacy/palm removal has code
+coverage paths but was not separately visually qualified in this temperate test.
+
+# Nature category popups and option settings — November 3, 2026
+
+User requested a popup per toolbar category: small heading, option icons on the left,
+brief explanation on the right, then more settings after choosing an icon. Added
+NatureToolPopup, one exclusive reusable580×350 window above the floating toolbar.
+Terraforming has ^ / v / = for Raise terrain (Terraform hills & mountains), Lower
+terrain (Add valleys), Level terrain (Level out an area), with independent brush-size
+and strength/blend sliders. Current district is left with Terraforming/Raise open.
+
+Water: lake/pond/river with area/width and depth. Foliage: individual tree/woodland
+brush/ground foliage with type choice and brush size. Animals: individual/herd with
+species cycling from actual private WildlifeLibrary entries and herd size. Sun:
+Seasons/Weather tabs with existing live season/precipitation actions and availability
+rules; original icon row was reparented into this popup. Close X, toolbar toggle and
+Escape dismiss the current popup. Only one category panel is visible at a time.
+Main toolbar remains icon-only with no background bar; text appears inside popups.
+
+These are transient tool configuration panels, NOT terrain/placement implementations.
+NatureToolPopup stores independent per-category/option values and choice indices,
+exposes Value/ChoiceIndex and SettingChanged/OptionChanged for future editing
+backends. No paint, placement, water-body creation, undo or persistent editing schema
+is claimed. No Apply button implies mutations. Existing Sun actions remain live.
+No additional generated bitmap was needed; gold atlas reused, terrain glyphs use UI text.
+
+Updated NatureToolbarChecks passed all five popups/options/descriptions, main toolbar
+no-label/no-bar constraints, brush slider values and per-option persistence, close,
+Sun actions/availability, hidden legacy HUD, and unchanged tree count/signature.
+Additional live pointer-input check moved brush slider to76.25 then restored25.
+All five window screenshots visually inspected (Terraforming, Animals and Sun in
+particular); corrected slider fill tracks to stay thin. Reports Library/NatureToolbarChecks.txt,
+images Library/NaturePopup-{Terrain,Water,Trees,Animals,Sun}.png. No normal saves
+written. Original user map checkpoint Library/BeforeNaturePopups.cfregion was restored
+with full staged initialization. Current map remains Tree Coverage Preview seed642890401,
+district19,5832 trees. Source compiles; whitespace passes; changes uncommitted.
+
+# Icon-only nature toolbar — November 3, 2026
+
+User requested a subtle bottom nature toolbar with no text or background bar:
+mountain (height/depth), waves (water), trees (foliage), deer (animals), sun
+(weather/seasons). NatureToolbar builds five floating gold RawImage buttons at the
+bottom center of the district HUD. Hover brightens; selection has a small gold
+underline. It hides the bottom instruction text in district view. Overview retains
+its existing controls and hides/dismisses the toolbar. Escape dismisses the current
+category/flyout first, then a subsequent Escape uses normal region navigation.
+
+Sun has a second icon-only row: summer leafy branch, autumn leaf, winter bare twig;
+clear, rain and snow. Buttons use existing SetSeason/DistrictWeather APIs, with
+Tropical seasonal and temperature-dependent precipitation availability. The old
+right-side season/weather buttons remain built for legacy callback tooling but are
+hidden. Terrain/Water/Trees/Animals currently select a NatureTool enum and publish
+ToolSelected; actual terrain brushing, water creation, foliage placement and animal
+placement/herds are future work. Do not claim those editing backends exist.
+
+Generated transparent1448×1086 atlas, four columns/three rows, saved privately at
+Assets/CityForge/Resources/UI/NatureToolbarIcons.png (Resources/UI art is ignored by
+source-only Git policy). PNG/importer/meta must be restored with local UI artwork.
+Uses clamp/bilinear, no mipmaps/NPOT scaling, uncompressed alpha. Original generated
+image remains under ~/.codex/generated_images. Current chat outputs contain atlas,
+final generation prompt/tool details and in-game closed/Sun screenshots. Built-in
+image_gen used with existing T_Region_Nav_Icons.png as gold style reference; no
+licensed reference art is bundled into source control. New C# files are source.
+
+NatureToolbarChecks passed five categories, no Text/background, Sun callbacks,
+season/weather availability, dismissal, hidden legacy controls, and unchanged tree
+count/signature. Live additional checks passed Tropical availability, overview hide
+and cached district reentry. Report Library/NatureToolbarChecks.txt. Original user
+region was checkpointed to Library/BeforeNatureToolbar.cfregion before source
+compilation, then reopened through full staged initialization (no bank-stage skip
+needed for this inland map). Current Tree Coverage Preview district19 restored;
+no normal player save written. Work uncommitted alongside earlier session changes.
+
+# Larch foliage lightened — November 3, 2026
+
+User requested slightly lighter evergreens. Updated only the two private prepared
+Evergreen/Larch_branches_LOD0.mat and LOD1.mat foliage colors from(.27,.30,.25,1)
+to(.32,.36,.30,1), about20% brighter tint. Both _BaseColor and _Color match. Branch
+textures, normal strength, cutout, bark, broadleaf materials, lighting/shadows and
+population are retained. These shared materials serve approved runtime tall/medium
+larches as well as the private source prefabs; rebuilds reuse the references.
+They are ignored artwork, not public Git content. Original supplied assets remain.
+
+Live same-camera before/after inspected in the user's newly created Tree Coverage
+Preview region (seed642890401, district19), retaining5832 trees and placement
+signature. Their original camera was restored after comparison. No source reload,
+region regeneration or map-save operation performed. The user independently created
+and saved that region while the prior creation screen was open; do not replace it
+with the disposable verification map. Initial attempt to open that fixture was
+rejected because a region was already open; editor was unpaused and comparison ran
+on the existing district instead. Material originals backed up in current chat
+work/larch-brightness. Comparison images Library/LarchFoliageBefore/After.png.
+
+# Per-district Tree Coverage creation controls — November 3, 2026
+
+User requested 25%, 50%, 75% Tree Coverage per district during region creation, with
+woodland footprints resembling the approved forest tests. This later request adds
+explicit coverage choices; it does not migrate the existing Forest Gump region.
+
+Create Region / Terrain now has an 8×8 coverage grid (north at top), a Set All
+Districts selector (with Apply to reset custom cells) and clickable per-cell 25→50→75 cycling. Default50%. The old
+global Vegetation selector is replaced with guidance to these controls. New wizard
+and default-menu recipes use treeCoverageVersion1, default percent50 and optional
+per-original-district array; missing/empty arrays use the default. Versions remain
+geography12 / forestAppearance1 / waterway5. Missing/zero coverage versions retain
+legacy ecology/planting; stored maps are not rewritten.
+
+DistrictTreeCoverage uses seeded broad/fine noise ranking (.82/.18) and jittered
+~9.48m planting cells, adapted from the approved70% fixture. It selects the requested
+fraction of eligible planting cells, not a uniform tree-count thinning or measured
+canopy area. Water9m, camp clearings8m, slope>25 degrees, below-sea ground and active
+footprints stay excluded. Original cell IDs retain their percentage in combined
+unions. Canonical native seasonal planting uses the same plan; approved summer mixed
+trees bypass the older10m thinning/woodland gate for these new recipes only.
+RegionBiomeMap uses matching noise and sampled per-cell thresholds for ground/relief
+woodland fields. Exact detailed planting ranks eligible cells; preview thresholds
+are approximate. Species, art, lighting, shorelines, water and legacy seasons remain.
+See Documentation/03_Technical/Approved_Mixed_Forest.md.
+
+Validation: planner checks8 seeds×3 percentages, exact eligible targets, exclusions,
+determinism, nested footprints, independent district settings, recipe JSON/default
+round trip, invalid values and legacy opt-out. Live normally created512m districts:
+25%=729,50%=1458,75%=2187 trees; canonical/plan/mixed counts match, grounding and
+exclusions pass. L-shaped union keeps4374 trees and original member choices. Cache,
+private disk round trip and seasonal stability passed. Fresh wizard controls and
+final UI layout visually inspected. Full disk reopen of the L-shaped union passed:
+25/50/75 choices,4374 trees, canonical positions/species and recomputed plan retained.
+Editor left in Create Region / Terrain at the coverage grid, with all cells50%. Reports: Library/DistrictTreeCoverageChecks.txt and
+Library/DistrictTreeCoverageLiveResults.txt. Disposable verification map only under
+Library/TreeCoverageRoundtrip.cfregion; private user recovery remains
+Library/BeforeTreeCoverage.cfregion. No normal saves written; work uncommitted.
+
+# Automatic meadow paths removed — November 3, 2026
+
+User wants natural meadows without automatically generated paths, ahead of settlement
+work. BuildRoad now initializes an empty route for all meadow districts, including
+coastal/mountain fixtures. BuildRoadMesh skips empty routes. New ground painting and
+vegetation placement therefore receive no pilot-path masks or exclusions.
+Cached districts retain saved trees and terrain; RestoreSnapshot removes the known
+pilot-road soil contribution along the stored centerline from a cloned control map,
+redistributing it proportionally to the three native vegetation layers. Other layers
+are retained. The runtime road is then cleared, so new captures/reopens do not repeat
+the subtraction. Previously excluded trees are not regenerated in old districts.
+This is for the old decorative pilot path only; settlement road persistence must use
+separate explicit data when implemented. Normal player saves are not written.
+SavedRegionStore now accepts zero road points (previous minimum two rejected empty
+routes). Private recovery checkpoint: Library/BeforeMeadowPathRemoval.cfregion.
+
+Live source compilation and cached-district reopen passed: zero road points/no ribbon,
+7,788 ground samples lost pilot-path soil, 14,277 canonical trees and 2,647 mixed
+trees/signature unchanged. Private save/load and actual district reopen passed with
+zero ground-weight delta from the pathless cache. Existing 8-bit terrain weight
+quantization retained. Verification: Library/MeadowPathRemovalChecks.txt. Bank
+repainting was skipped by the recovery driver because this cached district was
+already painted; normal beach/forest/water setup ran. Changes remain uncommitted.
+
+User clarified the current forest spacing is acceptable; do NOT implement the dense
+70% fixture as normal planting. Verified Tree01_.fbx download metadata contains model
+5197447, matching the user's CGTrader settree URL. Summer chestnut/locust derive from
+that pack; larches are separate. Autumn/winter still use legacy seasonal trees.
+
+# Summer forest reactivation — November 3, 2026
+
+User reported all trees disappearing after Fall/Winter -> Summer and asked whether
+the previous chat's approved clusters were present. The open region uses forest
+appearance1 with2,647 approved mixed trees, signature d480c2f6d077b2e1, unchanged from
+prior checks. The eight-entry chestnut/locust/larch library is authoritative; normal
+maps use seeded native woodland positions, not the private70% stress fixture layout.
+
+Repeated inspection showed the stored forest intact and rendering in sampled close
+and distant views; persistent disappearance was not reproduced. SpatialForestRenderer
+now explicitly restores its active rendering backend on re-enable, toggling native
+LOD registration through the other backend, and invalidates cached selections.
+Disable also invalidates selection and clears submission counters. This hardens the
+season/tree-toggle reactivation path without changing geometry, placement or palette.
+
+The previous integration test checked holder.activeSelf for Summer, which does not
+prove rendering. MixedForestSeasonChecks now invokes the actual HUD season buttons,
+tests close/distant/close paths, checks submission/LOD state, and compares rendered
+pixels against a temporarily hidden mixed forest. It also checks Trees Off across
+season changes and preserves canonical counts/signatures. Run CityForge / Forest /
+Check summer visibility after seasons. Private recovery: Library/BeforeSummerTreeFix.cfregion.
+Live verification passed: actual HUD Fall/Winter/Summer at zooms 2/4/2, individual
+and spatial rendering, visible pixel differences 20,548 / 6,566 / 20,485 of 33,800
+samples, and Trees Off/On across seasons. Tree count/signature and canonical 14,277
+trees stayed unchanged. Report: Library/MixedForestSeasonChecks.txt.
+No normal saved region is overwritten. Rendering changes remain uncommitted alongside
+the patrol-only shark work; swimmer/encounter code remains deferred and removed.
+
+# Supplied great white patrols only — November 3, 2026
+
+User clarified: shark patrols now, swimmers later. The preliminary ambient swimmers
+and encounter implementation have been removed from source and the live scene.
+CoastalSharkPopulation now contains only one transient shark patrol per navigable
+coastal district with Animals enabled. CoastalOceanHabitat enforces actual ocean
+polygons,2.2m depth,2.8m clearance and active combined-district footprints. Targets
+and each movement step are checked; no swimmer targeting/scare/flee logic remains.
+
+The supplied2,178-vertex mesh and rig are prepared privately under ignored
+Resources/CoastalWildlife/GreatWhite/. The full1–117 frame action at24fps is4.833s;
+normalization produces an approximately5m shark. Builder: CityForge / Wildlife /
+Prepare supplied great white (from the main menu). Original downloads are intact.
+Do not publish supplied or derived artwork or substitute the Animal Pack shark.
+See Documentation/03_Technical/Coastal_Sharks.md for setup and checks.
+
+Private checkpoint: Library/BeforeSharkPatrolOnly.cfregion. Older BeforeCoastalSharks
+preserves the original pre-shark view. Find coastal shark frames the live patrol.
+CoastalSharkChecks.Begin() passed patrol movement (9.79m across30 samples), habitat
+constraints, Animals toggling and no swimmer spawning. Compilation/whitespace pass. Latest report: Library/CoastalSharkChecks.txt and
+this chat's outputs/Coastal-Shark-Checks.txt. Earlier encounter checks/captures are
+historical experiments superseded by the user's patrol-only instruction.
+Normal player saves remain untouched. Shark source changes are uncommitted; the
+preceding approved coastal/beach changes are committed as01ee3dd. Private assets
+remain excluded from Git. No player-performance or all-season visual guarantee.
+
+# Approved coastal streams and beaches — November 3, 2026
+
+The user approved the restored stream water, reduced shoreline shimmer, sandy ocean
+floor, and softer grass/sand transition with a restrained existing dirt blend.
+These changes are integrated into normal new/cached coastal district loading.
+
+## Production behavior
+
+- CoastalWaterClock centers ground-following Crest detail on the camera rig's ground
+  focus. Following the distant isometric camera's own XZ had put visible streams in
+  coarse cascades, leaving apparently dry beds.
+- Coastal clipping uses an RHalf signed-distance mask, up to2048 samples for
+  ground-following districts. The previous512-square binary mask used4m texels in
+  the2,048m combined district and clipped61 of192 sampled stream centers.
+- GroundFollowingWaterLevels preserves ocean surf while an owned foam renderer input
+  suppresses ocean foam on elevated inland channels. InlandFoamExclusion.shader is
+  original integration source; purchased water/terrain art and Crest source stay
+  private. Do not use FoamLodInput Minimum blend: Crest validation rejects it.
+- Coastal ground-following water uses regular-frustum reflections, as raised rivers
+  already do. CoastalWaterPresentation caps existing TAA jitterScale at .125 and
+  restores its previous value on disable. Other initial AA modes remain untouched.
+  Switching to SMAA/FXAA darkened this renderer's output and was rejected.
+- CoastalBeachSurface uses the existing private RichSand layer. The ocean floor is
+  full sand at all depths; the earlier4–12m offshore fade exposed grass and was
+  rejected. Dry beach width varies26–40m with multiple noise scales and a small
+  irregular edge offset. Blending starts at28% of local width. The dry upper beach
+  mixes approved matte courtyard/settlement dirt from existing soil layer0.
+- Camp clearings, roads and combined-district exclusions are protected. Runtime
+  meadow grass avoids the beach core. The dedicated coastline-test treatment is
+  retained. Water palette, wave weights, sea level, heights and tree placement remain.
+- Beach/camp/lake presentation rebuilds over canonical ground. CaptureSnapshot uses
+  coastalBaseAlphamaps so the extra sand layer and dirt mixing do not shift saved
+  soil indices or require cache migration. Normal player saves were not overwritten.
+
+## Verification and practical limits
+
+Unity compilation and whitespace checks pass. The seed109894062 combined district
+retains2,647 approved mixed trees and placement signature d480c2f6d077b2e1.
+All192 sampled stream centers are unclipped and below intended water level; minimum
+depth .4399m. Foam exclusion is active, ocean FFT and reflections remain enabled.
+TAA jitter transitions .125 -> .5 on presentation disable -> .125 on re-enable.
+All6,351 sampled submerged ocean cells have sand weight1 and grass weight0. The
+approved dry blend affects51,824 samples. Saved ground remains six layers and passes
+a disk round trip; sampled canonical base paint differences are zero.
+
+A full cached reload completed terrain/bank/water initialization. Later focused
+reload checks reused already-painted banks and skipped redundant bank repainting.
+Reports and approved captures are in the November3 chat workspace outputs directory.
+Coastal cached loading remains slow: bank repainting took several minutes and the
+higher-resolution water setup measured about40s locally. This is not a player/FPS
+or universal loading guarantee. Full coastal visual QA across views/seasons and
+elimination of every shimmer remain unproven. User accepted the observed improvement.
+
+## Private recovery and delivery
+
+Library/BeforeApprovedBeachTransition.cfregion preserves the latest pre-integration
+region/camera. Other private checkpoints include BeforeSandySeabed.cfregion,
+BeforeCoastalFlickerFix.cfregion and the validated StreamFix-VerifiedRecovery.cfregion.
+Do not use BeforeStreamMaskFix.cfregion as a normal save: an early domain-reload
+checkpoint has an incomplete road cache. Runtime-only region data was reconstructed
+from the same seed/recipe during recovery; the approved tree signature was retained.
+
+Historical preview scripts in this chat's work directory are one-shot experiments;
+do not reapply them over initialized production beaches. The approved transition is
+now source behavior. Source-only changes are recorded on the feature branch; no PR
+merge was requested. Purchased artwork, maps, private packages and snapshots remain
+excluded from public Git.
+
 # Approved mixed woodland integrated — November 3, 2026
 
 User approved the chestnut/locust/larch appearance and requested normal new-region

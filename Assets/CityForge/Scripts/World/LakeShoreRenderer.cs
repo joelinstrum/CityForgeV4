@@ -12,14 +12,17 @@ namespace CityForge.World
         readonly List<Batch> batches=new();readonly List<Object> owned=new();
         MeadowDistrictLandscape land;Bounds bounds;RegionWaterBody body;float waterLevel;
         float ShoreDistance(Vector2 p)=>land.LakeShoreDistance(body,waterLevel,p);
+        float DryBankFeather=>.4f*(body.playerCreated?Mathf.Max(8,body.playerOuterBankWidth+6):12);
         public int Rocks {get;private set;} public int Plants {get;private set;} public int Leaves {get;private set;}
         public ulong PlacementFingerprint {get;private set;}
         public void Initialize(MeadowDistrictLandscape landscape,RegionWaterBody body,float level)
         {
-            land=landscape;this.body=body;waterLevel=level;var min=(body.Bounds.min-Vector2.one*.5f)*land.View.MapSide-Vector2.one*8;
+            land=landscape;this.body=body;waterLevel=level;float feather=DryBankFeather;
+            var min=(body.Bounds.min-Vector2.one*.5f)*land.View.MapSide-Vector2.one*8;
             var max=(body.Bounds.max-Vector2.one*.5f)*land.View.MapSide+Vector2.one*8;
             bounds=new Bounds(new Vector3((min.x+max.x)/2,level+4,(min.y+max.y)/2),new Vector3(max.x-min.x,32,max.y-min.y));
-            PaintBed(min,max,level);
+            land.RepairPlayerLakeMeadow(body);
+            PaintBed(min-Vector2.one*(feather-8),max+Vector2.one*(feather-8),level);
             var rocks=Resources.Load<RiverBedRockAssets>("RiverBeds/RichRockAssets");
             for(int i=0;i<rocks.meshes.Length;i++)batches.Add(new Batch{mesh=rocks.meshes[i],material=rocks.materials[i]});
             var reeds=Extract(land.Baseline.shorelineReeds);var grass=Extract(land.Baseline.shorelineGrass);
@@ -29,28 +32,29 @@ namespace CityForge.World
             for(float z=min.y;z<max.y;z+=5)for(float x=min.x;x<max.x;x+=5){
                 var center=new Vector2(x+R()*5,z+R()*5);if(!land.Contains(center))continue;
                 float d=ShoreDistance(center),h=land.Height(center),patch=land.Noise(center,17,219);
-                if(d< -14||d>6||h>level+2||patch<.49f||land.RoadDistance(center)<land.Baseline.roadWidth+1)continue;
-                int count=2+rng.Next(5);
+                if(d< -14||d>6||h>level+2||patch<(body.playerCreated?.60f:.49f)||land.RoadDistance(center)<land.Baseline.roadWidth+1)continue;
+                int count=body.playerCreated?1+rng.Next(3):2+rng.Next(5);
                 for(int j=0;j<count&&Rocks<2048;j++){
                     var p=center+new Vector2(R()-.5f,R()-.5f)*5;
                     if(!land.Contains(p))continue;float height=land.Height(p),depth=level-height;
-                    if(depth< -1.5f||depth>2.2f||ShoreDistance(p)<-14||ShoreDistance(p)>6)continue;
+                    if(depth< -1.5f||depth>2.2f||ShoreDistance(p)<(body.playerCreated?-4:-14)||ShoreDistance(p)>(body.playerCreated?1.3f:6))continue;
                     int type=rng.Next(3)+(depth<.1f&&R()<.55f?3:0);var mesh=rocks.meshes[type];
-                    float size=Mathf.Lerp(.28f,1.25f,R())*(body.kind==WaterBodyKind.Pond?.7f:1);if(j==0&&R()<.2f)size=1.7f;
+                    float size=Mathf.Lerp(body.playerCreated?.25f:.28f,body.playerCreated?.75f:1.25f,R())*(body.kind==WaterBodyKind.Pond?.7f:1);if(j==0&&R()<(body.playerCreated?.12f:.2f))size=body.playerCreated?Mathf.Lerp(1.25f,1.9f,R()):1.7f;
                     float scale=size/Mathf.Max(mesh.bounds.size.x,Mathf.Max(mesh.bounds.size.y,mesh.bounds.size.z));
                     batches[type].placements.Add(Matrix4x4.TRS(new Vector3(p.x,height+size*.1f,p.y),Quaternion.Euler(R()*20,R()*360,R()*15),Vector3.one*scale)*Matrix4x4.Translate(-mesh.bounds.center));Rocks++;
                 }
-                if(d> -3&&d<5&&patch>.54f){
-                    int plants=3+rng.Next(6);
+                if(d>(body.playerCreated?-1.5f:-3)&&d<(body.playerCreated?2:5)&&patch>(body.playerCreated?.65f:.54f)){
+                    int plants=body.playerCreated?1+rng.Next(3):3+rng.Next(6);
                     for(int j=0;j<plants&&Plants<768;j++){
                         var p=center+new Vector2(R()-.5f,R()-.5f)*5;float height=land.Height(p);
                         if(!land.Contains(p)||height<level-.45f||height>level+1.7f)continue;
                         var pieces=height<level+.25f?reeds:grass;
-                        var pose=Matrix4x4.TRS(new Vector3(p.x,height-.025f,p.y),Quaternion.Euler(0,R()*360,0),Vector3.one*Mathf.Lerp(.7f,1.25f,R()));
+                        var pose=Matrix4x4.TRS(new Vector3(p.x,height-.025f,p.y),Quaternion.Euler(0,R()*360,0),Vector3.one*Mathf.Lerp(body.playerCreated?.85f:.7f,body.playerCreated?1.35f:1.25f,R()));
                         foreach(var piece in pieces)piece.batch.placements.Add(pose*piece.local);Plants++;
                     }
                 }
             }
+            if(body.playerCreated)BuildShoreAccents(rocks,salt);
             BuildLeaves(min,max,level,rng);
             PlacementFingerprint=1469598103934665603UL;
             foreach(var batch in batches){
@@ -61,6 +65,24 @@ namespace CityForge.World
             }
             Debug.Log($"Lake phase two: {Rocks} rocks, {Plants} reed/grass clumps, {Leaves} aquatic leaves; {batches.Count} static mesh batches.");
         }
+        void BuildShoreAccents(RiverBedRockAssets rocks,int salt)
+        {
+            // Sparse shoreline anchors use their own seeded sequence, leaving leaves/details stable.
+            var random=land.RandomFor(0,0,salt^0x34a9);float R()=>(float)random.NextDouble();
+            float walked=0,next=10+R()*20;
+            for(int i=0;i<body.outline.Length;i++){
+                var a=(body.outline[i]-Vector2.one*.5f)*land.View.MapSide;var b=(body.outline[(i+1)%body.outline.Length]-Vector2.one*.5f)*land.View.MapSide;float length=Vector2.Distance(a,b);
+                while(next<=walked+length&&Rocks<2048){
+                    var p=Vector2.Lerp(a,b,(next-walked)/Mathf.Max(.001f,length));next+=24+R()*22;
+                    if(!land.Contains(p)||land.View.InCampClearing(p,3)||land.RoadDistance(p)<land.Baseline.roadWidth+1)continue;
+                    float h=land.Height(p);if(h<waterLevel-.6f||h>waterLevel+.7f)continue;
+                    int type=random.Next(Mathf.Min(6,rocks.meshes.Length));var mesh=rocks.meshes[type];float size=Mathf.Lerp(1.6f,2.4f,R())*(body.kind==WaterBodyKind.Pond?.75f:1);
+                    float scale=size/Mathf.Max(mesh.bounds.size.x,Mathf.Max(mesh.bounds.size.y,mesh.bounds.size.z));
+                    batches[type].placements.Add(Matrix4x4.TRS(new Vector3(p.x,h+size*.08f,p.y),Quaternion.Euler(R()*12,R()*360,R()*12),Vector3.one*scale)*Matrix4x4.Translate(-mesh.bounds.center));Rocks++;
+                }
+                walked+=length;
+            }
+        }
         void PaintBed(Vector2 min,Vector2 max,float level)
         {
             var td=land.DisplayTerrain.terrainData;int n=td.alphamapResolution,oldLayers=land.EnsureLakeBedLayers();
@@ -70,18 +92,22 @@ namespace CityForge.World
             var original=td.GetAlphamaps(lowX,lowZ,width,height);var maps=(float[,,])original.Clone();
             for(int z=0;z<height;z++)for(int x=0;x<width;x++){
                 var p=land.Origin+new Vector2((x+lowX)/(float)(n-1),(z+lowZ)/(float)(n-1))*land.Side;
-                float amount=0,pebbles=0,sand=0,soil=0,moss=0;
+                float amount=0,pebbles=0,sand=0,soil=0;
                 if(p.x>=min.x&&p.x<=max.x&&p.y>=min.y&&p.y<=max.y){
                     float d=ShoreDistance(p),depth=level-land.Height(p),patch=land.Noise(p,14,217),small=land.Noise(p,4,223);
-                    float bankWidth=Mathf.Lerp(2,7,land.Noise(p,24,229));
+                    float bankWidth=body.playerCreated?Mathf.Lerp(3.5f,5.5f,land.Noise(p,18,229)):DryBankFeather*Mathf.Lerp(.85f,1,land.Noise(p,24,229));
+                    float brokenEdge=body.playerCreated?d+(land.Noise(p,7,243)-.5f)*1.2f+(land.Noise(p,19,244)-.5f)*2.2f:d;
                     float wet=body.Contains(p/land.View.MapSide+Vector2.one*.5f)?Mathf.SmoothStep(0,1,Mathf.InverseLerp(-.05f,.25f,depth)):0;
-                    float dry=(1-Mathf.SmoothStep(0,1,Mathf.Max(0,d)/bankWidth))*Mathf.SmoothStep(0,1,Mathf.InverseLerp(.35f,.7f,patch));
-                    amount=Mathf.Max(wet*.96f,dry*.82f);
-                    pebbles=.1f+small*.35f;sand=(1-patch)*.2f;soil=.7f+patch*.55f;moss=d>0?patch*.4f:patch*.08f;
-                    float total=pebbles+sand+soil+moss;pebbles/=total;sand/=total;soil/=total;moss/=total;
+                    // Feather across several terrain texels; a sub-texel strip exposes angular splat boundaries.
+                    float dry=(1-Mathf.SmoothStep(0,1,Mathf.Max(0,brokenEdge)/bankWidth))*Mathf.Lerp(body.playerCreated?.24f:.68f,body.playerCreated?.56f:.88f,patch);
+                    amount=Mathf.Max(wet*.96f,dry);
+                    pebbles=(body.playerCreated?.25f:.1f)+small*(body.playerCreated?.5f:.35f);sand=(1-patch)*.2f;soil=.7f+patch*.55f;
+                    // Retain the original meadow through the feathered mask instead of
+                    // adding the ungraded bright-green fifth terrain layer as moss.
+                    float total=pebbles+sand+soil;pebbles/=total;sand/=total;soil/=total;
                 }
                 for(int l=0;l<maps.GetLength(2);l++)maps[z,x,l]=original[z,x,l]*(1-amount);
-                maps[z,x,oldLayers]+=amount*pebbles;maps[z,x,oldLayers+1]+=amount*sand;maps[z,x,oldLayers+2]+=amount*soil;maps[z,x,oldLayers-1]+=amount*moss;
+                maps[z,x,oldLayers]+=amount*pebbles;maps[z,x,oldLayers+1]+=amount*sand;maps[z,x,oldLayers+2]+=amount*soil;
             }
             td.SetAlphamaps(lowX,lowZ,maps);
         }

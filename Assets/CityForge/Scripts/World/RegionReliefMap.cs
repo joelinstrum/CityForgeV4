@@ -19,7 +19,7 @@ namespace CityForge.World
             var heightCache=continuousChannels?new RegionalReliefHeightCache(source.Data):null;
             if(heightCache!=null){var sampling=heightCache.BuildStages();while(sampling.MoveNext())yield return sampling.Current;}
             float H(float u,float v)=>(heightCache!=null?heightCache.Sample(u,v):SmoothRiverSurface.Sample(source.Data.Heights,u,v))*height;
-            float Surface(float u,float v,float h){float water=sea;if(RegionalRiverNetwork.HasGroundFollowingWater(source.Data)&&RegionalRiverNetwork.SignedDistance(source.Data,new Vector2(u,v))<0)water=Mathf.Max(water,RegionalRiverNetwork.GroundWaterLevel(source.Data,u,v));if(source.Data.WaterBodies!=null)foreach(var body in source.Data.WaterBodies)if((body.kind==WaterBodyKind.Lake||body.kind==WaterBodyKind.Pond)&&body.Bounds.Contains(new Vector2(u,v))&&body.Contains(new Vector2(u,v)))water=body.hasSurfaceLevel?body.surfaceLevelNormalized*height:sea;return Mathf.Max(h,water);}
+            float Surface(float u,float v,float h){float water=sea;if(RegionalRiverNetwork.HasGroundFollowingWater(source.Data)&&RegionalRiverNetwork.SignedDistance(source.Data,new Vector2(u,v))<0)water=Mathf.Max(water,RegionalRiverNetwork.GroundWaterLevel(source.Data,u,v));if(source.Data.WaterBodies!=null)foreach(var body in source.Data.WaterBodies)if((body.kind==WaterBodyKind.Lake||body.kind==WaterBodyKind.Pond||body.playerChannel)&&body.Bounds.Contains(new Vector2(u,v))&&body.Contains(new Vector2(u,v))){if(body.playerChannel)return PlayerChannelGeometry.Level(body,(new Vector2(u,v)-Vector2.one*.5f)*source.MapSide,source.MapSide);water=body.hasSurfaceLevel?body.surfaceLevelNormalized*height:sea;if(body.playerCreated)return water;}return Mathf.Max(h,water);}
             progress?.Invoke("Building regional relief mesh",.20f);yield return null;
             for(int z=0;z<n;z++)for(int x=0;x<n;x++){
                 int i=z*n+x;float u=x/(float)(n-1),v=z/(float)(n-1),h=Surface(u,v,H(u,v));
@@ -31,7 +31,7 @@ namespace CityForge.World
                 float u=x/(float)(pixels-1),v=z/(float)(pixels-1),h=H(u,v),bank=continuousChannels?RegionalRiverNetwork.SignedDistance(source.Data,new Vector2(u,v)):SmoothRiverSurface.Sample(source.Data.WaterDistance,u,v)/PrototypeRegionData.Side;
                 bool riverRecipe=source.CreationSettings!=null&&source.CreationSettings.version>=5;
                 bool water=!source.Waterless&&(bank<0||(!riverRecipe&&h<sea+.1f));
-                if(source.Data.WaterBodies!=null)foreach(var body in source.Data.WaterBodies)if((body.kind==WaterBodyKind.Lake||body.kind==WaterBodyKind.Pond)&&body.Bounds.Contains(new Vector2(u,v))&&body.Contains(new Vector2(u,v)))water=true;
+                if(source.Data.WaterBodies!=null)foreach(var body in source.Data.WaterBodies)if((body.kind==WaterBodyKind.Lake||body.kind==WaterBodyKind.Pond||body.playerChannel)&&body.Bounds.Contains(new Vector2(u,v))&&body.Contains(new Vector2(u,v)))water=true;
                 if(water){float offshore=layout!=null&&layout.HasOcean?Mathf.Max(0,-layout.LandDistance(new Vector2(u,v))):Mathf.Max(0,-bank);
                     colors[z*pixels+x]=source.Climate==RegionClimate.Tropical&&offshore>0&&IsOcean(source,new Vector2(u,v))?TropicalOceanDepth.MapColor(offshore):new Color(.12f,.31f,.40f);continue;}
                 var ecology=source.Data.Biomes?.At(new Vector2(u,v));float woodland=ecology?.woodland??.4f;

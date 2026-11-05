@@ -163,7 +163,7 @@ namespace CityForge.World
             // The accepted authored family is a summer baseline. Native seasonal trees remain authoritative in fall/winter.
             if(PresentedTreeCount==0||!land||!viewerCamera||!assets||!land.TreesEnabled||land.View==null||land.View.Data==null||batches[0]==null||land.View.VisualSeason!=RegionSeason.Summer)return;
             GeometryUtility.CalculateFrustumPlanes(viewerCamera,planes);foreach(var batch in batches)batch.Clear();
-            for(int treeIndex=0;treeIndex<trees.Count;treeIndex++){if((presentationMask!=null&&!presentationMask[treeIndex])||(palmMask!=null&&palmMask[treeIndex]))continue;var t=trees[treeIndex];if(!GeometryUtility.TestPlanesAABB(planes,new Bounds(t.center,Vector3.one*t.height*1.5f)))continue;
+            for(int treeIndex=0;treeIndex<trees.Count;treeIndex++){if((presentationMask!=null&&!presentationMask[treeIndex])||(palmMask!=null&&palmMask[treeIndex]))continue;var t=trees[treeIndex];if(land.View.IsForestRemoved(new Vector2(t.matrix.m03,t.matrix.m23)))continue;if(!GeometryUtility.TestPlanesAABB(planes,new Bounds(t.center,Vector3.one*t.height*1.5f)))continue;
                 float denominator=viewerCamera.orthographic?2*viewerCamera.orthographicSize:2*Mathf.Max(.01f,Vector3.Dot(t.center-viewerCamera.transform.position,viewerCamera.transform.forward))*Mathf.Tan(viewerCamera.fieldOfView*Mathf.Deg2Rad*.5f);
                 float coverage=t.height/denominator*QualitySettings.lodBias;int lod=coverage>=.16f?0:coverage>=.09f?1:coverage>=.045f?2:coverage>=.0225f?3:4;
                 batches[t.variant*5+lod].Add(t);}

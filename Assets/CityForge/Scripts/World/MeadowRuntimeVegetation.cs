@@ -23,6 +23,11 @@ namespace CityForge.World
         public int PendingTiles=>pending.Count-nextPending+(building!=null?1:0);
         Vector2Int lastCell=new(int.MinValue,int.MinValue);int lastRadius;
         public int LoadedTiles=>tiles.Count;
+        public void InvalidateWaterEdits(){
+            (building as IDisposable)?.Dispose();building=null;
+            foreach(var tile in tiles.Values)if(tile){tile.SetActive(false);Destroy(tile);}
+            tiles.Clear();pending.Clear();nextPending=0;lastCell=new Vector2Int(int.MinValue,int.MinValue);
+        }
         public void Initialize(MeadowDistrictLandscape source,Camera view){landscape=source;camera=view;motion=view.GetComponent<CityForge.CameraSystem.CameraMotionQuality>();}
         void LateUpdate()
         {
@@ -60,7 +65,8 @@ namespace CityForge.World
             for(int k=0;k<2100;k++){
                 if(k%32==0&&BudgetSpent)yield return null;
                 var p=new Vector2((cell.x+R())*TileSide,(cell.y+R())*TileSide);
-                if(landscape.View.InCampClearing(p)||landscape.MountainVegetation(p)<.35f||!landscape.Contains(p)||landscape.WaterDistance(p)<.3f||landscape.ExposedRiverBed(p)||landscape.Height(p)<landscape.View.SeaLevel+.12f||landscape.RoadDistance(p)<baseline.roadWidth+.4f)continue;
+                if(landscape.View.InPlayerChannelClearing(p)||landscape.View.InCampClearing(p)||landscape.MountainVegetation(p)<.35f||!landscape.Contains(p)||landscape.WaterDistance(p)<.3f||landscape.ExposedRiverBed(p)||landscape.Height(p)<landscape.View.SeaLevel+.12f||landscape.RoadDistance(p)<baseline.roadWidth+.4f)continue;
+                if(landscape.CoastalBeachWeight(p)>.5f)continue;
                 if(landscape.View.Coastline&&(landscape.Height(p)<landscape.View.SeaLevel+7||landscape.MountainSlope(p)>24))continue;
                 float forest=landscape.Canopy(p),density=Mathf.Lerp(.75f,.18f,forest)*(.8f+.2f*landscape.Noise(p,31));if(R()>density)continue;
                 int type=R()<.52f?0:1;if(R()<.045f+.12f*forest)type=2;
@@ -76,7 +82,7 @@ namespace CityForge.World
             if(baseline.forestFloorPlants!=null)for(int k=0;k<180;k++){
                 if(k%32==0&&BudgetSpent)yield return null;
                 var p=new Vector2((cell.x+R())*TileSide,(cell.y+R())*TileSide);
-                if(landscape.View.InCampClearing(p)||landscape.MountainVegetation(p)<.35f||!landscape.Contains(p)||landscape.WaterDistance(p)<.3f||landscape.ExposedRiverBed(p)||landscape.Canopy(p)<.22f||landscape.Noise(p,13,8)<.48f||landscape.Height(p)<landscape.View.SeaLevel+.15f||landscape.RoadDistance(p)<baseline.roadWidth+1)continue;
+                if(landscape.View.InPlayerChannelClearing(p)||landscape.View.InCampClearing(p)||landscape.MountainVegetation(p)<.35f||!landscape.Contains(p)||landscape.WaterDistance(p)<.3f||landscape.ExposedRiverBed(p)||landscape.Canopy(p)<.22f||landscape.Noise(p,13,8)<.48f||landscape.Height(p)<landscape.View.SeaLevel+.15f||landscape.RoadDistance(p)<baseline.roadWidth+1)continue;
                 var plant=baseline.forestFloorPlants[k%baseline.forestFloorPlants.Length];var matrix=Matrix4x4.TRS(new Vector3(p.x,landscape.Height(p)+.01f,p.y),Quaternion.Euler(0,R()*360,0),Vector3.one*baseline.forestFloorScale*(.7f+R()*.5f));
                 foreach(var piece in plant.pieces){var key=(piece.mesh,piece.material,piece.submesh);if(!lists.TryGetValue(key,out var list))lists[key]=list=new List<Matrix4x4>();list.Add(matrix*piece.local);}
             }

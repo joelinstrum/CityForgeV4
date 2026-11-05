@@ -315,11 +315,13 @@ namespace CityForge.UI
             if (controller != null) controller.CreatePrototypeRegion(RegionName, SelectedSize, ReadCreationSettings());
         }
 
-        Dropdown generationAnimals, generationCamps;
+        Dropdown generationAnimals, generationCamps, generationTreeCoverage;
+        int[] districtTreeCoverage;
+        Text[] districtCoverageLabels;
         Dropdown TerrainChoice(string name) => createRegionTerrainIntro.transform.Find(name+"Dropdown").GetComponent<Dropdown>();
         public World.RegionCreationSettings ReadCreationSettings()
         {
-            return new World.RegionCreationSettings { forestAppearanceVersion=1,waterwayVersion=5,nativeCampVersion=generationCamps&&generationCamps.value==1?1:0,seed=generationSeed&&int.TryParse(generationSeed.text,out var seed)?seed:World.PrototypeRegionData.DefaultSeed,
+            return new World.RegionCreationSettings { forestAppearanceVersion=1,treeCoverageVersion=1,treeCoveragePercent=generationTreeCoverage?(generationTreeCoverage.value+1)*25:50,districtTreeCoverage=districtTreeCoverage==null?null:(int[])districtTreeCoverage.Clone(),waterwayVersion=5,nativeCampVersion=generationCamps&&generationCamps.value==1?1:0,seed=generationSeed&&int.TryParse(generationSeed.text,out var seed)?seed:World.PrototypeRegionData.DefaultSeed,
                 terrainShape=terrainShapeChoice?TerrainShapes[terrainShapeChoice.value]:World.RegionTerrainShape.Land,peninsulaNorthToSouth=true,
                 climate=TerrainChoice("Climate").value==3?World.RegionClimate.Tropical:World.RegionClimate.Temperate,
                 moisture=TerrainChoice("Climate").value==3?World.RegionMoisture.Balanced:(World.RegionMoisture)TerrainChoice("Climate").value,vegetation=(World.RegionVegetation)TerrainChoice("Land Type").value,
@@ -333,11 +335,11 @@ namespace CityForge.UI
             TerrainChoice("Climate").ClearOptions();TerrainChoice("Climate").AddOptions(new System.Collections.Generic.List<string>{"Temperate — balanced", "Temperate — dry", "Temperate — wet", "Tropical"});TerrainChoice("Climate").interactable=true;
             TerrainChoice("Land Type").ClearOptions();TerrainChoice("Land Type").AddOptions(new System.Collections.Generic.List<string>{"Meadow and woodland", "Open meadow", "Woodland"});TerrainChoice("Land Type").interactable=true;
             parent.Find("ClimateNote").GetComponent<Text>().text="Moisture influences woodland and riverside vegetation.";
-            parent.Find("Land TypeLabel").GetComponent<Text>().text="VEGETATION";
+            parent.Find("Land TypeLabel").GetComponent<Text>().text="TREE COVERAGE";TerrainChoice("Land Type").value=0;TerrainChoice("Land Type").gameObject.SetActive(false);
             parent.Find("CoastalNote").GetComponent<Text>().text="One inland region, 64 connected districts.";
             parent.Find("SectionTitle").GetComponent<Text>().text="ENVIRONMENT";
             parent.Find("SectionTitle").GetComponent<RectTransform>().sizeDelta=new Vector2(240,38);
-            parent.Find("SectionDescription").GetComponent<Text>().text="Climate, vegetation, waterways and relief.";
+            parent.Find("SectionDescription").GetComponent<Text>().text="Climate, waterways and relief.";
             parent.Find("SectionDescription").GetComponent<RectTransform>().anchoredPosition=new Vector2(250,0);
             parent.Find("SectionDescription").GetComponent<RectTransform>().sizeDelta=new Vector2(525,38);
             var label=Instantiate(parent.Find("StreamsLabel").gameObject,parent);label.name="SeedLabel";label.GetComponent<Text>().text="MAP SEED";
@@ -368,7 +370,7 @@ namespace CityForge.UI
             var climateNote=parent.Find("ClimateNote").GetComponent<Text>();climateNote.text="Tropical adds light aqua coastal water.";climateNote.rectTransform.sizeDelta=new Vector2(350,18);
             parent.Find("MountainNote").GetComponent<Text>().text="Overall relief; Terrain can add a mountain border.";
             var mountainNote=parent.Find("MountainNote").GetComponent<RectTransform>();mountainNote.anchoredPosition=new Vector2(0,-242);mountainNote.sizeDelta=new Vector2(350,18);
-            var coastalNote=parent.Find("CoastalNote").GetComponent<RectTransform>();coastalNote.anchoredPosition=new Vector2(0,-350);coastalNote.sizeDelta=new Vector2(350,18);parent.Find("CoastalNote").GetComponent<Text>().text="Choose the region’s shape in Terrain.";
+            var coastalNote=parent.Find("CoastalNote").GetComponent<RectTransform>();coastalNote.anchoredPosition=new Vector2(0,-300);coastalNote.sizeDelta=new Vector2(350,48);parent.Find("CoastalNote").GetComponent<Text>().text="Set coverage for each district in Terrain.";
             parent.GetComponent<LayoutElement>().preferredHeight=520;
             terrainNextButton.GetComponent<RectTransform>().anchoredPosition=new Vector2(615,-472);
             terrainNextButton.GetComponentInChildren<Text>().text="NEXT";
@@ -382,15 +384,48 @@ namespace CityForge.UI
                 if(i==1&&(text.text=="TERRAIN"||text.text=="ENVIRONMENT"))text.text="ENVIRONMENT";else if(i==2&&(text.text=="NATURAL RESOURCES"||text.text=="TERRAIN"))text.text="TERRAIN";
                 else if(text.text=="Land, water, climate")text.text="Climate and ecology";else if(text.text=="What the land provides")text.text="Region shape";
             }
-            terrainShapePanel=new GameObject("CreateRegionTerrainShape",typeof(RectTransform),typeof(LayoutElement));terrainShapePanel.transform.SetParent(createRegionTerrainIntro.transform.parent,false);terrainShapePanel.GetComponent<LayoutElement>().preferredHeight=456;
+            terrainShapePanel=new GameObject("CreateRegionTerrainShape",typeof(RectTransform),typeof(LayoutElement));terrainShapePanel.transform.SetParent(createRegionTerrainIntro.transform.parent,false);terrainShapePanel.GetComponent<LayoutElement>().preferredHeight=900;
             Text CopyText(string template,string name,string value,Vector2 position,Vector2 size){var t=Instantiate(createRegionTerrainIntro.transform.Find(template).GetComponent<Text>(),terrainShapePanel.transform);t.name=name;t.text=value;t.rectTransform.anchoredPosition=position;t.rectTransform.sizeDelta=size;return t;}
             CopyText("SectionTitle","SectionTitle","TERRAIN",Vector2.zero,new Vector2(300,38));
             CopyText("SectionDescription","SectionDescription","Choose the outline of your region. Each map contains 64 connected districts.",new Vector2(0,-42),new Vector2(775,42));
             CopyText("StreamsLabel","ShapeLabel","REGION SHAPE",new Vector2(0,-100),new Vector2(350,30));
-            terrainShapeChoice=Instantiate(TerrainChoice("Land Type"),terrainShapePanel.transform);terrainShapeChoice.name="RegionShapeDropdown";terrainShapeChoice.GetComponent<RectTransform>().anchoredPosition=new Vector2(0,-134);terrainShapeChoice.onValueChanged=new Dropdown.DropdownEvent();terrainShapeChoice.ClearOptions();terrainShapeChoice.AddOptions(new System.Collections.Generic.List<string>{"Peninsula","Land","Coast","Mountain Border","Pangea","Archipelago"});terrainShapeChoice.value=1;terrainShapeChoice.onValueChanged.AddListener(_=>RefreshTerrainPreview());
+            terrainShapeChoice=Instantiate(TerrainChoice("Land Type"),terrainShapePanel.transform);terrainShapeChoice.name="RegionShapeDropdown";terrainShapeChoice.gameObject.SetActive(true);terrainShapeChoice.GetComponent<RectTransform>().anchoredPosition=new Vector2(0,-134);terrainShapeChoice.onValueChanged=new Dropdown.DropdownEvent();terrainShapeChoice.ClearOptions();terrainShapeChoice.AddOptions(new System.Collections.Generic.List<string>{"Peninsula","Land","Coast","Mountain Border","Pangea","Archipelago"});terrainShapeChoice.value=1;terrainShapeChoice.onValueChanged.AddListener(_=>RefreshTerrainPreview());
             terrainShapeDescription=CopyText("SectionDescription","ShapeDescription","",new Vector2(0,-202),new Vector2(350,140));terrainShapeDescription.alignment=TextAnchor.UpperLeft;terrainShapeDescription.fontSize=19;
             var preview=new GameObject("ShapePreview",typeof(RectTransform),typeof(RawImage));preview.transform.SetParent(terrainShapePanel.transform,false);terrainShapePreview=preview.GetComponent<RawImage>();var rect=preview.GetComponent<RectTransform>();rect.anchorMin=rect.anchorMax=rect.pivot=new Vector2(0,1);rect.anchoredPosition=new Vector2(425,-100);rect.sizeDelta=new Vector2(280,280);terrainShapePreview.raycastTarget=false;
-            createMapButton=Instantiate(terrainNextButton,terrainShapePanel.transform);createMapButton.name="CreateMapButton";createMapButton.GetComponentInChildren<Text>().text="CREATE MAP";createMapButton.onClick=new Button.ButtonClickedEvent();createMapButton.onClick.AddListener(CreatePrototypeRegion);terrainShapePanel.SetActive(false);RefreshTerrainPreview();
+            createMapButton=Instantiate(terrainNextButton,terrainShapePanel.transform);createMapButton.name="CreateMapButton";createMapButton.GetComponentInChildren<Text>().text="CREATE MAP";createMapButton.onClick=new Button.ButtonClickedEvent();createMapButton.onClick.AddListener(CreatePrototypeRegion);ConfigureTreeCoverage();createMapButton.GetComponent<RectTransform>().anchoredPosition=new Vector2(0,-820);terrainShapePanel.SetActive(false);RefreshTerrainPreview();
+        }
+        void ConfigureTreeCoverage()
+        {
+            var parent=terrainShapePanel.transform;
+            Text Label(string name,string value,Vector2 position,Vector2 size,int fontSize){
+                var t=SavedText(parent,name,value,fontSize);var r=t.rectTransform;r.anchorMin=r.anchorMax=r.pivot=new Vector2(0,1);r.anchoredPosition=position;r.sizeDelta=size;t.alignment=TextAnchor.UpperLeft;return t;
+            }
+            Label("TreeCoverageTitle","TREE COVERAGE",new Vector2(0,-430),new Vector2(350,32),24);
+            Label("TreeCoverageHelp","Choose woodland coverage for each district. Dense tree patches leave broad meadow clearings.\n\nClick a district to cycle 25%, 50%, or 75%. Water, steep slopes and camp clearings stay open.",new Vector2(0,-570),new Vector2(350,180),19);
+            Label("TreeCoverageAllLabel","SET ALL DISTRICTS",new Vector2(0,-480),new Vector2(350,26),18);
+            generationTreeCoverage=Instantiate(TerrainChoice("Land Type"),parent);generationTreeCoverage.name="TreeCoverageDropdown";generationTreeCoverage.gameObject.SetActive(true);
+            generationTreeCoverage.GetComponent<RectTransform>().anchoredPosition=new Vector2(0,-510);generationTreeCoverage.GetComponent<RectTransform>().sizeDelta=new Vector2(210,48);
+            generationTreeCoverage.onValueChanged=new Dropdown.DropdownEvent();generationTreeCoverage.ClearOptions();generationTreeCoverage.AddOptions(new System.Collections.Generic.List<string>{"25%","50%","75%"});generationTreeCoverage.value=1;
+            districtTreeCoverage=new int[64];districtCoverageLabels=new Text[64];
+            Label("TreeCoverageNorth","NORTH",new Vector2(425,-434),new Vector2(350,24),16);
+            for(int z=7;z>=0;z--)for(int x=0;x<8;x++){
+                int index=z*8+x;districtTreeCoverage[index]=50;
+                var go=new GameObject("DistrictCoverage"+index,typeof(RectTransform),typeof(Image),typeof(Button));go.transform.SetParent(parent,false);
+                var r=go.GetComponent<RectTransform>();r.anchorMin=r.anchorMax=r.pivot=new Vector2(0,1);r.anchoredPosition=new Vector2(425+x*44,-464-(7-z)*44);r.sizeDelta=new Vector2(42,42);
+                var button=go.GetComponent<Button>();button.targetGraphic=go.GetComponent<Image>();
+                var text=SavedText(go.transform,"Coverage","",16);text.alignment=TextAnchor.MiddleCenter;text.rectTransform.anchorMin=Vector2.zero;text.rectTransform.anchorMax=Vector2.one;text.rectTransform.offsetMin=text.rectTransform.offsetMax=Vector2.zero;districtCoverageLabels[index]=text;
+                button.onClick.AddListener(()=>{districtTreeCoverage[index]=districtTreeCoverage[index]==75?25:districtTreeCoverage[index]+25;RefreshCoverageCell(index);});RefreshCoverageCell(index);
+            }
+            Label("TreeCoverageSouth","SOUTH · 8 × 8 DISTRICTS",new Vector2(425,-820),new Vector2(350,24),16);
+            void ApplyAll(int value){for(int i=0;i<districtTreeCoverage.Length;i++){districtTreeCoverage[i]=(value+1)*25;RefreshCoverageCell(i);}}
+            generationTreeCoverage.onValueChanged.AddListener(ApplyAll);
+            var apply=Instantiate(terrainNextButton,parent);apply.name="ApplyTreeCoverage";apply.onClick=new Button.ButtonClickedEvent();apply.onClick.AddListener(()=>ApplyAll(generationTreeCoverage.value));
+            var applyRect=apply.GetComponent<RectTransform>();applyRect.anchoredPosition=new Vector2(225,-510);applyRect.sizeDelta=new Vector2(125,48);apply.GetComponentInChildren<Text>().text="APPLY";
+        }
+        void RefreshCoverageCell(int index)
+        {
+            int coverage=districtTreeCoverage[index];var t=districtCoverageLabels[index];t.text=coverage+"%";
+            t.transform.parent.GetComponent<Image>().color=Color.Lerp(new Color(.34f,.39f,.25f),new Color(.12f,.22f,.13f),(coverage-25)/50f);
         }
         void RefreshTerrainPreview()
         {
