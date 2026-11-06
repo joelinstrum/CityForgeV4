@@ -664,6 +664,8 @@ namespace CityForge.World
         }
         void BuildPresentation()
         {
+            // A newly built district is already active, so OnEnable ran before the baseline was assigned.
+            ApplyPresentation(true);
             if(Baseline.sunTemplate){
                 var sun=Instantiate(Baseline.sunTemplate,transform);
                 foreach(var light in sun.GetComponentsInChildren<Light>()){

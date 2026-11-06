@@ -17,6 +17,15 @@ namespace CityForge.Editor
         static IEnumerator Guard(IEnumerator check,string output){Directory.CreateDirectory(output);File.WriteAllText(Path.Combine(output,"Status.txt"),"RUNNING");while(true){bool next;try{next=check.MoveNext();}catch(Exception error){File.WriteAllText(Path.Combine(output,"Status.txt"),"FAIL "+error);(check as IDisposable)?.Dispose();yield break;}if(!next)break;yield return null;}File.WriteAllText(Path.Combine(output,"Status.txt"),"PASS district navigation, Tropical evergreen seasons, Temperate seasons and save round trips");}
         static Button Button(PrototypeRegionView view,string name)=>view.transform.Find("RegionHud/"+name).GetComponent<Button>();
         static string Caption(PrototypeRegionView view,string name)=>Button(view,name).GetComponentInChildren<Text>().text;
+        static void RequireDistrictIcon(PrototypeRegionView view, string buttonName, string iconName)
+        {
+            var button = Button(view, buttonName);
+            var rect = (RectTransform)button.transform;
+            var icon = rect.Find(iconName).GetComponent<RawImage>();
+            Require(rect.sizeDelta.x == rect.sizeDelta.y && rect.sizeDelta.x < 50 &&
+                icon.gameObject.activeSelf && button.targetGraphic == icon &&
+                !rect.Find("Caption").gameObject.activeSelf, "Compact district action " + buttonName);
+        }
         static IEnumerator Check(string savedRegion,string output)
         {
             string temp=Path.Combine(Application.temporaryCachePath,"district-climate-"+Guid.NewGuid().ToString("N")+".cfregion");
@@ -29,7 +38,9 @@ namespace CityForge.Editor
                     double deadline=UnityEditor.EditorApplication.timeSinceStartup+180;while(menu.IsOpeningRegion&&UnityEditor.EditorApplication.timeSinceStartup<deadline)yield return null;
                     var view=UnityEngine.Object.FindFirstObjectByType<PrototypeRegionView>();Require(view&&!menu.IsOpeningRegion,"Normal fixture load");view.RequestDistrict(district);while(view.DistrictLoading&&UnityEditor.EditorApplication.timeSinceStartup<deadline)yield return null;
                     Require(!view.DistrictLoading&&view.ApprovedDistrict,"District preloader");var land=view.ApprovedDistrict;land.SetSmallPlantsEnabled(false);
-                    Require(Caption(view,"SaveRegion")=="SAVE DISTRICT"&&Caption(view,"ReturnToMenu")=="RETURN TO REGION","District action captions");Require(!view.transform.Find("RegionHud/RegionOverview").gameObject.activeSelf,"Duplicate overview action hidden");
+                    RequireDistrictIcon(view, "SaveRegion", "Save disk");
+                    RequireDistrictIcon(view, "ReturnToMenu", "Return arrow");
+                    Require(!view.transform.Find("RegionHud/RegionOverview").gameObject.activeSelf,"Duplicate overview action hidden");
                     var canonical=land.CanonicalTreeInstances.ToArray();var prototypes=land.DisplayTerrain.terrainData.treePrototypes.Select(p=>p.prefab).ToArray();var presented=land.DisplayTerrain.terrainData.treeInstances.ToArray();
                     if(climate==RegionClimate.Tropical){
                         Require(view.Season==RegionSeason.Winter&&view.VisualSeason==RegionSeason.Summer&&Field<RegionSeason>(land,"treeSeason")==RegionSeason.Summer,"Winter save loads evergreen Tropical presentation");

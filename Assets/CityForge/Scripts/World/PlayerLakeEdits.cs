@@ -44,7 +44,15 @@ namespace CityForge.World
     {
         internal void RecordPlayerLake(RegionWaterBody body){var bodies=new List<RegionWaterBody>(Data.WaterBodies);bodies.Add(body);Data.WaterBodies=bodies.ToArray();Waterless=false;LakeWaterVersion=1;WoodlandRevision++;}
         public bool InPlayerLake(Vector2 p)=>Data!=null&&PlayerLakeGeometry.Distance(Data,p,MapSide,1)<0;
-        public bool InPlayerLakeClearing(Vector2 p){if(Data==null)return false;foreach(var body in Data.WaterBodies)if(body.playerCreated){float margin=body.playerOuterBankWidth>0?body.playerOuterBankWidth:8;var bounds=body.Bounds;bounds.min-=Vector2.one*(margin/MapSide);bounds.max+=Vector2.one*(margin/MapSide);if(bounds.Contains(p/MapSide+Vector2.one*.5f)&&PlayerLakeGeometry.Distance(body,p,MapSide)<margin)return true;}return false;}
+        public bool InPlayerLakeClearing(Vector2 p){if(Data==null)return false;foreach(var body in Data.WaterBodies)if(body.playerCreated&&InPlayerLakeClearing(body,p))return true;return false;}
+        bool InPlayerLakeClearing(RegionWaterBody body,Vector2 p)
+        {
+            float margin=body.playerOuterBankWidth>0?body.playerOuterBankWidth:8;
+            var bounds=body.Bounds;
+            bounds.min-=Vector2.one*(margin/MapSide);
+            bounds.max+=Vector2.one*(margin/MapSide);
+            return bounds.Contains(p/MapSide+Vector2.one*.5f)&&PlayerLakeGeometry.Distance(body,p,MapSide)<margin;
+        }
     }
     public sealed partial class MeadowDistrictLandscape
     {

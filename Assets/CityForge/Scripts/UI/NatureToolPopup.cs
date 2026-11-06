@@ -14,6 +14,7 @@ namespace CityForge.UI
         public int WaterBody {get;private set;}=-1;
         public bool WaterTypesOpen {get;private set;}
         public event Action<bool,int> WaterBodySelected;
+        public event Action WaterRemovalRequested;
         public RectTransform SunHost {get;private set;}
         public event Action<int> OptionChanged;
         public event Action<int> OptionInvoked;
@@ -69,9 +70,14 @@ namespace CityForge.UI
                     var icon=AtlasButton(back.transform,"Icon",tile,new Vector2(4,-1),new Vector2(64,64));icon.interactable=false;var c=icon.colors;c.disabledColor=Color.white;icon.colors=c;icon.GetComponent<RawImage>().raycastTarget=false;
                     if((tool==NatureTool.Trees&&i<2)||tool==NatureTool.Water||tool==NatureTool.Animals){var badge=Label(back.transform,"Badge",tool==NatureTool.Water?new[]{"+","×"}[i]:tool==NatureTool.Trees?new[]{"+","×","1"}[i]:i==0?"1":"+",new Vector2(51,-46),new Vector2(20,20),15,Gold);badge.fontStyle=FontStyle.Bold;}
                 }
-                button.onClick.AddListener(()=>{SelectOption(index);if(Category==NatureTool.Water)OpenWaterTypes();else OptionInvoked?.Invoke(index);});optionObjects.Add(back.gameObject);
+                button.onClick.AddListener(()=>{
+                    SelectOption(index);
+                    if(Category!=NatureTool.Water)OptionInvoked?.Invoke(index);
+                    else if(index==0)OpenWaterTypes();
+                    else WaterRemovalRequested?.Invoke();
+                });optionObjects.Add(back.gameObject);
             }
-            SelectOption(selected.TryGetValue(tool,out int prior)?prior:0);
+            SelectOption(tool!=NatureTool.Water&&selected.TryGetValue(tool,out int prior)?prior:0);
         }
         public void SelectOption(int index)
         {
@@ -84,21 +90,22 @@ namespace CityForge.UI
                 Slider("Radius","Brush size",5,100,25,0," m");Slider(index==2?"Blend":"Strength",index==2?"Blend strength":"Brush strength",1,20,5,70,"");
             }else if(Category==NatureTool.Water){
                 title.text=index==0?"Add Water Bodies":"Remove Water Bodies";
-                explanation.text=index==0?"Create lakes, streams and rivers.":"Remove lakes, streams and rivers from the landscape.";
-                TextButton(content,"ChooseWaterType","Choose a water body  >",new Vector2(0,0),new Vector2(400,42),OpenWaterTypes);
+                explanation.text=index==0?"Create lakes, streams and rivers.":"Click a player-added water body to restore the ground beneath it.";
+                if(index==0)
+                    TextButton(content,"ChooseWaterType","Choose a water body  >",Vector2.zero,new Vector2(400,42),OpenWaterTypes);
+                TextButton(content,"RemoveWaterBody","Remove Water",new Vector2(0,index==0?-52:0),new Vector2(400,42),()=>WaterRemovalRequested?.Invoke());
             }else if(Category==NatureTool.Trees){
-                title.text=new[]{"Add Woodlands","Remove Woodlands","Add trees"}[index];explanation.text=new[]{"Add a patch of trees and natural woodland.","Remove trees inside the red circle.","Place individual trees in the landscape."}[index];
+                title.text=new[]{"Add Woodlands","Remove Woodlands","Add trees"}[index];explanation.text=new[]{"Select the add icon, then drag to plant. Tab changes brush size.","Remove trees inside the red circle.","Place individual trees in the landscape."}[index];
                 if(index==1){
                     Label(content,"RemovalSize","200 m circumference",new Vector2(0,0),new Vector2(400,28),20,Gold);
-                    Label(content,"RemovalHint","Click Remove Woodlands to start.\nTab switches between 200 m and 400 m.\nClick and drag to remove trees.",new Vector2(0,-40),new Vector2(400,90),17,Muted);
+                    Label(content,"RemovalHint","Click or drag to remove trees.\nTab switches between 200 m and 400 m.",new Vector2(0,-36),new Vector2(400,56),17,Muted);
                 }else if(index==0){
                     Label(content,"PlantingSize","200 m circumference",new Vector2(0,0),new Vector2(400,28),20,Gold);
                     var view=GetComponentInParent<PrototypeRegionView>();bool mixed=view&&view.ApprovedDistrict&&view.ApprovedDistrict.MixedForest;Choice("Species","Tree type",mixed?new[]{"Mixed woodland","Chestnut","Locust","Larch"}:new[]{"Native woodland"},32);
-                    Label(content,"PlantingHint","Click Add Woodlands, then drag to plant.\nTab switches between 200 m and 400 m.",new Vector2(0,-104),new Vector2(400,42),17,Muted);
                 }else{
                     Choice("Species","Tree type",new[]{"Mixed woodland","Chestnut","Locust","Larch"},0);
-
                 }
+                TextButton(content,"RemoveTrees","Remove Trees",new Vector2(0,-104),new Vector2(400,38),()=>OptionInvoked?.Invoke(1));
             }else if(Category==NatureTool.Animals){
                 title.text=index==0?"Individual animal":"Animal herd";explanation.text=index==0?"Choose an animal to add to the district.":"Add a group of animals together.";
                 var species=new List<string>();var library=Resources.Load<WildlifeLibrary>("Wildlife/TemperateWildlife");if(library)foreach(var animal in library.species)if(animal.prefab&&!species.Contains(animal.id))species.Add(animal.id.Replace('_',' '));
@@ -115,10 +122,10 @@ namespace CityForge.UI
         }
         public void OpenWaterTypes()
         {
-            if(Category!=NatureTool.Water)return;
+            if(Category!=NatureTool.Water||Option!=0)return;
             WaterTypesOpen=true;WaterBody=-1;
             foreach(Transform child in content){child.gameObject.SetActive(false);Destroy(child.gameObject);}
-            explanation.text=Option==0?"Choose the kind of water body to add.":"Choose the kind of water body to remove.";
+            explanation.text="Choose the kind of water body to add.";
             status.text="";
             for(int i=0;i<3;i++){
                 int kind=i;string label=new[]{"Lake / Pond","Stream","River"}[i];
@@ -126,7 +133,7 @@ namespace CityForge.UI
                     WaterBody=kind;
                     foreach(Transform row in content)if(row.name.StartsWith("WaterBody"))row.GetComponent<Image>().color=row.name=="WaterBody"+kind?new Color(.35f,.32f,.21f,.9f):new Color(.2f,.23f,.17f);
                     status.text=label+" selected · Editing tools coming next";
-                    WaterBodySelected?.Invoke(Option==0,kind);
+                    WaterBodySelected?.Invoke(true,kind);
                 });
             }
             TextButton(content,"WaterBack","<  Back",new Vector2(0,-118),new Vector2(110,30),()=>SelectOption(Option));

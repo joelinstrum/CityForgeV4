@@ -9,6 +9,7 @@ namespace CityForge.CameraSystem
     public sealed class CityForgeCameraController : MonoBehaviour
     {
         public const float IsometricPitch = 35.26439f;
+        private const float PointerTiltSensitivity = .06f;
         [SerializeField] private Vector3 focus = Vector3.zero;
         [SerializeField, Range(15f, IsometricPitch)] private float pitch = IsometricPitch;
         [SerializeField] private float yaw = 45f;
@@ -110,20 +111,34 @@ namespace CityForge.CameraSystem
                 if (zoomIn != zoomOut) StepZoom(zoomIn);
             }
 
-            var zoom = Input.mouseScrollDelta.y;
-            if (Mathf.Abs(zoom) > 0.01f)
+            bool infoPressed = Input.GetKeyDown(KeyCode.I);
+            bool tiltHeld = Input.GetKey(KeyCode.C);
+            var region = infoPressed || tiltHeld ? GetComponentInParent<World.PrototypeRegionView>() : null;
+            bool inDistrict = region && region.SelectedDistrict >= 0;
+            bool adjustingTilt = inDistrict && tiltHeld;
+            var scroll = Input.mouseScrollDelta.y;
+            if (!adjustingTilt && Mathf.Abs(scroll) > 0.01f)
             {
-                if (regionSide > 0f) StepZoom(zoom>0);
+                if (regionSide > 0f) StepZoom(scroll>0);
                 else {
-                var factor = Mathf.Pow(0.85f, zoom);
+                var factor = Mathf.Pow(0.85f, scroll);
                 orthographicSize = Mathf.Clamp(orthographicSize * factor, 3f, regionSide > 0f ? regionSide : 5000f);
                 distance = Mathf.Clamp(distance * factor, 5f, regionSide > 0f ? regionSide * 4f : 12000f);
                 }
             }
 
-            if (Input.GetKeyDown(KeyCode.I)) ToggleViewAngle();
+            if (infoPressed && !inDistrict) ToggleViewAngle();
             if (regionSide == 0f && Input.GetKeyDown(KeyCode.P)) ToggleProjection();
             if (Input.GetKeyDown(KeyCode.Home)) ResetView();
+            else if (adjustingTilt)
+            {
+                float tilt = Mathf.Clamp01(ViewTilt + (Input.GetAxisRaw("Mouse Y") + scroll) * PointerTiltSensitivity);
+                if (tilt != ViewTilt)
+                {
+                    SetViewTilt(tilt);
+                    return;
+                }
+            }
             ApplyPose();
         }
 

@@ -69,8 +69,9 @@ First-pass bounds:3–64 guide points; at least100m² rounded area; at most30% o
 district bounding square;32 added bodies per region. Ground must leave9m room inside
 the active district,12m from existing water and space from roads/camps; shoreline
 height span cannot exceed12m. Merging water systems and user-selected water heights,
-depths, shore widths and water removal are future work. Invalid completion retains
-the guide and explains why, without adding water. Lakes do not raise original ground.
+depths, and shore widths are future work. Invalid completion retains the guide and
+explains why. Lakes do not raise original ground. Water > Remove Water Bodies
+removes player lakes and ponds and restores the meadow underneath.
 
 RegionWaterBody.playerCreated/playerDepth/playerBankWidth are additive saved fields.
 The normalized polygon and surfaceLevelNormalized are authoritative. Basin replay

@@ -70,10 +70,10 @@ namespace CityForge.World
             selected.Clear();selected.UnionWith(next);hint.text=selected.Count+" / 4 selected";RefreshBorders();return true;
         }
         public void Apply(){if(!DistrictConnections.Valid(selected,view.GridSide))return;view.CombineDistrictCells(Selection);Active=false;selected.Clear();hint.text="Combined. Click the district to open it. Save Region to keep it.";RefreshBorders();}
-        public void RefreshBorders()
+        public void RefreshBorders(RegionReliefMap relief=null)
         {
             if(!ids)return;var colors=new Color[view.DistrictCount];for(int i=0;i<colors.Length;i++){var group=view.DistrictMembers(i);colors[i]=new Color((group.Min()+1f)/(view.DistrictCount+1),selected.Contains(i)?1:0,group.Length>1?1:0,1);}ids.SetPixels(colors);ids.Apply();
-            var relief=view.GetComponentInChildren<RegionReliefMap>(true);if(relief)relief.SetDistrictGroups(ids);
+            if(!relief)relief=view.GetComponentInChildren<RegionReliefMap>(true);if(relief)relief.SetDistrictGroups(ids);
             if(view.SelectedDistrict<0){int count=view.DistrictCount-view.CombinedDistricts.Sum(g=>g.cells.Length-1);var title=view.transform.Find("RegionHud/RegionTitle");if(title)title.GetComponent<Text>().text=view.RegionName+" / "+count+" DISTRICTS";var heading=view.transform.Find("RegionHud/DistrictSelection/Heading");if(heading)heading.GetComponent<Text>().text=count+" DISTRICTS · CLICK THE MAP TO ENTER";}
             toggle.GetComponent<Image>().color=Active?new Color(.64f,.43f,.10f):new Color(.13f,.15f,.13f,.96f);toggle.GetComponentInChildren<Text>().text=Active?"● COMBINE DISTRICTS":"COMBINE DISTRICTS";apply.gameObject.SetActive(Active);apply.interactable=DistrictConnections.Valid(selected,view.GridSide);apply.GetComponent<Image>().color=new Color(.35f,.31f,.18f);
         }

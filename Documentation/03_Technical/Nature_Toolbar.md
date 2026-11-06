@@ -1,9 +1,19 @@
+# Remove Water Bodies
+
+Water > Remove Water arms a red X cursor and closes the menu. The waves-and-cross icon also arms removal. Click the visible surface of a
+player-added lake, pond, stream, or river. The district rebuilds from its original
+terrain and canonical meadow paint, and the cursor returns to normal. Escape
+cancels selection. Generated water is outside the scope of this tool.
+
+Removing a connected stream or river removes its entire saved route across
+districts. Save District or Save Region to persist the removal.
+
 # Streams and rivers
 
 Add Water Bodies / Stream or River now uses an open PointWire ribbon. Click points,
 press Enter to create, finish at a district edge to carry into its neighbor. Start
 at the downstream end in that neighbor to extend the saved route. Hint, Backspace
-and Escape supported. See Player_Waterways.md. Remove water remains menu-only.
+and Escape supported. See Player_Waterways.md.
 Earlier notes below saying streams/rivers are menu-only are historical.
 
 # Lake filling
@@ -21,13 +31,9 @@ choices remain menu-only; the earlier all-menu-only description below is histori
 
 # Water menu foundation
 
-Water opens Add Water Bodies / Remove Water Bodies. Each leads to Lake / Stream /
-River choices and Back. Switching mode/category resets the water subtype selection.
-WaterBodySelected(bool adding,int kind) is the future integration hook (0 lake,
-1 stream,2 river); WaterTypesOpen and WaterBody expose transient navigation state.
-No water editing backend is armed and no map geometry is changed in this first pass.
-Oceans are excluded. Selection feedback explicitly says editing tools come next.
-This supersedes historical Lake/Pond/River slider content below.
+Add Water Bodies leads to Lake / Pond, Stream, and River choices. Switching mode
+or category resets the water subtype selection. The add tools use
+`WaterBodySelected` with 0 for lakes and ponds, 1 for streams, and 2 for rivers.
 
 # Forest Remove and Add Woodlands are live
 

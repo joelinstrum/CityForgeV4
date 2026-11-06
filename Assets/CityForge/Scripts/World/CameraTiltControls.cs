@@ -16,6 +16,7 @@ namespace CityForge.World
             var rect=host.GetComponent<RectTransform>();rect.anchorMin=rect.anchorMax=rect.pivot=Vector2.zero;rect.anchoredPosition=new Vector2(25,85);rect.sizeDelta=new Vector2(142,246);
             host.GetComponent<Image>().color=new Color(.13f,.15f,.13f,.94f);
             var control=host.GetComponent<CameraTiltControls>();control.view=view;control.group=host.GetComponent<CanvasGroup>();
+            control.SetVisible(false);
             Text Label(string name,string value,Vector2 position,Vector2 size,int fontSize){var text=new GameObject(name,typeof(RectTransform),typeof(Text));text.transform.SetParent(host.transform,false);var label=text.GetComponent<Text>();label.font=font;label.fontSize=fontSize;label.color=Ink;label.alignment=TextAnchor.MiddleCenter;label.raycastTarget=false;label.text=value;var r=label.rectTransform;r.anchorMin=r.anchorMax=r.pivot=Vector2.zero;r.anchoredPosition=position;r.sizeDelta=size;return label;}
             Label("Title","CAMERA TILT",new Vector2(4,215),new Vector2(134,25),14);
             Label("Top","ISOMETRIC",new Vector2(4,190),new Vector2(134,22),12);
@@ -29,12 +30,23 @@ namespace CityForge.World
             control.slider=pole.GetComponent<Slider>();control.slider.direction=Slider.Direction.BottomToTop;control.slider.handleRect=d;control.slider.targetGraphic=image;control.slider.navigation=new Navigation{mode=Navigation.Mode.None};control.slider.onValueChanged.AddListener(value=>{if(control.rig)control.rig.SetViewTilt(value);});
         }
         void OnDestroy(){if(dotSprite)Destroy(dotSprite);if(dotTexture)Destroy(dotTexture);}
+        void SetVisible(bool visible)
+        {
+            group.alpha = visible ? 1 : 0;
+            group.interactable = group.blocksRaycasts = visible;
+        }
+
         void Update()
         {
-            if(!view)return;bool visible=view.SelectedDistrict>=0&&view.ApprovedDistrict;
-            group.alpha=visible?1:0;group.interactable=group.blocksRaycasts=visible;
-            if(!visible)return;if(!rig)rig=view.GetComponentInChildren<CityForgeCameraController>();if(!rig)return;
-            slider.SetValueWithoutNotify(rig.ViewTilt);angle.text=rig.ViewPitch.ToString("0.0")+"°";
+            bool visible = view && view.SelectedDistrict >= 0 && view.ApprovedDistrict &&
+                !view.DistrictLoading && Input.GetKey(KeyCode.C);
+            SetVisible(visible);
+            if (!visible) return;
+
+            if (!rig) rig = view.GetComponentInChildren<CityForgeCameraController>();
+            if (!rig) return;
+            slider.SetValueWithoutNotify(rig.ViewTilt);
+            angle.text = rig.ViewPitch.ToString("0.0") + "°";
         }
     }
 }
