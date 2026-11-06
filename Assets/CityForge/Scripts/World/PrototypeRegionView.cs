@@ -411,6 +411,7 @@ namespace CityForge.World
             camera.clearFlags = CameraClearFlags.SolidColor;
             camera.backgroundColor = new Color(.075f, .105f, .12f);
             var control=cameraObject.AddComponent<CityForgeCameraController>();control.FrameRegion(MapSide,VerticalHeight);control.enabled=false;
+            cameraObject.AddComponent<DistrictHorizon>().Initialize(this, control, VerticalHeight);
             BuildDistrictLines();
             var surfaceMs = buildTimer.ElapsedMilliseconds;
             if(!deferLegacyTrees){legacyTreesReady=true;BuildTrees(seed);}

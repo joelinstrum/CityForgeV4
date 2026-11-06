@@ -1,3 +1,31 @@
+# CityForge V4 handoff — November 6, 2026
+
+The next session is for the **Lot Editor**. Its main-menu entry is
+`MenuAction.LotEditor` in `Assets/CityForge/Scripts/UI/MainMenuController.cs`.
+It currently opens an informational placeholder. Start there and confirm the
+intended editing workflow before replacing the placeholder. The currency discussion
+was brainstorming only.
+
+This branch adds player water removal, town founding on the region map, separate
+region and town name lists, region suffix selection, and the 25/50/75% coverage
+dropdown in Environment. Terrain retains per-district coverage controls. In a
+district, the disk and arrow handle save and return, the lower-right panel shows save
+status, and I toggles the upper-left district details. Hold C and move the pointer
+or scroll to tilt the camera. The slider appears while C is held.
+
+The district horizon is a camera backdrop. It samples the existing region elevation
+data for distant silhouettes and adds a blue sky and drifting clouds at low angles.
+The default isometric view keeps its floating slab. The horizon adds no neighboring
+district instances. Commit `f533b05` is the checkpoint before the horizon work.
+Gameplay and editor C# compilation and whitespace checks were run during the
+session. The final sky colors and backdrop frame time have not been independently
+verified in Unity Play Mode.
+
+The working scene notes and recovery checkpoints below are historical. Use the
+current Unity version in `ProjectSettings/ProjectVersion.txt` and the existing local
+checkout for private runtime assets. Keep player saves and licensed assets out of
+Git.
+
 # District nature editing handoff — November 5, 2026
 
 The working district is Tree Coverage Preview, District 4–3 (index 19), in Unity Play
