@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -34,6 +35,10 @@ namespace CityForge.UI
         [SerializeField] private Button terrainNextButton;
 
         private InputField generationSeed;
+        private World.PlaceNameGenerator regionNames;
+        private string selectedRegionSuffix = string.Empty;
+        private int regionNameCharacterLimit;
+        private GameObject regionNameHint;
         GameObject terrainShapePanel;Dropdown terrainShapeChoice;Button createMapButton;Text terrainShapeDescription;RawImage terrainShapePreview;Texture2D terrainShapeTexture;
         static readonly World.RegionTerrainShape[] TerrainShapes={World.RegionTerrainShape.Peninsula,World.RegionTerrainShape.Land,World.RegionTerrainShape.Coast,World.RegionTerrainShape.MountainBorder,World.RegionTerrainShape.OneIsland,World.RegionTerrainShape.SmallIslands};
         private GameObject savedRegionList;
@@ -45,14 +50,41 @@ namespace CityForge.UI
         public CityForge.World.RegionSize SelectedSize => regionSizeInput != null ? (CityForge.World.RegionSize)regionSizeInput.value : CityForge.World.RegionSize.Medium;
         public void SetRegionSize(CityForge.World.RegionSize size) { if (regionSizeInput != null) regionSizeInput.value = (int)size; }
 
-        public string RegionName => regionNameInput != null ? regionNameInput.text : string.Empty;
+        private string BaseRegionName
+        {
+            get
+            {
+                string name = regionNameInput ? regionNameInput.text.Trim() : string.Empty;
+                string suffix = " " + selectedRegionSuffix;
+                return selectedRegionSuffix.Length > 0 && name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
+                    ? name.Substring(0, name.Length - suffix.Length).TrimEnd()
+                    : name;
+            }
+        }
+        public string RegionName => AppendRegionSuffix(BaseRegionName);
+
+        private string AppendRegionSuffix(string name)
+        {
+            if (name.Length == 0 || selectedRegionSuffix.Length == 0) return name;
+            string suffix = " " + selectedRegionSuffix;
+            if (name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                name = name.Substring(0, name.Length - suffix.Length).TrimEnd();
+            return name + suffix;
+        }
+
         public CityForgeTimeline.Era SelectedEra => CityForgeTimeline.Eras[selectedEraIndex];
         public CityForgeTimeline.Period SelectedPeriod => SelectedEra.Periods[selectedPeriodIndex];
-        public bool BasicSettingsComplete => CountLetters(RegionName) >= 2;
+        public bool BasicSettingsComplete => CountLetters(BaseRegionName) >= 2;
 
         public void SetRegionName(string name)
         {
-            if (regionNameInput != null) regionNameInput.text = name ?? string.Empty;
+            if (regionNameInput != null)
+            {
+                string displayName = AppendRegionSuffix(name?.Trim() ?? string.Empty);
+                if (regionNameCharacterLimit > 0)
+                    regionNameInput.characterLimit = Mathf.Max(regionNameCharacterLimit, displayName.Length);
+                regionNameInput.text = displayName;
+            }
             RefreshProgression();
         }
 
@@ -194,6 +226,7 @@ namespace CityForge.UI
             SetCreateRegionNavigationVisible(true);
             if (bodyLabel != null) bodyLabel.gameObject.SetActive(false);
             ConfigureGenerationControls();
+            ConfigureRegionNameAutogenerate();
             generationSeed.text=(System.Guid.NewGuid().GetHashCode()&int.MaxValue).ToString();
             RefreshTimeSelection();
             SelectCreateRegionSection(0);
@@ -204,6 +237,117 @@ namespace CityForge.UI
                     EventSystem.current.SetSelectedGameObject(regionNameInput.gameObject);
                 regionNameInput.ActivateInputField();
             }
+        }
+
+        private void ConfigureRegionNameAutogenerate()
+        {
+            if (!regionNameInput || regionNameHint) return;
+
+            var field = (RectTransform)regionNameInput.transform;
+            var buttonObject = new GameObject("Autogenerate Region Name", typeof(RectTransform), typeof(Image), typeof(Button));
+            var buttonRect = (RectTransform)buttonObject.transform;
+            buttonRect.SetParent(field.parent, false);
+            buttonRect.anchorMin = field.anchorMin;
+            buttonRect.anchorMax = field.anchorMax;
+            buttonRect.pivot = field.pivot;
+            buttonRect.sizeDelta = Vector2.one * field.sizeDelta.y;
+            const float gap = 8f;
+            field.sizeDelta -= new Vector2(buttonRect.sizeDelta.x + gap, 0);
+            buttonRect.anchoredPosition = field.anchoredPosition + new Vector2(field.sizeDelta.x + gap, 0);
+
+            var image = buttonObject.GetComponent<Image>();
+            image.color = new Color(.24f, .20f, .13f);
+            var button = buttonObject.GetComponent<Button>();
+            button.targetGraphic = image;
+            button.onClick.AddListener(AutogenerateRegionName);
+            regionNameCharacterLimit = regionNameInput.characterLimit;
+            ConfigureRegionNameSuffix();
+            regionNameInput.onEndEdit.AddListener(_ =>
+            {
+                if (selectedRegionSuffix.Length > 0) SetRegionName(BaseRegionName);
+            });
+
+            var glyph = SavedText(buttonRect, "Refresh", "↻", 28);
+            glyph.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            glyph.alignment = TextAnchor.MiddleCenter;
+            glyph.rectTransform.anchorMin = Vector2.zero;
+            glyph.rectTransform.anchorMax = Vector2.one;
+            glyph.rectTransform.offsetMin = glyph.rectTransform.offsetMax = Vector2.zero;
+
+            var hint = SavedText(field.parent, "Autogenerate hint", "Autogenerate", 15);
+            hint.alignment = TextAnchor.MiddleRight;
+            hint.rectTransform.anchorMin = buttonRect.anchorMin;
+            hint.rectTransform.anchorMax = buttonRect.anchorMax;
+            hint.rectTransform.pivot = buttonRect.pivot;
+            hint.rectTransform.sizeDelta = new Vector2(125, 24);
+            hint.rectTransform.anchoredPosition = buttonRect.anchoredPosition +
+                new Vector2(buttonRect.sizeDelta.x - hint.rectTransform.sizeDelta.x, 24);
+            regionNameHint = hint.gameObject;
+            regionNameHint.SetActive(false);
+
+            var hover = buttonObject.AddComponent<EventTrigger>();
+            var enter = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
+            enter.callback.AddListener(_ => regionNameHint.SetActive(true));
+            var exit = new EventTrigger.Entry { eventID = EventTriggerType.PointerExit };
+            exit.callback.AddListener(_ => regionNameHint.SetActive(false));
+            hover.triggers.Add(enter);
+            hover.triggers.Add(exit);
+        }
+
+        private void ConfigureRegionNameSuffix()
+        {
+            if (!regionSizeInput) return;
+
+            var sizeRect = (RectTransform)regionSizeInput.transform;
+            var sizeLabel = (RectTransform)sizeRect.parent.Find("Region SizeLabel");
+            var suffix = Instantiate(regionSizeInput, sizeRect.parent);
+            suffix.name = "Region name suffix";
+            suffix.onValueChanged = new Dropdown.DropdownEvent();
+            var choices = new System.Collections.Generic.List<string> { "None" };
+            foreach (var option in World.PlaceNameGenerator.Suffixes)
+                choices.Add(char.ToUpperInvariant(option[0]) + option.Substring(1));
+            suffix.ClearOptions();
+            suffix.AddOptions(choices);
+            suffix.SetValueWithoutNotify(0);
+            suffix.onValueChanged.AddListener(index =>
+            {
+                string name = BaseRegionName;
+                selectedRegionSuffix = index == 0 ? string.Empty : choices[index];
+                SetRegionName(name);
+            });
+
+            var label = SavedText(sizeRect.parent, "Region name suffix label", "NAME SUFFIX", 16);
+            var labelRect = label.rectTransform;
+            label.alignment = TextAnchor.MiddleLeft;
+            labelRect.anchorMin = sizeRect.anchorMin;
+            labelRect.anchorMax = sizeRect.anchorMax;
+            labelRect.pivot = sizeRect.pivot;
+            labelRect.sizeDelta = new Vector2(sizeRect.sizeDelta.x, 30);
+            labelRect.anchoredPosition = sizeRect.anchoredPosition + new Vector2(0, 34);
+
+            var rowOffset = new Vector2(0, -(sizeRect.sizeDelta.y + 44));
+            sizeRect.anchoredPosition += rowOffset;
+            if (sizeLabel) sizeLabel.anchoredPosition += rowOffset;
+        }
+
+        private void AutogenerateRegionName()
+        {
+            regionNames ??= new World.PlaceNameGenerator("RegionNames", regionNameCharacterLimit, randomSuffix: false);
+            var name = regionNames.Next(BaseRegionName);
+            if (name == null) return;
+
+            SetRegionName(name);
+            regionNameInput.Select();
+            regionNameInput.ActivateInputField();
+            StartCoroutine(PlaceRegionNameCaret());
+        }
+
+        private System.Collections.IEnumerator PlaceRegionNameCaret()
+        {
+            // InputField selects all text when it activates in LateUpdate.
+            yield return null;
+            if (regionNameInput.isFocused)
+                regionNameInput.caretPosition = BaseRegionName.Length;
         }
 
         private void ChangeEra(int direction)
@@ -252,6 +396,7 @@ namespace CityForge.UI
             if(index==2&&generationSeed&&!int.TryParse(generationSeed.text,out _))return;
 
             selectedNavigationIndex = index;
+            if (regionNameHint) regionNameHint.SetActive(false);
             if (createRegionBasicSettings != null)
                 createRegionBasicSettings.SetActive(index == 0);
             if (createRegionTerrainIntro != null)
@@ -370,7 +515,10 @@ namespace CityForge.UI
             var climateNote=parent.Find("ClimateNote").GetComponent<Text>();climateNote.text="Tropical adds light aqua coastal water.";climateNote.rectTransform.sizeDelta=new Vector2(350,18);
             parent.Find("MountainNote").GetComponent<Text>().text="Overall relief; Terrain can add a mountain border.";
             var mountainNote=parent.Find("MountainNote").GetComponent<RectTransform>();mountainNote.anchoredPosition=new Vector2(0,-242);mountainNote.sizeDelta=new Vector2(350,18);
-            var coastalNote=parent.Find("CoastalNote").GetComponent<RectTransform>();coastalNote.anchoredPosition=new Vector2(0,-300);coastalNote.sizeDelta=new Vector2(350,48);parent.Find("CoastalNote").GetComponent<Text>().text="Set coverage for each district in Terrain.";
+            var coverageNote=parent.Find("CoastalNote").GetComponent<Text>();
+            coverageNote.rectTransform.anchoredPosition=new Vector2(0,-346);
+            coverageNote.rectTransform.sizeDelta=new Vector2(350,24);
+            coverageNote.text="Sets all districts. Adjust individual districts in Terrain.";
             parent.GetComponent<LayoutElement>().preferredHeight=520;
             terrainNextButton.GetComponent<RectTransform>().anchoredPosition=new Vector2(615,-472);
             terrainNextButton.GetComponentInChildren<Text>().text="NEXT";
@@ -401,10 +549,14 @@ namespace CityForge.UI
                 var t=SavedText(parent,name,value,fontSize);var r=t.rectTransform;r.anchorMin=r.anchorMax=r.pivot=new Vector2(0,1);r.anchoredPosition=position;r.sizeDelta=size;t.alignment=TextAnchor.UpperLeft;return t;
             }
             Label("TreeCoverageTitle","TREE COVERAGE",new Vector2(0,-430),new Vector2(350,32),24);
-            Label("TreeCoverageHelp","Choose woodland coverage for each district. Dense tree patches leave broad meadow clearings.\n\nClick a district to cycle 25%, 50%, or 75%. Water, steep slopes and camp clearings stay open.",new Vector2(0,-570),new Vector2(350,180),19);
-            Label("TreeCoverageAllLabel","SET ALL DISTRICTS",new Vector2(0,-480),new Vector2(350,26),18);
-            generationTreeCoverage=Instantiate(TerrainChoice("Land Type"),parent);generationTreeCoverage.name="TreeCoverageDropdown";generationTreeCoverage.gameObject.SetActive(true);
-            generationTreeCoverage.GetComponent<RectTransform>().anchoredPosition=new Vector2(0,-510);generationTreeCoverage.GetComponent<RectTransform>().sizeDelta=new Vector2(210,48);
+            Label("TreeCoverageHelp","Click a district to cycle 25%, 50%, or 75%. Use Tree Coverage in Environment to set all districts.\n\nWater, steep slopes and camp clearings stay open.",new Vector2(0,-480),new Vector2(350,180),19);
+            var environment = createRegionTerrainIntro.transform;
+            generationTreeCoverage = Instantiate(TerrainChoice("Land Type"), environment);
+            generationTreeCoverage.name = "TreeCoverageDropdown";
+            generationTreeCoverage.gameObject.SetActive(true);
+            var coverageRect = (RectTransform)generationTreeCoverage.transform;
+            coverageRect.anchoredPosition = new Vector2(0, -296);
+            coverageRect.sizeDelta = new Vector2(210, 48);
             generationTreeCoverage.onValueChanged=new Dropdown.DropdownEvent();generationTreeCoverage.ClearOptions();generationTreeCoverage.AddOptions(new System.Collections.Generic.List<string>{"25%","50%","75%"});generationTreeCoverage.value=1;
             districtTreeCoverage=new int[64];districtCoverageLabels=new Text[64];
             Label("TreeCoverageNorth","NORTH",new Vector2(425,-434),new Vector2(350,24),16);
@@ -419,8 +571,8 @@ namespace CityForge.UI
             Label("TreeCoverageSouth","SOUTH · 8 × 8 DISTRICTS",new Vector2(425,-820),new Vector2(350,24),16);
             void ApplyAll(int value){for(int i=0;i<districtTreeCoverage.Length;i++){districtTreeCoverage[i]=(value+1)*25;RefreshCoverageCell(i);}}
             generationTreeCoverage.onValueChanged.AddListener(ApplyAll);
-            var apply=Instantiate(terrainNextButton,parent);apply.name="ApplyTreeCoverage";apply.onClick=new Button.ButtonClickedEvent();apply.onClick.AddListener(()=>ApplyAll(generationTreeCoverage.value));
-            var applyRect=apply.GetComponent<RectTransform>();applyRect.anchoredPosition=new Vector2(225,-510);applyRect.sizeDelta=new Vector2(125,48);apply.GetComponentInChildren<Text>().text="APPLY";
+            var apply=Instantiate(terrainNextButton,environment);apply.name="ApplyTreeCoverage";apply.onClick=new Button.ButtonClickedEvent();apply.onClick.AddListener(()=>ApplyAll(generationTreeCoverage.value));
+            var applyRect=apply.GetComponent<RectTransform>();applyRect.anchoredPosition=new Vector2(225,-296);applyRect.sizeDelta=new Vector2(125,48);apply.GetComponentInChildren<Text>().text="APPLY";
         }
         void RefreshCoverageCell(int index)
         {

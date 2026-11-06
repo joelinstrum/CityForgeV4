@@ -47,7 +47,15 @@ namespace CityForge.World
     }
     public sealed partial class PrototypeRegionView
     {
-        public bool InPlayerChannelClearing(Vector2 p){foreach(var b in Data.WaterBodies)if(b.playerChannel){float margin=b.bankWidthNormalized*MapSide+2;var bounds=b.Bounds;bounds.min-=Vector2.one*(margin/MapSide);bounds.max+=Vector2.one*(margin/MapSide);if(bounds.Contains(p/MapSide+Vector2.one*.5f)&&PlayerChannelGeometry.Sampler(b,MapSide).Query(p,out _,out _)<(b.halfWidthNormalized+b.bankWidthNormalized)*MapSide+2)return true;}return false;}
+        public bool InPlayerChannelClearing(Vector2 p){foreach(var body in Data.WaterBodies)if(body.playerChannel&&InPlayerChannelClearing(body,p))return true;return false;}
+        bool InPlayerChannelClearing(RegionWaterBody body,Vector2 p)
+        {
+            float margin=body.bankWidthNormalized*MapSide+2;
+            var bounds=body.Bounds;
+            bounds.min-=Vector2.one*(margin/MapSide);
+            bounds.max+=Vector2.one*(margin/MapSide);
+            return bounds.Contains(p/MapSide+Vector2.one*.5f)&&PlayerChannelGeometry.Sampler(body,MapSide).Query(p,out _,out _)<(body.halfWidthNormalized+body.bankWidthNormalized)*MapSide+2;
+        }
         internal void RecordPlayerChannel(RegionWaterBody body,string replaceId){var list=new List<RegionWaterBody>();foreach(var b in Data.WaterBodies)if(replaceId==null||b.id!=replaceId)list.Add(b);list.Add(body);Data.WaterBodies=list.ToArray();Waterless=false;WoodlandRevision++;}
         // Snaps only exterior union edges with an actual neighboring region cell.
         public bool ChannelBoundary(Vector2 p,out Vector2 edge,out Vector2 outward)

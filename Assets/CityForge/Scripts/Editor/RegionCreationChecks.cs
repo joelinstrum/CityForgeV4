@@ -43,6 +43,16 @@ namespace CityForge.EditorTools
             menu.Handle(CityForge.UI.MenuAction.CreateRegion);
             var modal=UnityEngine.Object.FindFirstObjectByType<CityForge.UI.CityForgeModal>();modal.SetRegionName("Generation Integration");modal.SetRegionSize(RegionSize.Small);modal.SelectCreateRegionSection(1);
             var terrain=modal.transform.Find("Panel75/RoundedContentClip/ScrollViewport/ScrollContent/CreateRegionTerrainIntro");
+            var coverage = terrain.Find("TreeCoverageDropdown").GetComponent<UnityEngine.UI.Dropdown>();
+            Check(coverage.isActiveAndEnabled && coverage.IsInteractable() &&
+                coverage.options.Count == 3 && coverage.options[0].text == "25%" &&
+                coverage.options[1].text == "50%" && coverage.options[2].text == "75%",
+                "Environment shows the three tree coverage choices");
+            coverage.value = 2;
+            var coverageSettings = modal.ReadCreationSettings();
+            Check(coverageSettings.treeCoveragePercent == 75 &&
+                Array.TrueForAll(coverageSettings.districtTreeCoverage, percent => percent == 75),
+                "Environment tree coverage sets all districts");
             terrain.Find("TopographyDropdown").GetComponent<UnityEngine.UI.Dropdown>().value=1;
             terrain.Find("RiversDropdown").GetComponent<UnityEngine.UI.Dropdown>().value=1;
             terrain.Find("StreamsDropdown").GetComponent<UnityEngine.UI.Dropdown>().value=1;

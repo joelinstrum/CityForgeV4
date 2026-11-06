@@ -10,6 +10,7 @@ namespace CityForge.World
     [Serializable] public sealed class RegionDistrictInfo
     {
         public int index;
+        public int currentYear;
         public string name;
         public Rect bounds;
         public RegionBiome biome;

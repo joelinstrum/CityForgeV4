@@ -80,8 +80,10 @@ is unchanged. The regional relief map recognizes saved player channels as water.
 Limits:2–64 guide points,4096 samples per route,65536 samples/64 routes per region.
 A route must have at least10m endpoint separation. Camps, roads and existing water
 are protected; natural-water/lake connections, confluences, reverse/upstream extension,
-removal, adjustable widths and flow simulation are future work. Save District/Region
-persists routes globally even if only one detailed district cache is saved.
+adjustable widths and flow simulation are future work. Water > Remove Water Bodies
+deletes the entire player route, including any connected reach in a neighboring
+district. Save District/Region persists routes and removals globally even if only
+one detailed district cache is saved.
 
 Verification
 

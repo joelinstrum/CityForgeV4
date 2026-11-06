@@ -42,7 +42,7 @@ namespace CityForge.UI
                 weather[i].GetComponent<RectTransform>().anchoredPosition=new Vector2((i-1)*106,22);
             }
             Popup.OptionChanged+=option=>{if(Selected==NatureTool.Sun)for(int i=0;i<3;i++){seasons[i].gameObject.SetActive(option==0);weather[i].gameObject.SetActive(option==1);}};
-            Popup.Show(NatureTool.None);sunMenu.gameObject.SetActive(false);ForestBrush=gameObject.AddComponent<ForestRemovalBrush>();ForestBrush.Initialize(view,this,hud);LakeOutline=gameObject.AddComponent<LakeOutlineTool>();LakeOutline.Initialize(view,this,hud);RiverRoute=gameObject.AddComponent<RiverRouteTool>();RiverRoute.Initialize(view,this,hud);HideLegacy(hud);Refresh();
+            Popup.Show(NatureTool.None);sunMenu.gameObject.SetActive(false);ForestBrush=gameObject.AddComponent<ForestRemovalBrush>();ForestBrush.Initialize(view,this,hud);LakeOutline=gameObject.AddComponent<LakeOutlineTool>();LakeOutline.Initialize(view,this,hud);RiverRoute=gameObject.AddComponent<RiverRouteTool>();RiverRoute.Initialize(view,this,hud);gameObject.AddComponent<WaterRemovalTool>().Initialize(view,this);HideLegacy(hud);Refresh();
         }
         DistrictWeather Weather=>view&&view.ApprovedDistrict?view.ApprovedDistrict.GetComponent<DistrictWeather>():null;
         static RectTransform Rect(Transform parent,string name,Vector2 anchor,Vector2 position,Vector2 size)

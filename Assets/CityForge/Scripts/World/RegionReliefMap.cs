@@ -100,7 +100,16 @@ namespace CityForge.World
             slabMaterial=new Material(Resources.Load<Shader>("Region/RegionalSlab"));var renderer=slab.AddComponent<MeshRenderer>();renderer.sharedMaterial=slabMaterial;renderer.shadowCastingMode=ShadowCastingMode.Off;
         }
         public void SetDistrictGroups(Texture2D ids){if(material){material.SetTexture("_DistrictIds",ids);material.SetFloat("_Grouped",1);}}
-        public bool TryPick(Ray ray,out int district){district=-1;if(!picker.Raycast(ray,out var hit,1000000))return false;district=view.DistrictAtWorld(hit.point);return district>=0;}
+        public bool TryPick(Ray ray, out int district) => TryPick(ray, out district, out _);
+        internal bool TryPick(Ray ray, out int district, out Vector3 point)
+        {
+            district = -1;
+            point = default;
+            if (!picker || !picker.Raycast(ray, out var hit, 1000000)) return false;
+            point = hit.point;
+            district = view.DistrictAtWorld(point);
+            return district >= 0;
+        }
         void OnDestroy(){if(slabMesh)Destroy(slabMesh);if(slabMaterial)Destroy(slabMaterial);if(mesh)Destroy(mesh);if(material)Destroy(material);if(atlas)Destroy(atlas);}
     }
 }

@@ -32,8 +32,8 @@ namespace CityForge.EditorTools
                     File.WriteAllText(Root+"Status.txt","Sweep frame "+frame);
                 }
                 Require(slider.handleRect.GetComponent<Image>().sprite!=null,"Visible round slider handle");
-                rig.ToggleViewAngle();Require(rig.ViewTilt==0,"I reaches low endpoint");rig.ToggleViewAngle();Require(rig.ViewTilt==1,"I reaches isometric endpoint");
-                File.WriteAllText(Root+"Checks.txt","PASS:35.26439 degree cap including legacy85 degree restore;61 slider positions; fixed focus/heading/zoom; focus centered through continuous tilt/FOV transition; finite matrices; original perspective/orthographic endpoints; I synchronization; legacy camera restore and intermediate JSON round trip; water material unchanged. Captures include tilt control. No player saves written.");File.WriteAllText(Root+"Status.txt","COMPLETE");
+                rig.ToggleViewAngle();Require(rig.ViewTilt==0,"Angle toggle reaches low endpoint");rig.ToggleViewAngle();Require(rig.ViewTilt==1,"Angle toggle reaches isometric endpoint");
+                File.WriteAllText(Root+"Checks.txt","PASS:35.26439 degree cap including legacy85 degree restore;61 slider positions; fixed focus/heading/zoom; focus centered through continuous tilt/FOV transition; finite matrices; original perspective/orthographic endpoints; angle toggle synchronization; legacy camera restore and intermediate JSON round trip; water material unchanged. Captures include tilt control. No player saves written.");File.WriteAllText(Root+"Status.txt","COMPLETE");
             }finally{canvas.renderMode=oldMode;canvas.worldCamera=oldCamera;canvas.planeDistance=oldPlane;RenderTexture.active=previous;RenderTexture.ReleaseTemporary(target);UnityEngine.Object.Destroy(read);rig.SetViewTilt(0);}
         }
     }
