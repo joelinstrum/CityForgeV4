@@ -1,12 +1,108 @@
-# CityForge V4 handoff — November 6, 2026
+# CityForge V4 handoff — November 7, 2026
 
-The next session is for the **Lot Editor**. Its main-menu entry is
-`MenuAction.LotEditor` in `Assets/CityForge/Scripts/UI/MainMenuController.cs`.
-It currently opens an informational placeholder. Start there and confirm the
-intended editing workflow before replacing the placeholder. The currency discussion
-was brainstorming only.
+## Lot Editor
 
-This branch adds player water removal, town founding on the region map, separate
+Open **Lot Editor** from the main menu. The full-screen developer workspace has
+a Back button and starts with an editable 3 × 4 lot. Width and length each
+support 1–16 tiles. The right inspector edits name, cost, monthly cost, parent
+category, subcategory, and first era. Costs are metadata in whole units.
+
+**Save Lot** writes a local library entry by lot ID. **New** starts a new ID.
+**Saved Lots** searches, loads, and deletes entries with confirmation for
+deletion or discarding unsaved work. A legacy `Draft.cflot` appears in the same
+library. District placement currently uses the most recently saved lot. It
+places object prefabs on dry, sufficiently flat terrain and persists a lot
+record with the region. The district customization workspace protects
+developer-authored content and allows cosmetic object overrides.
+
+- Trees, fences, and characters have searchable thumbnail pickers and recent
+  items. Buildings open through era, then use category, then the asset list.
+  Transportation has no imported building yet. Character and building ghosts
+  show placement under the cursor. Buildings can rotate with R before placing.
+  Placed assets support selection, dragging, rotation, and deletion.
+- Fence PointWire routes accept open or closed sketches and fill with a chosen
+  repeatable fence. Ground paths have 1, 3, 6, 9, and 12 m widths, optional
+  rounded corners, material swatches, material changes, and deletion.
+- Base textures fill the lot. Overlay brushes paint only the main grid tiles
+  crossed by a drag. Terrain mode selects a tile for Delete or 90° rotation.
+  Each layer supports 1-tile and 2 × 2 texture repeat. The preview uses olive
+  ground, a solid gray surround, and a lighter secondary grid.
+- The preview has Day/Night, hard shadows, +/− zoom, and Suspend animation.
+  The three Indigenous character prefab roots were scaled up 12% in the local
+  private assets, which also affects the camp instances using those prefabs.
+- The character Script icon saves per-character settings and previews
+  randomized Idle and Walk. Characters can wander, follow a reachable paved
+  path, or favor an approach to another NPC. Interaction scans run at most once
+  per 10 seconds per character, with up to four candidates per scan. Walk
+  animation starts only on a moving frame. Suspend animation pauses simulation.
+
+Start implementation work in `LotEditorPanel.cs`, `LotEditorViewport.cs`,
+`LotCharacterPreview.cs`, and `Scripts/Lots/`. The main-menu entry is
+`MenuAction.LotEditor`. District integration is in `DistrictLots.cs`.
+`LotCatalogSetup` creates the ignored local asset catalog from available models.
+The source PR includes the built-in content JSON and mod guide. Mod fragments
+load from `Mods/ContentCatalog` beneath Unity's persistent data directory and
+use stable IDs. See `Documentation/03_Technical/Content_Catalog_Mods.md`.
+
+Pending work includes district rendering for lot ground textures and paths,
+running authored NPC behaviors in districts, Run and building-entry behaviors,
+Scripted sequences, and evaluating mod category conditions. The lot's first
+era and costs are currently stored fields. District placement has no library
+picker or era/economy enforcement. No next feature has been selected.
+
+Validation used Unity 6000.1.12f1 in a disposable project copy. The checked-in
+`LotEditorChecks.Run` covers the editor flow. Additional batch checks exercised
+the V3 imports, material and terrain tools, animation and NPC behaviors,
+multi-lot storage, legacy saves, and valid and rejected JSON mod fragments.
+The latest batch log is `work/fence-unity/content-catalog-mod-check.log` in the
+November 6 Codex chat workspace. Full district gameplay verification remains
+pending.
+
+
+## CityForge V3 model source for future Lot Editor imports
+
+The local source project is `/Users/joelinstrum/dev/CityForge - V3`. Start in
+`Assets/CityForgeV3/Resources/CityForgeV3`, especially `Props`, `Buildings3D`,
+`BuildingProps`, `Flora`, `Garden`, `Bridges`, `Boats`, `Railroad`, and
+`Vehicles`. V3's `Runtime/World/LotWorldController.Props.cs` (under
+`Assets/CityForgeV3`) records the resource paths, textures, and model scaling
+used in-game. Import individual models with their texture maps as needed.
+
+V4's first V3 imports come from `Props/PicketFenceV01`,
+`Props/WroughtIronFenceV01`, and `Props/WroughtIronVariationsV01`. The local
+copies live under the Git-ignored `Assets/CityForge/Resources/Lots/V3Fences`
+folder. V4's `LotCatalogSetup` registers them with stable IDs and URP materials.
+The two straight panels fill paths. The corner, decorative garden fence, and
+gate are standalone pieces.
+
+The main menu opens the Lot Editor through `MenuAction.LotEditor` in
+`Assets/CityForge/Scripts/UI/MainMenuController.cs`. Path swatches and surfaces use
+local files under the Git-ignored `Assets/CityForge/Resources/Lots/PathMaterials`
+folder. The V3 source paths below are relative to its `Resources/CityForgeV3` folder.
+
+| V4 resource | V3 source |
+| --- | --- |
+| `cobblestone.png` | `LotTextures/CobblestoneSuppliedV01/cobblestone-texture.png` |
+| `brick.png` | `LotTextures/BrickPavingV01/brick-texture-1.png` |
+| `concrete.png` | `LotTextures/UrbanOverlaysV01/concrete-sidewalk.png` |
+| `gravel.png` | `Water/River/BanksV3/open-gravel.png` |
+| `packed-earth.png` | `Water/River/02-river-bed-dirt.png` |
+
+The Characters picker uses existing Indigenous camp NPC definitions and private
+V3 copies under `Assets/CityForge/Resources/Lots/V3Characters`. The V3 models
+come from `Props/Characters/{FarmerV01,HistoricPolicemanV01,VictorianGentlemanV01,HooliganV01}`
+and `Characters/DockWorkerV01`. `LotCatalogSetup` prepares the local prefabs
+and Idle/Walk controllers. Era groups use the CityForge timeline.
+
+The first V3 building batch uses source meshes and color/normal maps from
+`Buildings3D/{WoodenCottageV01,PlymouthStoreProduction,SmallSchoolV01,LumberMillV01,QueenAnneColorHouseV02}`.
+The local copies are in `Assets/CityForge/Resources/Lots/V3Buildings`.
+`LotCatalogSetup` registers their era and use categories. Check `Buildings3D`,
+`Buildings`, and `Industry` for future imports.
+
+## Previous session — region controls and district horizon
+
+PR #12 added player water removal, town founding on the region map, separate
 region and town name lists, region suffix selection, and the 25/50/75% coverage
 dropdown in Environment. Terrain retains per-district coverage controls. In a
 district, the disk and arrow handle save and return, the lower-right panel shows save

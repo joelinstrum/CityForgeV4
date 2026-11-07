@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
 
 namespace CityForge.UI
 {
@@ -27,6 +28,9 @@ namespace CityForge.UI
         [SerializeField] private Text volumeLabel;
         [SerializeField] private CityForgeModal largeModal;
         [SerializeField] private Texture2D menuIconSheet;
+
+        private GameObject lotWorkspace;
+        private GameObject lotMenuSelection;
 
         private const string VolumeKey = "CityForge.MasterVolume";
         private const string FullscreenKey = "CityForge.Fullscreen";
@@ -62,12 +66,14 @@ namespace CityForge.UI
         public bool IsOpeningRegion {get;private set;}
         private void Update()
         {
-            if (!IsOpeningRegion&&Input.GetKeyDown(KeyCode.Escape)) CloseDialog();
+            if (IsOpeningRegion || !Input.GetKeyDown(KeyCode.Escape)) return;
+            if (lotWorkspace) lotWorkspace.GetComponent<LotEditorPanel>().CancelInteraction();
+            else CloseDialog();
         }
 
         public void Handle(MenuAction action)
         {
-            if(IsOpeningRegion)return;
+            if (IsOpeningRegion || lotWorkspace) return;
             switch (action)
             {
                 case MenuAction.OpenRegion:
@@ -79,7 +85,7 @@ namespace CityForge.UI
                         new Rect(390f, 130f, 465f, 365f), true);
                     break;
                 case MenuAction.LotEditor:
-                    ShowInformation("LOT EDITOR", "The lot editor has not been built for V4 yet.");
+                    OpenLotEditor();
                     break;
                 case MenuAction.WaterSystems:
                     ShowInformation("WATER SYSTEMS", "Water is a separate V4 rendering and design milestone.");
@@ -113,6 +119,32 @@ namespace CityForge.UI
                     RefreshSettingsLabels();
                     break;
             }
+        }
+
+        private void OpenLotEditor()
+        {
+            CloseDialog();
+            var events = EventSystem.current;
+            lotMenuSelection = events ? events.currentSelectedGameObject : null;
+            var back = LotEditorWorkspace.Create(informationTitle ? informationTitle.font : null,
+                CloseLotEditor);
+            lotWorkspace = back.GetComponentInParent<Canvas>().gameObject;
+            if (events) events.SetSelectedGameObject(back.gameObject);
+        }
+
+        private void OnDisable()
+        {
+            if (lotWorkspace) CloseLotEditor();
+        }
+
+        private void CloseLotEditor()
+        {
+            lotWorkspace.SetActive(false);
+            Destroy(lotWorkspace);
+            lotWorkspace = null;
+            var events = EventSystem.current;
+            if (events) events.SetSelectedGameObject(lotMenuSelection);
+            lotMenuSelection = null;
         }
 
         private void ShowInformation(string title, string body)

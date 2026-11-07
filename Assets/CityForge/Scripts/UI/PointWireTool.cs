@@ -163,11 +163,28 @@ namespace CityForge.UI
     public sealed class PointWireGraphic : MaskableGraphic
     {
         readonly List<Vector2> segments=new();
-        public void Clear(){segments.Clear();SetVerticesDirty();}
+        readonly List<Vector2> fills = new();
+        public void Clear(){segments.Clear();fills.Clear();SetVerticesDirty();}
+        public void AddFill(Vector2 a, Vector2 b, Vector2 c, Vector2 d)
+        {
+            fills.Add(a);
+            fills.Add(b);
+            fills.Add(c);
+            fills.Add(d);
+        }
         public void Add(Vector2 a,Vector2 b){segments.Add(a);segments.Add(b);}
         protected override void OnPopulateMesh(VertexHelper vh)
         {
-            vh.Clear();for(int i=0;i+1<segments.Count;i+=2){var a=segments[i];var b=segments[i+1];var delta=b-a;if(delta.sqrMagnitude<.0001f)continue;var n=new Vector2(-delta.y,delta.x).normalized*1.25f;int v=vh.currentVertCount;
+            vh.Clear();
+            var fillColor = color;
+            fillColor.a *= .35f;
+            for (int i = 0; i < fills.Count; i += 4)
+            {
+                for (int j = 0; j < 4; j++) vh.AddVert(fills[i + j], fillColor, Vector2.zero);
+                vh.AddTriangle(i, i + 1, i + 2);
+                vh.AddTriangle(i, i + 2, i + 3);
+            }
+            for(int i=0;i+1<segments.Count;i+=2){var a=segments[i];var b=segments[i+1];var delta=b-a;if(delta.sqrMagnitude<.0001f)continue;var n=new Vector2(-delta.y,delta.x).normalized*1.25f;int v=vh.currentVertCount;
                 vh.AddVert(a-n,color,Vector2.zero);vh.AddVert(a+n,color,Vector2.zero);vh.AddVert(b+n,color,Vector2.zero);vh.AddVert(b-n,color,Vector2.zero);vh.AddTriangle(v,v+1,v+2);vh.AddTriangle(v,v+2,v+3);
             }
         }

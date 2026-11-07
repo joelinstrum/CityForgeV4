@@ -1,0 +1,320 @@
+{
+  "schema": 1,
+  "eras": [
+    {
+      "id": "founders",
+      "name": "Founder's Era",
+      "periods": [
+        {
+          "name": "Frontier Settlement",
+          "firstYear": 1740,
+          "lastYear": 1759
+        },
+        {
+          "name": "Colonial Growth",
+          "firstYear": 1760,
+          "lastYear": 1779
+        },
+        {
+          "name": "A New Nation",
+          "firstYear": 1780,
+          "lastYear": 1799
+        },
+        {
+          "name": "Early Republic",
+          "firstYear": 1800,
+          "lastYear": 1819
+        }
+      ]
+    },
+    {
+      "id": "industrial",
+      "name": "Industrial Era",
+      "periods": [
+        {
+          "name": "Transportation Revolution",
+          "firstYear": 1820,
+          "lastYear": 1839
+        },
+        {
+          "name": "Industrial Expansion",
+          "firstYear": 1840,
+          "lastYear": 1859
+        },
+        {
+          "name": "Transformation",
+          "firstYear": 1860,
+          "lastYear": 1869
+        }
+      ]
+    },
+    {
+      "id": "victorian",
+      "name": "Victorian Era",
+      "periods": [
+        {
+          "name": "Railroad City",
+          "firstYear": 1870,
+          "lastYear": 1879
+        },
+        {
+          "name": "Urban Boom",
+          "firstYear": 1880,
+          "lastYear": 1889
+        },
+        {
+          "name": "Metropolitan Age",
+          "firstYear": 1890,
+          "lastYear": 1899
+        }
+      ]
+    },
+    {
+      "id": "machine",
+      "name": "Machine Age",
+      "periods": [
+        {
+          "name": "New Century",
+          "firstYear": 1900,
+          "lastYear": 1909
+        },
+        {
+          "name": "Motor Age Begins",
+          "firstYear": 1910,
+          "lastYear": 1920
+        }
+      ]
+    },
+    {
+      "id": "modern",
+      "name": "Modern Era",
+      "periods": [
+        {
+          "name": "Roaring Twenties",
+          "firstYear": 1921,
+          "lastYear": 1929
+        },
+        {
+          "name": "Depression Era",
+          "firstYear": 1930,
+          "lastYear": 1938
+        },
+        {
+          "name": "Wartime City",
+          "firstYear": 1939,
+          "lastYear": 1945
+        }
+      ]
+    },
+    {
+      "id": "postwar",
+      "name": "Postwar Era",
+      "periods": [
+        {
+          "name": "Postwar Boom",
+          "firstYear": 1946,
+          "lastYear": 1954
+        },
+        {
+          "name": "Suburban Expansion",
+          "firstYear": 1955,
+          "lastYear": 1964
+        },
+        {
+          "name": "Urban Transformation",
+          "firstYear": 1965,
+          "lastYear": 1974
+        }
+      ]
+    },
+    {
+      "id": "contemporary",
+      "name": "Contemporary Era",
+      "periods": [
+        {
+          "name": "Reinvention",
+          "firstYear": 1975,
+          "lastYear": 1989
+        },
+        {
+          "name": "Information Age",
+          "firstYear": 1990,
+          "lastYear": 2000
+        },
+        {
+          "name": "New Millennium",
+          "firstYear": 2001,
+          "lastYear": 2009
+        },
+        {
+          "name": "Connected City",
+          "firstYear": 2010,
+          "lastYear": 2019
+        },
+        {
+          "name": "Twenty-First Century City",
+          "firstYear": 2020,
+          "lastYear": 2026
+        }
+      ]
+    }
+  ],
+  "categoryTypes": [
+    {
+      "id": "lot-use",
+      "conditions": []
+    }
+  ],
+  "categories": [
+    {
+      "id": "residential",
+      "name": "Residential",
+      "legacyName": "Residential",
+      "categoryType": "lot-use",
+      "subcategories": [
+        {
+          "id": "single-family",
+          "name": "Single-Family",
+          "legacyName": "Single-Family"
+        },
+        {
+          "id": "multi-family",
+          "name": "Multi-Family",
+          "legacyName": "Multi-Family"
+        },
+        {
+          "id": "estate",
+          "name": "Estate",
+          "legacyName": "Estate"
+        },
+        {
+          "id": "homestead",
+          "name": "Homestead",
+          "legacyName": "Homestead"
+        }
+      ]
+    },
+    {
+      "id": "commercial",
+      "name": "Commercial",
+      "legacyName": "Commercial",
+      "categoryType": "lot-use",
+      "subcategories": [
+        {
+          "id": "retail",
+          "name": "Retail",
+          "legacyName": "Retail"
+        },
+        {
+          "id": "office",
+          "name": "Office",
+          "legacyName": "Office"
+        },
+        {
+          "id": "dining",
+          "name": "Dining",
+          "legacyName": "Dining"
+        },
+        {
+          "id": "lodging",
+          "name": "Lodging",
+          "legacyName": "Lodging"
+        }
+      ]
+    },
+    {
+      "id": "civics",
+      "name": "Civics",
+      "legacyName": "Civics",
+      "categoryType": "lot-use",
+      "subcategories": [
+        {
+          "id": "government",
+          "name": "Government",
+          "legacyName": "Government"
+        },
+        {
+          "id": "education",
+          "name": "Education",
+          "legacyName": "Education"
+        },
+        {
+          "id": "healthcare",
+          "name": "Healthcare",
+          "legacyName": "Healthcare"
+        },
+        {
+          "id": "culture",
+          "name": "Culture",
+          "legacyName": "Culture"
+        },
+        {
+          "id": "public-safety",
+          "name": "Public Safety",
+          "legacyName": "Public Safety"
+        },
+        {
+          "id": "parks",
+          "name": "Parks",
+          "legacyName": "Parks"
+        }
+      ]
+    },
+    {
+      "id": "industrial",
+      "name": "Industrial",
+      "legacyName": "Industrial",
+      "categoryType": "lot-use",
+      "subcategories": [
+        {
+          "id": "agriculture",
+          "name": "Agriculture",
+          "legacyName": "Agriculture"
+        },
+        {
+          "id": "extraction",
+          "name": "Extraction",
+          "legacyName": "Extraction"
+        },
+        {
+          "id": "manufacturing",
+          "name": "Manufacturing",
+          "legacyName": "Manufacturing"
+        },
+        {
+          "id": "warehousing",
+          "name": "Warehousing",
+          "legacyName": "Warehousing"
+        }
+      ]
+    },
+    {
+      "id": "transportation",
+      "name": "Transportation",
+      "legacyName": "Transportation",
+      "categoryType": "lot-use",
+      "subcategories": [
+        {
+          "id": "road",
+          "name": "Road",
+          "legacyName": "Road"
+        },
+        {
+          "id": "rail",
+          "name": "Rail",
+          "legacyName": "Rail"
+        },
+        {
+          "id": "water",
+          "name": "Water",
+          "legacyName": "Water"
+        },
+        {
+          "id": "air",
+          "name": "Air",
+          "legacyName": "Air"
+        }
+      ]
+    }
+  ]
+}

@@ -291,6 +291,7 @@ namespace CityForge.World
             try
             {
                 progress?.Invoke("Preparing region",.15f);yield return null;
+                if (snapshot?.info.lots != null) view.PlacedLots.AddRange(snapshot.info.lots);
                 if(snapshot!=null){view.Towns=snapshot.info.towns??System.Array.Empty<RegionTown>();view.ForestAdditions=snapshot.info.forestAdditions??System.Array.Empty<ForestAdditionRecord>();view.ForestRemovals=snapshot.info.forestRemovals??System.Array.Empty<ForestRemovalStroke>();view.NativeCamps=snapshot.info.nativeCamps??System.Array.Empty<NativeCampRecord>();view.CombinedDistricts=snapshot.info.combinedDistricts??System.Array.Empty<CombinedDistrictGroup>();view.CreationSettings=snapshot.info.creation;view.legacyClimate=snapshot.info.climate;view.AnimalsEnabled=snapshot.info.animals;size=(RegionSize)snapshot.info.size;seed=snapshot.info.seed;regionName=snapshot.info.name;view.SavedRegionId=snapshot.info.id;view.Season=(RegionSeason)snapshot.info.season;view.TerrainHeightRange=snapshot.info.terrainHeightRange;view.LoadedMeadow=snapshot.meadow;view.LoadedMeadowDistrict=snapshot.info.meadowCacheDistrict;view.LoadedFromSnapshot=true;view.wantsMeadow=snapshot.info.meadow;view.Waterless=snapshot.info.waterless;view.Coastline=snapshot.info.coastline;view.CoastVersion=snapshot.info.coastVersion;view.MinimalRiverCrest=snapshot.info.minimalRiverCrest;view.StillWater=snapshot.info.stillWater;view.LakeWaterVersion=snapshot.info.lakeWaterVersion<0?-1:1;view.RiverBedVersion=snapshot.info.riverBedVersion;}
                 if(view.LoadedMeadow!=null&&view.LoadedMeadowDistrict>=0)view.sessionMeadows[view.LoadedMeadowDistrict]=view.LoadedMeadow;
                 view.Size = size;
@@ -476,6 +477,7 @@ namespace CityForge.World
             scaler.referenceResolution = new Vector2(1920f, 1080f);
             var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             BuildDistrictSelection(root.transform,font);
+            BuildLotActions(root.transform, font);
             gameObject.AddComponent<DistrictCombiner>().Initialize(this);
             townTools=gameObject.AddComponent<CityForge.UI.RegionTownTools>();
             townTools.Initialize(this,root.GetComponent<Canvas>(),font);
@@ -721,6 +723,12 @@ namespace CityForge.World
 
         private void Update()
         {
+            if (playerLotWorkspace)
+            {
+                if (Input.GetKeyDown(KeyCode.Escape))
+                    playerLotWorkspace.GetComponent<CityForge.UI.LotEditorPanel>().CancelInteraction();
+                return;
+            }
             if (SelectedDistrict >= 0 && Input.GetKeyDown(KeyCode.I))
                 SetDistrictInfoVisible(!regionTitle.gameObject.activeSelf);
 
@@ -831,6 +839,7 @@ namespace CityForge.World
             overviewButton.SetActive(false);
             RefreshTrees();
             yield return UpdateLandscapeModeStages();
+            RebuildDistrictLots();
             if(NaturalLandscape&&IsCombinedDistrict){
                 var bounds=ActiveDistrictBounds;var rig=GetComponentInChildren<CityForgeCameraController>();float high=0,low=VerticalHeight;var td=approvedDistrict.DisplayTerrain.terrainData;foreach(float h in td.GetHeights(0,0,td.heightmapResolution,td.heightmapResolution)){high=Mathf.Max(high,h*td.size.y);low=Mathf.Min(low,h*td.size.y);}
                 float span=high-low;rig.FrameDistrictUnion(Mathf.Max(bounds.width,bounds.height),VerticalHeight,low,high,new Vector3(bounds.center.x,0,bounds.center.y));
@@ -857,7 +866,7 @@ namespace CityForge.World
             if(districtLoading)return;
             GetComponent<RegionPreviewDiagnostics>().SetDiagnostic(false,1);
             float returnHeading=GetComponentInChildren<CityForgeCameraController>().CaptureRegionState().yaw;
-            SelectedDistrict=-1;if(districtSelection)districtSelection.SetActive(true);
+            SelectedDistrict=-1;RebuildDistrictLots();if(districtSelection)districtSelection.SetActive(true);
             SetDistrictInfoVisible(true);
             navigationHint.text = OverviewNavigationHint;
             transform.Find("RegionLandCover").GetComponent<MeshFilter>().sharedMesh=wholeRegionMesh;
@@ -951,6 +960,7 @@ namespace CityForge.World
         }
         private void OnDestroy()
         {
+            ClosePlayerLot();
             // Stopping Editor Play mode also destroys this view without going through ReturnToMenu.
             RestorePresentationSettings();
             Shader.SetGlobalFloat("_LandscapeEnabled", 0);
