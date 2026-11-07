@@ -168,6 +168,10 @@ venv/
 # Authored relief shader only; biome artwork remains local.
 !/Assets/CityForge/Resources/
 /Assets/CityForge/Resources/**
+!/Assets/CityForge/Resources/Config/
+!/Assets/CityForge/Resources/Config.meta
+!/Assets/CityForge/Resources/Config/ContentCatalog.json
+!/Assets/CityForge/Resources/Config/ContentCatalog.json.meta
 !/Assets/CityForge/Resources/Region/
 !/Assets/CityForge/Resources.meta
 !/Assets/CityForge/Resources/Region.meta
@@ -237,3 +241,7 @@ venv/
 !/Assets/CityForge/Resources/UI.meta
 !/Assets/CityForge/Resources/UI/ForestRemovalCircle.shader
 !/Assets/CityForge/Resources/UI/ForestRemovalCircle.shader.meta
+
+# Local Lot Editor catalog references private model assets.
+/Assets/CityForge/Resources/Lots/
+/Assets/CityForge/Resources/Lots.meta

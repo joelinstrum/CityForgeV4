@@ -27,6 +27,7 @@ namespace CityForge.World
         public CombinedDistrictGroup[] combinedDistricts;
         public ForestRemovalStroke[] forestRemovals;
         public ForestAdditionRecord[] forestAdditions;
+        public DistrictLotRecord[] lots;
         public int meadowCacheDistrict=-1;
         public float terrainHeightRange;
         public RegionWaterBody[] waterBodies;
@@ -89,6 +90,7 @@ namespace CityForge.World
         {
             var baseline=Resources.Load<MeadowRuntimeBaseline>("Region/MeadowRuntimeBaseline");
             var info=new SavedRegionInfo{animals=view.AnimalsEnabled,id=id??view.SavedRegionId??Guid.NewGuid().ToString("N"),name=name??view.RegionName,season=(int)view.Season,terrainHeightRange=view.TerrainHeightRange,seed=view.Data.Seed,size=(int)view.Size,district=view.SelectedDistrict,meadow=view.PrefersMeadow,waterBodies=view.Data.WaterBodies,waterless=view.Waterless,coastline=view.Coastline,coastVersion=view.CoastVersion,minimalRiverCrest=view.MinimalRiverCrest,stillWater=false,lakeWaterVersion=LakeWaterRenderer.UsesCalmWater(view)?1:-1,riverBedVersion=view.RiverBedVersion,savedUtc=DateTime.UtcNow.ToString("O"),baselineVersion=baseline?baseline.generationVersion:0,camera=view.GetComponentInChildren<CameraSystem.CityForgeCameraController>().CaptureRegionState()};
+            if (view.PlacedLots.Count != 0) info.lots = view.PlacedLots.ToArray();
             info.climate=view.Climate;info.creation=view.CreationSettings;info.districts=view.Districts;info.combinedDistricts=view.CombinedDistricts;info.nativeCamps=view.NativeCamps;info.towns=view.Towns;info.forestRemovals=view.ForestRemovals;info.forestAdditions=view.ForestAdditions;
             var pilot=view.ApprovedDistrict;info.meadowCacheDistrict=pilot?pilot.DistrictIndex:view.LoadedMeadowDistrict;
             return new SavedRegionSnapshot{info=info,data=view.Data,meadow=pilot?pilot.CaptureSnapshot():view.LoadedMeadow};
@@ -114,6 +116,7 @@ namespace CityForge.World
         {
             RegionTown.Validate(snapshot.info.towns);
             PlayerLakeGeometry.Validate(snapshot.info.waterBodies);PlayerChannelGeometry.Validate(snapshot.info.waterBodies);
+            PrototypeRegionView.ValidateLotRecords(snapshot.info.lots, (snapshot.info.creation?.GridSide ?? 2) * (snapshot.info.creation?.GridSide ?? 2));
             ForestAdditionValidation.Validate(snapshot.info.forestAdditions,snapshot.info.creation?.GridSide??2,NativeCampPlanner.MapSide(snapshot.info.size,snapshot.info.creation?.GridSide??2));
             ForestRemovalValidation.Validate(snapshot.info.forestRemovals,snapshot.info.creation?.GridSide??2);
             DistrictConnections.Validate(snapshot.info.combinedDistricts,snapshot.info.creation?.GridSide??2);
@@ -162,7 +165,10 @@ namespace CityForge.World
             // JsonUtility can instantiate a missing nested recipe with current defaults.
             // An old save without a recipe must retain its original grid/vertical scale.
             if(info!=null&&(!json.Contains("\"creation\"")||System.Text.RegularExpressions.Regex.IsMatch(json,"\"creation\"\\s*:\\s*null")))info.creation=null;
-            if(info!=null&&!json.Contains("\"meadowCacheDistrict\""))info.meadowCacheDistrict=info.district>=0?info.district:3;if(info==null||info.schema!=1||(int)info.climate<0||(int)info.climate>1||info.season<0||info.season>2||info.size<0||info.size>2||!Finite(info.terrainHeightRange)||info.terrainHeightRange<0||info.terrainHeightRange>10000||info.district< -1||info.district>=(info.creation?.GridSide??2)*(info.creation?.GridSide??2)||string.IsNullOrWhiteSpace(info.name))throw new InvalidDataException("Unsupported region metadata.");if(info.creation!=null)info.creation.Validate();PlayerLakeGeometry.Validate(info.waterBodies);PlayerChannelGeometry.Validate(info.waterBodies);ForestAdditionValidation.Validate(info.forestAdditions,info.creation?.GridSide??2,NativeCampPlanner.MapSide(info.size,info.creation?.GridSide??2));ForestRemovalValidation.Validate(info.forestRemovals,info.creation?.GridSide??2);DistrictConnections.Validate(info.combinedDistricts,info.creation?.GridSide??2);NativeCampPlanner.Validate(info.nativeCamps,info.creation?.GridSide??2,NativeCampPlanner.MapSide(info.size,info.creation?.GridSide??2));RegionTown.Validate(info.towns);return info;
+            if(info!=null&&!json.Contains("\"meadowCacheDistrict\""))info.meadowCacheDistrict=info.district>=0?info.district:3;if(info==null||info.schema!=1||(int)info.climate<0||(int)info.climate>1||info.season<0||info.season>2||info.size<0||info.size>2||!Finite(info.terrainHeightRange)||info.terrainHeightRange<0||info.terrainHeightRange>10000||info.district< -1||info.district>=(info.creation?.GridSide??2)*(info.creation?.GridSide??2)||string.IsNullOrWhiteSpace(info.name))throw new InvalidDataException("Unsupported region metadata.");if(info.creation!=null)info.creation.Validate();PlayerLakeGeometry.Validate(info.waterBodies);PlayerChannelGeometry.Validate(info.waterBodies);ForestAdditionValidation.Validate(info.forestAdditions,info.creation?.GridSide??2,NativeCampPlanner.MapSide(info.size,info.creation?.GridSide??2));ForestRemovalValidation.Validate(info.forestRemovals,info.creation?.GridSide??2);DistrictConnections.Validate(info.combinedDistricts,info.creation?.GridSide??2);NativeCampPlanner.Validate(info.nativeCamps,info.creation?.GridSide??2,NativeCampPlanner.MapSide(info.size,info.creation?.GridSide??2));RegionTown.Validate(info.towns);
+            int gridSide = info.creation?.GridSide ?? 2;
+            PrototypeRegionView.ValidateLotRecords(info.lots, gridSide * gridSide);
+            return info;
         }
         static int Count(BinaryReader reader,int min,int max){int count=reader.ReadInt32();if(count<min||count>max)throw new InvalidDataException("Invalid snapshot dimensions.");return count;}
         static void WriteFloats(BinaryWriter writer,Array values){var buffer=new byte[Buffer.ByteLength(values)];Buffer.BlockCopy(values,0,buffer,0,buffer.Length);writer.Write(buffer);}
