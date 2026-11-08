@@ -9,6 +9,7 @@ namespace CityForge.Lots
     public sealed class LotCustomization
     {
         public int schema = 1;
+        public bool configured;
         public List<LotObjectDefinition> objects = new List<LotObjectDefinition>();
     }
 
@@ -26,6 +27,8 @@ namespace CityForge.Lots
             if (customization == null) return result;
             if (customization.schema != 1 || customization.objects == null || customization.objects.Count > 512)
                 throw new InvalidDataException("Invalid landscaping customization.");
+            // Unity serializes null inline fields as empty objects in region saves.
+            if (!customization.configured && customization.objects.Count == 0) return result;
             var authored = new Dictionary<string, LotObjectDefinition>();
             foreach (var item in result.objects) authored.Add(item.id, item);
             result.objects.RemoveAll(item => IsCosmetic(catalog, item.assetId));
@@ -48,7 +51,7 @@ namespace CityForge.Lots
 
         public static LotCustomization CreateOverride(LotDefinition original, LotDefinition working, LotAssetCatalog catalog)
         {
-            var changes = new LotCustomization();
+            var changes = new LotCustomization { configured = true };
             foreach (var item in working.objects)
                 if (IsCosmetic(catalog, item.assetId)) changes.objects.Add(item);
             var permitted = Apply(original, changes, catalog);

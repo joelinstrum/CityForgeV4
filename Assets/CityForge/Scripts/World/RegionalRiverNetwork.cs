@@ -66,17 +66,50 @@ namespace CityForge.World
         }
         public static bool HasContinuousChannels(PrototypeRegionData data)
         {if(data.WaterBodies!=null)foreach(var body in data.WaterBodies)if(body.channelVersion>=1)return true;return false;}
-        public static float ContinuousHeight(PrototypeRegionData data,float u,float v,float height)
+        // Conservative bounds for regular terrain rows. Outside these intervals
+        // no channel segment is close enough to change the base height.
+        internal static Vector2Int[] HeightRowBounds(PrototypeRegionData data,Vector2 origin,float span,int count)
+        {
+            var rows=new Vector2Int[count];
+            for(int z=0;z<count;z++)rows[z]=new Vector2Int(count,-1);
+            float scale=(count-1)/span;
+            if(data.WaterBodies==null)return rows;
+            foreach(var body in data.WaterBodies){
+                if(body.channelVersion<1||body.centerline==null||body.centerline.Length<2)continue;
+                var padding=Vector2.one*(body.halfWidthNormalized+body.bankWidthNormalized);
+                for(int i=1;i<body.centerline.Length;i++){
+                    var a=body.centerline[i-1];var b=body.centerline[i];
+                    var min=(Vector2.Min(a,b)-padding-origin)*scale;
+                    var max=(Vector2.Max(a,b)+padding-origin)*scale;
+                    int first=Mathf.Max(0,Mathf.FloorToInt(min.y)),last=Mathf.Min(count-1,Mathf.CeilToInt(max.y));
+                    int left=Mathf.Max(0,Mathf.FloorToInt(min.x)),right=Mathf.Min(count-1,Mathf.CeilToInt(max.x));
+                    if(left>right)continue;
+                    for(int z=first;z<=last;z++)rows[z]=new Vector2Int(Mathf.Min(rows[z].x,left),Mathf.Max(rows[z].y,right));
+                }
+            }
+            return rows;
+        }
+
+        public static float ContinuousHeight(PrototypeRegionData data,float u,float v,float height,bool includeStreams=true)
         {
             if(data.WaterBodies==null)return height;
-            foreach(var body in data.WaterBodies)if(body.kind==WaterBodyKind.Ocean&&body.Contains(new Vector2(u,v)))return height;
+            var point=new Vector2(u,v);
+            bool checkedOcean=false,inOcean=false;
             foreach(var body in data.WaterBodies){
-                if(body.channelVersion<1)continue;
+                if(body.channelVersion<1||(!includeStreams&&body.isStream))continue;
                 float reach=body.halfWidthNormalized+body.bankWidthNormalized;
                 var bounds=body.Bounds;
                 if(u<bounds.xMin-body.bankWidthNormalized||u>bounds.xMax+body.bankWidthNormalized||v<bounds.yMin-body.bankWidthNormalized||v>bounds.yMax+body.bankWidthNormalized)continue;
-                float distance=ChannelDistance(body,new Vector2(u,v),reach);
+                float distance=ChannelDistance(body,point,reach);
                 if(distance>=reach)continue;
+                if(!checkedOcean){
+                    checkedOcean=true;
+                    foreach(var ocean in data.WaterBodies)
+                        if(ocean.kind==WaterBodyKind.Ocean&&ocean.Contains(point)){inOcean=true;break;}
+                }
+                // Continue the tidal bed through the bay's shallow shelf. Preserve
+                // deeper sea floor and leave the river's dry bank grading inland.
+                if(inOcean&&(body.id!="tidal-river"||distance>body.halfWidthNormalized))continue;
                 if(body.channelVersion>=2){
                     // Preserve adjacent ground. Only a shallow wetted ribbon is cut;
                     // the surface follows the original ground rather than sea level.
@@ -91,7 +124,7 @@ namespace CityForge.World
                 float bed=level-(body.isStream?.65f:7f)/PrototypeRegionData.Height;
                 float channel=Mathf.Lerp(bed,edge,Mathf.Pow(Mathf.Clamp01(distance/body.halfWidthNormalized),4));
                 float bank=Mathf.Lerp(edge,Mathf.Max(height,edge),Mathf.SmoothStep(0,1,Mathf.InverseLerp(body.halfWidthNormalized,reach,distance)));
-                height=distance<=body.halfWidthNormalized?channel:bank;
+                height=inOcean?Mathf.Min(height,channel):distance<=body.halfWidthNormalized?channel:bank;
             }
             return height;
         }
@@ -109,27 +142,14 @@ namespace CityForge.World
             if(data.WaterBodies!=null)foreach(var body in data.WaterBodies){
                 if(body.playerChannel)continue;
                 if(distance<=0)return distance;
-                if(body.centerline!=null){var bounds=body.Bounds;if(point.x<bounds.xMin-distance||point.x>bounds.xMax+distance||point.y<bounds.yMin-distance||point.y>bounds.yMax+distance)continue;distance=Mathf.Min(distance,body.channelVersion>=1?ChannelDistance(body,point,distance+body.halfWidthNormalized)-body.halfWidthNormalized:body.DistanceToCenterline(point,out _)-body.halfWidthNormalized);}
+                if(body.centerline?.Length>1){var bounds=body.Bounds;if(point.x<bounds.xMin-distance||point.x>bounds.xMax+distance||point.y<bounds.yMin-distance||point.y>bounds.yMax+distance)continue;distance=Mathf.Min(distance,body.channelVersion>=1?ChannelDistance(body,point,distance+body.halfWidthNormalized)-body.halfWidthNormalized:body.DistanceToCenterline(point,out _)-body.halfWidthNormalized);}
                 else if(body.kind==WaterBodyKind.Ocean&&body.Contains(point))return -1;
             }
             return distance;
         }
-        // New routes have uniformly spaced, monotone coordinates along their axis. A segment
-        // outside this axis window cannot be within limit, so terrain/mask sampling
-        // need not project onto all route segments per waterway.
-        static float ChannelDistance(RegionWaterBody body,Vector2 point,float limit)
-        {
-            float squared=limit*limit;var points=body.centerline;
-            float along=body.channelAlongX?point.x:point.y;int segments=points.Length-1;
-            int first=Mathf.Clamp(Mathf.FloorToInt((along-limit)*segments),0,segments-1);
-            int last=Mathf.Clamp(Mathf.FloorToInt((along+limit)*segments),0,segments-1);
-            for(int i=first;i<=last;i++){
-                var a=points[i];var delta=points[i+1]-a;
-                float t=Mathf.Clamp01(Vector2.Dot(point-a,delta)/delta.sqrMagnitude);
-                squared=Mathf.Min(squared,(point-a-delta*t).sqrMagnitude);
-            }
-            return Mathf.Sqrt(squared);
-        }
+        static float ChannelDistance(RegionWaterBody body,Vector2 point,float limit) =>
+            Mathf.Min(limit,body.IndexedCenterlineDistance(point));
+
         public static float BankDistance(RegionWaterBody body,float u,float v)
         {
             if(body.channelVersion>=1)return body.IndexedCenterlineDistance(new Vector2(u,v))-body.halfWidthNormalized;

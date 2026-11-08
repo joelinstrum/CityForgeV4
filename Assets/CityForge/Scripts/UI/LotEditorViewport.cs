@@ -172,6 +172,22 @@ namespace CityForge.UI
             }
         }
 
+        private readonly List<Renderer> previewTrees = new();
+        private MaterialPropertyBlock treeLighting;
+        private readonly UnityEngine.Rendering.SphericalHarmonicsL2[] treeProbe = new UnityEngine.Rendering.SphericalHarmonicsL2[1];
+
+        private void LightPreviewTree(Renderer renderer)
+        {
+            treeProbe[0] = World.PrototypeRegionView.LotDaylightProbe();
+            if (night)
+                treeProbe[0] *= .18f;
+            treeLighting ??= new MaterialPropertyBlock();
+            renderer.GetPropertyBlock(treeLighting);
+            treeLighting.CopySHCoefficientArraysFrom(treeProbe);
+            renderer.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.CustomProvided;
+            renderer.SetPropertyBlock(treeLighting);
+        }
+
         private void ApplyLighting()
         {
             previewLight.transform.rotation = night ? Quaternion.Euler(32f, 115f, 0f) : Quaternion.Euler(50f, -35f, 0f);
@@ -179,6 +195,8 @@ namespace CityForge.UI
             previewLight.intensity = night ? .09f : 1.05f;
             cameraView.backgroundColor = night ? new Color32(10, 16, 27, 255) : new Color32(28, 37, 46, 255);
             UpdateDraftingLighting();
+            foreach (var tree in previewTrees)
+                if (tree) LightPreviewTree(tree);
         }
 
         private void UpdateDraftingLighting()
@@ -209,6 +227,7 @@ namespace CityForge.UI
             pathTargets.Clear();
             instances.Clear();
             pickTargets.Clear();
+            previewTrees.Clear();
             selectionFootprint = null;
 
             content = new GameObject("Lot preview contents").transform;
@@ -238,7 +257,7 @@ namespace CityForge.UI
             {
                 var line = Material(new Color32(191, 200, 147, 255), unlit: true);
                 var minor = Material(new Color32(136, 152, 104, 128), unlit: true);
-                MakeTransparent(minor, LotGroundOverlay.MaxCount + 2);
+                LotGroundTexture.ConfigureTransparentLayer(minor, LotGroundOverlay.MaxCount + 2);
                 for (int x = 1; x < lot.width * 4; x++)
                     Box("Width line", new Vector3(x * LotDefinition.TileMeters / 4 - size.x / 2, .045f, 0),
                         new Vector3(x % 4 == 0 ? .12f : .065f, .018f, size.y), x % 4 == 0 ? line : minor);
@@ -261,8 +280,15 @@ namespace CityForge.UI
                     RestorePausedPose(instance.transform, pose);
                 if (asset.IsCharacter) characterPreview.Bind(item, asset, instance.transform, animationsPaused);
                 foreach (var renderer in instance.GetComponentsInChildren<Renderer>())
+                {
+                    if (asset.category == "Trees" || asset.category == "Landscaping" && asset.group == "Trees")
+                    {
+                        previewTrees.Add(renderer);
+                        LightPreviewTree(renderer);
+                    }
                     if (renderer is MeshRenderer || renderer is SkinnedMeshRenderer || renderer is BillboardRenderer)
                         pickTargets.Add((item.id, renderer));
+                }
                 if (item.id != selected) continue;
                 var footprint = LotRuntimeLoader.Footprint(item, asset);
                 var position = instance.transform.localPosition;
@@ -307,7 +333,7 @@ namespace CityForge.UI
             if (textureCenter.HasValue)
                 material.SetTextureOffset("_BaseMap", (Vector2.one - repeat) * .5f +
                     LotGroundTexture.Repeat(LotGroundOverlay.QuarterTurn(bounds.center - textureCenter.Value, -rotation), span));
-            MakeTransparent(material, order);
+            LotGroundTexture.ConfigureTransparentLayer(material, order);
             var overlay = Box("Ground overlay", new Vector3(bounds.center.x, .01f, bounds.center.y),
                 new Vector3(localSize.x, .005f, localSize.y), material).GetComponent<Renderer>();
             overlay.transform.localRotation = Quaternion.Euler(0, rotation * 90, 0);
@@ -350,19 +376,6 @@ namespace CityForge.UI
                 var line = Box("Tile outline", new Vector3(x, height, z), new Vector3(sizeX, .01f, sizeZ), material);
                 line.transform.SetParent(parent, false);
             }
-        }
-
-        private static void MakeTransparent(Material material, int order)
-        {
-            material.SetFloat("_Surface", 1);
-            material.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
-            material.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-            material.SetFloat("_SrcBlendAlpha", (float)UnityEngine.Rendering.BlendMode.One);
-            material.SetFloat("_DstBlendAlpha", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-            material.SetFloat("_ZWrite", 0);
-            material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-            material.SetOverrideTag("RenderType", "Transparent");
-            material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent + order;
         }
 
         private Material Material(Color color, Texture2D texture = null, Vector2 tiling = default, bool unlit = false)
@@ -483,7 +496,7 @@ namespace CityForge.UI
                         color.a *= .48f;
                         transparent.SetColor("_BaseColor", color);
                         transparent.DisableKeyword("_ALPHAPREMULTIPLY_ON");
-                        MakeTransparent(transparent, LotGroundOverlay.MaxCount + 3);
+                        LotGroundTexture.ConfigureTransparentLayer(transparent, LotGroundOverlay.MaxCount + 3);
                         ghostMaterials.Add(original, transparent);
                     }
                     slots[i] = transparent;

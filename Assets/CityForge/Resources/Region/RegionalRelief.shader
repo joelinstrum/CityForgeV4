@@ -16,8 +16,8 @@ Shader "CityForge/Regional Relief"
  V Vert(A i){V o;o.positionCS=TransformObjectToHClip(i.positionOS.xyz);o.color=i.color;o.uv=i.uv;return o;}
  half4 Frag(V i):SV_Target {
  float2 q=i.uv*_Grid,cell=floor(min(q,_Grid-.001)),f=frac(q),edge=min(f,1-f),width=max(fwidth(q),.0001);
- float2 lines=1-saturate(edge/width);half3 color=SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,i.uv).rgb;
- if(_Grouped<.5)return half4(lerp(color,half3(.86,.85,.74),max(lines.x,lines.y)*.32),1);
+ float2 lines=1-saturate(edge/(width*.88));half3 color=SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,i.uv).rgb;
+ if(_Grouped<.5)return half4(lerp(color,half3(.74,.76,.77),max(lines.x,lines.y)*.25),1);
  float2 center=(cell+.5)/_Grid;float4 a=SAMPLE_TEXTURE2D(_DistrictIds,sampler_DistrictIds,center);
  float2 sx=float2(f.x<.5?-1:1,0),sy=float2(0,f.y<.5?-1:1);
  float4 b=SAMPLE_TEXTURE2D(_DistrictIds,sampler_DistrictIds,center+sx/_Grid),c=SAMPLE_TEXTURE2D(_DistrictIds,sampler_DistrictIds,center+sy/_Grid);
@@ -26,7 +26,7 @@ Shader "CityForge/Regional Relief"
  // Selected cells form one outline even before Apply; applied groups share their stable ID.
  float2 selectedBoundary=float2(abs(a.g-b.g)>.5||(outX>0&&a.g>.5),abs(a.g-c.g)>.5||(outY>0&&a.g>.5));
  if(a.g>.5){if(b.g>.5)boundary.x=0;if(c.g>.5)boundary.y=0;}
- float grid=max(lines.x*boundary.x,lines.y*boundary.y);color=lerp(color,half3(.86,.85,.74),grid*.32);
+ float grid=max(lines.x*boundary.x,lines.y*boundary.y);color=lerp(color,half3(.74,.76,.77),grid*.25);
  float2 goldLines=1-saturate(edge/(width*2.3));
  float gold=max(goldLines.x*selectedBoundary.x,goldLines.y*selectedBoundary.y);
  return half4(lerp(color,half3(1,.70,.16),gold*.98),1);

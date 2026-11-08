@@ -100,7 +100,7 @@ namespace CityForge.Lots
             Vector2 PointAt(int i) => i < points.Count ? points[i] : end.GetValueOrDefault();
         }
 
-        public static Mesh BuildMesh(LotPathDefinition path, Vector2 tileSize, float height)
+        public static Mesh BuildMesh(LotPathDefinition path, Vector2 tileSize, float height, Func<Vector2, float> ground = null)
         {
             IReadOnlyList<Vector2> points = path.points;
             if (path.curved)
@@ -136,6 +136,7 @@ namespace CityForge.Lots
                 triangles[t + 5] = b;
             }
 
+            if (ground != null) return BuildTerrainRibbon(vertices, segments, tileSize, height, ground);
             var mesh = new Mesh { name = "Lot path surface", vertices = vertices, normals = normals, uv = uv, triangles = triangles };
             return mesh;
 
@@ -145,6 +146,58 @@ namespace CityForge.Lots
                 normals[index] = Vector3.up;
                 uv[index] = new Vector2(point.x / tileSize.x, point.y / tileSize.y);
             }
+        }
+        private static Mesh BuildTerrainRibbon(Vector3[] edges, int segments, Vector2 tileSize, float lift,
+            Func<Vector2, float> ground)
+        {
+            var vertices = new List<Vector3>();
+            var uv = new List<Vector2>();
+            var triangles = new List<int>();
+            int across = 1;
+            for (int i = 0; i < edges.Length; i += 2)
+                across = Mathf.Max(across, Mathf.CeilToInt(Vector3.Distance(edges[i], edges[i + 1])));
+            int stride = across + 1;
+            for (int segment = 0; segment < segments; segment++)
+            {
+                int a = segment * 2;
+                int b = (a + 2) % edges.Length;
+                int along = Mathf.Max(1, Mathf.CeilToInt(Mathf.Max(Vector3.Distance(edges[a], edges[b]),
+                    Vector3.Distance(edges[a + 1], edges[b + 1]))));
+                for (int row = segment == 0 ? 0 : 1; row <= along; row++)
+                {
+                    float t = (float)row / along;
+                    var left = Vector3.Lerp(edges[a], edges[b], t);
+                    var right = Vector3.Lerp(edges[a + 1], edges[b + 1], t);
+                    int start = vertices.Count;
+                    for (int column = 0; column <= across; column++)
+                    {
+                        var point = Vector3.Lerp(left, right, (float)column / across);
+                        var planar = new Vector2(point.x, point.z);
+                        point.y = ground(planar) + lift;
+                        vertices.Add(point);
+                        uv.Add(planar / tileSize);
+                    }
+                    if (start == 0) continue;
+                    for (int column = 0; column < across; column++)
+                    {
+                        int next = start + column;
+                        int prev = next - stride;
+                        triangles.Add(prev);
+                        triangles.Add(prev + 1);
+                        triangles.Add(next + 1);
+                        triangles.Add(prev);
+                        triangles.Add(next + 1);
+                        triangles.Add(next);
+                    }
+                }
+            }
+            var mesh = new Mesh { name = "Lot path surface" };
+            if (vertices.Count > ushort.MaxValue) mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+            mesh.SetVertices(vertices);
+            mesh.SetUVs(0, uv);
+            mesh.SetTriangles(triangles, 0);
+            mesh.RecalculateNormals();
+            return mesh;
         }
     }
 }

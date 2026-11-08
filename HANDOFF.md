@@ -1,3 +1,26 @@
+# CityForge V4 handoff · November 8, 2026
+
+Work in the existing CityForge V4 checkout at `/Users/joelinstrum/dev/CityForge - V4`. The checkpoint branch is `feature/regional-resources-and-capital-founding`. Read `AGENTS.md` and the checkout’s `HANDOFF.md` before changing landscape or rendering. This project uses Unity 6000.1.12f1.
+
+## Gameplay and controls
+
+- The region wizard has resource options and a River and Bay shape. The regional resource overlay shows survey icons and supports filtering, including settlement suitability. Hidden mineral deposits follow the discovery state. `Documentation/03_Technical/Regional_Resources.md` describes the resource model.
+- On the region map, **Remake Map** is available for eligible regions without towns. It replaces the generated map after confirmation. **Manage Towns** lets players select, move, or delete a town, even when two markers overlap. Moving a town moves its marker while placed lots stay in place. Deleting a capital promotes the oldest remaining town. **L** toggles town labels in overview and district views.
+- The first town is the capital. Founding it opens the capital district and offers saved **Civics → Founder’s Buildings** lots. The picker displays thumbnails, dimensions, requirements, and configured bonuses. It explains blocked choices. Placement snaps the footprint to the grid and checks dry, reasonably flat ground and overlap.
+- Placed lots render the saved base texture, overlay paint, and paths. Preview trees receive the district’s ambient daylight fill. An older empty landscaping override now restores authored props. An intentionally cleared lot can be saved again to record the empty override explicitly.
+- The district’s **Time of Day** dropdown offers Morning, Noon, Afternoon, Evening, and Night. The region saves the selected preset. Morning light comes from map east, afternoon and evening light from the west, and night has cool moonlight. The district’s direct daylight baseline is 25% lower than before this session.
+- Crest coastal water retains shore surf and uses wider, stronger isometric ripple normals at wider zoom. Offshore foam also admits smaller crests. The user approved the broader ripples. Related code is in `CoastlineLandscape.cs` and `CoastalWaterPresentation.cs`.
+
+## Local assets and validation
+
+The public branch is source-only. Keep licensed models and textures, Crest package source, generated output, and player saves in the local checkout. The local Lot Editor catalog uses the founder buildings and landscaping assets under `Assets/CityForge/Resources/Lots`. The Agrarian Assembly Hall is a local saved lot in Unity’s persistent data directory. Its current configuration is a 2 × 2 lot, pasture requirement, and 10% population growth bonus. Richmond is a local save for checking the capital and placed hall. Use a copy for destructive checks.
+
+Focused Unity checks during the session covered surveys and save compatibility, the founder picker and lot placement, placed ground layers, Richmond’s poplar restoration and town edits, district daylight presets, and coastal foam and ripple settings. The scratch Unity project and logs live under the previous chat’s `work/` directory and are outside the PR.
+
+Bonus effects are stored and displayed. Applying those effects to the town simulation is future work. The last visual review also flagged the sharp, bright lawn border and vegetation poking through paving. These are separate from the district lighting and water changes.
+
+---
+
 # CityForge V4 handoff — November 7, 2026
 
 ## Lot Editor

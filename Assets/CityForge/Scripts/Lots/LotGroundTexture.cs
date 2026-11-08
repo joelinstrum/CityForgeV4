@@ -107,6 +107,7 @@ namespace CityForge.Lots
         public static readonly LotGroundTexture[] Overlay =
         {
             new LotGroundTexture("", "Clear All Overlays", "", Color.clear),
+            new LotGroundTexture("tileable-grass", "Tileable Grass", "Lots/GroundTextures/tileable-grass", Color.clear),
             new LotGroundTexture("worn-sidewalk", "Worn Sidewalk", "Lots/GroundTextures/worn-sidewalk", Color.clear),
             new LotGroundTexture("brick-walkway", "Brick Walkway", "Lots/GroundTextures/brick-walkway", Color.clear)
         };
@@ -127,5 +128,18 @@ namespace CityForge.Lots
         public static LotGroundTexture Find(bool overlay, string id) =>
             Array.Find(overlay ? Overlay : Base, entry => entry.Id == (id ?? ""));
         public static Vector2 Repeat(Vector2 size, int span) => size / (LotDefinition.TileMeters * span);
+
+        internal static void ConfigureTransparentLayer(Material material, int order)
+        {
+            material.SetFloat("_Surface", 1);
+            material.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            material.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            material.SetFloat("_SrcBlendAlpha", (float)UnityEngine.Rendering.BlendMode.One);
+            material.SetFloat("_DstBlendAlpha", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            material.SetFloat("_ZWrite", 0);
+            material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            material.SetOverrideTag("RenderType", "Transparent");
+            material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent + order;
+        }
     }
 }

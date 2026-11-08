@@ -30,6 +30,11 @@ namespace CityForge.Editor
                 Require(generated.Length>=2&&generated.Length<=3,"Camp cap across seeds and grid sizes");counts.Add(generated.Length);
             }
             Require(counts.SetEquals(new[]{2,3}),"Seeded targets include both two and three camps");
+            foreach(int target in new[]{2,3}){
+                recipe.nativeCampCount=target;
+                Require(NativeCampPlanner.Create(data,recipe,0).Length==target,"Explicit camp target "+target);
+            }
+            recipe.nativeCampCount=0;
             foreach(var camp in camps){for(int i=0;i<camp.teepees;i++){
                 var p=camp.TeepeePosition(i);Require(Mathf.Abs(Vector2.Distance(p,camp.center)-camp.Radius)<.01f,"Horseshoe radius");
                 for(int j=i+1;j<camp.teepees;j++)Require(Vector2.Distance(p,camp.TeepeePosition(j))>6.5f,"Teepee separation");

@@ -32,6 +32,11 @@ internal static class LotCatalogSetup
         var candidates = new[]
         {
             farmhouse,
+            FoundersBuilding("timber-council-hall", "Timber Council Hall", "TimberCouncilHall", 12f),
+            FoundersBuilding("stone-courthouse", "Stone Courthouse", "StoneCourthouse", 12f),
+            FoundersBuilding("brick-state-house", "Brick State House", "BrickStateHouse", 12f),
+            FoundersBuilding("harbor-council-house", "Harbor Council House", "HarborCouncilHouse", 12f),
+            FoundersBuilding("agrarian-assembly-hall", "Agrarian Assembly Hall", "AgrarianAssemblyHall", 12f),
             V3Building("wooden-cottage", "Wooden Cottage", "WoodenCottage", "residential", "founders", 8f),
             V3Building("plymouth-store", "Plymouth Store", "PlymouthStore", "commercial", "founders", 9.26f, ".jpeg", ".jpeg"),
             V3Building("small-school", "Small School", "SmallSchool", "civics", "founders", 9f, ".jpg", ".png"),
@@ -70,7 +75,7 @@ internal static class LotCatalogSetup
         var catalog = AssetDatabase.LoadAssetAtPath<LotAssetCatalog>(CatalogPath);
         var entries = (catalog ? catalog.entries : System.Array.Empty<LotAssetCatalogEntry>()).ToList();
         bool changed = false;
-        foreach (var entry in candidates.Concat(meadowPoplars).Concat(Characters()).Where(item => item.prefab))
+        foreach (var entry in candidates.Concat(meadowPoplars).Concat(Characters()).Concat(Landscaping()).Where(item => item.prefab))
         {
             var existing = entries.Find(item => item != null && item.id == entry.id);
             if (existing == null)
@@ -88,6 +93,13 @@ internal static class LotCatalogSetup
                 existing.fencePostCenter = entry.fencePostCenter;
                 existing.fencePostWidth = entry.fencePostWidth;
                 existing.fenceRailLift = entry.fenceRailLift;
+                changed = true;
+            }
+            else if (entry.subcategory == "founders-buildings" &&
+                (existing.prefab != entry.prefab || existing.materialOverride != entry.materialOverride ||
+                    existing.footprint != entry.footprint || existing.subcategory != entry.subcategory))
+            {
+                entries[entries.IndexOf(existing)] = entry;
                 changed = true;
             }
             else if ((entry.category == "Buildings" || entry.IsCharacter) &&
@@ -123,6 +135,65 @@ internal static class LotCatalogSetup
     {
         entry.group = category;
         SetEra(entry, eraId);
+    }
+
+    private static LotAssetCatalogEntry FoundersBuilding(string id, string label, string folder, float span)
+    {
+        string root = DirectoryPath + "/FoundersBuildings/" + folder + "/";
+        string modelPath = root + "Model.fbx";
+        var model = AssetDatabase.LoadAssetAtPath<GameObject>(modelPath);
+        var entry = Entry(id, label, "Buildings", model, Vector2.one * span, false, true);
+        SetBuildingEra(entry, "civics", "founders");
+        entry.subcategory = "founders-buildings";
+        if (!model) return entry;
+
+        if (AssetImporter.GetAtPath(modelPath) is ModelImporter modelImporter &&
+            (modelImporter.materialImportMode != ModelImporterMaterialImportMode.None ||
+                modelImporter.importAnimation || modelImporter.importCameras || modelImporter.importLights))
+        {
+            modelImporter.materialImportMode = ModelImporterMaterialImportMode.None;
+            modelImporter.importAnimation = modelImporter.importCameras = modelImporter.importLights = false;
+            modelImporter.SaveAndReimport();
+            entry.prefab = model = AssetDatabase.LoadAssetAtPath<GameObject>(modelPath);
+        }
+
+        var bounds = FenceBounds(model).size;
+        float widest = Mathf.Max(bounds.x, bounds.z);
+        if (widest > .001f) entry.footprint = new Vector2(bounds.x, bounds.z) * (span / widest);
+
+        string materialPath = root + "Building.mat";
+        var material = AssetDatabase.LoadAssetAtPath<Material>(materialPath);
+        if (!material)
+        {
+            var color = ImportTexture("Color.jpg", TextureImporterType.Default, true);
+            var normal = ImportTexture("Normal.png", TextureImporterType.NormalMap, false);
+            var surface = ImportTexture("MetallicSmoothness.png", TextureImporterType.Default, false);
+            if (!color || !normal || !surface) return entry;
+            material = new Material(Shader.Find("Universal Render Pipeline/Lit")) { name = entry.label };
+            material.SetTexture("_BaseMap", color);
+            material.SetTexture("_BumpMap", normal);
+            material.SetTexture("_MetallicGlossMap", surface);
+            material.SetFloat("_Smoothness", 1);
+            material.EnableKeyword("_NORMALMAP");
+            material.EnableKeyword("_METALLICSPECGLOSSMAP");
+            AssetDatabase.CreateAsset(material, materialPath);
+        }
+        entry.materialOverride = material;
+        return entry;
+
+        Texture2D ImportTexture(string file, TextureImporterType type, bool srgb)
+        {
+            var path = root + file;
+            if (AssetImporter.GetAtPath(path) is TextureImporter importer &&
+                (importer.textureType != type || importer.sRGBTexture != srgb || importer.maxTextureSize != 2048))
+            {
+                importer.textureType = type;
+                importer.sRGBTexture = srgb;
+                importer.maxTextureSize = 2048;
+                importer.SaveAndReimport();
+            }
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+        }
     }
 
     private static LotAssetCatalogEntry V3Building(string id, string label, string folder, string category,
@@ -162,6 +233,144 @@ internal static class LotCatalogSetup
         }
         entry.materialOverride = material;
         return entry;
+    }
+
+    private static LotAssetCatalogEntry[] Landscaping() => new[]
+    {
+        GardenModel("boxwood-hedge", "Clipped boxwood hedge", "Hedges", "Boxwood", 3f, "Color.png"),
+        Boxwood("boxwood-corner-02", "Boxwood corner", "Corner02", 3f),
+        Boxwood("boxwood-curved-02", "Curved boxwood hedge", "Curved02", 3f),
+        Boxwood("boxwood-rectangular-03", "Rectangular boxwood hedge", "Rectangular03", 3f),
+        Boxwood("boxwood-round-02", "Round boxwood", "Round02", 1.5f),
+        Cypress("pencil-cypress-small", "Pencil cypress · Small", "PencilSmall"),
+        Cypress("pencil-cypress-medium", "Pencil cypress · Medium", "PencilMedium"),
+        Cypress("pencil-cypress-tall", "Pencil cypress · Tall", "PencilTall"),
+        Cypress("mediterranean-cypress-compact", "Mediterranean cypress · Compact", "MediterraneanCompact"),
+        Cypress("mediterranean-cypress-tall", "Mediterranean cypress · Tall", "MediterraneanTall"),
+        FlowerBed("square-flower-bed", "Square flower bed", "square", new Vector2(4, 4)),
+        FlowerBed("rectangular-flower-bed", "Rectangular flower bed", "rectangle", new Vector2(6, 3)),
+        GardenModel("ornate-garden-bench", "Ornate garden bench", "Benches", "GardenBench", 1.8f, "Color.jpg", "Normal.jpg"),
+        GardenModel("stone-garden-fountain", "Stone garden fountain", "Fountains", "StoneFountain", 3f, "Color.jpg", "Normal.png")
+    };
+
+    private static LotAssetCatalogEntry Cypress(string id, string label, string model)
+    {
+        var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(DirectoryPath + "/Landscaping/Cypress/" + model + ".prefab");
+        var size = prefab ? FenceBounds(prefab).size : Vector3.zero;
+        var entry = Entry(id, label, "Landscaping", prefab, new Vector2(size.x, size.z), true, false);
+        entry.group = "Trees";
+        return entry;
+    }
+
+    private static LotAssetCatalogEntry Boxwood(string id, string label, string shape, float span)
+    {
+        const string root = DirectoryPath + "/Landscaping/BoxwoodCollection/";
+        var entry = GardenModel(id, label, "Hedges", "BoxwoodCollection", span, "Color.png", "Normal.png",
+            "Boxwood_" + shape + ".fbx");
+        var material = entry.materialOverride;
+        if (!material || material.GetTexture("_MetallicGlossMap")) return entry;
+
+        const string surfacePath = root + "Surface.png";
+        if (AssetImporter.GetAtPath(surfacePath) is TextureImporter importer && importer.sRGBTexture)
+        {
+            importer.sRGBTexture = false;
+            importer.SaveAndReimport();
+        }
+        var surface = AssetDatabase.LoadAssetAtPath<Texture2D>(surfacePath);
+        if (!surface) return entry;
+        material.SetTexture("_MetallicGlossMap", surface);
+        material.SetTexture("_OcclusionMap", surface);
+        material.SetFloat("_Smoothness", 1f);
+        material.EnableKeyword("_METALLICSPECGLOSSMAP");
+        material.EnableKeyword("_OCCLUSIONMAP");
+        EditorUtility.SetDirty(material);
+        return entry;
+    }
+
+    private static LotAssetCatalogEntry GardenModel(string id, string label, string group, string folder,
+        float span, string colorFile, string normalFile = null, string modelFile = "Model.fbx")
+    {
+        string root = DirectoryPath + "/Landscaping/" + folder + "/";
+        var model = AssetDatabase.LoadAssetAtPath<GameObject>(root + modelFile);
+        var entry = Entry(id, label, "Landscaping", model, Vector2.one * span, true, true);
+        entry.group = group;
+        if (!model) return entry;
+        var bounds = FenceBounds(model).size;
+        float widest = Mathf.Max(bounds.x, bounds.z);
+        if (widest > .001f) entry.footprint = new Vector2(bounds.x, bounds.z) * (span / widest);
+        var color = AssetDatabase.LoadAssetAtPath<Texture2D>(root + colorFile);
+        entry.materialOverride = GardenMaterial(root + "Garden.mat", color, normalFile == null ? null : root + normalFile,
+            cutout: group == "Hedges");
+        return entry;
+    }
+
+    private static LotAssetCatalogEntry FlowerBed(string id, string label, string shape, Vector2 size)
+    {
+        const string root = DirectoryPath + "/Landscaping/Beds/";
+        string prefabPath = root + shape + ".prefab";
+        var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+        var plan = AssetDatabase.LoadAssetAtPath<Texture2D>(root + shape + ".png");
+        var blooms = AssetDatabase.LoadAssetAtPath<Texture2D>(root + "Flowers.png");
+        if (!prefab && plan && blooms)
+        {
+            var garden = new GameObject(label);
+            var surface = GardenMaterial(root + shape + ".mat", plan, null, cutout: true);
+            var flowers = GardenMaterial(root + "Flowers.mat", blooms, null, cutout: true);
+            AddQuad("Planting plan", new Vector3(0, .045f, 0), Quaternion.Euler(90, 0, 0), size, surface);
+            for (int row = -1; row <= 1; row += 2)
+            for (int x = -1; x <= 1; x++)
+            {
+                var position = new Vector3(x * size.x * .26f, .21f, row * size.y * .24f);
+                AddQuad("Flowers", position, Quaternion.identity, new Vector2(.9f, .42f), flowers);
+                AddQuad("Flowers", position, Quaternion.Euler(0, 90, 0), new Vector2(.9f, .42f), flowers);
+            }
+            prefab = PrefabUtility.SaveAsPrefabAsset(garden, prefabPath);
+            Object.DestroyImmediate(garden);
+
+            void AddQuad(string name, Vector3 position, Quaternion rotation, Vector2 scale, Material material)
+            {
+                var card = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                Object.DestroyImmediate(card.GetComponent<Collider>());
+                card.name = name;
+                card.transform.SetParent(garden.transform, false);
+                card.transform.SetLocalPositionAndRotation(position, rotation);
+                card.transform.localScale = new Vector3(scale.x, scale.y, 1);
+                card.GetComponent<MeshRenderer>().sharedMaterial = material;
+            }
+        }
+        var entry = Entry(id, label, "Landscaping", prefab, size, true, false);
+        entry.group = "Flower Beds";
+        return entry;
+    }
+
+    private static Material GardenMaterial(string path, Texture2D color, string normalPath, bool cutout)
+    {
+        var material = AssetDatabase.LoadAssetAtPath<Material>(path);
+        if (material) return material;
+        material = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+        material.SetTexture("_BaseMap", color);
+        material.SetFloat("_Smoothness", .16f);
+        if (normalPath != null && AssetImporter.GetAtPath(normalPath) is TextureImporter normalImporter)
+        {
+            if (normalImporter.textureType != TextureImporterType.NormalMap)
+            {
+                normalImporter.textureType = TextureImporterType.NormalMap;
+                normalImporter.SaveAndReimport();
+            }
+            material.SetTexture("_BumpMap", AssetDatabase.LoadAssetAtPath<Texture2D>(normalPath));
+            material.EnableKeyword("_NORMALMAP");
+        }
+        if (cutout)
+        {
+            material.SetFloat("_AlphaClip", 1);
+            material.SetFloat("_Cutoff", .42f);
+            material.SetFloat("_Cull", 0);
+            material.EnableKeyword("_ALPHATEST_ON");
+            material.SetOverrideTag("RenderType", "TransparentCutout");
+            material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.AlphaTest;
+        }
+        AssetDatabase.CreateAsset(material, path);
+        return material;
     }
 
     private static LotAssetCatalogEntry[] Characters()

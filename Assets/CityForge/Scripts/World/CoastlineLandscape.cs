@@ -6,32 +6,38 @@ public sealed partial class MeadowDistrictLandscape {
  var root=Instantiate(Baseline.waterTemplate,holder.transform);root.SetActive(false);root.transform.position=Vector3.up*View.SeaLevel;
  Water=root.GetComponent<WaterRenderer>();Water.Viewer=View.GetComponentInChildren<Camera>();Water.Viewpoint=Water.Viewer.transform;
  Water.AnimatedWavesLod.Enabled=true;Water.DynamicWavesLod.Enabled=false;Water.FoamLod.Enabled=true;Water.FlowLod.Enabled=false;
- var surf=Own(ScriptableObject.CreateInstance<FoamLodSettings>());surf.name="Coastal breaking surf";surf.ShorelineFoamMaximumDepth=1.8f;surf.ShorelineFoamStrength=.12f;surf.ShorelineFoamPriming=0;surf.FoamFadeRate=1.5f;surf.WaveFoamCoverage=.42f;surf.WaveFoamStrength=.65f;surf.FilterWaves=2;Water.FoamLod.Settings=surf;
+ var surf=Own(ScriptableObject.CreateInstance<FoamLodSettings>());surf.name="Coastal breaking surf";surf.ShorelineFoamMaximumDepth=1.8f;surf.ShorelineFoamStrength=.12f;surf.ShorelineFoamPriming=0;surf.FoamFadeRate=1.5f;// Include smaller offshore crests in the foam simulation. Shore surf uses its own inputs.
+ surf.WaveFoamCoverage=.70f;surf.WaveFoamStrength=.85f;surf.FilterWaves=1;Water.FoamLod.Settings=surf;
  Water.DepthLod.Enabled=true;Water.DepthLod.Resolution=256;Water.ShadowLod.Enabled=false;Water.LevelLod.Enabled=false;Water.AlbedoLod.Enabled=false;Water.AbsorptionLod.Enabled=false;
  Water.LodResolution=256;Water.LodLevels=7;Water.GeometryDownSampleFactor=2;
  Water.ClipLod.Enabled=true;Water.ClipLod.Resolution=512;Water.ClipLod.DefaultClippingState=DefaultClippingState.EverythingClipped;Water.DefaultExcludes=WaterBodyAffects.Surface;
  var bounds=new GameObject("District-bounded ocean footprint").AddComponent<WaterBody>();bounds.transform.SetParent(holder.transform,false);bounds.transform.position=new Vector3(Origin.x+Side/2,View.SeaLevel,Origin.y+Side/2);bounds.transform.localScale=new Vector3(Side,40,Side);bounds.Affects=WaterBodyAffects.Surface;bounds.Exclusion=WaterBodyExclusion.Include;bounds.Precise=true;
  // Clip dry inland water as well as the district perimeter, so lower water cannot peek
  // out below raised terrain edges in the isometric projection.
- bool groundFollowing=RegionalRiverNetwork.HasGroundFollowingWater(View.Data);
+ var data=View.Data;
+ float seaLevel=View.SeaLevel,mapSide=View.MapSide;
+ bool coastlineTest=View.Coastline,legacyCoast=!(View.CreationSettings?.version>=5);
+ bool useSwash=CoastalShorelineSwash.Applies(View);
+ bool groundFollowing=RegionalRiverNetwork.HasGroundFollowingWater(data);
  int maskSize=groundFollowing?Mathf.Clamp(Mathf.NextPowerOfTwo(Mathf.CeilToInt(Side)),512,2048):512;
  var pixels=new Color[maskSize*maskSize];
  for(int z=0;z<maskSize;z++)for(int x=0;x<maskSize;x++){
  var worldX=Origin.x+(x+.5f)*Side/maskSize;var worldZ=Origin.y+(z+.5f)*Side/maskSize;
- bool wet=CoastalShorelineSwash.Applies(View)?Height(new Vector2(worldX,worldZ))<View.SeaLevel+2:View.Coastline?worldX<CoastlineTestRegion.ShoreX(worldZ)+12:Height(new Vector2(worldX,worldZ))<View.SeaLevel-.02f;
- if(wet&&!View.Coastline&&!(View.CreationSettings?.version>=5)){
- var normalized=new Vector2(worldX/View.MapSide+.5f,worldZ/View.MapSide+.5f);wet=false;
+ var point=new Vector2(worldX,worldZ);
+ bool wet=useSwash?Height(point)<seaLevel+2:coastlineTest?worldX<CoastlineTestRegion.ShoreX(worldZ)+12:Height(point)<seaLevel-.02f;
+ if(wet&&!coastlineTest&&legacyCoast){
+ var normalized=new Vector2(worldX/mapSide+.5f,worldZ/mapSide+.5f);wet=false;
  foreach(var body in View.Data.WaterBodies)if(!body.playerChannel&&(body.kind==WaterBodyKind.Ocean||body.kind==WaterBodyKind.River)&&body.Bounds.Contains(normalized)&&body.Contains(normalized)){wet=true;break;}
  }
  float clipValue=wet?0:1;
  if(groundFollowing){
- var uv=new Vector2(worldX/View.MapSide+.5f,worldZ/View.MapSide+.5f);
+ var uv=new Vector2(worldX/mapSide+.5f,worldZ/mapSide+.5f);
  // A binary coastal texel can be wider than a stream in combined districts.
  // Interpolate signed distance instead, retaining sub-texel channel crossings.
- float distance=RegionalRiverNetwork.SignedDistance(View.Data,uv)*View.MapSide;
+ float distance=RegionalRiverNetwork.SignedDistance(data,uv)*mapSide;
  clipValue=Mathf.Min(clipValue,Mathf.Clamp01(.5f+distance/8f));
  }
- clipValue=Contains(new Vector2(worldX,worldZ))?clipValue:1;
+ if(needsTerrainHoles&&!Contains(point))clipValue=1;
  pixels[z*maskSize+x]=new Color(clipValue,clipValue,clipValue,1);
  }
  var mask=Own(new Texture2D(maskSize,maskSize,TextureFormat.RHalf,false,true){name="Coastal ocean inclusion mask",wrapMode=TextureWrapMode.Clamp,filterMode=FilterMode.Bilinear});mask.SetPixels(pixels);mask.Apply(false,true);
@@ -40,8 +46,8 @@ public sealed partial class MeadowDistrictLandscape {
  Water.Reflections.UseObliqueMatrix=!groundFollowing;
  Water.Reflections.Enabled=true;Water.Reflections.Resolution=256;Water.Reflections.DisableShadows=true;Water.Reflections.RenderOnlySingleCamera=true;Water.Reflections.Layers=~(1<<4);Water.Underwater.Enabled=false;
  Water.Surface.Material=CreateTypedWaterMaterial(WaterBodyKind.Ocean);
- if(RegionalRiverNetwork.HasGroundFollowingWater(View.Data)){
- var levels=new GameObject("Ground-following river levels beside ocean");levels.transform.SetParent(holder.transform,false);levels.AddComponent<GroundFollowingWaterLevels>().Initialize(this,Water,View.SeaLevel);
+ if(groundFollowing||View.CreationSettings?.terrainShape==RegionTerrainShape.RiverAndBay){
+ var levels=new GameObject("Coastal river levels and foam limit");levels.transform.SetParent(holder.transform,false);levels.AddComponent<GroundFollowingWaterLevels>().Initialize(this,Water,View.SeaLevel,groundFollowing);
  }
 
  var mat=Water.Surface.Material;mat.SetFloat("_Crest_FoamEnabled",1);mat.SetTexture("_Crest_FoamTexture",Resources.Load<Texture2D>("Coasts/CoastalFoam"));mat.SetFloat("_Crest_FoamFeather",.65f);mat.SetFloat("_Crest_FoamScale",5);mat.SetFloat("_Crest_FoamIntensityAlbedo",1);mat.SetFloat("_Crest_PlanarReflectionsEnabled",1);mat.SetFloat("_Crest_PlanarReflectionsApplySmoothness",1);mat.SetFloat("_Crest_Smoothness",.8f);mat.SetFloat("_Crest_SmoothnessFar",.8f);mat.SetFloat("_Crest_PlanarReflectionsIntensity",.65f);

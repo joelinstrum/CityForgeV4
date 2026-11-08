@@ -15,12 +15,26 @@ namespace CityForge.UI
         private Camera camera;
         private Light light;
 
-        public Texture Get(LotAssetCatalogEntry asset)
-        {
-            if (cache.TryGetValue(asset.id, out var cached)) return cached;
-            if (!stage) CreateStage();
+        public Texture Get(LotAssetCatalogEntry asset) => Render(asset.id, asset.label, parent =>
+            LotRuntimeLoader.InstantiateObject(new LotObjectDefinition { assetId = asset.id }, asset, parent));
 
-            var instance = LotRuntimeLoader.InstantiateObject(new LotObjectDefinition { assetId = asset.id }, asset, stage.transform);
+        public Texture GetLot(LotDefinition lot, LotAssetCatalog catalog) => Render(lot.id, lot.name, parent =>
+        {
+            var instance = new GameObject(lot.name);
+            instance.transform.SetParent(parent, false);
+            foreach (var item in lot.objects)
+            {
+                var asset = catalog ? catalog.Find(item.assetId) : null;
+                if (asset != null && asset.prefab) LotRuntimeLoader.InstantiateObject(item, asset, instance.transform);
+            }
+            return instance;
+        });
+
+        private Texture Render(string id, string label, Func<Transform, GameObject> instantiate)
+        {
+            if (cache.TryGetValue(id, out var cached)) return cached;
+            if (!stage) CreateStage();
+            var instance = instantiate(stage.transform);
             RenderTexture target = null;
             try
             {
@@ -39,14 +53,14 @@ namespace CityForge.UI
                 camera.nearClipPlane = radius;
                 camera.farClipPlane = radius * 5;
 
-                target = new RenderTexture(96, 96, 24) { name = asset.label + " thumbnail" };
+                target = new RenderTexture(96, 96, 24) { name = label + " thumbnail" };
                 var request = new UniversalRenderPipeline.SingleCameraRequest { destination = target };
                 if (!RenderPipeline.SupportsRenderRequest(camera, request)) return null;
                 light.enabled = true;
                 RenderPipeline.SubmitRenderRequest(camera, request);
-                cache.Add(asset.id, target);
+                cache.Add(id, target);
                 target = null;
-                return cache[asset.id];
+                return cache[id];
             }
             finally
             {

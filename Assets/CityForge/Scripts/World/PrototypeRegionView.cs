@@ -18,6 +18,9 @@ namespace CityForge.World
         private GameObject districtSelection;
         private Canvas menuCanvas;
         private Camera menuCamera;
+        internal const float DistrictSunScale = .75f;
+        private const float RegionSunIntensity = 1.55f;
+
         private Terrain terrain;
         private Color previousAmbient;
         private AmbientMode previousAmbientMode;
@@ -44,8 +47,8 @@ namespace CityForge.World
         private readonly List<GameObject> trees = new List<GameObject>();
         private Text regionTitle, regionNote, navigationHint;
         private Image districtInfoBackground;
-        private const string OverviewNavigationHint = "Arrows / WASD: pan   ·   Wheel / + / −: zoom   ·   Q/E: rotate   ·   I: camera angle   ·   Home: reset   ·   Click a district: enter   ·   Esc: back";
-        private const string DistrictNavigationHint = "I: district info   ·   Hold C + move up/down: camera tilt   ·   Wheel / + / −: zoom   ·   Esc: back";
+        private const string OverviewNavigationHint = "Arrows / WASD: pan   ·   Wheel / + / −: zoom   ·   Q/E: rotate   ·   I: camera angle   ·   Home: reset   ·   Drag slab edge: orbit   ·   Click a district: enter   ·   L: town labels   ·   Esc: back";
+        private const string DistrictNavigationHint = "I: district info   ·   Hold C + move up/down: camera tilt   ·   Wheel / + / −: zoom   ·   L: town labels   ·   Esc: back";
         private Texture2D woodlandField;
         private readonly Dictionary<Vector2Int, List<Vector2>> canopyCells = new();
         private readonly List<Vector2> treePositions = new List<Vector2>();
@@ -78,6 +81,7 @@ namespace CityForge.World
                 LayoutHudAction(districtBackIcon, district, -25f, "RETURN TO MENU");
                 ShowDistrictMessage("");
             }
+            RefreshRemakeButton();
             foreach(RegionSeason season in System.Enum.GetValues(typeof(RegionSeason)))
             {
                 var button=hud.Find("Season"+season);if(!button)continue;
@@ -144,7 +148,6 @@ namespace CityForge.World
                 var go=new GameObject("Approved meadow runtime district");go.transform.SetParent(transform,false);
                 approvedDistrict=go.AddComponent<MeadowDistrictLandscape>();
                 yield return approvedDistrict.BuildStages(this,baseline,Data.Biomes!=null&&SelectedDistrict<0,(stage,value)=>loadingProgress?.Invoke(stage,.4f+value*.55f));
-                approvedDistrict.SetSeason(VisualSeason);
             }
             if(!active&&!buildingRegion&&!legacyTreesReady){legacyTreesReady=true;BuildTrees(Data.Seed);}
             NaturalLandscape=active;
@@ -153,10 +156,23 @@ namespace CityForge.World
             if(active&&Data.Biomes!=null&&SelectedDistrict<0){var camera=GetComponentInChildren<Camera>();camera.farClipPlane=Mathf.Max(camera.farClipPlane,MapSide*10);}
             if(!relief){var map=new GameObject("Regional relief map");map.transform.SetParent(transform,false);relief=map.AddComponent<RegionReliefMap>();yield return relief.BuildStages(this,(stage,value)=>loadingProgress?.Invoke(stage,.4f+value*.55f));}
             relief.gameObject.SetActive(SelectedDistrict<0);
+            GetComponentInChildren<CityForgeCameraController>().GetComponent<Camera>().backgroundColor=SelectedDistrict<0
+                ? new Color(.29f,.30f,.39f) : new Color(.075f,.105f,.12f);
             GetComponent<DistrictCombiner>()?.RefreshBorders();
             var land=transform.Find("RegionLandCover");if(land)land.GetComponent<MeshRenderer>().enabled=!active&&SelectedDistrict>=0;
             var forest=transform.Find("RandomTrees");if(forest)forest.gameObject.SetActive(!active);
-            var sun=transform.Find("RegionSun");if(sun)sun.gameObject.SetActive(!active);
+            var sun = transform.Find("RegionSun");
+            if (sun)
+            {
+                if (SelectedDistrict < 0)
+                {
+                    sun.GetComponent<Light>().intensity = RegionSunIntensity;
+                    sun.GetComponent<Light>().color = new Color(1f, .94f, .82f);
+                    sun.rotation = Quaternion.Euler(32f, 205f, 0f);
+                    ApplyOverviewLighting();
+                }
+                sun.gameObject.SetActive(!active);
+            }
             var volume=transform.Find("RegionLightingVolume");if(volume)volume.gameObject.SetActive(!active);
             if(waterSurface)waterSurface.gameObject.SetActive(!active&&SelectedDistrict>=0);
             foreach(Transform child in transform)if(child.name.StartsWith("Meadow tile ")||child.name.StartsWith("Distant tree"))child.gameObject.SetActive(!active);
@@ -164,6 +180,8 @@ namespace CityForge.World
             var distant=GetComponent<DistantTreeRenderer>();if(distant)distant.enabled=!active;
             if(active)sampling=false;
             var hud=transform.Find("RegionHud");if(hud)foreach(Transform child in hud)if(child.name.StartsWith("Relief"))child.gameObject.SetActive(SelectedDistrict>=0&&!active);
+            ApplyDistrictDaylight();
+            RefreshDaylightPicker();
             RefreshSeasonButtons();
 
         }
@@ -190,12 +208,13 @@ namespace CityForge.World
         public bool IsSaving {get;private set;}
         public void SaveCurrentRegion()
         {
-            if(IsSaving||DistrictLoading||returning)return;
+            if(IsSaving||DistrictLoading||returning||RemakeBlocksInput)return;
             StartCoroutine(SaveWithFeedback());
         }
         IEnumerator SaveWithFeedback()
         {
             IsSaving=true;
+            RefreshRemakeButton();
             var button=transform.Find("RegionHud/SaveRegion").GetComponent<Button>();
             var caption=button.transform.Find("Caption").GetComponent<Text>();
             var back=transform.Find("RegionHud/ReturnToMenu").GetComponent<Button>();
@@ -244,6 +263,7 @@ namespace CityForge.World
                 }
             }finally{
                 IsSaving=false;
+                RefreshRemakeButton();
                 if(progress)progress.SetActive(false);
                 if(button)button.interactable=true;
                 if(back)back.interactable=backEnabled;
@@ -266,7 +286,7 @@ namespace CityForge.World
             if(snapshot?.info.district>=0){var view=FindFirstObjectByType<PrototypeRegionView>();view.EnterDistrict(snapshot.info.district);view.GetComponentInChildren<CityForgeCameraController>().RestoreRegionState(snapshot.info.camera);}
 #endif
         }
-        public static IEnumerator OpenStages(string regionName,Canvas canvas,int seed=PrototypeRegionData.DefaultSeed,RegionSize size=RegionSize.Medium,SavedRegionSnapshot snapshot=null,System.Action<string,float> progress=null)
+        public static IEnumerator OpenStages(string regionName,Canvas canvas,int seed=PrototypeRegionData.DefaultSeed,RegionSize size=RegionSize.Medium,SavedRegionSnapshot snapshot=null,System.Action<string,float> progress=null,bool remakingMap=false)
         {
             if(FindFirstObjectByType<PrototypeRegionView>()!=null)throw new System.InvalidOperationException("A region is already open.");
             var view = new GameObject("PrototypeRegion").AddComponent<PrototypeRegionView>();
@@ -292,7 +312,7 @@ namespace CityForge.World
             {
                 progress?.Invoke("Preparing region",.15f);yield return null;
                 if (snapshot?.info.lots != null) view.PlacedLots.AddRange(snapshot.info.lots);
-                if(snapshot!=null){view.Towns=snapshot.info.towns??System.Array.Empty<RegionTown>();view.ForestAdditions=snapshot.info.forestAdditions??System.Array.Empty<ForestAdditionRecord>();view.ForestRemovals=snapshot.info.forestRemovals??System.Array.Empty<ForestRemovalStroke>();view.NativeCamps=snapshot.info.nativeCamps??System.Array.Empty<NativeCampRecord>();view.CombinedDistricts=snapshot.info.combinedDistricts??System.Array.Empty<CombinedDistrictGroup>();view.CreationSettings=snapshot.info.creation;view.legacyClimate=snapshot.info.climate;view.AnimalsEnabled=snapshot.info.animals;size=(RegionSize)snapshot.info.size;seed=snapshot.info.seed;regionName=snapshot.info.name;view.SavedRegionId=snapshot.info.id;view.Season=(RegionSeason)snapshot.info.season;view.TerrainHeightRange=snapshot.info.terrainHeightRange;view.LoadedMeadow=snapshot.meadow;view.LoadedMeadowDistrict=snapshot.info.meadowCacheDistrict;view.LoadedFromSnapshot=true;view.wantsMeadow=snapshot.info.meadow;view.Waterless=snapshot.info.waterless;view.Coastline=snapshot.info.coastline;view.CoastVersion=snapshot.info.coastVersion;view.MinimalRiverCrest=snapshot.info.minimalRiverCrest;view.StillWater=snapshot.info.stillWater;view.LakeWaterVersion=snapshot.info.lakeWaterVersion<0?-1:1;view.RiverBedVersion=snapshot.info.riverBedVersion;}
+                if(snapshot!=null){view.TimeOfDay=snapshot.info.timeOfDay;view.RestoreSettlementData(snapshot.info);view.ForestAdditions=snapshot.info.forestAdditions??System.Array.Empty<ForestAdditionRecord>();view.ForestRemovals=snapshot.info.forestRemovals??System.Array.Empty<ForestRemovalStroke>();view.NativeCamps=snapshot.info.nativeCamps??System.Array.Empty<NativeCampRecord>();view.CombinedDistricts=snapshot.info.combinedDistricts??System.Array.Empty<CombinedDistrictGroup>();view.CreationSettings=snapshot.info.creation;view.legacyClimate=snapshot.info.climate;view.AnimalsEnabled=snapshot.info.animals;size=(RegionSize)snapshot.info.size;seed=snapshot.info.seed;regionName=snapshot.info.name;view.SavedRegionId=snapshot.info.id;view.Season=(RegionSeason)snapshot.info.season;view.TerrainHeightRange=snapshot.info.terrainHeightRange;view.LoadedMeadow=snapshot.meadow;view.LoadedMeadowDistrict=snapshot.info.meadowCacheDistrict;view.LoadedFromSnapshot=true;view.wantsMeadow=snapshot.info.meadow;view.Waterless=snapshot.info.waterless;view.Coastline=snapshot.info.coastline;view.CoastVersion=snapshot.info.coastVersion;view.MinimalRiverCrest=snapshot.info.minimalRiverCrest;view.StillWater=snapshot.info.stillWater;view.LakeWaterVersion=snapshot.info.lakeWaterVersion<0?-1:1;view.RiverBedVersion=snapshot.info.riverBedVersion;}
                 if(view.LoadedMeadow!=null&&view.LoadedMeadowDistrict>=0)view.sessionMeadows[view.LoadedMeadowDistrict]=view.LoadedMeadow;
                 view.Size = size;
                 view.RegionName = string.IsNullOrWhiteSpace(regionName) ? "Test Region" : regionName.Trim();
@@ -320,7 +340,10 @@ namespace CityForge.World
             }
             finally
             {
-                if(!opened&&view)view.ReturnToMenu();
+                if(!opened&&view){
+                    view.skipPresentationCleanup=remakingMap;
+                    view.ReturnToMenu();
+                }
             }
         }
 
@@ -368,26 +391,14 @@ namespace CityForge.World
             var sun = new GameObject("RegionSun").AddComponent<Light>();
             sun.transform.SetParent(transform);
             sun.type = LightType.Directional;
-            sun.intensity = 1.55f;
+            sun.intensity = RegionSunIntensity;
             sun.shadows = LightShadows.Soft;
             sun.shadowStrength = .64f;
             sun.shadowBias = .015f;
             sun.shadowNormalBias = .1f;
             sun.color = new Color(1f, .94f, .82f);
             sun.transform.rotation = Quaternion.Euler(32f, 205f, 0f);
-            // Directional sky fill keeps shaded foliage readable without flattening sunlit turf.
-            RenderSettings.ambientMode = AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = new Color(.32f, .38f, .46f);
-            RenderSettings.ambientEquatorColor = new Color(.22f, .245f, .25f);
-            RenderSettings.ambientGroundColor = new Color(.105f, .095f, .08f);
-            RenderSettings.ambientIntensity = 1f;
-            // Runtime worlds have no baked sky probe; provide diffuse sky fill explicitly.
-            var skyFill = new SphericalHarmonicsL2();
-            skyFill.AddAmbientLight(new Color(.32f, .35f, .39f));
-            skyFill.AddDirectionalLight(Vector3.up, new Color(.30f, .38f, .48f), .65f);
-            skyFill.AddDirectionalLight(Vector3.down, new Color(.22f, .19f, .14f), .35f);
-            RenderSettings.ambientProbe = skyFill;
-            RenderSettings.fog = false;
+            ApplyOverviewLighting();
 
             var cameraObject = new GameObject("RegionCamera");
             cameraObject.transform.SetParent(transform);
@@ -466,6 +477,8 @@ namespace CityForge.World
 
         private void BuildDistrictLines() { }
 
+        private CityForge.UI.RegionResourcesOverlay resourceOverlay;
+
         private void BuildHud(string regionName, int seed)
         {
             var root = new GameObject("RegionHud", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
@@ -478,9 +491,12 @@ namespace CityForge.World
             var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             BuildDistrictSelection(root.transform,font);
             BuildLotActions(root.transform, font);
+            BuildDaylightPicker(root.transform, font);
             gameObject.AddComponent<DistrictCombiner>().Initialize(this);
             townTools=gameObject.AddComponent<CityForge.UI.RegionTownTools>();
             townTools.Initialize(this,root.GetComponent<Canvas>(),font);
+            resourceOverlay=gameObject.AddComponent<CityForge.UI.RegionResourcesOverlay>();
+            resourceOverlay.Initialize(this,root.transform,font);
             if(NativeCamps.Length>0)gameObject.AddComponent<NativeCampMarkers>().Initialize(this);
             var infoBackground = new GameObject("DistrictInfoBackground", typeof(RectTransform), typeof(Image));
             infoBackground.transform.SetParent(root.transform, false);
@@ -522,6 +538,7 @@ namespace CityForge.World
             var saveRect=save.GetComponent<RectTransform>();saveRect.anchorMin=saveRect.anchorMax=saveRect.pivot=new Vector2(1,1);saveRect.anchoredPosition=new Vector2(-245,-25);saveRect.sizeDelta=new Vector2(205,48);
             save.GetComponent<Image>().color=new Color(.13f,.15f,.13f,.95f);save.GetComponent<Button>().onClick.AddListener(SaveCurrentRegion);
             var saveCaption=HudText(save.transform,"Caption",font,19);saveCaption.text="SAVE REGION";saveCaption.alignment=TextAnchor.MiddleCenter;saveCaption.rectTransform.anchorMin=Vector2.zero;saveCaption.rectTransform.anchorMax=Vector2.one;saveCaption.rectTransform.offsetMin=saveCaption.rectTransform.offsetMax=Vector2.zero;
+            BuildRemakeButton(root.transform,font);
             var saveProgress=new GameObject("SaveProgress",typeof(RectTransform),typeof(Image));saveProgress.transform.SetParent(save.transform,false);
             var progressRect=saveProgress.GetComponent<RectTransform>();progressRect.anchorMin=new Vector2(0,0);progressRect.anchorMax=new Vector2(1,0);progressRect.pivot=new Vector2(.5f,0);progressRect.offsetMin=new Vector2(12,5);progressRect.offsetMax=new Vector2(-12,9);
             saveProgress.GetComponent<Image>().color=new Color(.35f,.36f,.29f,.7f);saveProgress.GetComponent<Image>().raycastTarget=false;
@@ -723,12 +740,21 @@ namespace CityForge.World
 
         private void Update()
         {
+            if(RemakeBlocksInput)
+            {
+                if(remakeWarning&&Input.GetKeyDown(KeyCode.Escape))CloseRemakeWarning();
+                return;
+            }
             if (playerLotWorkspace)
             {
                 if (Input.GetKeyDown(KeyCode.Escape))
                     playerLotWorkspace.GetComponent<CityForge.UI.LotEditorPanel>().CancelInteraction();
                 return;
             }
+            if (UpdateFounderPlacement()) return;
+            if (townTools && !DistrictLoading && !IsSaving && Input.GetKeyDown(KeyCode.L))
+                townTools.ToggleLabels();
+
             if (SelectedDistrict >= 0 && Input.GetKeyDown(KeyCode.I))
                 SetDistrictInfoVisible(!regionTitle.gameObject.activeSelf);
 
@@ -754,11 +780,23 @@ namespace CityForge.World
             }
         }
 
+        private bool orbitingSlab;
         private void OnGUI()
         {
-            if(SelectedDistrict>=0)return;
+            if(SelectedDistrict>=0||RemakeBlocksInput||DistrictLoading||IsSaving){
+                orbitingSlab=false;
+                return;
+            }
             var pointer = Event.current;
-            if (SelectedDistrict >= 0 || pointer.type != EventType.MouseDown || pointer.button != 0) return;
+            if(pointer.button!=0)return;
+            if(orbitingSlab&&pointer.type==EventType.MouseDrag){
+                GetComponentInChildren<CityForgeCameraController>().OrbitRegion(pointer.delta);
+                pointer.Use();
+                return;
+            }
+            if(pointer.type==EventType.MouseUp)orbitingSlab=false;
+            if(pointer.type!=EventType.MouseDown)return;
+            orbitingSlab=false;
             // Use the event coordinates so a click is picked at its actual location,
             // including editor clicks that arrive without a preceding mouse-move event.
             var position = new Vector2(pointer.mousePosition.x, Screen.height - pointer.mousePosition.y);
@@ -769,7 +807,16 @@ namespace CityForge.World
                 if (hits.Count > 0) return;
             }
             var ray = GetComponentInChildren<Camera>().ScreenPointToRay(position);
-            if ((townTools && townTools.HandleMapClick(ray)) || TryEnterDistrict(ray)) pointer.Use();
+            if(townTools&&townTools.HandleMapClick(ray)){
+                pointer.Use();
+                return;
+            }
+            if(relief&&relief.gameObject.activeSelf&&relief.HitsSlabSide(ray)){
+                orbitingSlab=true;
+                pointer.Use();
+                return;
+            }
+            if((resourceOverlay&&resourceOverlay.TrySelect(ray))||TryEnterDistrict(ray))pointer.Use();
         }
 
         public static int DistrictAt(Vector3 point) => (point.x >= 0 ? 1 : 0) + (point.z >= 0 ? 2 : 0);
@@ -785,7 +832,7 @@ namespace CityForge.World
         public void RequestDistrict(int index)
         {
             if(index<0||index>=DistrictCount)throw new System.ArgumentOutOfRangeException(nameof(index));
-            if(IsSaving||districtLoading||SelectedDistrict>=0)return;
+            if(IsSaving||districtLoading||SelectedDistrict>=0||RemakeBlocksInput)return;
             var combiner=GetComponent<DistrictCombiner>();if(combiner&&combiner.Active){combiner.Select(index);return;}
             index=DistrictAnchor(index);
             districtLoading=true;var camera=GetComponentInChildren<CityForgeCameraController>();
@@ -841,8 +888,9 @@ namespace CityForge.World
             yield return UpdateLandscapeModeStages();
             RebuildDistrictLots();
             if(NaturalLandscape&&IsCombinedDistrict){
-                var bounds=ActiveDistrictBounds;var rig=GetComponentInChildren<CityForgeCameraController>();float high=0,low=VerticalHeight;var td=approvedDistrict.DisplayTerrain.terrainData;foreach(float h in td.GetHeights(0,0,td.heightmapResolution,td.heightmapResolution)){high=Mathf.Max(high,h*td.size.y);low=Mathf.Min(low,h*td.size.y);}
-                float span=high-low;rig.FrameDistrictUnion(Mathf.Max(bounds.width,bounds.height),VerticalHeight,low,high,new Vector3(bounds.center.x,0,bounds.center.y));
+                var bounds=ActiveDistrictBounds;var rig=GetComponentInChildren<CityForgeCameraController>();
+                var heightRange=approvedDistrict.DistrictHeightRange;
+                rig.FrameDistrictUnion(Mathf.Max(bounds.width,bounds.height),VerticalHeight,heightRange.x,heightRange.y,new Vector3(bounds.center.x,0,bounds.center.y));
                 regionTitle.text=RegionName+"  /  COMBINED DISTRICT ("+ActiveDistrictMembers.Length+")";regionNote.text=bounds.width.ToString("N0")+" × "+bounds.height.ToString("N0")+" m · "+ActiveDistrictMembers.Length+" CONNECTED DISTRICTS";
                 progress?.Invoke("Ready",1);yield return null;yield break;
             }
@@ -864,6 +912,8 @@ namespace CityForge.World
         {
             if(IsSaving)return;
             if(districtLoading)return;
+            CloseFounderPicker();
+            CancelFounderPlacement();
             GetComponent<RegionPreviewDiagnostics>().SetDiagnostic(false,1);
             float returnHeading=GetComponentInChildren<CityForgeCameraController>().CaptureRegionState().yaw;
             SelectedDistrict=-1;RebuildDistrictLots();if(districtSelection)districtSelection.SetActive(true);
@@ -872,8 +922,7 @@ namespace CityForge.World
             transform.Find("RegionLandCover").GetComponent<MeshFilter>().sharedMesh=wholeRegionMesh;
             if(waterSurface){waterSurface.position=Vector3.up*SeaLevel; waterSurface.localScale=Vector3.one*(MapSide/10);}
             foreach (var line in GetComponentsInChildren<LineRenderer>(true)) line.gameObject.SetActive(true);
-            GetComponentInChildren<CityForgeCameraController>().FrameRegion(MapSide,VerticalHeight);
-            GetComponentInChildren<CityForgeCameraController>().SetHeading(returnHeading);
+            GetComponentInChildren<CityForgeCameraController>().FrameRegion(MapSide,VerticalHeight,returnHeading);
             regionTitle.text=RegionName+"  /  "+DistrictCount+" DISTRICTS";
             regionNote.text=Size.ToString().ToUpperInvariant()+"  ·  "+MapSide.ToString("N0")+" × "+MapSide.ToString("N0")+" m  ·  SEED "+Data.Seed;
             overviewButton.SetActive(false); RefreshTrees(); UpdateLandscapeMode();
@@ -934,7 +983,7 @@ namespace CityForge.World
         }
         public void ReturnToMenu()
         {
-            if (returning||IsSaving) return;
+            if (returning||IsSaving||RemakeBlocksInput) return;
             returning = true;
             gameObject.SetActive(false);
             if (menuCanvas != null) menuCanvas.gameObject.SetActive(true);
@@ -942,6 +991,27 @@ namespace CityForge.World
             RestorePresentationSettings();
             Destroy(gameObject);
         }
+        private static void ApplyOverviewLighting()
+        {
+            RenderSettings.ambientMode = AmbientMode.Trilight;
+            RenderSettings.ambientSkyColor = new Color(.32f, .38f, .46f);
+            RenderSettings.ambientEquatorColor = new Color(.22f, .245f, .25f);
+            RenderSettings.ambientGroundColor = new Color(.105f, .095f, .08f);
+            RenderSettings.ambientIntensity = 1f;
+            // Runtime worlds have no baked sky probe; provide diffuse sky fill explicitly.
+            RenderSettings.ambientProbe = LotDaylightProbe();
+            RenderSettings.fog = false;
+        }
+
+        internal static SphericalHarmonicsL2 LotDaylightProbe()
+        {
+            var skyFill = new SphericalHarmonicsL2();
+            skyFill.AddAmbientLight(new Color(.32f, .35f, .39f));
+            skyFill.AddDirectionalLight(Vector3.up, new Color(.30f, .38f, .48f), .65f);
+            skyFill.AddDirectionalLight(Vector3.down, new Color(.22f, .19f, .14f), .35f);
+            return skyFill;
+        }
+
         private void RestorePresentationSettings()
         {
             RenderSettings.ambientLight = previousAmbient;
@@ -961,12 +1031,16 @@ namespace CityForge.World
         private void OnDestroy()
         {
             ClosePlayerLot();
-            // Stopping Editor Play mode also destroys this view without going through ReturnToMenu.
-            RestorePresentationSettings();
-            Shader.SetGlobalFloat("_LandscapeEnabled", 0);
-            Shader.SetGlobalTexture("_RegionField", null);
-            Shader.SetGlobalTexture("_MeadowCoverField", null);
-            Shader.SetGlobalTexture("_WoodlandCoverField", null);
+            CloseFounderPicker();
+            CancelFounderPlacement();
+            if(!skipPresentationCleanup){
+                // Stopping Editor Play mode also destroys this view without going through ReturnToMenu.
+                RestorePresentationSettings();
+                Shader.SetGlobalFloat("_LandscapeEnabled", 0);
+                Shader.SetGlobalTexture("_RegionField", null);
+                Shader.SetGlobalTexture("_MeadowCoverField", null);
+                Shader.SetGlobalTexture("_WoodlandCoverField", null);
+            }
             foreach (var asset in generatedAssets) if (asset != null) Destroy(asset);
         }
     }

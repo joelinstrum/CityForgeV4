@@ -229,6 +229,10 @@
       "categoryType": "lot-use",
       "subcategories": [
         {
+          "id": "founders-buildings",
+          "name": "Founder's Buildings"
+        },
+        {
           "id": "government",
           "name": "Government",
           "legacyName": "Government"

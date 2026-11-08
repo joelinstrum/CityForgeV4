@@ -172,6 +172,8 @@ venv/
 !/Assets/CityForge/Resources/Config.meta
 !/Assets/CityForge/Resources/Config/ContentCatalog.json
 !/Assets/CityForge/Resources/Config/ContentCatalog.json.meta
+!/Assets/CityForge/Resources/Config/RegionalResourceModifiers.json
+!/Assets/CityForge/Resources/Config/RegionalResourceModifiers.json.meta
 !/Assets/CityForge/Resources/Region/
 !/Assets/CityForge/Resources.meta
 !/Assets/CityForge/Resources/Region.meta

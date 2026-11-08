@@ -39,18 +39,18 @@ namespace CityForge.World
             foreach(var candidate in candidates){
                 int variant=land.View.ForestAddition(candidate.point)?.variant??library.Pick(candidate.hash);var template=library.prefabs[variant];
                 var tree=Instantiate(template,holder.transform,false);tree.name=template.name;
-                tree.transform.position=new Vector3(candidate.point.x,land.Height(candidate.point),candidate.point.y);
-                tree.transform.rotation=Quaternion.Euler(0,candidate.native.rotation*Mathf.Rad2Deg,0)*template.transform.localRotation;
+                tree.transform.SetPositionAndRotation(new Vector3(candidate.point.x,land.Height(candidate.point),candidate.point.y),
+                    Quaternion.Euler(0,candidate.native.rotation*Mathf.Rad2Deg,0)*template.transform.localRotation);
                 tree.transform.localScale=template.transform.localScale*Mathf.Lerp(.88f,1.12f,((candidate.hash>>8)&65535)/65535f);
                 unchecked {signature=(signature^candidate.hash)*1099511628211UL;signature=(signature^(uint)variant)*1099511628211UL;}
                 placements.Add((tree.transform,candidate.hash,variant));TreeCount++;
-                if((System.Diagnostics.Stopwatch.GetTimestamp()-started)*1000.0/System.Diagnostics.Stopwatch.Frequency>=2){yield return null;started=System.Diagnostics.Stopwatch.GetTimestamp();}
+                if((System.Diagnostics.Stopwatch.GetTimestamp()-started)*1000.0/System.Diagnostics.Stopwatch.Frequency>=8){yield return null;started=System.Diagnostics.Stopwatch.GetTimestamp();}
             }
             PlacementSignature=signature.ToString("x16");
             var renderer=holder.AddComponent<SpatialForestRenderer>();renderer.viewCamera=land.View.GetComponentInChildren<Camera>();
             renderer.shadowSources=library.shadowSources;renderer.shadowReplacements=library.shadowReplacements;
             renderer.simplifiedDistantShadows=true;renderer.minimumInstancedViewSize=200;renderer.instanced=true;
-            renderer.Capture();Ready=true;RefreshVisibility();
+            renderer.Capture(prepareInstancedView:true);Ready=true;RefreshVisibility();
         }
         public int AddTrees(IReadOnlyList<TreeInstance> source)
         {

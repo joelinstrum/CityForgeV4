@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using CityForge.CameraSystem;
 using CityForge.Lots;
 using CityForge.UI;
@@ -26,6 +27,8 @@ namespace CityForge.World
         private Transform lotInstances;
         private GameObject lotActions;
         private Text lotFeedback;
+        private Text placeLotLabel;
+        private Font lotFont;
         private int lotRotation;
         private GameObject playerLotWorkspace;
         private CityForgeCameraController lotCamera;
@@ -39,12 +42,18 @@ namespace CityForge.World
             rect.pivot = new Vector2(.5f, 1);
             rect.anchoredPosition = new Vector2(0, -23);
             rect.sizeDelta = new Vector2(556, 72);
-            AddLotButton(lotActions.transform, font, "Place saved lot at center", 0, 220, PlaceDraftLot);
+            lotFont = font;
+            placeLotLabel = AddLotButton(lotActions.transform, font, "Place saved lot at center", 0, 220, () =>
+            {
+                if (PendingFounder != null) OpenFounderPicker();
+                else PlaceDraftLot();
+            });
             var rotate = AddLotButton(lotActions.transform, font, "Facing: 0°", 228, 128, null);
-            rotate.GetComponentInParent<Button>().onClick.AddListener(() =>
+            rotate.GetComponentInParent<Button>(true).onClick.AddListener(() =>
             {
                 lotRotation = (lotRotation + 1) % 4;
                 rotate.text = $"Facing: {lotRotation * 90}°";
+                founderPreviewEvaluated = false;
             });
             AddLotButton(lotActions.transform, font, "Customize centered lot", 364, 190, () => CustomizeLot(font));
             lotFeedback = HudText(lotActions.transform, "Lot feedback", font, 16);
@@ -74,7 +83,7 @@ namespace CityForge.World
 
         private void CustomizeLot(Font font)
         {
-            if (SelectedDistrict < 0 || DistrictLoading || IsSaving || playerLotWorkspace) return;
+            if (SelectedDistrict < 0 || DistrictLoading || IsSaving || playerLotWorkspace || founderDraft != null) return;
             var rig = GetComponentInChildren<CityForgeCameraController>();
             var focus = rig.CaptureRegionState().focus;
             var center = new Vector2(focus.x, focus.z);
@@ -119,47 +128,24 @@ namespace CityForge.World
 
         private void PlaceDraftLot()
         {
-            if (SelectedDistrict < 0 || DistrictLoading || IsSaving) return;
+            if (SelectedDistrict < 0 || DistrictLoading || IsSaving || PendingFounder != null) return;
+            if (Capital == null)
+            {
+                lotFeedback.text = "Establish the capital on the region map first.";
+                return;
+            }
             try
             {
-                var lot = LotLibrary.Local.LoadLatest();
+                var lot = LotLibrary.Local.List().Select(entry => entry.Lot).FirstOrDefault(entry => !IsFoundersLot(entry));
+                if (lot == null) throw new FileNotFoundException();
                 var focus = GetComponentInChildren<CityForgeCameraController>().CaptureRegionState().focus;
                 var record = new DistrictLotRecord
                 {
                     id = Guid.NewGuid().ToString("N"), center = new Vector2(focus.x, focus.z),
                     district = DistrictAtWorld(focus), definition = lot, rotation = lotRotation
                 };
-                var catalog = LotAssetCatalog.Load();
-                foreach (var item in lot.objects)
-                {
-                    var asset = catalog ? catalog.Find(item.assetId) : null;
-                    if (asset == null || !asset.prefab)
-                        throw new InvalidDataException("Missing asset: " + item.assetId);
-                    if (!LotRuntimeLoader.Fits(lot, item, asset))
-                        throw new InvalidDataException("The saved lot has an object outside its boundaries.");
-                }
-
-                var bounds = LotBounds(record);
-                foreach (var other in PlacedLots)
-                    if (bounds.Overlaps(LotBounds(other))) throw new InvalidDataException("That lot overlaps another lot.");
-
-                var water = ApprovedDistrict && ApprovedDistrict.DisplayTerrain
-                    ? new WildlifeWaterAccess(ApprovedDistrict) : null;
-                float low = float.PositiveInfinity, high = float.NegativeInfinity;
-                int stepsX = Mathf.CeilToInt(bounds.width / 2);
-                int stepsY = Mathf.CeilToInt(bounds.height / 2);
-                for (int z = 0; z <= stepsY; z++)
-                for (int x = 0; x <= stepsX; x++)
-                {
-                    var point = new Vector2(Mathf.Lerp(bounds.xMin, bounds.xMax, (float)x / stepsX),
-                        Mathf.Lerp(bounds.yMin, bounds.yMax, (float)z / stepsY));
-                    if (!InActiveDistrict(point) || water != null && !water.Dry(point))
-                        throw new InvalidDataException("Aim at dry ground inside the district.");
-                    float height = LotHeight(point);
-                    low = Mathf.Min(low, height);
-                    high = Mathf.Max(high, height);
-                }
-                if (high - low > 2f) throw new InvalidDataException("Aim at flatter ground to place this lot.");
+                var problem = LotAssetProblem(lot, LotAssetCatalog.Load()) ?? LotSiteProblem(record, DistrictLotWater());
+                if (problem != null) throw new InvalidDataException(problem);
                 PlacedLots.Add(record);
                 RebuildDistrictLots();
                 lotFeedback.text = "Lot placed. Save the region to keep it.";
@@ -169,6 +155,45 @@ namespace CityForge.World
                 lotFeedback.text = error is FileNotFoundException || error is DirectoryNotFoundException
                     ? "Save a lot in the Lot Editor first." : error.Message;
             }
+        }
+
+        private static string LotAssetProblem(LotDefinition lot, LotAssetCatalog catalog)
+        {
+            foreach (var item in lot.objects)
+            {
+                var asset = catalog ? catalog.Find(item.assetId) : null;
+                if (asset == null || !asset.prefab) return "Missing asset: " + item.assetId;
+                if (!LotRuntimeLoader.Fits(lot, item, asset)) return "An object is outside the saved lot boundaries.";
+            }
+            return null;
+        }
+
+        private WildlifeWaterAccess DistrictLotWater() => ApprovedDistrict && ApprovedDistrict.DisplayTerrain
+            ? new WildlifeWaterAccess(ApprovedDistrict) : null;
+
+        private string LotSiteProblem(DistrictLotRecord record, WildlifeWaterAccess water)
+        {
+            var bounds = LotBounds(record);
+            foreach (var other in PlacedLots)
+                if (bounds.Overlaps(LotBounds(other))) return "That lot overlaps another lot.";
+
+            float low = float.PositiveInfinity, high = float.NegativeInfinity;
+            int stepsX = Mathf.CeilToInt(bounds.width / 2);
+            int stepsY = Mathf.CeilToInt(bounds.height / 2);
+            for (int z = 0; z <= stepsY; z++)
+            for (int x = 0; x <= stepsX; x++)
+            {
+                var point = new Vector2(Mathf.Lerp(bounds.xMin, bounds.xMax, (float)x / stepsX),
+                    Mathf.Lerp(bounds.yMin, bounds.yMax, (float)z / stepsY));
+                if (!InActiveDistrict(point) || (water != null ? !water.Dry(point) :
+                    !IsTownLand(point / MapSide + Vector2.one * .5f)))
+                    return "Choose dry ground inside the district.";
+                float height = LotHeight(point);
+                low = Mathf.Min(low, height);
+                high = Mathf.Max(high, height);
+                if (high - low > 2f) return "Choose flatter ground.";
+            }
+            return null;
         }
 
         private static Rect LotBounds(DistrictLotRecord record)
@@ -192,7 +217,11 @@ namespace CityForge.World
                 Destroy(lotInstances.gameObject);
                 lotInstances = null;
             }
-            if (lotActions) lotActions.SetActive(SelectedDistrict >= 0);
+            if (lotActions)
+            {
+                lotActions.SetActive(SelectedDistrict >= 0);
+                placeLotLabel.text = PendingFounder != null ? "Founder’s Building…" : "Place saved lot at center";
+            }
             if (SelectedDistrict < 0 || PlacedLots.Count == 0) return;
             var catalog = LotAssetCatalog.Load();
             lotInstances = new GameObject("Placed lots").transform;
@@ -223,6 +252,7 @@ namespace CityForge.World
                     point.y = LotHeight(new Vector2(point.x, point.z));
                     item.position = point;
                 }
+                root.gameObject.AddComponent<DistrictLotSurfaces>().Build(definition, LotHeight);
             }
         }
 

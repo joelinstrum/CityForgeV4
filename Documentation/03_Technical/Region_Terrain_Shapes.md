@@ -1,3 +1,9 @@
+## River & Bay
+
+River & Bay appends terrain shape ID 8. A seeded tidal river crosses the mainland and meets a south-facing bay with three irregular islands. The bay uses the existing ocean outline and hole format. The main river and its tributaries use the same water datum as the bay. Rivers and Streams add feeders, and Topography still controls the uplands. Grading near the main channel creates low riverfront land that blends back into the regional terrain.
+
+The Terrain preview uses the same seeded bay and river layout as generation. Normal region saves retain the canonical heightfield, water contours, and routes. Older shape IDs keep their existing layouts.
+
 ## Nearly flush stream and river banks — November1
 
 New wizard waterwayVersion3 uses ground-following channelVersion2 water. Water surface is20cm below the original shared ground, stream bed45cm below water, major river bed2m below water. Adjacent meadow stays at its original height instead of descending into an80m-wide valley. The bank soil paint fades over1.25m instead of16m. Both overview mesh and detailed Crest LevelLod follow the local surface; existing ocean datum remains the lower limit on ocean layouts. Previous saved waterways retain their prior profile. Mountain avoidance and the12ft stream cap remain.
