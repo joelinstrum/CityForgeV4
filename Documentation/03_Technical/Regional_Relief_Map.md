@@ -1,3 +1,9 @@
+## Regional cartography — November 7
+
+The relief overview uses muted olive lowlands, warmer exposed ridges, slate-blue temperate water, thin pale shorelines, and subdued grid lines. A shallow gray slab frames the map. The default wide view uses a mild perspective at heading 335°, with the actual relief mesh used for framing. Close overview zooms use orthographic projection. Returning from a district keeps its current heading and refits the map.
+
+The overview exaggerates displayed elevation by 1.68× around sea level. District terrain and water rendering continue to use canonical heights and the existing detailed biome materials. District picking uses the displayed relief mesh and the existing original grid. Combined district borders and selection highlights still use the group IDs.
+
 ## Tropical shelf depth and thicker map edges — October31
 
 New default recipe version12 gives Tropical ocean layouts a gradually deepening continental shelf: sea level30m, seabed reaching6m (24m depth) over12% of region width. Land and all explicit water surfaces shift upward18m together, preserving relative relief, river depths and shoreline location. Non-ocean and Temperate generation remains unchanged; versions1–11 and stored heightfields remain authoritative. Existing Tropical maps receive the offshore color presentation without regenerating their geography.

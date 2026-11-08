@@ -258,7 +258,7 @@ namespace CityForge.Editor
             CreateTerrainDropdown(terrainIntro.transform, "Rivers", font, rounded, 425f, 46f,
                 new[] { "None", "One Major River", "Two Major Rivers", "Three Major Rivers" });
             CreateTerrainDropdown(terrainIntro.transform, "Streams", font, rounded, 425f, 195f,
-                new[] { "None", "A Few Streams", "Many Streams" });
+                new[] { "None", "A Few Small Streams", "Many Streams" });
             CreateTerrainDropdown(terrainIntro.transform, "Land Type", font, rounded, 0f, 315f,
                 new[] { "Pangea", "Islands", "Continent", "Coastal", "Archipelago", "Peninsula" });
             var coastalNote = Label(terrainIntro.transform, "CoastalNote", font, 12, Gold,

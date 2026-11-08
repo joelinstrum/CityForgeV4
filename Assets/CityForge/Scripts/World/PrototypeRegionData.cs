@@ -25,6 +25,7 @@ namespace CityForge.World
             return null;
         }
         public bool SmoothRiverHeights;
+        internal bool HasIncisionGrade=>riverGrade!=null;
         float[,] riverGrade;float riverSide,riverVertical;
         public void ConfigureContinuousRiver(float side)
         {
@@ -36,7 +37,8 @@ namespace CityForge.World
             DryRiverBedMigration.Channel(this,riverSide,u,v,out float d,out float width,out float depth,2);
             return depth*(1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(width*.28f,width,d)));
         }
-        public float SmoothHeight(float u,float v)=>RegionalRiverNetwork.ContinuousHeight(this,u,v,riverGrade!=null?SmoothRiverSurface.Sample(riverGrade,u,v)-RiverIncision(u,v)/riverVertical:SmoothRiverSurface.Sample(Heights,u,v));
+        public float SmoothHeight(float u,float v)=>SmoothHeight(u,v,true);
+        internal float SmoothHeight(float u,float v,bool includeStreams)=>RegionalRiverNetwork.ContinuousHeight(this,u,v,riverGrade!=null?SmoothRiverSurface.Sample(riverGrade,u,v)-RiverIncision(u,v)/riverVertical:SmoothRiverSurface.Sample(Heights,u,v),includeStreams);
         public readonly float[,] Heights;
         public readonly float[,] WaterDistance;
 

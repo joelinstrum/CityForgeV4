@@ -10,6 +10,7 @@ namespace CityForge.Lots
         public string label;
         public string category;
         public string group;
+        public string subcategory;
         public string eraId;
         public string idleState;
         public bool IsCharacter => category == "Characters";

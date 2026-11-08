@@ -15,6 +15,8 @@ namespace CityForge.World
         readonly List<Tree>[] batches=new List<Tree>[35];
         readonly Matrix4x4[] matrices=new Matrix4x4[1023];
         readonly List<Vector4> tints=new List<Vector4>(1023),targets=new List<Vector4>(1023);
+        SphericalHarmonicsL2 daylightProbe;
+        RegionTimeOfDay? probeTime;
         readonly SphericalHarmonicsL2[] probes=new SphericalHarmonicsL2[1023];
         readonly Plane[] planes=new Plane[6];
         MaterialPropertyBlock block;
@@ -49,7 +51,8 @@ namespace CityForge.World
             if(!assets||assets.meshes==null||assets.meshes.Length!=70||!assets.layout||!assets.leaf||!assets.wood)
                 throw new InvalidOperationException("Approved forest runtime assets are missing. Build the verified local checkpoint using CityForge/Forest/Build approved runtime assets.");
             var sh=new SphericalHarmonicsL2();for(int c=0;c<3;c++)for(int i=0;i<9;i++)sh[c,i]=land.Baseline.ambientSH[c*9+i];
-            for(int i=0;i<1023;i++)probes[i]=sh;
+            daylightProbe = sh;
+            probeTime = null;
             Mark("resources");
             if(!MixedDistrictForest.Applies(land)){
             if(ReplacesNativeTrees)BuildNativeReplacements();
@@ -162,6 +165,13 @@ namespace CityForge.World
         {
             // The accepted authored family is a summer baseline. Native seasonal trees remain authoritative in fall/winter.
             if(PresentedTreeCount==0||!land||!viewerCamera||!assets||!land.TreesEnabled||land.View==null||land.View.Data==null||batches[0]==null||land.View.VisualSeason!=RegionSeason.Summer)return;
+            var time = land.View.TimeOfDay;
+            if (probeTime != time)
+            {
+                var probe = PrototypeRegionView.TintDistrictProbe(daylightProbe, time);
+                for (int i = 0; i < probes.Length; i++) probes[i] = probe;
+                probeTime = time;
+            }
             GeometryUtility.CalculateFrustumPlanes(viewerCamera,planes);foreach(var batch in batches)batch.Clear();
             for(int treeIndex=0;treeIndex<trees.Count;treeIndex++){if((presentationMask!=null&&!presentationMask[treeIndex])||(palmMask!=null&&palmMask[treeIndex]))continue;var t=trees[treeIndex];if(land.View.IsForestRemoved(new Vector2(t.matrix.m03,t.matrix.m23)))continue;if(!GeometryUtility.TestPlanesAABB(planes,new Bounds(t.center,Vector3.one*t.height*1.5f)))continue;
                 float denominator=viewerCamera.orthographic?2*viewerCamera.orthographicSize:2*Mathf.Max(.01f,Vector3.Dot(t.center-viewerCamera.transform.position,viewerCamera.transform.forward))*Mathf.Tan(viewerCamera.fieldOfView*Mathf.Deg2Rad*.5f);

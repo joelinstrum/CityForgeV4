@@ -36,7 +36,7 @@ namespace CityForge.World
         }
         // An exact segment hierarchy for immutable generated routes. This changes
         // query cost, not the stored curve or the distance field's resolution.
-        [NonSerialized] CenterlineIndex distanceIndex;
+        [NonSerialized] volatile CenterlineIndex distanceIndex;
         [NonSerialized] internal PlayerChannelSampler playerSampler;
         public float IndexedCenterlineDistance(Vector2 point)
         {
@@ -97,8 +97,56 @@ namespace CityForge.World
                 else{Search(node.right,point,ref best);Search(node.left,point,ref best);}
             }
         }
+        [NonSerialized] volatile OceanContourIndex oceanIndex;
+
+        // Ocean descriptors are immutable after generation. Bucket edges by latitude so
+        // repeated terrain and foam samples only test edges that can cross their ray.
+        sealed class OceanContourIndex
+        {
+            const int Bands = 128;
+            public readonly Vector2[] Outline;
+            public readonly RegionWaterContour[] Holes;
+            readonly (Vector2 a, Vector2 b, int contour)[][] edges;
+
+            public OceanContourIndex(Vector2[] outline, RegionWaterContour[] holes)
+            {
+                Outline=outline;Holes=holes;
+                var rows=new List<(Vector2,Vector2,int)>[Bands];
+                Add(outline,1);
+                if(holes!=null)for(int i=0;i<holes.Length;i++)Add(holes[i]?.points,1<<(i+1));
+                edges=Array.ConvertAll(rows,row=>row?.ToArray()??Array.Empty<(Vector2,Vector2,int)>());
+
+                void Add(Vector2[] contour,int flag)
+                {
+                    if(contour==null||contour.Length<3)return;
+                    for(int i=0,j=contour.Length-1;i<contour.Length;j=i++){
+                        var a=contour[i];var b=contour[j];
+                        if(a.y==b.y)continue;
+                        for(int band=Band(Mathf.Min(a.y,b.y));band<=Band(Mathf.Max(a.y,b.y));band++)
+                            (rows[band]??=new List<(Vector2,Vector2,int)>()).Add((a,b,flag));
+                    }
+                }
+            }
+
+            static int Band(float y)=>Mathf.Clamp((int)(y*Bands),0,Bands-1);
+            public bool Contains(Vector2 point)
+            {
+                int parity=0;
+                foreach(var (a,b,contour) in edges[Band(point.y)])
+                    if((a.y>point.y)!=(b.y>point.y)&&point.x<(b.x-a.x)*(point.y-a.y)/(b.y-a.y)+a.x)
+                        parity^=contour;
+                return parity==1;
+            }
+        }
+
         public bool Contains(Vector2 point)
         {
+            if(kind==WaterBodyKind.Ocean&&(holes?.Length??0)<=30&&outline?.Length>=3&&!(centerline?.Length>1)){
+                var index=oceanIndex;
+                if(index==null||index.Outline!=outline||index.Holes!=holes)
+                    oceanIndex=index=new OceanContourIndex(outline,holes);
+                return index.Contains(point);
+            }
             if(centerline!=null&&(playerChannel?IndexedCenterlineDistance(point):DistanceToCenterline(point,out _))<=halfWidthNormalized)return true;
             if(!PolygonContains(outline,point))return false;
             if(holes!=null)foreach(var hole in holes)if(PolygonContains(hole?.points,point))return false;

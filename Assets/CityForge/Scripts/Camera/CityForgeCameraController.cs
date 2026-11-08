@@ -10,6 +10,9 @@ namespace CityForge.CameraSystem
     {
         public const float IsometricPitch = 35.26439f;
         private const float PointerTiltSensitivity = .06f;
+        private const float MinOrbitPitch = 22f;
+        private const float MaxOverviewPitch = 52f;
+        private float MaximumPitch => reliefFraming ? MaxOverviewPitch : IsometricPitch;
         [SerializeField] private Vector3 focus = Vector3.zero;
         [SerializeField, Range(15f, IsometricPitch)] private float pitch = IsometricPitch;
         [SerializeField] private float yaw = 45f;
@@ -22,11 +25,12 @@ namespace CityForge.CameraSystem
         [SerializeField] private float viewTilt=-1;
         [SerializeField] private float perspectiveFieldOfView=60;
         public float ViewTilt => viewTilt<0?(lowerView?0:1):viewTilt;
-        public float ViewPitch => Mathf.Lerp(12,Mathf.Clamp(pitch,15f,IsometricPitch),ViewTilt);
+        public float ViewPitch => Mathf.Lerp(12,Mathf.Clamp(pitch,15f,MaximumPitch),ViewTilt);
         public void SetViewTilt(float value){viewTilt=Mathf.Clamp01(value);lowerView=viewTilt<1;viewCamera=GetComponent<Camera>();viewCamera.orthographic=!lowerView;ApplyPose();}
         public bool LowerView => lowerView;
         public float OrthographicSetback {get;private set;}
         public bool FitShadowDepth {get;set;}=true;
+        private bool reliefFraming;
         private bool meadowFraming;private float meadowStartSize;
         private Camera viewCamera;
         private Vector3 framedCenter;
@@ -142,6 +146,16 @@ namespace CityForge.CameraSystem
             ApplyPose();
         }
 
+        internal void OrbitRegion(Vector2 pointerDelta)
+        {
+            if(!reliefFraming)return;
+            yaw=Mathf.Repeat(yaw-pointerDelta.x*.16f,360f);
+            pitch=Mathf.Clamp(ViewPitch-pointerDelta.y*.10f,MinOrbitPitch,MaxOverviewPitch);
+            // Use the overview projection throughout the drag so changing
+            // pitch cannot dolly the camera or resize the map.
+            SetViewTilt(1f);
+        }
+
         public World.RegionCameraState CaptureRegionState()=>new World.RegionCameraState{focus=focus,pitch=pitch,yaw=yaw,distance=distance,size=orthographicSize,zoom=ZoomLevel,lowerView=lowerView,hasViewTilt=true,viewTilt=ViewTilt};
         public void RestoreRegionState(World.RegionCameraState state)
         {
@@ -149,11 +163,12 @@ namespace CityForge.CameraSystem
             if(state.hasViewTilt&&!float.IsFinite(state.viewTilt))throw new System.IO.InvalidDataException("Invalid saved camera tilt.");
             if(!float.IsFinite(state.focus.x)||!float.IsFinite(state.focus.y)||!float.IsFinite(state.focus.z)||!float.IsFinite(state.pitch)||!float.IsFinite(state.yaw)||!float.IsFinite(state.distance)||!float.IsFinite(state.size)||state.size<3||state.distance<5)throw new System.IO.InvalidDataException("Invalid saved camera.");
             viewTilt=state.hasViewTilt?Mathf.Clamp01(state.viewTilt):(state.lowerView?0:1);lowerView=viewTilt<1;viewCamera=GetComponent<Camera>();viewCamera.orthographic=!lowerView;
-            focus=state.focus;pitch=Mathf.Clamp(state.pitch,15f,IsometricPitch);yaw=state.yaw;distance=state.distance;orthographicSize=state.size;ZoomLevel=Mathf.Clamp(state.zoom,0,5);ApplyPose();ZoomChanged?.Invoke(ZoomLevel);
+            focus=state.focus;pitch=Mathf.Clamp(state.pitch,15f,MaximumPitch);yaw=state.yaw;distance=state.distance;orthographicSize=state.size;ZoomLevel=Mathf.Clamp(state.zoom,0,5);ApplyPose();ZoomChanged?.Invoke(ZoomLevel);
         }
 
         public void ToggleViewAngle()
         {
+            if(reliefFraming)pitch=IsometricPitch;
             SetViewTilt(ViewTilt>.5f?0:1);
         }
 
@@ -161,7 +176,8 @@ namespace CityForge.CameraSystem
         {
             if (regionSide > 0f)
             {
-                if(meadowFraming)FrameMeadowComparison(regionSide,regionHeight,framedCenter,meadowStartSize);else FrameArea(regionSide, regionHeight, framedCenter);
+                if(reliefFraming)FrameRegion(regionSide,regionHeight);
+                else if(meadowFraming)FrameMeadowComparison(regionSide,regionHeight,framedCenter,meadowStartSize);else FrameArea(regionSide, regionHeight, framedCenter);
                 return;
             }
             lowerView=false;viewTilt=-1;viewCamera.orthographic=true;
@@ -184,11 +200,13 @@ namespace CityForge.CameraSystem
         public void ApplyPose()
         {
             if (viewCamera == null) viewCamera = GetComponent<Camera>();
-            // Older scenes/saved camera states may contain the former steeper endpoint.
-            pitch=Mathf.Clamp(pitch,15f,IsometricPitch);
+            pitch=Mathf.Clamp(pitch,15f,MaximumPitch);
             if(viewCamera.orthographicSize!=orthographicSize)viewCamera.orthographicSize=orthographicSize;
             float tilt=ViewTilt;
-            if(regionSide>0){lowerView=tilt<1;viewCamera.orthographic=!lowerView;}
+            // At close overview zooms the rays are effectively parallel. Use the
+            // orthographic camera there to keep the full range of zoom steps.
+            bool perspectiveRelief=reliefFraming&&tilt>=1&&orthographicSize>distance*.015f;
+            if(regionSide>0){lowerView=tilt<1;viewCamera.orthographic=!lowerView&&!perspectiveRelief;}
             var posePitch = Mathf.Lerp(12,pitch,tilt);
             var lowDistance=orthographicSize/Mathf.Tan(perspectiveFieldOfView*.5f*Mathf.Deg2Rad);
             // TerrainData.size.y is the storage range (often 1200m), not the ground height.
@@ -203,7 +221,7 @@ namespace CityForge.CameraSystem
             var poseDistance=distance;
             // Orthographic projection is unchanged by retreating along the viewing ray.
             // Keep tall district terrain in front of the camera at every zoom level.
-            if(tilt>0&&regionSide>0){
+            if(tilt>0&&regionSide>0&&!perspectiveRelief){
                 float screenDepth=orthographicSize/Mathf.Tan(posePitch*Mathf.Deg2Rad);
                 float topDepth=(shadowTerrainHeight+80f-focus.y)/Mathf.Sin(posePitch*Mathf.Deg2Rad);
                 poseDistance=Mathf.Max(poseDistance,screenDepth+topDepth+30f);
@@ -236,8 +254,9 @@ namespace CityForge.CameraSystem
                 // Fit the depth range to the terrain currently on screen. Huge empty
                 // foreground/background ranges waste directional shadow texels.
                 var depthMargin = orthographicSize * 2f + shadowTerrainHeight;
+                if(perspectiveRelief)depthMargin=Mathf.Max(depthMargin,regionSide+shadowTerrainHeight);
                 near=lowerView ? .5f : Mathf.Max(1f,poseDistance-depthMargin);far=poseDistance+depthMargin;
-                if(FitShadowDepth&&!lowerView)
+                if(FitShadowDepth&&!lowerView&&!perspectiveRelief)
                 {
                     // Orthographic screen Y and world height bound depth exactly:
                     // depth = distance + screenY*cot(pitch) - (height-focusY)/sin(pitch).
@@ -256,7 +275,7 @@ namespace CityForge.CameraSystem
             // Standard perspective matrices retain correct URP depth reconstruction.
             // A narrowing field of view approaches parallel rays while maintaining
             // the same apparent size at the focus plane; the top uses native ortho.
-            viewCamera.fieldOfView=tilt>0&&tilt<1?2*Mathf.Atan(orthographicSize/poseDistance)*Mathf.Rad2Deg:perspectiveFieldOfView;
+            viewCamera.fieldOfView=perspectiveRelief||(tilt>0&&tilt<1)?2*Mathf.Atan(orthographicSize/poseDistance)*Mathf.Rad2Deg:perspectiveFieldOfView;
             viewCamera.ResetProjectionMatrix();
         }
 
@@ -265,28 +284,46 @@ namespace CityForge.CameraSystem
         public void FrameMeadowComparison(float side,float height,Vector3 center,float size=40)
         {
             lowerView=false;viewTilt=-1;
+            reliefFraming=false;
             meadowFraming=true;meadowStartSize=size;
             regionSide=side;regionHeight=height;framedCenter=center;focus=center;
             pitch=IsometricPitch;yaw=315;distance=280;farthestSize=size*16;
             viewCamera=GetComponent<Camera>();viewCamera.orthographic=true;SetZoomLevel(1);
         }
 
-        public void FrameRegion(float side, float height = 1200f)
+        public void FrameRegion(float side, float height = 1200f, float heading = 335f)
         {
             FrameArea(side, height, Vector3.zero);
             var map=GetComponentInParent<World.PrototypeRegionView>()?.GetComponentInChildren<World.RegionReliefMap>(true);
             if(!map)return;
+            reliefFraming=true;
+            yaw=heading;
+            distance=side*2.55f;
             var bounds=map.GetComponent<Renderer>().bounds;
             foreach(var renderer in map.GetComponentsInChildren<Renderer>())bounds.Encapsulate(renderer.bounds);
-            focus=bounds.center;
-            var inverse=Quaternion.Inverse(Quaternion.Euler(pitch,yaw,0));
-            float horizontal=0,vertical=0;
-            for(int i=0;i<8;i++){
-                var corner=bounds.center+Vector3.Scale(bounds.extents,new Vector3((i&1)==0?-1:1,(i&2)==0?-1:1,(i&4)==0?-1:1));
-                var projected=inverse*(corner-focus);horizontal=Mathf.Max(horizontal,Mathf.Abs(projected.x));vertical=Mathf.Max(vertical,Mathf.Abs(projected.y));
+            regionHeight=Mathf.Max(height,bounds.max.y);
+            var orientation=Quaternion.Euler(pitch,yaw,0);
+            var inverse=Quaternion.Inverse(orientation);
+            var min=new Vector2(float.PositiveInfinity,float.PositiveInfinity);
+            var max=new Vector2(float.NegativeInfinity,float.NegativeInfinity);
+            void Include(Vector3 point)
+            {
+                var local=inverse*(point-bounds.center);
+                var projected=new Vector2(local.x,local.y)*(distance/(distance+local.z));
+                min=Vector2.Min(min,projected);
+                max=Vector2.Max(max,projected);
             }
-            // Fit the actual relief bounds, with room above/below for the HUD.
-            orthographicSize=1.25f*Mathf.Max(vertical,horizontal/Mathf.Max(.1f,viewCamera.aspect));
+
+            var reliefMesh=map.GetComponent<MeshFilter>();
+            foreach(var point in reliefMesh.sharedMesh.vertices)Include(reliefMesh.transform.TransformPoint(point));
+            // Include the four lower corners of the slab, beneath the sampled surface.
+            for(int i=0;i<4;i++)
+                Include(new Vector3((i&1)==0?bounds.min.x:bounds.max.x,bounds.min.y,
+                    (i&2)==0?bounds.min.z:bounds.max.z));
+            // Center the projected relief and leave room around its deepest corners.
+            focus=bounds.center+orientation*(Vector3)((min+max)*.5f);
+            var halfSpan=(max-min)*.5f;
+            orthographicSize=1.12f*Mathf.Max(halfSpan.y,halfSpan.x/Mathf.Max(.1f,viewCamera.aspect));
             farthestSize=orthographicSize;ApplyPose();
         }
 
@@ -300,6 +337,7 @@ namespace CityForge.CameraSystem
         public void FrameArea(float side, float height, Vector3 center)
         {
             lowerView=false;viewTilt=-1;
+            reliefFraming=false;
             meadowFraming=false;
             regionSide = side; regionHeight = height; framedCenter = center;
             focus = center + new Vector3(0f, height * .0375f, 0f);

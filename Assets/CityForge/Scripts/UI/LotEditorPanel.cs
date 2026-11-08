@@ -121,7 +121,8 @@ namespace CityForge.UI
             var overlayBadge = Tray("Overlay mode", 22, 255, 412, 33);
             overlayModeLabel = Label(overlayBadge, "", 8, 2, 395, 16);
             overlayModeLabel.color = Gold;
-            if (!PlayerMode) AddCategory(categories, "Characters", "Characters", LotGlyph.Character, 7);
+            AddCategory(categories, "Landscaping", "Landscaping", LotGlyph.Landscaping, 7);
+            if (!PlayerMode) AddCategory(categories, "Characters", "Characters", LotGlyph.Character, 8);
             pathTools = AddImage("Ground path controls", transform, PanelColor).rectTransform;
             Place(pathTools, Vector2.zero, Vector2.zero, new Vector2(22, 121), new Vector2(621, 167));
             AddOutline(pathTools.GetComponent<Image>(), Stroke);
@@ -250,8 +251,12 @@ namespace CityForge.UI
             Control(inspector, "Browse assets…", 15, 571, 312, () => OpenAssetPopup("", "All assets"),
                 LotGlyph.Catalog, "Open the searchable asset picker");
 
+            if (!PlayerMode)
+                Control(inspector, "Requirements & Bonus…", 15, 613, 312, OpenCapitalSettings,
+                    description: "Set site requirements and a capital bonus for this lot");
+
             terrainInspector = AddImage("Terrain tile menu", inspector, ButtonColor).rectTransform;
-            At(terrainInspector, 15, 621, 312, 110);
+            At(terrainInspector, 15, PlayerMode ? 621 : 657, 312, 110);
             AddOutline(terrainInspector.GetComponent<Image>(), Stroke);
             Label(terrainInspector, "Overlay orientation", 10, 3, 290, 18).font = headingFont;
             terrainTileLabel = Label(terrainInspector, "", 10, 28, 290, 14);
@@ -629,7 +634,8 @@ namespace CityForge.UI
                 (!PlayerMode || LotCustomizationService.IsCosmetic(catalog, asset.id)) &&
                 (category.Length == 0 ? asset.category != "Buildings" : asset.category == category) &&
                 (!fencePath.Finished || category != "Fences" || asset.fenceSpan > 0)).ToArray() : Array.Empty<LotAssetCatalogEntry>();
-            PopulatePicker(query, allowed, recentAssets, item => item.id, item => item.label,
+            var recents = category == "Landscaping" ? System.Array.Empty<string>() : recentAssets.ToArray();
+            PopulatePicker(query, allowed, recents, item => item.id, item => item.label,
                 item => PickerGroup(item),
                 item => item.label + " " + item.category + " " + PickerGroup(item) +
                     (item.IsCharacter ? $" {item.fromYear} {item.toYear} NPC" : ""), thumbnails.Get,
@@ -705,8 +711,13 @@ namespace CityForge.UI
                         (string.IsNullOrEmpty(item.eraId) ? item.fromYear <= era.LastYear && item.toYear >= era.FirstYear
                             : item.eraId == era.id)).ToArray()
                         : Array.Empty<LotAssetCatalogEntry>();
-                    PopulatePicker(search.text, choices, recentAssets, item => item.id, item => item.label,
-                        _ => "", item => item.label, thumbnails.Get, _ => LotGlyph.House, _ => false, ArmAsset,
+                    var uncategorizedRecents = recentAssets.Where(id =>
+                        Array.Exists(choices, item => item.id == id && string.IsNullOrEmpty(item.subcategory))).ToArray();
+                    string Subcategory(LotAssetCatalogEntry item) =>
+                        LotClassification.SubcategoryName(use.id, item.subcategory) ?? "";
+                    PopulatePicker(search.text, choices, uncategorizedRecents, item => item.id, item => item.label,
+                        Subcategory, item => item.label + " " + Subcategory(item),
+                        thumbnails.Get, _ => LotGlyph.House, _ => false, ArmAsset,
                         item => "Preview and place " + item.label, "No buildings in this category");
                     return;
                 }
@@ -737,6 +748,107 @@ namespace CityForge.UI
 
         private bool CanScript(LotObjectDefinition item) =>
             CanEdit(item) && catalog && catalog.Find(item.assetId)?.IsCharacter == true;
+
+        private void OpenCapitalSettings()
+        {
+            if (PlayerMode || assetPopup) return;
+            CloseChoices();
+            var frame = CreateModal("Requirements & Bonus");
+            var lot = session.Lot;
+            Label(frame, "Site requirements · all selected items are required", 20, 49, 520, 17);
+            var resourceNames = new[]
+            {
+                "Timber", "Stone", "Iron", "Coal", "Fish", "Fertile soil", "Pasture",
+                "Fresh water", "Natural harbor", "Scenic beauty", "Clay"
+            };
+            var resources = new Toggle[resourceNames.Length];
+            for (int i = 0; i < resources.Length; i++)
+            {
+                var name = resourceNames[i];
+                resources[i] = Checkbox(frame, name, name, 20 + i % 2 * 264, 88 + i / 2 * 34, 256,
+                    lot.requiredResources.Contains((LotRequiredResource)i));
+            }
+            var kiln = Checkbox(frame, "Kiln access", "Kiln access", 284, 258, 256, lot.requiresKiln);
+
+            Label(frame, "Capital bonus", 20, 292, 520, 18);
+            var menu = DefaultControls.CreateDropdown(new DefaultControls.Resources());
+            menu.name = "Capital bonus type";
+            menu.transform.SetParent(frame, false);
+            At((RectTransform)menu.transform, 20, 329, 520, 33);
+            foreach (var label in menu.GetComponentsInChildren<Text>(true)) label.font = font;
+            var effect = menu.GetComponent<Dropdown>();
+            effect.ClearOptions();
+            effect.AddOptions(new List<string>
+            {
+                "None", "Early Works · public construction discount", "Local Justice · crime reduction",
+                "Public Confidence · civic prestige", "Sturdy Foundations · public repair discount",
+                "Port Administration · port fee revenue", "Population Growth · faster population growth"
+            });
+            effect.SetValueWithoutNotify((int)lot.capitalBonus.effect);
+
+            var percentLabel = Label(frame, "Bonus (%)", 20, 369, 76, 16);
+            var percent = Field(frame, "Bonus percentage", 96, 369, 78);
+            var usesLabel = Label(frame, "Buildings (0 = ongoing)", 195, 369, 233, 16);
+            var uses = Field(frame, "Buildings", 434, 369, 106);
+            percent.contentType = uses.contentType = InputField.ContentType.IntegerNumber;
+            percent.characterLimit = 3;
+            uses.characterLimit = 2;
+            percent.SetTextWithoutNotify(lot.capitalBonus.percent.ToString());
+            uses.SetTextWithoutNotify(lot.capitalBonus.eligibleBuildings.ToString());
+            var port = Checkbox(frame, "Operating port", "Bonus requires an operating port", 20, 416, 520,
+                lot.capitalBonus.requiresOperatingPort);
+            var status = Label(frame, "Saved as lot settings for future gameplay.", 20, 479, 314, 14);
+            Control(frame, "Cancel", 343, 479, 91, CloseAssetPopup);
+            MarkActive(Control(frame, "Apply", 445, 479, 95, ApplySettings, LotGlyph.Check), true);
+
+            effect.onValueChanged.AddListener(value =>
+            {
+                int[] defaults = { 0, 15, 25, 10, 20, 15, 10 };
+                percent.SetTextWithoutNotify(defaults[value].ToString());
+                uses.SetTextWithoutNotify(value == (int)LotCapitalEffect.PublicBuildingCostReduction ? "3" : "0");
+                port.SetIsOnWithoutNotify(value == (int)LotCapitalEffect.PortFeeRevenueIncrease);
+                RefreshBonusFields();
+            });
+            RefreshBonusFields();
+
+            void RefreshBonusFields()
+            {
+                bool enabled = effect.value != (int)LotCapitalEffect.None;
+                percent.gameObject.SetActive(enabled);
+                percentLabel.gameObject.SetActive(enabled);
+                port.gameObject.SetActive(enabled);
+                bool limited = effect.value == (int)LotCapitalEffect.PublicBuildingCostReduction;
+                uses.gameObject.SetActive(limited);
+                usesLabel.gameObject.SetActive(limited);
+            }
+
+            void ApplySettings()
+            {
+                var bonus = new LotCapitalBonus { effect = (LotCapitalEffect)effect.value };
+                if (bonus.effect != LotCapitalEffect.None)
+                {
+                    bool validPercent = int.TryParse(percent.text, out bonus.percent);
+                    bool validUses = bonus.effect != LotCapitalEffect.PublicBuildingCostReduction ||
+                        int.TryParse(uses.text, out bonus.eligibleBuildings);
+                    bonus.requiresOperatingPort = port.isOn;
+                    if (!validPercent || !validUses || !bonus.IsValid)
+                    {
+                        status.text = "Use 1–100% and 0–99 buildings.";
+                        status.color = Gold;
+                        return;
+                    }
+                }
+                session.Edit(definition =>
+                {
+                    definition.requiredResources = resources.Select((toggle, index) => (toggle, index))
+                        .Where(item => item.toggle.isOn).Select(item => (LotRequiredResource)item.index).ToList();
+                    definition.requiresKiln = kiln.isOn;
+                    definition.capitalBonus = bonus;
+                });
+                CloseAssetPopup();
+                Refresh("Lot requirements and bonus applied.", rebuildPreview: false);
+            }
+        }
 
         private void OpenCharacterScript()
         {
@@ -1739,6 +1851,7 @@ namespace CityForge.UI
 
         private string Validate()
         {
+            if (!session.Lot.HasValidCapitalSettings()) return "Review the lot requirements and capital bonus.";
             foreach (var item in session.Lot.objects)
             {
                 var asset = catalog ? catalog.Find(item.assetId) : null;
@@ -1887,13 +2000,13 @@ namespace CityForge.UI
         private Button ToolTile(Transform parent, string label, LotGlyph glyph, int column, Action action,
             string description)
         {
-            var button = Control(parent, label, 5 + column * 76, 4, 72, action, glyph, description, true);
-            At((RectTransform)button.transform, 5 + column * 76, 4, 72, 45);
-            At(button.GetComponentInChildren<LotEditorIcon>().rectTransform, 25, 2, 22, 22);
+            var button = Control(parent, label, 5 + column * 67, 4, 64, action, glyph, description, true);
+            At((RectTransform)button.transform, 5 + column * 67, 4, 64, 45);
+            At(button.GetComponentInChildren<LotEditorIcon>().rectTransform, 21, 2, 22, 22);
             var caption = button.GetComponentInChildren<Text>();
             caption.text = label;
             caption.fontSize = 12;
-            At(caption.rectTransform, 0, 25, 72, 18);
+            At(caption.rectTransform, 0, 25, 64, 18);
             return button;
         }
 
@@ -1905,6 +2018,7 @@ namespace CityForge.UI
                 case "Trees": return LotGlyph.Tree;
                 case "Fences": return LotGlyph.Fence;
                 case "Characters": return LotGlyph.Character;
+                case "Landscaping": return LotGlyph.Landscaping;
                 default: return LotGlyph.Catalog;
             }
         }

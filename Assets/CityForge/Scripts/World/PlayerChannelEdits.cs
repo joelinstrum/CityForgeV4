@@ -130,6 +130,8 @@ namespace CityForge.World
                     var local=(p-Origin)/Side;float cut=playerLakeBaseTerrain.GetInterpolatedHeight(local.x,local.y)-Height(p);
                     amount=Mathf.Max(amount,Mathf.SmoothStep(0,1,Mathf.InverseLerp(.08f,.6f,cut)));
                 }
+                amount*=RiverSedimentWeight(p/side+Vector2.one*.5f);
+                if(amount<=0)continue;
                 int zz=z-z0,xx=x-x0;for(int l=0;l<maps.GetLength(2);l++)maps[zz,xx,l]=(l<lakeBaseAlphamaps.GetLength(2)?lakeBaseAlphamaps[z,x,l]:0)*(1-amount);maps[zz,xx,offset]+=amount*.3f;maps[zz,xx,offset+1]+=amount*.1f;maps[zz,xx,offset+2]+=amount*.6f;}
             terrainData.SetAlphamaps(x0,z0,maps);
         }

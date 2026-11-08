@@ -3,16 +3,18 @@ using System.Collections.Generic;
 using UnityEngine;
 namespace CityForge.World
 {
-    public enum RegionTerrainShape { Land, Pangea, Coast, MountainBorder, OneIsland, SmallIslands, Archipelago, Peninsula }
+    public enum RegionTerrainShape { Land, Pangea, Coast, MountainBorder, OneIsland, SmallIslands, Archipelago, Peninsula, RiverAndBay }
     /// <summary>Version-six land/ocean plan, shared by generation, shore descriptors and wizard preview.</summary>
     public sealed class RegionTerrainLayout
     {
         readonly RegionTerrainShape shape;readonly int seed,peninsulaOrientation;readonly float phase;
         readonly Vector2[] centers;readonly float[] radii;
+        internal readonly RiverBayLayout RiverBay;
         public bool HasOcean=>shape!=RegionTerrainShape.Land&&shape!=RegionTerrainShape.MountainBorder;
         public RegionTerrainLayout(RegionCreationSettings recipe)
         {
             shape=recipe.terrainShape;seed=recipe.seed;peninsulaOrientation=recipe.peninsulaNorthToSouth?3:seed;phase=(seed%997)*.0063f;
+            if (shape == RegionTerrainShape.RiverAndBay) RiverBay = new RiverBayLayout(seed,recipe.riverBayVariant,recipe.waterwayVersion>=6);
             int count=shape==RegionTerrainShape.SmallIslands?9:shape==RegionTerrainShape.Archipelago?4:1;centers=new Vector2[count];radii=new float[count];var rng=new System.Random(seed^0x713ab);
             for(int i=0;i<count;i++){
                 if(shape==RegionTerrainShape.Archipelago){centers[i]=new Vector2(.27f+i%2*.46f,.27f+i/2*.46f)+new Vector2((float)rng.NextDouble()-.5f,(float)rng.NextDouble()-.5f)*.035f;radii[i]=.145f+(float)rng.NextDouble()*.025f;continue;}
@@ -32,6 +34,7 @@ namespace CityForge.World
         public float LandDistance(Vector2 p)
         {
             if(!HasOcean)return 1;
+            if(RiverBay != null)return RiverBay.LandDistance(p);
             if(shape==RegionTerrainShape.Coast){p=Orient(p,seed);return p.x-Coast(p.y);}
             if(shape==RegionTerrainShape.Peninsula){p=Orient(p,peninsulaOrientation);float u=Mathf.Min(p.x,.62f);var center=new Vector2(u,PeninsulaCenter(u));return PeninsulaWidth(u)-Vector2.Distance(p,center);}
             float best=float.NegativeInfinity;
@@ -40,6 +43,7 @@ namespace CityForge.World
         public RegionWaterBody CreateOcean()
         {
             if(!HasOcean)return null;
+            if(RiverBay != null)return RiverBay.Ocean();
             var body=new RegionWaterBody{id="regional-ocean",kind=WaterBodyKind.Ocean,appearanceProfile="coastal-ocean",hasSurfaceLevel=true,surfaceLevelNormalized=12f/PrototypeRegionData.Height};
             if(shape==RegionTerrainShape.Peninsula){
                 var points=new List<Vector2>();

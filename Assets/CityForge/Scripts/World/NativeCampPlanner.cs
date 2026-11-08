@@ -21,7 +21,9 @@ namespace CityForge.World
         public static NativeCampRecord[] Create(PrototypeRegionData data,RegionCreationSettings recipe,int size)
         {
             if(recipe.nativeCampVersion!=1)return Array.Empty<NativeCampRecord>();
-            int grid=recipe.GridSide,target=2+new System.Random(recipe.seed^0x51c42).Next(2);float side=MapSide(size,grid),cell=side/grid;
+            int grid=recipe.GridSide;
+            int target=recipe.nativeCampCount>0?recipe.nativeCampCount:2+new System.Random(recipe.seed^0x51c42).Next(2);
+            float side=MapSide(size,grid),cell=side/grid;
             float sea=TropicalOceanDepth.DeepRecipe(recipe)?TropicalOceanDepth.Sea:12;
             var random=new System.Random(recipe.seed^0x63a27);var order=Enumerable.Range(0,grid*grid).ToArray();
             for(int i=order.Length-1;i>0;i--){int j=random.Next(i+1);(order[i],order[j])=(order[j],order[i]);}

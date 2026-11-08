@@ -19,6 +19,9 @@ namespace CityForge.Lots
         public string subcategory = "";
         public string firstEraId = "";
         public int firstEraYear;
+        public List<LotRequiredResource> requiredResources = new List<LotRequiredResource>();
+        public bool requiresKiln;
+        public LotCapitalBonus capitalBonus;
         public int width = 3;
         public int length = 4;
         public List<LotObjectDefinition> objects = new List<LotObjectDefinition>();
@@ -46,6 +49,10 @@ namespace CityForge.Lots
             lot.firstEraId ??= "";
             if (!LotClassification.IsValid(lot.category, lot.subcategory, lot.firstEraId, lot.firstEraYear))
                 throw new InvalidDataException("Invalid lot classification.");
+
+            lot.requiredResources ??= new List<LotRequiredResource>();
+            if (!lot.HasValidCapitalSettings())
+                throw new InvalidDataException("Invalid lot requirements or capital bonus.");
 
             var ids = new HashSet<string>();
             foreach (var item in lot.objects)
@@ -90,9 +97,51 @@ namespace CityForge.Lots
             return lot;
         }
 
+        internal bool HasValidCapitalSettings()
+        {
+            var distinct = new HashSet<LotRequiredResource>();
+            foreach (var resource in requiredResources)
+                if (!Enum.IsDefined(typeof(LotRequiredResource), resource) || !distinct.Add(resource))
+                    return false;
+            return capitalBonus.IsValid;
+        }
+
         public static bool ValidSize(int width, int length)
         {
             return width >= 1 && width <= MaxTiles && length >= 1 && length <= MaxTiles;
+        }
+    }
+
+    public enum LotRequiredResource
+    {
+        Timber, Stone, Iron, Coal, Fish, FertileSoil, Pasture, FreshWater, NaturalHarbor, ScenicBeauty, Clay
+    }
+
+    public enum LotCapitalEffect
+    {
+        None, PublicBuildingCostReduction, CrimeReduction, CivicPrestigeIncrease,
+        PublicBuildingRepairCostReduction, PortFeeRevenueIncrease, PopulationGrowthIncrease
+    }
+
+    [Serializable]
+    public struct LotCapitalBonus
+    {
+        public LotCapitalEffect effect;
+        public int percent;
+        // Zero means ongoing; a positive value limits the public building discount.
+        public int eligibleBuildings;
+        public bool requiresOperatingPort;
+
+        internal bool IsValid
+        {
+            get
+            {
+                if (!Enum.IsDefined(typeof(LotCapitalEffect), effect)) return false;
+                if (effect == LotCapitalEffect.None)
+                    return percent == 0 && eligibleBuildings == 0 && !requiresOperatingPort;
+                return percent >= 1 && percent <= 100 && eligibleBuildings >= 0 && eligibleBuildings <= 99 &&
+                    (eligibleBuildings == 0 || effect == LotCapitalEffect.PublicBuildingCostReduction);
+            }
         }
     }
 

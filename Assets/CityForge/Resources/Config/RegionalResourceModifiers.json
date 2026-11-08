@@ -1,0 +1,80 @@
+{
+  "modifiers": [
+    {
+      "type": "timber",
+      "category": 1,
+      "weight": 28,
+      "firstEra": "",
+      "effect": "construction-cost-fraction",
+      "effectScale": -0.08
+    },
+    {
+      "type": "stone",
+      "category": 1,
+      "weight": 30,
+      "firstEra": "",
+      "effect": "infrastructure-cost-fraction",
+      "effectScale": -0.06
+    },
+    {
+      "type": "iron",
+      "category": 1,
+      "weight": 32,
+      "firstEra": "industrial"
+    },
+    {
+      "type": "coal",
+      "category": 1,
+      "weight": 30,
+      "firstEra": "industrial"
+    },
+    {
+      "type": "fish",
+      "category": 3,
+      "weight": 30,
+      "firstEra": ""
+    },
+    {
+      "type": "fertile-soil",
+      "category": 0,
+      "weight": 65,
+      "firstEra": ""
+    },
+    {
+      "type": "pasture",
+      "category": 0,
+      "weight": 30,
+      "firstEra": ""
+    },
+    {
+      "type": "fresh-water",
+      "category": 0,
+      "weight": 15,
+      "firstEra": ""
+    },
+    {
+      "type": "fresh-water",
+      "category": 3,
+      "weight": 48,
+      "firstEra": ""
+    },
+    {
+      "type": "fresh-water",
+      "category": 2,
+      "weight": 25,
+      "firstEra": ""
+    },
+    {
+      "type": "natural-harbor",
+      "category": 2,
+      "weight": 70,
+      "firstEra": ""
+    },
+    {
+      "type": "scenic-beauty",
+      "category": 4,
+      "weight": 75,
+      "firstEra": ""
+    }
+  ]
+}

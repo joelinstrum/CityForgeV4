@@ -1,0 +1,15 @@
+# Regional resources
+
+The existing region worker produces a versioned survey after waterways and biomes. It samples the original region in normalized X/Z coordinates. Timber follows woodland, stone follows elevation and slope, and fertile soil and pasture favor different lowland conditions. Water advantages use the actual water descriptors. Iron and coal use seeded geological proxies. Harbor shelter is estimated from the coastal footprint.
+
+The Create Region wizard places Resources after Terrain. Abundance scales resource richness where geography already supports it. Distribution changes the strength of seeded regional patches, with Distinct Districts as the default. Historical — Progressive starts with hidden deposits for explicit discovery. Revealed at Start records the deposits as discovered during creation and still uses the same economic eligibility rules.
+
+A survey stores eight 64 × 64 byte layers and sparse mineral deposits in region metadata. The roughly 32 KiB of raw layer data freezes the initial resource distribution independently of subsequent terrain edits, historical eras, and generator revisions. Each mineral ID is scoped to its region and survey version. Only discovery IDs change during play. Older saves without a survey continue to load and report that a survey is unavailable.
+
+`ResourceMap.At` and `InDistrict` query normalized coordinates. `PrototypeRegionView.EvaluateSettlement` accepts region-world X/Z in metres, and `EvaluateTown` adapts a town record. The evaluator uses only public layers and explicitly discovered deposits. A discovered deposit can be visible before its modifier applies. The provisional JSON rules in `Resources/Config/RegionalResourceModifiers.json` control category weights, era ranges from the existing timeline, and optional technology predicates. Rules can also expose named additive passive modifiers for future development systems. Suitability is advisory. Town placement continues to use the existing land validation.
+
+Town IDs persist across save and load. District membership derives from the original grid and the saved location. Combined districts can enumerate their original members' towns. The first newly founded town becomes capital. Older towns receive deterministic IDs on load, preserve an existing capital, and use their first recorded town when no capital was previously designated.
+
+The specialization interface distinguishes potential from actual development. Regional benefit evaluation takes explicit connections and infrastructure IDs. Legacy path definitions describe finite, ordered ranks. Region metadata can hold earned achievements for multiple paths. Calculation and progression policies belong in future systems using these contracts.
+
+In Play Mode, open **CityForge → Diagnostics → Regional Resources** in the Unity Editor. Select a layer and click the survey to evaluate a location. The Editor can show undiscovered deposits for debugging while the suitability result still filters them. **CityForge → Checks → Regional Resources** exercises the generation, discovery and era boundary, town metadata, and save round trip.

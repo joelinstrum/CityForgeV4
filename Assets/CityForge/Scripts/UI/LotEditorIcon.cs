@@ -7,7 +7,7 @@ namespace CityForge.UI
     internal enum LotGlyph
     {
         None, House, Tree, Fence, Select, Move, Rotate, Shrink, Grow, Copy, Trash,
-        Grid, Snap, View, Undo, Redo, Save, Check, Catalog, Back, Edit, Path, Lighting, Textures, Character
+        Grid, Snap, View, Undo, Redo, Save, Check, Catalog, Back, Edit, Path, Lighting, Textures, Character, Landscaping
     }
 
     [RequireComponent(typeof(CanvasRenderer))]
@@ -29,6 +29,10 @@ namespace CityForge.UI
                 case LotGlyph.Tree:
                     Line(12, 3, 12, 9); Line(8, 3, 16, 3);
                     Line(6, 9, 3, 11, 3, 15, 7, 17, 8, 20, 14, 21, 17, 18, 21, 16, 21, 12, 18, 9, 6, 9); break;
+                case LotGlyph.Landscaping:
+                    Line(3, 8, 5, 3, 19, 3, 21, 8, 3, 8);
+                    Line(12, 8, 12, 19); Line(12, 12, 8, 16, 5, 16);
+                    Line(12, 14, 16, 18, 19, 18); Arc(12, 20, 2, 0, 360); break;
                 case LotGlyph.Fence:
                     for (int x = 4; x <= 20; x += 8) Line(x, 4, x, 19);
                     Line(3, 9, 21, 9); Line(3, 15, 21, 15); break;

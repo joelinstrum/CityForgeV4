@@ -52,10 +52,12 @@ namespace CityForge
             var z=matrix.MultiplyVector(new Vector3(0,0,local.extents.z));
             return new Bounds(matrix.MultiplyPoint3x4(local.center),2*new Vector3(Mathf.Abs(x.x)+Mathf.Abs(y.x)+Mathf.Abs(z.x),Mathf.Abs(x.y)+Mathf.Abs(y.y)+Mathf.Abs(z.y),Mathf.Abs(x.z)+Mathf.Abs(y.z)+Mathf.Abs(z.z)));
         }
-        public void Capture()
+        public void Capture(bool prepareInstancedView=false)
         {
             if (captured) return;
             CaptureLods(GetComponentsInChildren<LODGroup>(true));captured=true;
+            if(prepareInstancedView&&instanced&&viewCamera&&viewCamera.orthographicSize>=minimumInstancedViewSize)
+                SetOriginals(true);
         }
         void CaptureLods(IEnumerable<LODGroup> sources)
         {

@@ -32,9 +32,11 @@ namespace CityForge.World
         readonly PrototypeRegionData data;
         readonly Vector2 offset;
         readonly float[] coverageThresholds;
+        readonly float tropicalElevationOffset;
         public RegionBiomeMap(RegionCreationSettings recipe,PrototypeRegionData data)
         {
             recipe.Validate();this.recipe=recipe;this.data=data;
+            tropicalElevationOffset=TropicalOceanDepth.DeepRecipe(recipe)?(TropicalOceanDepth.Sea-12)/PrototypeRegionData.Height:0;
             var random=new System.Random(recipe.seed);offset=new Vector2(random.Next(100,10000),random.Next(100,10000));
             if(DistrictTreeCoverage.Applies(recipe)){
                 coverageThresholds=new float[recipe.GridSide*recipe.GridSide];
@@ -42,7 +44,7 @@ namespace CityForge.World
                     var values=new System.Collections.Generic.List<float>();var bounds=DistrictBounds(i,recipe.GridSide);
                     for(int z=0;z<24;z++)for(int x=0;x<24;x++){
                         var uv=bounds.min+new Vector2((x+.5f)/24,(z+.5f)/24)/recipe.GridSide;
-                        float sea=(TropicalOceanDepth.DeepRecipe(recipe)?TropicalOceanDepth.Sea:12)/PrototypeRegionData.Height;
+                        float sea=(tropicalElevationOffset>0?TropicalOceanDepth.Sea:12)/PrototypeRegionData.Height;
                         if(Sample(data.Heights,uv)<sea&&Sample(data.WaterDistance,uv)<=0)continue;
                         values.Add(DistrictTreeCoverage.Score(uv,recipe));
                     }
@@ -59,22 +61,23 @@ namespace CityForge.World
         public RegionBiomeSample At(Vector2 uv)
         {
             uv=new Vector2(Mathf.Clamp01(uv.x),Mathf.Clamp01(uv.y));
-            float elevation=Sample(data.Heights,uv)-(TropicalOceanDepth.DeepRecipe(recipe)?(TropicalOceanDepth.Sea-12)/PrototypeRegionData.Height:0),bank=Sample(data.WaterDistance,uv)/PrototypeRegionData.Side;
+            float elevation=Sample(data.Heights,uv)-tropicalElevationOffset,bank=Sample(data.WaterDistance,uv)/PrototypeRegionData.Side;
             float regional=Mathf.PerlinNoise(offset.x+uv.x*4.3f,offset.y+uv.y*4.3f);
-            float patch=Mathf.PerlinNoise(offset.x+81+uv.x*13,offset.y-23+uv.y*13);
             float river=data.WaterBodies!=null&&data.WaterBodies.Length>0?1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(0,.045f,bank)):0;
             float climate=recipe.moisture==RegionMoisture.Dry?-.24f:recipe.moisture==RegionMoisture.Wet?.24f:0;
             float moisture=Mathf.Clamp01(.25f+regional*.5f+river*.25f+climate);
-            float vegetation=recipe.vegetation==RegionVegetation.OpenMeadow?-.38f:recipe.vegetation==RegionVegetation.Woodland?.32f:0;
-            float forest=Mathf.SmoothStep(0,1,Mathf.InverseLerp(.38f,.76f,regional*.4f+patch*.2f+moisture*.4f+vegetation));
-            forest*=1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(recipe.version>=5?.32f:.17f,recipe.version>=5?.65f:.43f,elevation));
+            float forest=0;
             float dry=Mathf.Clamp01((.55f-moisture)*1.8f);
             bool wet=elevation<12f/PrototypeRegionData.Height&&bank<=0;
-            if(coverageThresholds!=null){
+            if(!wet&&coverageThresholds!=null){
                 int x=Mathf.Min(recipe.GridSide-1,(int)(uv.x*recipe.GridSide)),z=Mathf.Min(recipe.GridSide-1,(int)(uv.y*recipe.GridSide));
                 float threshold=coverageThresholds[z*recipe.GridSide+x];forest=Mathf.SmoothStep(0,1,Mathf.InverseLerp(threshold-.025f,threshold+.025f,DistrictTreeCoverage.Score(uv,recipe)));
+            }else if(!wet){
+                float patch=Mathf.PerlinNoise(offset.x+81+uv.x*13,offset.y-23+uv.y*13);
+                float vegetation=recipe.vegetation==RegionVegetation.OpenMeadow?-.38f:recipe.vegetation==RegionVegetation.Woodland?.32f:0;
+                forest=Mathf.SmoothStep(0,1,Mathf.InverseLerp(.38f,.76f,regional*.4f+patch*.2f+moisture*.4f+vegetation));
+                forest*=1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(recipe.version>=5?.32f:.17f,recipe.version>=5?.65f:.43f,elevation));
             }
-            if(wet)forest=0;
             var kind=wet?RegionBiome.Water:elevation>.20f?RegionBiome.Upland:river>.65f?RegionBiome.Riverside:forest>.55f?RegionBiome.Woodland:dry>.35f?RegionBiome.DryMeadow:RegionBiome.Meadow;
             return new RegionBiomeSample(moisture,forest,dry,kind);
         }

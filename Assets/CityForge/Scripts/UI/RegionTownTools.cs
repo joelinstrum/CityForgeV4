@@ -21,7 +21,14 @@ namespace CityForge.UI
         CityForgeCameraController cameraControls;
         DistrictCombiner combiner;
         Font font;
-        Button addTown;
+        Button addTown, manageTowns, deleteTown;
+        RectTransform manager;
+        Dropdown townChoices;
+        Text manageStatus;
+        RegionTown movingTown;
+        bool confirmDelete;
+        bool labelsVisible = true;
+        int displayedDistrict = int.MinValue;
         Text instruction, error, capitalLabel;
         InputField townName, year;
         GameObject autogenerateHint;
@@ -29,7 +36,7 @@ namespace CityForge.UI
         RegionTown[] displayedTowns;
         RegionReliefMap displayedRelief;
         Vector2 pendingPosition;
-        bool capital, cursorWasVisible, cameraWasEnabled;
+        bool cursorWasVisible, cameraWasEnabled;
 
         public bool Placing { get; private set; }
 
@@ -48,6 +55,10 @@ namespace CityForge.UI
             var buttonRect = (RectTransform)addTown.transform;
             buttonRect.anchorMin = buttonRect.anchorMax = buttonRect.pivot = topLeft;
 
+            manageTowns = MakeButton(hud, "Manage Towns", new Vector2(201, -155), new Vector2(168, 40), OpenManager);
+            var manageRect = (RectTransform)manageTowns.transform;
+            manageRect.anchorMin = manageRect.anchorMax = manageRect.pivot = topLeft;
+
             instruction = Label(hud, "Town placement hint", "", new Vector2(25, -202), new Vector2(370, 35));
             instruction.rectTransform.anchorMin = instruction.rectTransform.anchorMax = instruction.rectTransform.pivot = topLeft;
             instruction.alignment = TextAnchor.UpperLeft;
@@ -55,6 +66,7 @@ namespace CityForge.UI
             cursor.gameObject.SetActive(false);
             instruction.gameObject.SetActive(false);
             BuildDialog();
+            BuildManager();
         }
 
         void BeginPlacement()
@@ -82,11 +94,18 @@ namespace CityForge.UI
                 return true;
             }
 
+            if (movingTown != null)
+            {
+                var problem = view.MoveTown(movingTown, position);
+                if (problem == null) Cancel();
+                else instruction.text = problem + " · Esc to cancel";
+                return true;
+            }
+
             Cancel();
             pendingPosition = position;
             townName.text = "";
             year.text = view.TownYear(district).ToString();
-            capital = false;
             UpdateCapitalLabel();
             error.text = "";
             cameraWasEnabled = cameraControls.enabled;
@@ -103,9 +122,16 @@ namespace CityForge.UI
             if (Placing)
             {
                 Placing = false;
+                movingTown = null;
                 Cursor.visible = cursorWasVisible;
                 cursor.gameObject.SetActive(false);
                 instruction.gameObject.SetActive(false);
+                return true;
+            }
+            if (manager && manager.gameObject.activeSelf)
+            {
+                manager.gameObject.SetActive(false);
+                cameraControls.enabled = cameraWasEnabled;
                 return true;
             }
             if (dialog && dialog.gameObject.activeSelf)
@@ -118,17 +144,22 @@ namespace CityForge.UI
             return false;
         }
 
+        internal void ToggleLabels()
+        {
+            if (Placing || dialog.gameObject.activeSelf || manager.gameObject.activeSelf) return;
+            labelsVisible = !labelsVisible;
+        }
+
         void LateUpdate()
         {
             bool overview = view.SelectedDistrict < 0 && !view.DistrictLoading;
-            markerRoot.gameObject.SetActive(overview);
+            markerRoot.gameObject.SetActive(labelsVisible && !view.DistrictLoading);
             addTown.gameObject.SetActive(overview);
             addTown.interactable = !view.IsSaving;
-            if (!overview || view.IsSaving)
-            {
-                Cancel();
-                if (!overview) return;
-            }
+            manageTowns.gameObject.SetActive(overview && view.Towns.Length > 0);
+            manageTowns.interactable = !view.IsSaving;
+            if (!overview || view.IsSaving) Cancel();
+            if (!labelsVisible || view.DistrictLoading || !view.Relief || !view.Relief.SurfaceReady) return;
             if (Placing && combiner.Active) Cancel();
             instruction.gameObject.SetActive(Placing);
             bool showCursor = Placing && Application.isFocused &&
@@ -138,7 +169,7 @@ namespace CityForge.UI
             if (showCursor && RectTransformUtility.ScreenPointToLocalPointInRectangle(hud, Input.mousePosition, null, out var local))
                 cursor.anchoredPosition = local;
 
-            if (displayedTowns != view.Towns || displayedRelief != view.Relief)
+            if (displayedTowns != view.Towns || displayedRelief != view.Relief || displayedDistrict != view.SelectedDistrict)
                 RebuildMarkers();
             foreach (var marker in markers)
             {
@@ -159,17 +190,99 @@ namespace CityForge.UI
             markers.Clear();
             displayedTowns = view.Towns;
             displayedRelief = view.Relief;
+            displayedDistrict = view.SelectedDistrict;
             if (!displayedRelief) return;
-            foreach (var town in displayedTowns)
+            var visibleTowns = displayedDistrict < 0 ? displayedTowns : view.TownsInDistrict(displayedDistrict);
+            foreach (var town in visibleTowns)
             {
-                var world = (town.position - Vector2.one * .5f) * view.MapSide;
-                var ray = new Ray(new Vector3(world.x, 20000, world.y), Vector3.down);
-                if (!displayedRelief.TryPick(ray, out _, out var point)) continue;
-
+                var point = view.TownMarkerPoint(town);
                 var root = Rect(markerRoot, town.name, Vector2.zero, Vector2.zero);
                 Label(root, "Name", town.name, new Vector2(0, 24), new Vector2(400, 24), 17);
                 Label(root, "Symbol", town.capital ? "★" : "●", Vector2.zero, new Vector2(28, 28), town.capital ? 23 : 16);
                 markers.Add((root, point));
+            }
+        }
+
+        void BuildManager()
+        {
+            manager = Rect(hud, "Manage Towns Dialog", Vector2.zero, Vector2.zero);
+            manager.anchorMin = Vector2.zero;
+            manager.anchorMax = Vector2.one;
+            manager.offsetMin = manager.offsetMax = Vector2.zero;
+            manager.gameObject.AddComponent<Image>().color = new Color(0, 0, 0, .55f);
+            var panel = Rect(manager, "Manage Towns", Vector2.zero, new Vector2(560, 244));
+            panel.gameObject.AddComponent<Image>().color = Panel;
+            Label(panel, "Heading", "Manage Towns", new Vector2(0, 88), new Vector2(520, 40), 25);
+
+            var choices = DefaultControls.CreateDropdown(new DefaultControls.Resources());
+            choices.transform.SetParent(panel, false);
+            var rect = (RectTransform)choices.transform;
+            rect.anchoredPosition = new Vector2(0, 36);
+            rect.sizeDelta = new Vector2(510, 36);
+            townChoices = choices.GetComponent<Dropdown>();
+            townChoices.captionText.font = townChoices.itemText.font = font;
+            townChoices.onValueChanged.AddListener(_ => ResetDelete());
+
+            manageStatus = Label(panel, "Town edit status", "", new Vector2(0, -20), new Vector2(514, 62), 16);
+            MakeButton(panel, "Move Town", new Vector2(-170, -82), new Vector2(158, 38), BeginMove);
+            deleteTown = MakeButton(panel, "Delete Town", new Vector2(0, -82), new Vector2(158, 38), DeleteSelectedTown);
+            MakeButton(panel, "Close", new Vector2(170, -82), new Vector2(158, 38), () => Cancel());
+            manager.gameObject.SetActive(false);
+        }
+
+        void OpenManager()
+        {
+            if (view.SelectedDistrict >= 0 || view.IsSaving || view.DistrictLoading || view.Towns.Length == 0) return;
+            Cancel();
+            if (combiner.Active) combiner.SetActive(false);
+            townChoices.ClearOptions();
+            townChoices.AddOptions(view.Towns.Select(town =>
+            {
+                int district = town.DistrictIndex(view.GridSide);
+                return $"{town.name}{(town.capital ? " (Capital)" : "")}  ·  {town.establishedYear}  ·  District {district % view.GridSide + 1}–{district / view.GridSide + 1}";
+            }).ToList());
+            townChoices.SetValueWithoutNotify(0);
+            ResetDelete();
+            cameraWasEnabled = cameraControls.enabled;
+            cameraControls.enabled = false;
+            manager.SetAsLastSibling();
+            manager.gameObject.SetActive(true);
+        }
+
+        void ResetDelete()
+        {
+            confirmDelete = false;
+            deleteTown.GetComponentInChildren<Text>().text = "Delete Town";
+            manageStatus.text = "Town edits update the map marker. Placed lots stay where they are.";
+        }
+
+        void BeginMove()
+        {
+            var town = view.Towns[townChoices.value];
+            Cancel();
+            BeginPlacement();
+            if (!Placing) return;
+            movingTown = town;
+            instruction.text = $"Choose a new spot for {town.name} · Esc to cancel";
+        }
+
+        void DeleteSelectedTown()
+        {
+            var town = view.Towns[townChoices.value];
+            if (!confirmDelete)
+            {
+                confirmDelete = true;
+                deleteTown.GetComponentInChildren<Text>().text = "Confirm Delete";
+                manageStatus.text = $"Delete {town.name}{(town.capital ? " (Capital)" : "")}?" +
+                    (town.capital && view.Towns.Length > 1 ? " The oldest remaining town becomes the capital." : "");
+                return;
+            }
+            string problem = view.DeleteTown(town);
+            if (problem != null) manageStatus.text = problem;
+            else
+            {
+                Cancel();
+                OpenManager();
             }
         }
 
@@ -194,12 +307,7 @@ namespace CityForge.UI
             year = MakeInput(panel, "Year established", new Vector2(-134, -28), new Vector2(112, 37));
             year.contentType = InputField.ContentType.IntegerNumber;
             year.characterLimit = 4;
-            var capitalButton = MakeButton(panel, "", new Vector2(74, -28), new Vector2(228, 37), () =>
-            {
-                capital = !capital;
-                UpdateCapitalLabel();
-            });
-            capitalLabel = capitalButton.GetComponentInChildren<Text>();
+            capitalLabel = Label(panel, "Capital status", "", new Vector2(74, -28), new Vector2(228, 37), 16);
             error = Label(panel, "Validation", "", new Vector2(0, -74), new Vector2(420, 38), 15);
             MakeButton(panel, "Cancel", new Vector2(-103, -120), new Vector2(176, 38), () => Cancel());
             MakeButton(panel, "Establish Town", new Vector2(103, -120), new Vector2(176, 38), Submit);
@@ -244,15 +352,20 @@ namespace CityForge.UI
 
         void UpdateCapitalLabel()
         {
-            string caption = view.Towns.Any(town => town.capital) ? "Replace capital" : "Make capital";
-            capitalLabel.text = (capital ? "[✓] " : "[ ] ") + caption;
+            capitalLabel.text = view.Towns.Length == 0 ? "Regional capital" : "";
         }
 
         void Submit()
         {
             int.TryParse(year.text, out int establishedYear);
-            string problem = view.AddTown(pendingPosition, townName.text.Trim(), establishedYear, capital);
-            if (problem == null) Cancel();
+            string problem = view.AddTown(pendingPosition, townName.text.Trim(), establishedYear);
+            if (problem == null)
+            {
+                Cancel();
+                var capital = view.Capital;
+                if (capital != null && capital.awaitingFoundersBuilding && view.Towns.Length == 1)
+                    view.RequestDistrict(capital.DistrictIndex(view.GridSide));
+            }
             else error.text = problem;
         }
 
