@@ -102,8 +102,9 @@ namespace CityForge.World
             RenderSettings.ambientSkyColor = sky * tint;
             RenderSettings.ambientEquatorColor = equator * tint;
             RenderSettings.ambientGroundColor = ground * tint;
-            RenderSettings.ambientIntensity = intensity * level;
-            RenderSettings.ambientProbe = TintDistrictProbe(probe, time);
+            const float districtFillScale = .90f;
+            RenderSettings.ambientIntensity = intensity * level * districtFillScale;
+            RenderSettings.ambientProbe = TintDistrictProbe(probe, time) * districtFillScale;
         }
 
         internal static SphericalHarmonicsL2 TintDistrictProbe(SphericalHarmonicsL2 probe, RegionTimeOfDay time)

@@ -17,7 +17,7 @@ namespace CityForge.UI
             public string requestedAnimation;
             public string assetId, idle;
             public Actor partner;
-            public bool talking;
+            public bool talking, onDeck;
             public readonly Queue<Vector2> route = new Queue<Vector2>();
 
             public Vector2 Point => new Vector2(view.localPosition.x, view.localPosition.z);
@@ -43,6 +43,7 @@ namespace CityForge.UI
         private readonly List<(IReadOnlyList<Vector2> points, bool closed)> paths =
             new List<(IReadOnlyList<Vector2>, bool)>();
         private Vector2 halfSize;
+        private LotDefinition lot;
         private float previewTime;
         private const float WalkSpeed = 1.15f;
         private const float PartnerSearchInterval = 10f;
@@ -51,6 +52,7 @@ namespace CityForge.UI
         public void BeginRefresh(LotDefinition lot, LotAssetCatalog catalog)
         {
             bound.Clear();
+            this.lot = lot;
             halfSize = lot.Size * .5f;
             obstacles.Clear();
             paths.Clear();
@@ -94,6 +96,15 @@ namespace CityForge.UI
                 view.localRotation = actor.view.localRotation;
             }
             actor.view = view;
+            var position = view.localPosition;
+            actor.onDeck = LotCharacterDeck.TryHeight(lot, item.position, out float deck);
+            if (actor.onDeck)
+            {
+                view.localPosition = new Vector3(item.position.x, deck, item.position.y);
+                actor.route.Clear();
+                actor.talking = false;
+            }
+            else view.localPosition = new Vector3(position.x, 0, position.z);
             actor.animator = view.GetComponentInChildren<Animator>();
             actor.requestedAnimation = null;
             if (!ClearRoute(actor))
@@ -148,7 +159,8 @@ namespace CityForge.UI
             {
                 var actor = pair.Value;
                 if (!actor.settings.configured) continue;
-                if (pair.Key == dragged || actor.settings.idlePercent == 100)
+                if (pair.Key == dragged || actor.onDeck || actor.settings.idlePercent == 100 ||
+                    actor.settings.scriptedBehavior != LotScriptedBehavior.None)
                 {
                     actor.Animate(actor.idle);
                     continue;

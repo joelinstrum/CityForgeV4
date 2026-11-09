@@ -203,8 +203,11 @@ namespace CityForge.World
                     for(int x=0;x<n;x++)Sample(z,x,districtHeights[z*stride,x*stride]*vertical-sea);
                 });
             }else for(int z=0;z<n;z++)for(int x=0;x<n;x++){
-                var p=origin+new Vector2(x/(float)(n-1),z/(float)(n-1))*side;
-                Sample(z,x,Height(p)-sea);
+                float gx=x/(float)(n-1)*last,gz=z/(float)(n-1)*last;
+                int ix=Mathf.Min(last-1,(int)gx),iz=Mathf.Min(last-1,(int)gz);
+                float h=Mathf.Lerp(Mathf.Lerp(districtHeights[iz,ix],districtHeights[iz,ix+1],gx-ix),
+                    Mathf.Lerp(districtHeights[iz+1,ix],districtHeights[iz+1,ix+1],gx-ix),gz-iz);
+                Sample(z,x,h*vertical-sea);
             }
 
             void Sample(int z,int x,float h)
@@ -247,7 +250,11 @@ namespace CityForge.World
         public float CoastalBeachWeight(Vector2 p)
         {
             if(coastalBeachDistances==null)return 0;
-            return CoastalBeachWeight(p,CoastalBeachDistance(p));
+            float distance = CoastalBeachDistance(p);
+            float sand = CoastalBeachWeight(p, distance);
+            if (distance < 0 || distance > 10f || !hasDeepHarbor || !Contains(p) || View.InCampClearing(p) || RoadDistance(p) <= Baseline.roadWidth)
+                return sand;
+            return Mathf.Max(sand, HarborDryCover(p, distance).x);
         }
 
         float CoastalBeachWeight(Vector2 p,float d,bool checkFootprint=true)
@@ -262,7 +269,7 @@ namespace CityForge.World
             float edge=1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(width*.28f,width,d+rough));
             float high=1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(3,7,Height(p)-View.SeaLevel));
             float steep=1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(20,35,MountainSlope(p)));
-            return edge*high*steep;
+            return edge*high*steep*(1-DeepHarborWeight(p));
         }
 
         float CoastalBeachDirtWeight(Vector2 p,float beach,float d)
@@ -277,14 +284,18 @@ namespace CityForge.World
         {
             var source=Resources.Load<TerrainLayer>("RiverBeds/RichSand");
             if(!source)throw new InvalidOperationException("Missing approved coastal sand terrain layer.");
-            yield return BuildCoastalBeachDistances(districtHeights);
+            if (coastalBeachDistances == null) yield return BuildCoastalBeachDistances(districtHeights);
             var layer=Own(Instantiate(source));layer.name="Coastal beach sand";
             layer.diffuseTexture=Own(MatteStreamSoil(source.diffuseTexture));
             layer.specular=new Color(.025f,.025f,.025f);layer.smoothness=0;layer.normalScale=.45f;
             int n=terrainData.alphamapResolution,count=terrainData.terrainLayers.Length;
             coastalBaseAlphamaps=baseMaps;
-            var maps=new float[n,n,count+1];
+            var harborLayer = CreateHarborRockLayer();
+            var harborSoilLayer = harborLayer ? CreateHarborSoilLayer() : null;
+            bool hasHarborSoil = harborSoilLayer != null;
+            var maps=new float[n,n,count+1+(harborLayer ? 1 : 0)+(hasHarborSoil ? 1 : 0)];
             var weights=new Vector2[n,n];
+            var harborCover = harborLayer ? new Vector2[n,n] : null;
             int last=coastalBeachDistances.GetLength(0)-1;
             var coordinates=new float[n];
             for(int i=0;i<n;i++)coordinates[i]=Mathf.Min(i/(float)(n-1)*last,last-.001f);
@@ -315,7 +326,15 @@ namespace CityForge.World
                         Mathf.Lerp(coastalBeachDistances[iz,ix],coastalBeachDistances[iz,ix+1],gx-ix),
                         Mathf.Lerp(coastalBeachDistances[iz+1,ix],coastalBeachDistances[iz+1,ix+1],gx-ix),gz-iz);
                     if(distance>44||distance<-side)continue;
-                    if(distance<=0){weights[z,x]=Vector2.right;wetCounts[z]++;continue;}
+                    if(distance<=0)
+                    {
+                        weights[z,x]=Vector2.right;
+                        wetCounts[z]++;
+                        if (harborCover != null && distance >= -12)
+                            harborCover[z,x] = new Vector2(HarborWetRock(origin +
+                                new Vector2(x/(float)(n-1),z/(float)(n-1))*side, distance), 0);
+                        continue;
+                    }
                     (drySamples[z]??=new System.Collections.Generic.List<(int,float)>()).Add((x,distance));
                 }
             });
@@ -328,10 +347,16 @@ namespace CityForge.World
                 foreach(var (x,distance) in drySamples[z]){
                     var p=origin+new Vector2(x/(float)(n-1),z/(float)(n-1))*side;
                     float weight=CoastalBeachWeight(p,distance,false);
-                    if(weight<=0)continue;
                     if(weight>.5f)CoastalBeachPaintedSamples++;
                     float dirt=CoastalBeachDirtWeight(p,weight,distance);
                     if(dirt>.01f)CoastalBeachDirtSamples++;
+                    if (harborCover != null && distance <= 10f && !View.InCampClearing(p) && RoadDistance(p) > Baseline.roadWidth)
+                    {
+                        var cover = HarborDryCover(p, distance);
+                        if (!hasHarborSoil) cover.y = 0;
+                        harborCover[z,x] = cover;
+                        weight += cover.x + cover.y;
+                    }
                     weights[z,x]=new Vector2(weight,dirt);
                 }
                 if(timer.ElapsedMilliseconds>12){yield return null;timer.Restart();}
@@ -339,13 +364,18 @@ namespace CityForge.World
             yield return RegionBuildSteps.ComputeRows(n,z=>{
                 for(int x=0;x<n;x++){
                     var weight=weights[z,x];
-                    if(weight.x==1&&weight.y==0){maps[z,x,count]=1;continue;}
+                    var cover = harborCover == null ? Vector2.zero : harborCover[z,x];
+                    if(weight.x==1&&weight.y==0&&cover == Vector2.zero){maps[z,x,count]=1;continue;}
                     for(int i=0;i<count;i++)maps[z,x,i]=baseMaps[z,x,i]*(1-weight.x);
                     maps[z,x,0]+=weight.y;
-                    maps[z,x,count]=weight.x-weight.y;
+                    maps[z,x,count]=Mathf.Max(0, weight.x-weight.y-cover.x-cover.y);
+                    if (harborCover != null) maps[z,x,count+1]=cover.x;
+                    if (hasHarborSoil) maps[z,x,count+2]=cover.y;
                 }
             });
-            var layers=new TerrainLayer[count+1];Array.Copy(terrainData.terrainLayers,layers,count);layers[count]=layer;
+            var layers=new TerrainLayer[maps.GetLength(2)];Array.Copy(terrainData.terrainLayers,layers,count);layers[count]=layer;
+            if (harborLayer) layers[count+1]=harborLayer;
+            if (hasHarborSoil) layers[count+2]=harborSoilLayer;
             terrainData.terrainLayers=layers;terrainData.SetAlphamaps(0,0,maps);CoastalBeachLayer=count;
         }
     }

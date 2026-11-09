@@ -184,6 +184,8 @@ venv/
 !/Assets/CityForge/Resources/Region/RegionalSlab.shader.meta
 !/Assets/CityForge/Resources/Region/DistrictHorizon.shader
 !/Assets/CityForge/Resources/Region/DistrictHorizon.shader.meta
+!/Assets/CityForge/Resources/Region/LotPathBlend.shader
+!/Assets/CityForge/Resources/Region/LotPathBlend.shader.meta
 !/Assets/CityForge/Resources/Region/TownNames.json
 !/Assets/CityForge/Resources/Region/TownNames.json.meta
 !/Assets/CityForge/Resources/Region/RegionNames.json

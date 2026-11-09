@@ -28,7 +28,7 @@ namespace CityForge.Lots
 
         public static LotLibrary Local => new LotLibrary(Path.Combine(Application.persistentDataPath, "Lots"));
 
-        public Entry[] List()
+        public Entry[] List(LotType type = LotType.Playable)
         {
             if (!Directory.Exists(folder)) return Array.Empty<Entry>();
             var entries = new List<Entry>();
@@ -38,7 +38,7 @@ namespace CityForge.Lots
                 bool legacy = filename == "Draft";
                 if (!legacy && !Guid.TryParseExact(filename, "N", out _)) continue;
                 var lot = TryRead(file);
-                if (lot == null || (!legacy && lot.id != filename) || legacy && File.Exists(PathFor(lot.id))) continue;
+                if (lot == null || lot.type != type || (!legacy && lot.id != filename) || legacy && File.Exists(PathFor(lot.id))) continue;
                 entries.Add(new Entry(lot, File.GetLastWriteTimeUtc(file)));
             }
             return entries.OrderByDescending(entry => entry.SavedUtc).ThenBy(entry => entry.Lot.id).ToArray();
@@ -46,7 +46,7 @@ namespace CityForge.Lots
 
         public LotDefinition Load(string id)
         {
-            var lot = LotDefinition.Parse(File.ReadAllText(Resolve(id)));
+            var lot = Read(Resolve(id));
             if (lot.id != id) throw new InvalidDataException("Saved lot ID does not match its file.");
             return lot;
         }
@@ -58,8 +58,19 @@ namespace CityForge.Lots
             return latest.Lot;
         }
 
-        public void Save(LotDefinition lot)
+        public LotDefinition SaveAs(LotDefinition lot, LotType type)
         {
+            if (!Enum.IsDefined(typeof(LotType), type)) throw new ArgumentOutOfRangeException(nameof(type));
+            if (type == LotType.Zoning && (!lot.zoningLayout.Configured || !lot.zoningLayout.Valid || !lot.zoningLayout.Fits(lot)))
+                throw new InvalidDataException("Zoning lots require a building slot inside the lot.");
+            if (lot.type != type)
+            {
+                lot = LotDefinition.Parse(JsonUtility.ToJson(lot));
+                lot.type = type;
+                lot.id = Guid.NewGuid().ToString("N");
+            }
+
+            lot.harborHouseScaleUpdated = true;
             Directory.CreateDirectory(folder);
             string destination = Resolve(lot.id);
             string temporary = destination + "." + Guid.NewGuid().ToString("N") + ".tmp";
@@ -73,6 +84,7 @@ namespace CityForge.Lots
             {
                 if (File.Exists(temporary)) File.Delete(temporary);
             }
+            return lot;
         }
 
         public void Delete(string id) => File.Delete(Resolve(id));
@@ -90,9 +102,61 @@ namespace CityForge.Lots
             return Path.Combine(folder, id + Extension);
         }
 
+        private static LotDefinition Read(string file)
+        {
+            var lot = LotDefinition.Parse(File.ReadAllText(file));
+            if (lot.harborHouseScaleUpdated ||
+                !lot.objects.Any(item => item.assetId == LotCharacterDeck.HarborHouse && item.scale < 1.5f))
+                return lot;
+
+            var catalog = LotAssetCatalog.Load();
+            var houseAsset = catalog ? catalog.Find(LotCharacterDeck.HarborHouse) : null;
+            if (houseAsset == null) return lot;
+
+            // Older saved copies used the original size even though new placements
+            // already use the corrected size. Grow the lot only where needed to fit.
+            var workersMoved = new HashSet<string>();
+            foreach (var house in lot.objects)
+            {
+                if (house.assetId != LotCharacterDeck.HarborHouse || house.scale >= houseAsset.DefaultPlacementScale) continue;
+                float previous = house.scale;
+                var workers = lot.objects.Where(item => !workersMoved.Contains(item.id) &&
+                    catalog.Find(item.assetId)?.IsCharacter == true && LotCharacterDeck.TryHeight(house, item.position, out _)).ToArray();
+                house.scale = houseAsset.DefaultPlacementScale;
+                var bounds = LotRuntimeLoader.Footprint(house, houseAsset);
+                foreach (var worker in workers)
+                {
+                    var asset = catalog.Find(worker.assetId);
+                    var footprint = LotRuntimeLoader.Footprint(worker, asset);
+                    var center = house.position + (worker.position - house.position) * (house.scale / previous);
+                    var moved = new Rect(center - footprint.size * .5f, footprint.size);
+                    bounds = Rect.MinMaxRect(Mathf.Min(bounds.xMin, moved.xMin), Mathf.Min(bounds.yMin, moved.yMin),
+                        Mathf.Max(bounds.xMax, moved.xMax), Mathf.Max(bounds.yMax, moved.yMax));
+                }
+                int width = TilesFor(bounds.xMin, bounds.xMax), length = TilesFor(bounds.yMin, bounds.yMax);
+                if (width > LotDefinition.MaxTiles || length > LotDefinition.MaxTiles)
+                {
+                    house.scale = previous;
+                    continue;
+                }
+                lot.width = Mathf.Max(lot.width, width);
+                lot.length = Mathf.Max(lot.length, length);
+                foreach (var worker in workers)
+                {
+                    worker.position = house.position + (worker.position - house.position) * (house.scale / previous);
+                    workersMoved.Add(worker.id);
+                }
+            }
+            lot.harborHouseScaleUpdated = true;
+            return lot;
+
+            static int TilesFor(float min, float max) =>
+                Mathf.CeilToInt((2 * Mathf.Max(-min, max) - .001f) / LotDefinition.TileMeters);
+        }
+
         private static LotDefinition TryRead(string file)
         {
-            try { return LotDefinition.Parse(File.ReadAllText(file)); }
+            try { return Read(file); }
             catch (Exception error) when (error is IOException || error is InvalidDataException || error is ArgumentException)
             {
                 return null;

@@ -14,6 +14,7 @@ namespace CityForge.Lots
         public string eraId;
         public string idleState;
         public bool IsCharacter => category == "Characters";
+        internal float DefaultPlacementScale => id == LotCharacterDeck.HarborHouse ? 1.5f : 1f;
         public GameObject prefab;
         public Vector2 footprint;
         public bool playerPlaceable;
@@ -30,6 +31,8 @@ namespace CityForge.Lots
 
     public sealed class LotAssetCatalog : ScriptableObject
     {
+        public const string StreetFurniture = "Street Furniture";
+
         public LotAssetCatalogEntry[] entries = Array.Empty<LotAssetCatalogEntry>();
 
         public static LotAssetCatalog Load()

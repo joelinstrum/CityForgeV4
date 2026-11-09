@@ -162,6 +162,20 @@ namespace CityForge.World
         {
             if(!Bounds.Overlaps(area))return false;
             foreach(var p in new[]{area.min,area.max,new Vector2(area.xMin,area.yMax),new Vector2(area.xMax,area.yMin)})if(Contains(p))return true;
+            return ContoursCross(area);
+        }
+
+        internal bool HasShorelineInside(Rect area)
+        {
+            // The ocean polygon can close around the region border. Its closing edges
+            // and a boundary that only touches the district do not define a shore here.
+            const float inset = .000001f;
+            area = Rect.MinMaxRect(area.xMin + inset, area.yMin + inset, area.xMax - inset, area.yMax - inset);
+            return Bounds.Overlaps(area) && ContoursCross(area);
+        }
+
+        private bool ContoursCross(Rect area)
+        {
             foreach(var points in Contours)for(int i=0;i<points.Length;i++){
                 var a=points[i];var b=points[(i+1)%points.Length];float lo=0,hi=1;var delta=b-a;
                 bool Clip(float origin,float direction,float min,float max){if(Mathf.Abs(direction)<1e-8f)return origin>=min&&origin<=max;float t0=(min-origin)/direction,t1=(max-origin)/direction;if(t0>t1)(t0,t1)=(t1,t0);lo=Mathf.Max(lo,t0);hi=Mathf.Min(hi,t1);return lo<=hi;}

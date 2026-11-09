@@ -27,6 +27,9 @@ namespace CityForge.UI
         private bool animationsPaused;
         private readonly LotCharacterPreview characterPreview = new LotCharacterPreview();
         private string draggedObject, selectedObject;
+        private bool movingSelection, characterFocus;
+        private readonly Dictionary<Renderer, Material[]> buildingMaterials = new();
+        private readonly Dictionary<Material, Material> fadedBuildingMaterials = new();
         private readonly Dictionary<Animator, float> pausedSpeeds = new Dictionary<Animator, float>();
         private RawImage image;
         private RenderTexture target;
@@ -44,12 +47,20 @@ namespace CityForge.UI
         private PointWireGraphic fenceGuide;
         private PointWirePath groundPath;
         private PointWireGraphic groundGuide;
+        private PointWireGraphic pathSelectionGuide;
+        private Vector3[] selectedPathEdges;
+        private bool selectedPathClosed;
+        private MeshRenderer selectedPathRenderer;
+        private int selectedPathOrder;
         private float groundPathWidth;
         private bool curveGroundPath;
         private readonly List<Vector2> roundedGuide = new List<Vector2>();
         private Func<Vector2, Vector2?> snapGroundPoint;
-        private Vector2? guideHover;
+        private Vector2? guidePointer;
+        private Camera guideEventCamera;
         private LotAssetCatalogEntry ghostAsset;
+        private LotDefinition previewLot;
+        private readonly HashSet<string> previewCharacters = new();
         private GameObject placementGhost;
         private readonly Dictionary<Material, Material> ghostMaterials = new Dictionary<Material, Material>();
         private Func<Vector2, Vector2?> ghostPosition;
@@ -61,6 +72,7 @@ namespace CityForge.UI
         {
             image = surface;
             surface.gameObject.AddComponent<RectMask2D>();
+            pathSelectionGuide = CreateGuide("Selected path outline", new Color32(255, 179, 68, 255));
             groundGuide = CreateGuide("Ground path guide", new Color32(255, 179, 68, 255));
             fenceGuide = CreateGuide("Fence path guide", new Color32(199, 118, 255, 255));
             click = handleClick;
@@ -173,30 +185,42 @@ namespace CityForge.UI
         }
 
         private readonly List<Renderer> previewTrees = new();
-        private MaterialPropertyBlock treeLighting;
-        private readonly UnityEngine.Rendering.SphericalHarmonicsL2[] treeProbe = new UnityEngine.Rendering.SphericalHarmonicsL2[1];
+        private readonly List<Renderer> previewPaths = new();
+        private MaterialPropertyBlock previewLighting;
+        private readonly UnityEngine.Rendering.SphericalHarmonicsL2[] previewProbe = new UnityEngine.Rendering.SphericalHarmonicsL2[1];
 
-        private void LightPreviewTree(Renderer renderer)
+        private void LightPreviewTree(Renderer renderer) =>
+            ApplyPreviewProbe(renderer, World.PrototypeRegionView.LotDaylightProbe());
+
+        private void LightPreviewPath(Renderer renderer)
         {
-            treeProbe[0] = World.PrototypeRegionView.LotDaylightProbe();
-            if (night)
-                treeProbe[0] *= .18f;
-            treeLighting ??= new MaterialPropertyBlock();
-            renderer.GetPropertyBlock(treeLighting);
-            treeLighting.CopySHCoefficientArraysFrom(treeProbe);
+            // The lot stage has its own sun. Keep its path fill independent of the scene's sky probe.
+            var fill = new UnityEngine.Rendering.SphericalHarmonicsL2();
+            fill.AddAmbientLight(new Color(.12f, .13f, .14f));
+            ApplyPreviewProbe(renderer, fill);
+        }
+
+        private void ApplyPreviewProbe(Renderer renderer, UnityEngine.Rendering.SphericalHarmonicsL2 probe)
+        {
+            previewProbe[0] = night ? probe * .18f : probe;
+            previewLighting ??= new MaterialPropertyBlock();
+            renderer.GetPropertyBlock(previewLighting);
+            previewLighting.CopySHCoefficientArraysFrom(previewProbe);
             renderer.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.CustomProvided;
-            renderer.SetPropertyBlock(treeLighting);
+            renderer.SetPropertyBlock(previewLighting);
         }
 
         private void ApplyLighting()
         {
             previewLight.transform.rotation = night ? Quaternion.Euler(32f, 115f, 0f) : Quaternion.Euler(50f, -35f, 0f);
             previewLight.color = night ? new Color(.59f, .73f, 1f) : Color.white;
-            previewLight.intensity = night ? .09f : 1.05f;
+            previewLight.intensity = night ? .09f : .90f;
             cameraView.backgroundColor = night ? new Color32(10, 16, 27, 255) : new Color32(28, 37, 46, 255);
             UpdateDraftingLighting();
             foreach (var tree in previewTrees)
                 if (tree) LightPreviewTree(tree);
+            foreach (var path in previewPaths)
+                if (path) LightPreviewPath(path);
         }
 
         private void UpdateDraftingLighting()
@@ -211,6 +235,8 @@ namespace CityForge.UI
         public void Refresh(LotDefinition lot, LotAssetCatalog catalog, string selected, LotPathDefinition selectedPath, bool grid, Rect? selectedTile)
         {
             selectedObject = selected;
+            previewLot = lot;
+            previewCharacters.Clear();
             characterPreview.BeginRefresh(lot, catalog);
             var pausedPoses = CapturePausedPoses();
             ClearOverlayPreview();
@@ -222,12 +248,18 @@ namespace CityForge.UI
             }
             foreach (var material in materials) Destroy(material);
             materials.Clear();
+            buildingMaterials.Clear();
+            fadedBuildingMaterials.Clear();
             foreach (var mesh in pathMeshes) Destroy(mesh);
             pathMeshes.Clear();
             pathTargets.Clear();
+            selectedPathEdges = null;
+            selectedPathRenderer = null;
+            pathSelectionGuide.gameObject.SetActive(false);
             instances.Clear();
             pickTargets.Clear();
             previewTrees.Clear();
+            previewPaths.Clear();
             selectionFootprint = null;
 
             content = new GameObject("Lot preview contents").transform;
@@ -235,8 +267,9 @@ namespace CityForge.UI
             var size = lot.Size;
             var ground = LotGroundTexture.Find(false, lot.baseTexture) ?? LotGroundTexture.Base[0];
             var groundTexture = ground.Texture;
+            var groundSize = lot.SizeForRotation(lot.baseTextureRotation);
             var groundMaterial = Material(groundTexture ? Color.white : ground.Fallback, groundTexture,
-                LotGroundTexture.Repeat(size, lot.baseTextureSpan));
+                LotGroundTexture.Repeat(groundSize, lot.baseTextureSpan));
             var surroundings = Material(new Color32(108, 108, 108, 255));
             draftingMaterial = grid
                 ? Material(Color.white, draftingTexture, Vector2.one * 96f, true)
@@ -245,12 +278,21 @@ namespace CityForge.UI
             var border = Material(new Color32(234, 215, 154, 255), unlit: true);
             Box("Drafting surface", new Vector3(0, -.92f, 0), new Vector3(768, .1f, 768), draftingMaterial);
             Box("Gray surroundings", new Vector3(0, -.38f, 0), new Vector3(size.x + 8, .35f, size.y + 8), surroundings);
-            Box("Ground", new Vector3(0, -.2f, 0), new Vector3(size.x, .4f, size.y), groundMaterial);
-            DrawGroundOverlay(lot.overlayTexture, lot.overlayTextureSpan, new Rect(-size * .5f, size), 0);
+            Box("Ground", new Vector3(0, -.2f, 0), new Vector3(groundSize.x, .4f, groundSize.y), groundMaterial)
+                .transform.localRotation = Quaternion.Euler(0, lot.baseTextureRotation * 90f, 0);
+            if (lot.IsWaterfront)
+            {
+                var water = lot.WaterfrontBounds;
+                Box("Waterfront rows", new Vector3(water.center.x, .009f, water.center.y),
+                    new Vector3(water.width, .01f, water.height), Material(new Color32(54, 112, 150, 255), unlit: true));
+            }
+            var wholeLot = new Rect(-size * .5f, size);
+            DrawGroundOverlay(lot.overlayTexture, lot.overlayTextureSpan, wholeLot, 0, rotation: lot.overlayTextureRotation,
+                visibleArea: lot.IsWaterfront ? lot.LandBounds : null);
             for (int i = 0; i < lot.overlays.Count; i++)
             {
                 var overlay = lot.overlays[i];
-                DrawGroundOverlay(overlay.texture, overlay.span, overlay.Bounds, i + 1, overlay.TextureCenter, overlay.rotation);
+                DrawGroundOverlay(overlay.texture, overlay.span, overlay.Bounds, i + 1, overlay.TextureCenter, overlay.rotation, lot.IsWaterfront ? lot.LandBounds : null);
             }
 
             if (grid)
@@ -268,6 +310,10 @@ namespace CityForge.UI
             if (selectedTile.HasValue)
                 DrawTileOutline(selectedTile.Value, Material(Color.white, unlit: true), content);
 
+            if (lot.zoningLayout.Configured)
+                DrawTileOutline(lot.zoningLayout.BuildingSlot,
+                    Material(new Color32(96, 219, 241, 255), unlit: true), content, "Variable building slot");
+
             foreach (var item in lot.objects)
             {
                 var asset = catalog ? catalog.Find(item.assetId) : null;
@@ -278,9 +324,19 @@ namespace CityForge.UI
                 instances.Add(item.id, instance.transform);
                 if (pausedPoses != null && pausedPoses.TryGetValue(item.id, out var pose))
                     RestorePausedPose(instance.transform, pose);
-                if (asset.IsCharacter) characterPreview.Bind(item, asset, instance.transform, animationsPaused);
+                if (asset.IsCharacter)
+                {
+                    previewCharacters.Add(item.id);
+                    characterPreview.Bind(item, asset, instance.transform, animationsPaused);
+                }
                 foreach (var renderer in instance.GetComponentsInChildren<Renderer>())
                 {
+                    if (asset.category == "Buildings")
+                    {
+                        var original = renderer.sharedMaterials;
+                        buildingMaterials.Add(renderer, original);
+                        if (characterFocus) renderer.sharedMaterials = FadeBuildingMaterials(original);
+                    }
                     if (asset.category == "Trees" || asset.category == "Landscaping" && asset.group == "Trees")
                     {
                         previewTrees.Add(renderer);
@@ -292,7 +348,7 @@ namespace CityForge.UI
                 if (item.id != selected) continue;
                 var footprint = LotRuntimeLoader.Footprint(item, asset);
                 var position = instance.transform.localPosition;
-                selectionFootprint = Box("Selected footprint", new Vector3(position.x, .075f, position.z),
+                selectionFootprint = Box("Selected footprint", new Vector3(position.x, position.y + .075f, position.z),
                     new Vector3(footprint.width, .025f, footprint.height), border).transform;
             }
 
@@ -300,21 +356,32 @@ namespace CityForge.UI
             {
                 var path = lot.paths[i];
                 var style = LotPathMaterial.Find(path.materialId);
-                var texture = style.Texture;
                 var mesh = LotPathSurface.BuildMesh(path, style.TileSize, .085f + i * .0005f);
                 pathMeshes.Add(mesh);
-                pathTargets.Add((path, mesh.vertices));
+                var edges = mesh.vertices;
+                pathTargets.Add((path, edges));
+                if (path == selectedPath)
+                {
+                    selectedPathEdges = edges;
+                    selectedPathClosed = path.closed;
+                    pathSelectionGuide.gameObject.SetActive(true);
+                }
                 var surface = new GameObject(style.Label + " path", typeof(MeshFilter), typeof(MeshRenderer));
                 surface.layer = PreviewLayer;
                 surface.transform.SetParent(content, false);
                 surface.GetComponent<MeshFilter>().sharedMesh = mesh;
-                var material = Material(texture ? Color.white : style.Fallback, texture, Vector2.one);
+                var material = style.CreateMaterial();
+                if (path.edgeBlend > 0 || path.recessed) LotPathMaterial.ApplyEdgeTreatment(material, path, path.edgeBlend, i);
+                materials.Add(material);
+                var renderer = surface.GetComponent<MeshRenderer>();
+                renderer.sharedMaterial = material;
                 if (path == selectedPath)
                 {
-                    material.EnableKeyword("_EMISSION");
-                    material.SetColor("_EmissionColor", new Color(.24f, .14f, .035f));
+                    selectedPathRenderer = renderer;
+                    selectedPathOrder = i;
                 }
-                surface.GetComponent<MeshRenderer>().sharedMaterial = material;
+                previewPaths.Add(renderer);
+                LightPreviewPath(renderer);
             }
 
             characterPreview.EndRefresh();
@@ -323,10 +390,40 @@ namespace CityForge.UI
             ApplyPose();
         }
 
-        private void DrawGroundOverlay(string id, int span, Rect bounds, int order, Vector2? textureCenter = null, int rotation = 0)
+        internal void PreviewPathEdgeBlend(LotPathDefinition path, int value)
+        {
+            if (!selectedPathRenderer) return;
+            var material = selectedPathRenderer.sharedMaterial;
+            if (value > 0 || path.recessed)
+            {
+                LotPathMaterial.ApplyEdgeTreatment(material, path, value, selectedPathOrder);
+            }
+            else if (material.HasProperty("_EdgeBlend"))
+            {
+                var opaque = LotPathMaterial.Find(path.materialId).CreateMaterial();
+                selectedPathRenderer.sharedMaterial = opaque;
+                materials.Remove(material);
+                materials.Add(opaque);
+                Destroy(material);
+            }
+        }
+
+        private void DrawGroundOverlay(string id, int span, Rect bounds, int order, Vector2? textureCenter = null,
+            int rotation = 0, Rect? visibleArea = null)
         {
             var texture = LotGroundTexture.Find(true, id)?.Texture;
             if (!texture) return;
+            if (visibleArea is Rect land)
+            {
+                var clipped = Rect.MinMaxRect(Mathf.Max(land.xMin, bounds.xMin), Mathf.Max(land.yMin, bounds.yMin),
+                    Mathf.Min(land.xMax, bounds.xMax), Mathf.Min(land.yMax, bounds.yMax));
+                if (clipped.width <= 0 || clipped.height <= 0) return;
+                if (clipped != bounds)
+                {
+                    textureCenter ??= bounds.center + LotGroundOverlay.FullTextureAnchor(bounds.size, span, rotation);
+                    bounds = clipped;
+                }
+            }
             var localSize = rotation % 2 == 0 ? bounds.size : new Vector2(bounds.height, bounds.width);
             var repeat = LotGroundTexture.Repeat(localSize, span);
             var material = Material(Color.white, texture, repeat);
@@ -362,7 +459,7 @@ namespace CityForge.UI
             overlayPreviewMaterial = null;
         }
 
-        private void DrawTileOutline(Rect bounds, Material material, Transform parent)
+        private void DrawTileOutline(Rect bounds, Material material, Transform parent, string name = "Tile outline")
         {
             const float height = .16f;
             const float width = .12f;
@@ -373,7 +470,7 @@ namespace CityForge.UI
 
             void Line(float x, float z, float sizeX, float sizeZ)
             {
-                var line = Box("Tile outline", new Vector3(x, height, z), new Vector3(sizeX, .01f, sizeZ), material);
+                var line = Box(name, new Vector3(x, height, z), new Vector3(sizeX, .01f, sizeZ), material);
                 line.transform.SetParent(parent, false);
             }
         }
@@ -435,14 +532,14 @@ namespace CityForge.UI
         public void ShowFencePath(PointWirePath path)
         {
             fencePath = path;
-            guideHover = null;
+            guidePointer = null;
             fenceGuide.gameObject.SetActive(path != null);
             DrawGuide(fencePath, fenceGuide, .36f, false);
         }
 
         public void ShowGroundPath(PointWirePath path, float width, bool curved, Func<Vector2, Vector2?> snapPoint)
         {
-            if (groundPath != path) guideHover = null;
+            if (groundPath != path) guidePointer = null;
             groundPath = path;
             groundPathWidth = width;
             curveGroundPath = curved;
@@ -477,7 +574,7 @@ namespace CityForge.UI
             if (asset == null) return;
             ghostAsset = asset;
             placementGhost = LotRuntimeLoader.InstantiateObject(new LotObjectDefinition { assetId = asset.id, yaw = yaw, scale = scale }, asset, stage);
-            placementGhost.name = asset.IsCharacter ? "Character placement preview" : "Building placement preview";
+            placementGhost.name = asset.label + " placement preview";
             foreach (var child in placementGhost.GetComponentsInChildren<Transform>(true))
                 child.gameObject.layer = PreviewLayer;
             foreach (var collider in placementGhost.GetComponentsInChildren<Collider>(true)) collider.enabled = false;
@@ -527,9 +624,12 @@ namespace CityForge.UI
             if (!placementGhost) return;
             Vector2? position = null;
             if (ghostPointer.HasValue && TryRay(ghostPointer.Value, ghostEventCamera, out var ray) &&
-                TryPoint(ray, out var point)) position = ghostPosition(point);
+                TryPlacementPoint(ray, ghostAsset?.IsCharacter == true, out var point)) position = ghostPosition(point);
             if (position.HasValue)
-                placementGhost.transform.localPosition = new Vector3(position.Value.x, 0, position.Value.y);
+            {
+                float height = ghostAsset?.IsCharacter == true ? CharacterDeckHeight(position.Value) : 0;
+                placementGhost.transform.localPosition = new Vector3(position.Value.x, height, position.Value.y);
+            }
             placementGhost.SetActive(position.HasValue);
         }
 
@@ -542,20 +642,23 @@ namespace CityForge.UI
                 UpdatePlacementGhost();
             }
             if ((fencePath == null || fencePath.Finished) && (groundPath == null || groundPath.Finished)) return;
-            if (TryRay(eventData.position, eventData.enterEventCamera, out var ray) && TryPoint(ray, out var point))
-                guideHover = point;
+            guidePointer = eventData.position;
+            guideEventCamera = eventData.enterEventCamera;
         }
 
         public void OnPointerExit(PointerEventData eventData)
         {
-            guideHover = null;
+            guidePointer = null;
             ghostPointer = null;
             UpdatePlacementGhost();
         }
 
-        private Vector2 ProjectGuidePoint(PointWireGraphic guide, Vector2 point)
+        private Vector2 ProjectGuidePoint(PointWireGraphic guide, Vector2 point) =>
+            ProjectGuidePoint(guide, new Vector3(point.x, .1f, point.y));
+
+        private Vector2 ProjectGuidePoint(PointWireGraphic guide, Vector3 point)
         {
-            var projected = cameraView.WorldToViewportPoint(Origin + new Vector3(point.x, .1f, point.y));
+            var projected = cameraView.WorldToViewportPoint(Origin + point);
             var rect = guide.rectTransform.rect;
             return rect.min + Vector2.Scale(rect.size, new Vector2(projected.x, projected.y));
         }
@@ -567,14 +670,21 @@ namespace CityForge.UI
             var points = path.Points;
             Vector2? end = null;
             bool loop = path.Closed;
-            if (!path.Finished && points.Count > 0 && guideHover.HasValue)
+            if (!path.Finished && guidePointer.HasValue &&
+                TryRay(guidePointer.Value, guideEventCamera, out var ray) && TryPoint(ray, out var hover))
             {
-                var hover = guideHover.Value;
                 end = ground ? snapGroundPoint(hover) : hover;
+                if (points.Count == 0)
+                {
+                    if (ground && end.HasValue) DrawPathStart(guide, end.Value, width);
+                    return;
+                }
                 if (end.HasValue && NearStart(path, guide, hover)) loop = true;
                 if (loop || end.HasValue && (end.Value - points[points.Count - 1]).sqrMagnitude < .0001f)
                     end = null;
             }
+            if (points.Count == 0) return;
+            if (ground && end.HasValue) DrawGuideMarker(guide, end.Value, 4f);
 
             IReadOnlyList<Vector2> ribbon = points;
             if (ground && curveGroundPath)
@@ -609,18 +719,55 @@ namespace CityForge.UI
             }
 
             for (int i = 0; i < points.Count; i++)
-            {
-                var p = ProjectGuidePoint(guide, points[i]);
-                float radius = i == 0 ? 5 : 3;
-                var x = Vector2.right * radius;
-                var y = Vector2.up * radius;
-                guide.Add(p - x, p + y);
-                guide.Add(p + y, p + x);
-                guide.Add(p + x, p - y);
-                guide.Add(p - y, p - x);
-            }
+                DrawGuideMarker(guide, points[i], i == 0 ? 5f : 3f);
 
             Vector2 PointAt(int i) => i < ribbon.Count ? ribbon[i] : end.GetValueOrDefault();
+        }
+
+        private void DrawPathStart(PointWireGraphic guide, Vector2 point, float width)
+        {
+            // The initial gauge spans the lot X axis until the second point defines a heading.
+            var halfWidth = Vector2.right * (width * .5f);
+            var left = ProjectGuidePoint(guide, point - halfWidth);
+            var right = ProjectGuidePoint(guide, point + halfWidth);
+            var tick = Vector2.Perpendicular((right - left).normalized) * 5f;
+            guide.Add(left, right);
+            guide.Add(left - tick, left + tick);
+            guide.Add(right - tick, right + tick);
+            DrawGuideMarker(guide, point, 5f);
+        }
+
+        private void DrawGuideMarker(PointWireGraphic guide, Vector2 point, float radius)
+        {
+            var center = ProjectGuidePoint(guide, point);
+            var x = Vector2.right * radius;
+            var y = Vector2.up * radius;
+            guide.Add(center - x, center + y);
+            guide.Add(center + y, center + x);
+            guide.Add(center + x, center - y);
+            guide.Add(center - y, center - x);
+        }
+
+        private void DrawSelectedPathOutline()
+        {
+            if (selectedPathEdges == null || selectedPathEdges.Length < 4) return;
+            var guide = pathSelectionGuide;
+            guide.Clear();
+            int count = selectedPathEdges.Length;
+            int end = selectedPathClosed ? count : count - 2;
+            for (int i = 0; i < end; i += 2)
+            {
+                int next = (i + 2) % count;
+                guide.Add(Project(i), Project(next));
+                guide.Add(Project(i + 1), Project(next + 1));
+            }
+            if (!selectedPathClosed)
+            {
+                guide.Add(Project(0), Project(1));
+                guide.Add(Project(count - 2), Project(count - 1));
+            }
+
+            Vector2 Project(int index) => ProjectGuidePoint(guide, selectedPathEdges[index]);
         }
 
         private void LateUpdate()
@@ -629,23 +776,26 @@ namespace CityForge.UI
             if (!animationsPaused)
             {
                 characterPreview.Tick(Time.unscaledDeltaTime, draggedObject);
-                if (selectionFootprint && PreviewPosition(selectedObject) is Vector2 position)
-                    selectionFootprint.localPosition = new Vector3(position.x, .075f, position.y);
+                if (selectionFootprint && selectedObject != null && instances.TryGetValue(selectedObject, out var selectedView))
+                    selectionFootprint.localPosition = selectedView.localPosition + Vector3.up * .075f;
             }
             UpdatePlacementGhost();
-            DrawGuide(fencePath, fenceGuide, .36f, false);
-            DrawGuide(groundPath, groundGuide, groundPathWidth, true);
             var rect = image.rectTransform.rect;
             var canvasScale = image.canvas.scaleFactor;
             int width = Mathf.Clamp(Mathf.RoundToInt(rect.width * canvasScale), 1, 4096);
             int height = Mathf.Clamp(Mathf.RoundToInt(rect.height * canvasScale), 1, 4096);
-            if (target && target.width == width && target.height == height) return;
-            ReleaseTarget();
-            target = new RenderTexture(width, height, 24) { name = "Lot editor viewport" };
-            cameraView.targetTexture = target;
-            cameraView.aspect = (float)width / height;
-            image.texture = target;
-            ApplyPose();
+            if (!target || target.width != width || target.height != height)
+            {
+                ReleaseTarget();
+                target = new RenderTexture(width, height, 24) { name = "Lot editor viewport" };
+                cameraView.targetTexture = target;
+                cameraView.aspect = (float)width / height;
+                image.texture = target;
+                ApplyPose();
+            }
+            DrawSelectedPathOutline();
+            DrawGuide(fencePath, fenceGuide, .36f, false);
+            DrawGuide(groundPath, groundGuide, groundPathWidth, true);
         }
 
         private void ApplyPose()
@@ -670,10 +820,11 @@ namespace CityForge.UI
         public void OnBeginDrag(PointerEventData eventData)
         {
             if (eventData.button != PointerEventData.InputButton.Left ||
-                !TryRay(eventData.pressPosition, eventData.pressEventCamera, out var ray) ||
-                !TryPoint(ray, out var point)) return;
+                !TryRay(eventData.pressPosition, eventData.pressEventCamera, out var ray)) return;
+            var hit = Pick(ray);
+            if (!TryPlacementPoint(ray, hit != null && previewCharacters.Contains(hit), out var point)) return;
             eventData.eligibleForClick = false;
-            beginMove(Pick(ray), point);
+            beginMove(hit, point);
         }
 
         public void OnEndDrag(PointerEventData eventData)
@@ -681,7 +832,11 @@ namespace CityForge.UI
             if (eventData.button == PointerEventData.InputButton.Left) endMove();
         }
 
-        public void SetDraggedObject(string id) => draggedObject = id;
+        public void SetMoveState(string id, bool moving)
+        {
+            draggedObject = id;
+            movingSelection = moving;
+        }
 
         public Vector2? PreviewPosition(string id)
         {
@@ -695,16 +850,18 @@ namespace CityForge.UI
         public void PreviewMove(string id, Vector2 point)
         {
             if (!instances.TryGetValue(id, out var instance)) return;
-            instance.localPosition = new Vector3(point.x, 0, point.y);
+            float height = previewCharacters.Contains(id) ? CharacterDeckHeight(point) : 0;
+            instance.localPosition = new Vector3(point.x, height, point.y);
             if (selectionFootprint)
-                selectionFootprint.localPosition = new Vector3(point.x, .075f, point.y);
+                selectionFootprint.localPosition = new Vector3(point.x, height + .075f, point.y);
         }
 
         public void OnDrag(PointerEventData eventData)
         {
             if (eventData.button == PointerEventData.InputButton.Left)
             {
-                if (TryRay(eventData.position, eventData.pressEventCamera, out var ray) && TryPoint(ray, out var point))
+                if (TryRay(eventData.position, eventData.pressEventCamera, out var ray) &&
+                    TryPlacementPoint(ray, draggedObject != null && previewCharacters.Contains(draggedObject), out var point))
                     updateMove(point);
                 return;
             }
@@ -742,6 +899,12 @@ namespace CityForge.UI
             return true;
         }
 
+        private float CharacterDeckHeight(Vector2 point) =>
+            LotCharacterDeck.TryHeight(previewLot, point, out float height) ? height : 0;
+
+        private bool TryPlacementPoint(Ray ray, bool character, out Vector2 point) =>
+            (character && LotCharacterDeck.TryPick(previewLot, ray, Origin, out point)) || TryPoint(ray, out point);
+
         private static bool TryPoint(Ray ray, out Vector2 point)
         {
             point = default;
@@ -751,22 +914,57 @@ namespace CityForge.UI
             return true;
         }
 
+        public void SetCharacterFocus(bool enabled)
+        {
+            if (characterFocus == enabled) return;
+            characterFocus = enabled;
+            foreach (var (renderer, original) in buildingMaterials)
+                if (renderer) renderer.sharedMaterials = enabled ? FadeBuildingMaterials(original) : original;
+        }
+
+        private Material[] FadeBuildingMaterials(Material[] original)
+        {
+            var slots = (Material[])original.Clone();
+            for (int i = 0; i < slots.Length; i++)
+            {
+                var source = slots[i];
+                if (!source || !source.HasProperty("_BaseColor")) continue;
+                if (!fadedBuildingMaterials.TryGetValue(source, out var faded))
+                {
+                    faded = new Material(source);
+                    var color = source.GetColor("_BaseColor");
+                    color.a *= .70f;
+                    faded.SetColor("_BaseColor", color);
+                    faded.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+                    LotGroundTexture.ConfigureTransparentLayer(faded, LotGroundOverlay.MaxCount + 3);
+                    fadedBuildingMaterials.Add(source, faded);
+                    materials.Add(faded);
+                }
+                slots[i] = faded;
+            }
+            return slots;
+        }
+
         private string Pick(Ray ray)
         {
             string id = null;
             float nearest = float.PositiveInfinity;
+            bool pickedCharacter = false;
             foreach (var target in pickTargets)
             {
                 if (!target.renderer || !target.renderer.enabled) continue;
+                bool character = characterFocus && previewCharacters.Contains(target.id);
+                if (pickedCharacter && !character) continue;
                 var matrix = target.renderer.transform.worldToLocalMatrix;
                 var direction = matrix.MultiplyVector(ray.direction);
                 float scale = direction.magnitude;
                 if (scale <= Mathf.Epsilon) continue;
                 var local = new Ray(matrix.MultiplyPoint3x4(ray.origin), direction / scale);
-                if (!target.renderer.localBounds.IntersectRay(local, out var distance) || distance / scale >= nearest)
-                    continue;
+                if (!target.renderer.localBounds.IntersectRay(local, out var distance) ||
+                    (character == pickedCharacter && distance / scale >= nearest)) continue;
                 nearest = distance / scale;
                 id = target.id;
+                pickedCharacter = character;
             }
             return id;
         }
@@ -804,8 +1002,11 @@ namespace CityForge.UI
 
         public void OnPointerClick(PointerEventData eventData)
         {
+            bool character = ghostAsset?.IsCharacter == true ||
+                (movingSelection && selectedObject != null && previewCharacters.Contains(selectedObject));
             if (eventData.button == PointerEventData.InputButton.Left &&
-                TryRay(eventData.position, eventData.pressEventCamera, out var ray) && TryPoint(ray, out var point))
+                TryRay(eventData.position, eventData.pressEventCamera, out var ray) &&
+                TryPlacementPoint(ray, character, out var point))
             {
                 var objectHit = Pick(ray);
                 click(point, objectHit, objectHit == null ? PickPath(ray) : null);

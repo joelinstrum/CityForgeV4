@@ -67,7 +67,7 @@ namespace CityForge.UI
         }
         public void Select(NatureTool tool)
         {
-            if(!view||view.SelectedDistrict<0||view.DistrictLoading)return;
+            if(!view||view.SelectedDistrict<0||view.DistrictLoading||view.TownConstructionVisible)return;
             bool reopen=Selected==tool&&!Popup.gameObject.activeSelf;Selected=Selected==tool&&!reopen?NatureTool.None:tool;Popup.Show(Selected);sunMenu.gameObject.SetActive(Selected==NatureTool.Sun);
             ToolSelected?.Invoke(Selected);Refresh();
         }
@@ -79,7 +79,7 @@ namespace CityForge.UI
         void Refresh()
         {
             if(!view||!root)return;bool district=view.SelectedDistrict>=0&&!view.DistrictLoading;
-            bool leaving=!district&&wasDistrict;wasDistrict=district;if(leaving)Dismiss();root.gameObject.SetActive(district);
+            bool leaving=!district&&wasDistrict;wasDistrict=district;if(leaving)Dismiss();root.gameObject.SetActive(district&&!view.TownConstructionVisible);
             var controls=view.transform.Find("RegionHud/Controls");if(controls)controls.gameObject.SetActive(!district);
             for(int i=0;i<5;i++)marks[i].gameObject.SetActive(Selected==(NatureTool)(i+1));
             var current=Weather;

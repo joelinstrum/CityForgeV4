@@ -10,17 +10,19 @@ namespace CityForge.World
     {
         private readonly List<UnityEngine.Object> assets = new();
 
-        internal void Build(LotDefinition lot, Func<Vector2, float> terrainHeight)
+        internal void Build(LotDefinition lot, Func<Vector2, float> terrainHeight, float deckHeight = 0f)
         {
             var bounds = new Rect(-lot.Size * .5f, lot.Size);
             if (!string.IsNullOrEmpty(lot.baseTexture) && LotGroundTexture.Find(false, lot.baseTexture) is { } ground)
             {
                 var texture = ground.Texture;
-                AddSurface("Lot base", Grid(bounds, p => LotGroundTexture.Repeat(p - bounds.min, lot.baseTextureSpan), .035f),
+                AddSurface("Lot base", Grid(lot.LandBounds, p => LotGroundTexture.Repeat(
+                    LotGroundOverlay.QuarterTurn(p, -lot.baseTextureRotation) + lot.SizeForRotation(lot.baseTextureRotation) * .5f,
+                    lot.baseTextureSpan), .035f),
                     texture, texture ? Color.white : ground.Fallback);
             }
 
-            AddOverlay(lot.overlayTexture, lot.overlayTextureSpan, bounds, bounds.center, 0, 0);
+            AddOverlay(lot.overlayTexture, lot.overlayTextureSpan, bounds, bounds.center, lot.overlayTextureRotation, 0);
             for (int i = 0; i < lot.overlays.Count; i++)
             {
                 var overlay = lot.overlays[i];
@@ -31,9 +33,9 @@ namespace CityForge.World
             {
                 var path = lot.paths[i];
                 var style = LotPathMaterial.Find(path.materialId);
-                var texture = style.Texture;
-                AddSurface(style.Label + " path", LotPathSurface.BuildMesh(path, style.TileSize, .10f + i * .0005f, Height),
-                    texture, texture ? Color.white : style.Fallback);
+                var material = style.CreateMaterial();
+                if (path.edgeBlend > 0 || path.recessed) LotPathMaterial.ApplyEdgeTreatment(material, path, path.edgeBlend, i);
+                AddSurface(style.Label + " path", LotPathSurface.BuildMesh(path, style.TileSize, .10f + i * .0005f, PathHeight), material);
             }
 
             float Height(Vector2 point)
@@ -42,10 +44,19 @@ namespace CityForge.World
                 return terrainHeight(new Vector2(world.x, world.z)) - transform.position.y;
             }
 
+            float PathHeight(Vector2 point)
+            {
+                float terrain = Height(point);
+                return lot.OnWaterfront(point)
+                    ? Mathf.Max(terrain, deckHeight - transform.position.y) : terrain;
+            }
+
             void AddOverlay(string id, int span, Rect area, Vector2 center, int rotation, int order)
             {
                 var texture = LotGroundTexture.Find(true, id)?.Texture;
                 if (!texture) return;
+                area = lot.ClipToLand(area);
+                if (area.width <= 0 || area.height <= 0) return;
                 AddSurface("Lot overlay", Grid(area, p => Vector2.one * .5f +
                     LotGroundTexture.Repeat(LotGroundOverlay.QuarterTurn(p - center, -rotation), span), .065f),
                     texture, Color.white, order);
@@ -83,13 +94,18 @@ namespace CityForge.World
 
         private void AddSurface(string label, Mesh mesh, Texture2D texture, Color color, int overlayOrder = -1)
         {
-            var surface = new GameObject(label, typeof(MeshFilter), typeof(MeshRenderer));
-            surface.transform.SetParent(transform, false);
             var material = new Material(Shader.Find("Universal Render Pipeline/Lit"));
             material.SetColor("_BaseColor", color);
             material.SetFloat("_Smoothness", .08f);
             if (texture) material.SetTexture("_BaseMap", texture);
             if (overlayOrder >= 0) LotGroundTexture.ConfigureTransparentLayer(material, overlayOrder);
+            AddSurface(label, mesh, material);
+        }
+
+        private void AddSurface(string label, Mesh mesh, Material material)
+        {
+            var surface = new GameObject(label, typeof(MeshFilter), typeof(MeshRenderer));
+            surface.transform.SetParent(transform, false);
             surface.GetComponent<MeshFilter>().sharedMesh = mesh;
             var renderer = surface.GetComponent<MeshRenderer>();
             renderer.sharedMaterial = material;

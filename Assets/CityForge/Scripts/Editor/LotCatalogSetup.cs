@@ -52,6 +52,9 @@ internal static class LotCatalogSetup
                 "CF_Prop_DecorativeIronFence_v01", "decorative-", 1.6f, byHeight: true, extension: ".jpg"),
             V3Fence("v3-ornate-iron-gate", "Ornate iron gate", "WroughtIronVariationsV01",
                 "CF_Prop_OrnateIronGate_v01", "gate-", 2.2f, byHeight: true, extension: ".jpg"),
+            StreetFurniture("ornate-bench", "Ornate park bench", "Seating", 1.8f),
+            StreetFurniture("simple-street-lamppost", "Simple street lamppost", "Lighting", 3.6f, byHeight: true),
+            StreetFurniture("three-lantern-lamppost", "Three-lantern lamppost", "Lighting", .9f),
             Fence("wood-fence", "Wood fence", "01"),
             Fence("meadow-fence-02", "Meadow wood fence 02", "02"),
             Fence("meadow-fence-03", "Meadow wood fence 03", "03"),
@@ -284,6 +287,31 @@ internal static class LotCatalogSetup
         material.EnableKeyword("_METALLICSPECGLOSSMAP");
         material.EnableKeyword("_OCCLUSIONMAP");
         EditorUtility.SetDirty(material);
+        return entry;
+    }
+
+    private static LotAssetCatalogEntry StreetFurniture(string id, string label, string group, float size,
+        bool byHeight = false)
+    {
+        string root = DirectoryPath + "/V3StreetFurniture/" + id + "/";
+        var model = AssetDatabase.LoadAssetAtPath<GameObject>(root + "Model.fbx");
+        var entry = Entry("v3-" + id, label, LotAssetCatalog.StreetFurniture, model, Vector2.zero, true, true);
+        entry.group = group;
+        if (!model) return entry;
+
+        var bounds = FenceBounds(model).size;
+        float dimension = byHeight ? bounds.y : Mathf.Max(bounds.x, bounds.z);
+        if (dimension <= .001f)
+        {
+            entry.prefab = null;
+            return entry;
+        }
+
+        entry.footprint = new Vector2(bounds.x, bounds.z) * (size / dimension);
+        var color = AssetDatabase.LoadAssetAtPath<Texture2D>(root + "Color.png");
+        if (!color) color = AssetDatabase.LoadAssetAtPath<Texture2D>(root + "Color.jpg");
+        string normalPath = File.Exists(root + "Normal.png") ? root + "Normal.png" : root + "Normal.jpg";
+        entry.materialOverride = GardenMaterial(root + "Prop.mat", color, normalPath, cutout: false);
         return entry;
     }
 

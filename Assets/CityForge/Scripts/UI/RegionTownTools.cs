@@ -9,7 +9,7 @@ using UnityEngine.EventSystems;
 
 namespace CityForge.UI
 {
-    public sealed class RegionTownTools : MonoBehaviour
+    public sealed partial class RegionTownTools : MonoBehaviour
     {
         static readonly Color Gold = new Color(.98f, .87f, .60f);
         static readonly Color Panel = new Color(.10f, .12f, .09f, .98f);
@@ -67,6 +67,7 @@ namespace CityForge.UI
             instruction.gameObject.SetActive(false);
             BuildDialog();
             BuildManager();
+            BuildDistrictContext();
         }
 
         void BeginPlacement()
@@ -119,6 +120,11 @@ namespace CityForge.UI
 
         public bool Cancel()
         {
+            if (DistrictContextOpen)
+            {
+                CloseDistrictContext();
+                return true;
+            }
             if (Placing)
             {
                 Placing = false;
