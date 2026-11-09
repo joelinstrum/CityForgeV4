@@ -7,7 +7,7 @@ namespace CityForge.UI
     internal enum LotGlyph
     {
         None, House, Tree, Fence, Select, Move, Rotate, Shrink, Grow, Copy, Trash,
-        Grid, Snap, View, Undo, Redo, Save, Check, Catalog, Back, Edit, Path, Lighting, Textures, Character, Landscaping
+        Grid, Snap, View, Undo, Redo, Save, Check, Catalog, Back, Edit, Path, Lighting, Textures, Character, Landscaping, StreetFurniture, RotateLot
     }
 
     [RequireComponent(typeof(CanvasRenderer))]
@@ -33,6 +33,10 @@ namespace CityForge.UI
                     Line(3, 8, 5, 3, 19, 3, 21, 8, 3, 8);
                     Line(12, 8, 12, 19); Line(12, 12, 8, 16, 5, 16);
                     Line(12, 14, 16, 18, 19, 18); Arc(12, 20, 2, 0, 360); break;
+                case LotGlyph.StreetFurniture:
+                    Line(7, 3, 17, 3); Line(12, 3, 12, 12);
+                    Line(9, 12, 7, 18, 12, 22, 17, 18, 15, 12, 9, 12);
+                    Line(7, 18, 17, 18); break;
                 case LotGlyph.Fence:
                     for (int x = 4; x <= 20; x += 8) Line(x, 4, x, 19);
                     Line(3, 9, 21, 9); Line(3, 15, 21, 15); break;
@@ -60,6 +64,8 @@ namespace CityForge.UI
                     Line(9, 6, 12, 3, 15, 6); Line(9, 18, 12, 21, 15, 18); break;
                 case LotGlyph.Rotate:
                     Arc(12, 12, 8, 68, 364); Line(10, 15, 16, 19, 16, 23); break;
+                case LotGlyph.RotateLot:
+                    Arc(12, 12, 10, 18, -304, 6); Line(13, 21, 17.6f, 17, 12, 15); break;
                 case LotGlyph.Shrink:
                 case LotGlyph.Grow:
                     Box(4, 4, 20, 20); Line(8, 12, 16, 12);
@@ -98,7 +104,7 @@ namespace CityForge.UI
 
         private void Box(float x, float y, float right, float top) => Line(x, y, right, y, right, top, x, top, x, y);
 
-        private void Arc(float x, float y, float radius, int from, int to)
+        private void Arc(float x, float y, float radius, int from, int to, float? verticalRadius = null)
         {
             var previous = Point(from);
             for (int i = 1; i <= 20; i++)
@@ -110,7 +116,7 @@ namespace CityForge.UI
             Vector2 Point(float degrees)
             {
                 float angle = degrees * Mathf.Deg2Rad;
-                return new Vector2(x + radius * Mathf.Cos(angle), y + radius * Mathf.Sin(angle));
+                return new Vector2(x + radius * Mathf.Cos(angle), y + (verticalRadius ?? radius) * Mathf.Sin(angle));
             }
         }
 

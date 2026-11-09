@@ -87,6 +87,38 @@ namespace CityForge.World
                 ((town.position - position) * MapSide).sqrMagnitude < separation * separation);
         }
 
+        private bool CanEditDistrictTown(int district, RegionTown town) =>
+            CanEditTowns && district >= 0 && district < DistrictCount &&
+            town != null && Towns.Contains(town) && town.DistrictIndex(GridSide) == district;
+
+        internal string RenameDistrictTown(int district, RegionTown town, string name)
+        {
+            if (!CanEditDistrictTown(district, town)) return "Choose a town in this district.";
+            name = name?.Trim();
+            if (!RegionTown.ValidName(name)) return "Enter a town name.";
+            if (HasNearbyNamesake(name, town.position, town)) return "A nearby town already has that name.";
+            town.name = name;
+            Towns = (RegionTown[])Towns.Clone();
+            return null;
+        }
+
+        internal string MoveCapitalToDistrictTown(int district, RegionTown town)
+        {
+            if (!CanEditDistrictTown(district, town)) return "Choose a town in this district.";
+            var previous = Capital;
+            if (previous == town) return null;
+            town.awaitingFoundersBuilding = previous?.awaitingFoundersBuilding ?? false;
+            if (previous != null)
+            {
+                previous.capital = false;
+                previous.awaitingFoundersBuilding = false;
+            }
+            town.capital = true;
+            Towns = (RegionTown[])Towns.Clone();
+            offeredFounderPicker = false;
+            return null;
+        }
+
         internal string MoveTown(RegionTown town, Vector2 position)
         {
             if (!CanEditTowns || !Towns.Contains(town)) return "This town cannot be moved right now.";

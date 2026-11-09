@@ -8,7 +8,7 @@ namespace CityForge.World
         Texture2D levels,foamLimit;
         Mesh foamMesh;
         Material foamMaterial;
-        public void Initialize(MeadowDistrictLandscape land,WaterRenderer water,float datum,bool applyLevels=true)
+        public void Initialize(MeadowDistrictLandscape land,WaterRenderer water,float datum,bool applyLevels=true,bool limitFoam=true)
         {
             bool ocean=false;foreach(var body in land.View.Data.WaterBodies)if(body.kind==WaterBodyKind.Ocean)ocean=true;
             var tidalRiver=System.Array.Find(land.View.Data.WaterBodies,body=>body.id=="tidal-river");
@@ -16,14 +16,14 @@ namespace CityForge.World
             var layout=tidalRiver!=null?new RegionTerrainLayout(land.View.CreationSettings):null;
             float mapSide=land.View.MapSide,side=land.Side;
             var origin=land.Origin;
-            const int n=513;var pixels=applyLevels?new Color[n*n]:null;var foam=ocean?new Color[n*n]:null;float low=float.PositiveInfinity,high=float.NegativeInfinity;
+            const int n=513;var pixels=applyLevels?new Color[n*n]:null;var foam=ocean&&limitFoam?new Color[n*n]:null;float low=float.PositiveInfinity,high=float.NegativeInfinity;
             for(int z=0;z<n;z++)for(int x=0;x<n;x++){
                 var p=origin+new Vector2((x+.5f)/n,(z+.5f)/n)*side;
                 var uv=p/mapSide+Vector2.one*.5f;
                 float h=applyLevels?RegionalRiverNetwork.GroundWaterLevel(land.View.Data,uv.x,uv.y):datum;
                 if(ocean)h=Mathf.Max(datum,h);
                 if(applyLevels){low=Mathf.Min(low,h);high=Mathf.Max(high,h);pixels[z*n+x]=new Color(h-datum,0,0,1);}
-                if(ocean){
+                if(foam!=null){
                     float limit=1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(datum+.5f,datum+2,h));
                     if(tidalRiver!=null){
                         float inside=riverBounds.Contains(uv)?tidalRiver.halfWidthNormalized-tidalRiver.IndexedCenterlineDistance(uv):0;
@@ -37,6 +37,7 @@ namespace CityForge.World
                             limit*=Mathf.Lerp(1,surf,river);
                         }
                     }
+                    limit*=1-land.HarborWaterWeight(p);
                     foam[z*n+x]=new Color(limit,0,0,1);
                 }
             }
@@ -51,7 +52,7 @@ namespace CityForge.World
                 var input=WaveHarmonic.Crest._Extensions.AddComponent<LevelLodInput>(gameObject,LodInputMode.Texture);
                 input.OverrideHeight=true;input.HeightRange=new Vector2(low,high);input.GetData<LevelTextureLodInputData>().Texture=levels;
             }
-            if(ocean){
+            if(foam!=null){
                 // Preserve surf at the ocean datum; elevated inland beds must not
                 // inherit ocean shoreline foam/under-terrain priming.
                 foamLimit=new Texture2D(n,n,TextureFormat.RHalf,false,true){name="Coastal inland foam limit",wrapMode=TextureWrapMode.Clamp,filterMode=FilterMode.Bilinear};

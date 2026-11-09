@@ -24,16 +24,21 @@ namespace CityForge.World
         private LotAssetThumbnails founderThumbnails;
         private CityForgeCameraController founderCameraControl;
         private bool founderCameraWasEnabled, offeredFounderPicker;
-        private LotDefinition founderDraft;
-        private WildlifeWaterAccess founderWater;
-        private Camera founderMapCamera;
-        private TerrainCollider founderGround;
-        private LineRenderer founderOutline;
-        private Material founderOutlineMaterial;
-        private Vector2 founderCenter;
-        private string founderPreviewProblem;
-        private bool founderPreviewEvaluated;
-        private readonly List<RaycastResult> founderUiHits = new();
+        private LotDefinition lotPlacementDraft;
+        private DistrictLotRecord movingDistrictLot;
+        private int lotMoveRotation;
+        private bool lotMoveDragging, lotMoveCursorActive;
+        private Vector2 lotMoveGrabOffset, lotMovePress;
+        private Texture2D lotMoveCursor;
+        private WildlifeWaterAccess lotPlacementWater;
+        private Camera lotPlacementCamera;
+        private TerrainCollider lotPlacementGround;
+        private LineRenderer lotOutline, waterfrontGuide;
+        private Material lotOutlineMaterial, waterfrontGuideMaterial;
+        private DistrictLotRecord evaluatedLotPlacement;
+        private string lotPlacementProblem;
+        private bool lotPlacementEvaluated;
+        private readonly List<RaycastResult> lotPlacementUiHits = new();
 
         private RegionTown PendingFounder => Capital is { awaitingFoundersBuilding: true } capital ? capital : null;
         private bool InCapitalDistrict(RegionTown capital) => SelectedDistrict >= 0 &&
@@ -54,7 +59,7 @@ namespace CityForge.World
                 return;
             }
             offeredFounderPicker = true;
-            CancelFounderPlacement();
+            CancelLotPlacement();
             GetComponent<NatureToolbar>()?.Dismiss();
             founderCameraControl = GetComponentInChildren<CityForgeCameraController>();
             founderCameraWasEnabled = founderCameraControl.enabled;
@@ -202,47 +207,100 @@ namespace CityForge.World
         {
             if (!founderPicker || PendingFounder == null) return;
             CloseFounderPicker();
-            founderDraft = lot;
-            founderWater = DistrictLotWater();
-            founderMapCamera = GetComponentInChildren<Camera>();
-            var ground = ApprovedDistrict && ApprovedDistrict.DisplayTerrain ? ApprovedDistrict.DisplayTerrain : terrain;
-            founderGround = ground ? ground.GetComponent<TerrainCollider>() : null;
-            founderPreviewEvaluated = false;
-            founderOutline = new GameObject("Founder lot footprint").AddComponent<LineRenderer>();
-            founderOutline.transform.SetParent(transform, false);
-            founderOutlineMaterial = new Material(Shader.Find("Universal Render Pipeline/Unlit"));
-            founderOutline.sharedMaterial = founderOutlineMaterial;
-            founderOutline.widthMultiplier = .65f;
-            founderOutline.loop = true;
-            founderOutline.shadowCastingMode = ShadowCastingMode.Off;
-            founderOutline.receiveShadows = false;
-            founderOutline.enabled = false;
+            BeginLotPlacement(lot);
         }
 
-        private void CancelFounderPlacement()
+        private void BeginLotPlacement(LotDefinition lot, DistrictLotRecord moving = null)
         {
-            if (founderDraft == null) return;
-            founderDraft = null;
-            founderWater = null;
-            founderMapCamera = null;
-            founderGround = null;
-            founderOutline.enabled = false;
-            Destroy(founderOutline.gameObject);
-            Destroy(founderOutlineMaterial);
-            founderOutline = null;
-            founderOutlineMaterial = null;
-            if (lotFeedback) lotFeedback.text = "";
+            CancelLotPlacement();
+            GetComponent<NatureToolbar>()?.Dismiss();
+            SelectDistrictLot(null);
+            lotPlacementDraft = lot;
+            movingDistrictLot = moving;
+            if (moving != null)
+            {
+                lotMoveRotation = moving.RotationSteps;
+                placeLotLabel.text = "Cancel move";
+                lotFeedback.text = "Drag the lot to move it · Esc to cancel";
+                SetLotMoveCursor(true);
+            }
+            RefreshLotFacing();
+            lotPlacementWater = DistrictLotWater();
+            lotPlacementCamera = GetComponentInChildren<Camera>();
+            var ground = ApprovedDistrict && ApprovedDistrict.DisplayTerrain ? ApprovedDistrict.DisplayTerrain : terrain;
+            lotPlacementGround = ground ? ground.GetComponent<TerrainCollider>() : null;
+            lotPlacementEvaluated = false;
+            lotOutline = new GameObject("Lot placement footprint").AddComponent<LineRenderer>();
+            lotOutline.transform.SetParent(transform, false);
+            lotOutlineMaterial = new Material(Shader.Find("Universal Render Pipeline/Unlit"));
+            lotOutline.sharedMaterial = lotOutlineMaterial;
+            lotOutline.widthMultiplier = .65f;
+            lotOutline.loop = true;
+            lotOutline.shadowCastingMode = ShadowCastingMode.Off;
+            lotOutline.receiveShadows = false;
+            lotOutline.enabled = false;
+            if (lot.IsWaterfront)
+            {
+                waterfrontGuide = new GameObject("Waterfront rows guide").AddComponent<LineRenderer>();
+                waterfrontGuide.transform.SetParent(lotOutline.transform, false);
+                waterfrontGuideMaterial = new Material(lotOutlineMaterial) { color = new Color(.25f, .78f, 1f) };
+                waterfrontGuide.sharedMaterial = waterfrontGuideMaterial;
+                waterfrontGuide.widthMultiplier = .45f;
+                waterfrontGuide.shadowCastingMode = ShadowCastingMode.Off;
+                waterfrontGuide.receiveShadows = false;
+                waterfrontGuide.enabled = false;
+            }
         }
 
-        private bool UpdateFounderPlacement()
+        private void CancelLotPlacement(bool restoreUi = true)
+        {
+            if (lotPlacementDraft == null) return;
+            var moving = movingDistrictLot;
+            if (moving != null)
+            {
+                ResetLotMoveDrag();
+                SetLotMoveCursor(false);
+            }
+            movingDistrictLot = null;
+            lotPlacementDraft = null;
+            evaluatedLotPlacement = null;
+            if (restoreUi)
+            {
+                if (moving != null && placeLotLabel) placeLotLabel.text = "Place saved lot";
+                if (moving != null && SelectedDistrict >= 0 && ActiveDistrictMembers.Contains(moving.district))
+                    SelectDistrictLot(moving);
+                RefreshLotFacing();
+                if (lotFeedback) lotFeedback.text = "";
+            }
+            lotPlacementWater = null;
+            lotPlacementCamera = null;
+            lotPlacementGround = null;
+            if (lotOutline)
+            {
+                lotOutline.enabled = false;
+                Destroy(lotOutline.gameObject);
+            }
+            Destroy(lotOutlineMaterial);
+            if (waterfrontGuideMaterial) Destroy(waterfrontGuideMaterial);
+            waterfrontGuideMaterial = null;
+            lotOutline = null;
+            waterfrontGuide = null;
+            lotOutlineMaterial = null;
+        }
+
+        private bool UpdateLotPlacement()
         {
             var capital = PendingFounder;
-            if (capital == null || !InCapitalDistrict(capital))
+            if (movingDistrictLot != null || capital == null || !InCapitalDistrict(capital))
             {
-                offeredFounderPicker = false;
+                if (movingDistrictLot == null) offeredFounderPicker = false;
                 CloseFounderPicker();
-                CancelFounderPlacement();
-                return false;
+                if (lotPlacementDraft == null) return false;
+                if ((capital != null && movingDistrictLot == null) || SelectedDistrict < 0 ||
+                    DistrictLoading || IsSaving || Input.GetKeyDown(KeyCode.Escape))
+                    CancelLotPlacement();
+                else UpdateLotCursor(null);
+                return true;
             }
             if (!offeredFounderPicker && !DistrictLoading && !IsSaving)
             {
@@ -258,85 +316,324 @@ namespace CityForge.World
                 if (Input.GetKeyDown(KeyCode.Escape)) CloseFounderPicker();
                 return true;
             }
-            if (founderDraft == null) return false;
+            if (lotPlacementDraft == null) return false;
             if (DistrictLoading || IsSaving || Input.GetKeyDown(KeyCode.Escape))
             {
-                CancelFounderPlacement();
+                CancelLotPlacement();
                 return true;
             }
-            UpdateFounderCursor(capital);
+            UpdateLotCursor(capital);
             return true;
         }
 
-        private void UpdateFounderCursor(RegionTown capital)
+        private void UpdateLotCursor(RegionTown capital)
         {
-            founderOutline.enabled = false;
             var events = EventSystem.current;
-            bool clicked = Input.GetMouseButtonDown(0);
-            if (events && clicked)
+            bool pressed = Input.GetMouseButtonDown(0);
+            bool released = Input.GetMouseButtonUp(0);
+            bool overUi = events && events.IsPointerOverGameObject();
+            if (events && (pressed || released))
             {
-                founderUiHits.Clear();
-                events.RaycastAll(new PointerEventData(events) { position = Input.mousePosition }, founderUiHits);
-                if (founderUiHits.Count > 0) return;
-            }
-            else if (events && events.IsPointerOverGameObject()) return;
-
-            if (!founderGround || !founderGround.Raycast(founderMapCamera.ScreenPointToRay(Input.mousePosition),
-                out var hit, founderMapCamera.farClipPlane)) return;
-            int district = capital.DistrictIndex(GridSide);
-            var record = new DistrictLotRecord { district = district, definition = founderDraft, rotation = lotRotation };
-            var half = LotBounds(record).size * .5f;
-            var origin = DistrictOrigin(district);
-            var local = new Vector2(hit.point.x, hit.point.z) - origin - half;
-            float tile = LotDefinition.TileMeters;
-            record.center = origin + half + new Vector2(Mathf.Round(local.x / tile), Mathf.Round(local.y / tile)) * tile;
-            var bounds = LotBounds(record);
-            var districtBounds = new Rect(origin, Vector2.one * DistrictSide);
-            if (!founderPreviewEvaluated || record.center != founderCenter)
-            {
-                founderCenter = record.center;
-                founderPreviewEvaluated = true;
-                founderPreviewProblem = bounds.xMin < districtBounds.xMin || bounds.xMax > districtBounds.xMax ||
-                    bounds.yMin < districtBounds.yMin || bounds.yMax > districtBounds.yMax
-                    ? "Stay inside the capital’s district." : LotSiteProblem(record, founderWater);
-                DrawFounderOutline(bounds);
+                lotPlacementUiHits.Clear();
+                events.RaycastAll(new PointerEventData(events) { position = Input.mousePosition }, lotPlacementUiHits);
+                overUi = lotPlacementUiHits.Count > 0;
             }
 
-            founderOutline.enabled = true;
-            lotFeedback.text = (founderPreviewProblem ?? "Click to place " + founderDraft.name) + " · Esc to cancel";
-            if (clicked && founderPreviewProblem == null) PlaceFounderLot(capital, record);
+            var mouse = (Vector2)Input.mousePosition;
+            var ray = lotPlacementCamera.ScreenPointToRay(mouse);
+            UpdateLotPointer(capital, ray, mouse, pressed, Input.GetMouseButton(0), released, overUi);
         }
 
-        private void PlaceFounderLot(RegionTown capital, DistrictLotRecord record)
+        private void UpdateLotPointer(RegionTown capital, Ray ray, Vector2 mouse,
+            bool pressed, bool held, bool released, bool overUi)
         {
-            var problem = LotSiteProblem(record, DistrictLotWater());
+            lotOutline.enabled = false;
+            if (waterfrontGuide) waterfrontGuide.enabled = false;
+            Vector2 cursor = default;
+            bool hasGround = !overUi && TryLotCursorPoint(ray, out cursor);
+            if (movingDistrictLot != null)
+            {
+                SetLotMoveCursor(!overUi);
+                if (pressed && hasGround) BeginLotMoveDrag(ray, cursor, mouse);
+                if (!lotMoveDragging || (mouse - lotMovePress).sqrMagnitude < 16f)
+                {
+                    if (!held) ResetLotMoveDrag();
+                    else if (lotMoveDragging) PreviewLotMove(movingDistrictLot);
+                    lotPlacementEvaluated = false;
+                    lotPlacementProblem = null;
+                    DrawLotOutline(movingDistrictLot);
+                    lotOutline.enabled = true;
+                    return;
+                }
+                if (!hasGround || (!released && !held))
+                {
+                    if (!held) ResetLotMoveDrag();
+                    return;
+                }
+                cursor += lotMoveGrabOffset;
+            }
+            else if (!hasGround) return;
+
+            bool fixedDistrict = capital != null || (movingDistrictLot != null && IsFoundersLot(movingDistrictLot.definition));
+            int district = capital != null ? capital.DistrictIndex(GridSide) :
+                fixedDistrict ? movingDistrictLot.district : DistrictAtWorld(new Vector3(cursor.x, 0, cursor.y));
+            if (district < 0) return;
+            var record = new DistrictLotRecord
+            {
+                id = movingDistrictLot?.id, district = district, definition = lotPlacementDraft,
+                RotationSteps = movingDistrictLot == null ? lotRotation : lotMoveRotation
+            };
+            var origin = DistrictOrigin(district);
+            record.center = SnapLotCenter(record, origin, cursor);
+            if (!fixedDistrict)
+            {
+                record.district = DistrictAtWorld(new Vector3(record.center.x, 0, record.center.y));
+                if (record.district < 0) return;
+            }
+            if (!lotPlacementEvaluated || record.center != evaluatedLotPlacement.center ||
+                record.district != evaluatedLotPlacement.district)
+            {
+                var districtBounds = new Rect(origin, Vector2.one * DistrictSide);
+                if (record.definition.IsWaterfront && movingDistrictLot == null)
+                    lotPlacementProblem = OrientWaterfrontPlacement(record, fixedDistrict, districtBounds);
+                else
+                    lotPlacementProblem = PlacementSiteProblem(record, fixedDistrict, districtBounds);
+                evaluatedLotPlacement = record;
+                lotPlacementEvaluated = true;
+                RefreshLotFacing(record);
+                DrawLotOutline(record);
+            }
+
+            lotOutline.enabled = true;
+            if (waterfrontGuide) waterfrontGuide.enabled = true;
+            if (movingDistrictLot == null)
+            {
+                lotFeedback.text = (lotPlacementProblem ?? "Click to place " + lotPlacementDraft.name) + " · Esc to cancel";
+                if (pressed && lotPlacementProblem == null) CommitLotPlacement(capital, evaluatedLotPlacement);
+                return;
+            }
+
+            lotFeedback.text = (lotPlacementProblem ?? "Release to place the lot") + " · Esc to cancel";
+            PreviewLotMove(lotPlacementProblem == null ? evaluatedLotPlacement : movingDistrictLot);
+            if (!released) return;
+            if (lotPlacementProblem == null) CommitLotPlacement(capital, evaluatedLotPlacement);
+            if (movingDistrictLot != null) ResetLotMoveDrag();
+        }
+
+        private bool TryLotCursorPoint(Ray ray, out Vector2 cursor)
+        {
+            cursor = default;
+            if (!lotPlacementGround || !lotPlacementGround.Raycast(ray, out var hit, lotPlacementCamera.farClipPlane))
+                return false;
+            cursor = new Vector2(hit.point.x, hit.point.z);
+            if (!lotPlacementDraft.IsWaterfront || !TryLotWater(cursor, hit.point.y, lotPlacementWater, out float waterHeight))
+                return true;
+            var surface = new Plane(Vector3.up, Vector3.up * waterHeight);
+            if (surface.Raycast(ray, out float distance) && distance < hit.distance)
+            {
+                var surfacePoint = ray.GetPoint(distance);
+                var point = new Vector2(surfacePoint.x, surfacePoint.z);
+                if (InActiveDistrict(point) && TryLotWater(point, LotHeight(point), lotPlacementWater, out _))
+                    cursor = point;
+            }
+            return true;
+        }
+
+        private void BeginLotMoveDrag(Ray ray, Vector2 cursor, Vector2 mouse)
+        {
+            if (!districtLotRoots.TryGetValue(movingDistrictLot, out var root) || !root) return;
+            if (!LotContains(movingDistrictLot, cursor) && !root.GetComponentsInChildren<MeshRenderer>().Any(
+                renderer => renderer.enabled && renderer.bounds.IntersectRay(ray))) return;
+
+            lotMoveDragging = true;
+            lotMovePress = mouse;
+            lotMoveGrabOffset = movingDistrictLot.center - cursor;
+            lotPlacementEvaluated = false;
+        }
+
+        private void PreviewLotMove(DistrictLotRecord candidate)
+        {
+            if (!districtLotRoots.TryGetValue(movingDistrictLot, out var root) || !root) return;
+            float lift = candidate.definition.IsWaterfront
+                ? candidate.waterfrontDeckHeight - movingDistrictLot.waterfrontDeckHeight
+                : LotHeight(candidate.center) - LotHeight(movingDistrictLot.center);
+            root.SetPositionAndRotation(new Vector3(candidate.center.x, lift, candidate.center.y),
+                Quaternion.Euler(0, candidate.FacingDegrees, 0));
+        }
+
+        private void ResetLotMoveDrag()
+        {
+            lotMoveDragging = false;
+            lotPlacementEvaluated = false;
+            if (movingDistrictLot != null && districtLotRoots.TryGetValue(movingDistrictLot, out var root) && root)
+                root.SetPositionAndRotation(new Vector3(movingDistrictLot.center.x, 0, movingDistrictLot.center.y),
+                    Quaternion.Euler(0, movingDistrictLot.FacingDegrees, 0));
+        }
+
+        private void SetLotMoveCursor(bool visible)
+        {
+            if (lotMoveCursorActive == visible) return;
+            if (visible && !lotMoveCursor)
+            {
+                const int size = 32;
+                var pixels = new Color32[size * size];
+                for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    if (Arrow(x, y)) pixels[y * size + x] = new Color32(255, 238, 188, 255);
+                    else if (Arrow(x - 1, y) || Arrow(x + 1, y) || Arrow(x, y - 1) || Arrow(x, y + 1))
+                        pixels[y * size + x] = new Color32(24, 25, 28, 255);
+                }
+                lotMoveCursor = Own(new Texture2D(size, size, TextureFormat.RGBA32, false)
+                    { name = "District lot move cursor", wrapMode = TextureWrapMode.Clamp });
+                lotMoveCursor.SetPixels32(pixels);
+                lotMoveCursor.Apply();
+            }
+            Cursor.SetCursor(visible ? lotMoveCursor : null, visible ? new Vector2(15, 16) : Vector2.zero, CursorMode.Auto);
+            lotMoveCursorActive = visible;
+
+            static bool Arrow(int x, int y)
+            {
+                int along = Mathf.Max(Mathf.Abs(x - 15), Mathf.Abs(y - 15));
+                int across = Mathf.Min(Mathf.Abs(x - 15), Mathf.Abs(y - 15));
+                return along <= 12 && (across <= 1 || (along >= 8 && across <= 12 - along));
+            }
+        }
+
+        private static Vector2 SnapLotCenter(DistrictLotRecord record, Vector2 origin, Vector2 cursor)
+        {
+            // Keep the existing footprint-aligned grid at right angles. Diagonal lots
+            // use grid intersections for their centers because their corners cannot align.
+            var offset = record.diagonalRotation ? Vector2.zero :
+                record.definition.SizeForRotation(record.rotation) * .5f;
+            float tile = record.definition.IsWaterfront ? 2f : LotDefinition.TileMeters;
+            var local = (cursor - origin - offset) / tile;
+            return origin + offset + new Vector2(Mathf.Round(local.x), Mathf.Round(local.y)) * tile;
+        }
+
+        private string PlacementSiteProblem(DistrictLotRecord record, bool founder, Rect districtBounds)
+        {
+            var bounds = new DistrictLotFootprint(record).Bounds;
+            if (founder && (bounds.xMin < districtBounds.xMin || bounds.xMax > districtBounds.xMax ||
+                bounds.yMin < districtBounds.yMin || bounds.yMax > districtBounds.yMax))
+                return "Stay inside the capital’s district.";
+            return LotSiteProblem(record, lotPlacementWater, editing: movingDistrictLot != null);
+        }
+
+        private string OrientWaterfrontPlacement(DistrictLotRecord record, bool founder, Rect districtBounds)
+        {
+            int preferred = evaluatedLotPlacement?.RotationSteps ?? lotRotation;
+            var candidates = Enumerable.Range(0, 8).Select(offset =>
+            {
+                int rotation = (preferred + offset) % 8;
+                record.RotationSteps = rotation;
+                return (rotation, score: WaterfrontFacingScore(record));
+            }).OrderByDescending(candidate => candidate.score).ToArray();
+
+            string bestProblem = null;
+            foreach (var candidate in candidates)
+            {
+                record.RotationSteps = candidate.rotation;
+                string problem = PlacementSiteProblem(record, founder, districtBounds);
+                if (problem == null) return null;
+                bestProblem ??= problem;
+            }
+            record.RotationSteps = candidates[0].rotation;
+            return bestProblem;
+        }
+
+        private int WaterfrontFacingScore(DistrictLotRecord record)
+        {
+            var half = record.definition.WaterfrontSize * .5f;
+            int score = 0;
+            for (int column = -1; column <= 1; column++)
+            {
+                float x = column * half.x * .8f;
+                if (Wet(x, half.y)) score += 2;
+                if (Wet(x, half.y + 4f)) score++;
+                if (!Wet(x, -half.y)) score++;
+            }
+            return score;
+
+            bool Wet(float x, float z)
+            {
+                var point = WaterfrontWorldPoint(record, new Vector2(x, z));
+                return InActiveDistrict(point) && TryLotWater(point, LotHeight(point), lotPlacementWater, out _);
+            }
+        }
+
+        private void CommitLotPlacement(RegionTown capital, DistrictLotRecord record)
+        {
+            var problem = LotSiteProblem(record, DistrictLotWater(), editing: movingDistrictLot != null);
             if (problem != null)
             {
-                founderWater = DistrictLotWater();
-                founderPreviewEvaluated = false;
+                lotPlacementWater = DistrictLotWater();
+                lotPlacementEvaluated = false;
+                return;
+            }
+            if (movingDistrictLot != null)
+            {
+                movingDistrictLot.center = record.center;
+                movingDistrictLot.district = record.district;
+                movingDistrictLot.RotationSteps = record.RotationSteps;
+                movingDistrictLot.waterfrontDeckHeight = record.waterfrontDeckHeight;
+                CancelLotPlacement();
+                RebuildDistrictLots();
+                selectedLotFeedback.text = "Lot moved. Save the region to keep it.";
                 return;
             }
             record.id = Guid.NewGuid().ToString("N");
             PlacedLots.Add(record);
-            capital.awaitingFoundersBuilding = false;
-            CancelFounderPlacement();
+            if (capital != null) capital.awaitingFoundersBuilding = false;
+            CancelLotPlacement();
             RebuildDistrictLots();
-            lotFeedback.text = "Founder’s Building placed. Save the region to keep it.";
+            lotFeedback.text = capital != null ? "Founder’s Building placed. Save the region to keep it." :
+                "Lot placed. Save the region to keep it.";
         }
 
-        private void DrawFounderOutline(Rect bounds)
+        private void DrawLotOutline(DistrictLotRecord record)
         {
-            founderOutlineMaterial.color = founderPreviewProblem == null ? new Color(.89f, .84f, .47f) : new Color(.93f, .34f, .23f);
-            Vector2[] corners = { bounds.min, new Vector2(bounds.xMax, bounds.yMin), bounds.max, new Vector2(bounds.xMin, bounds.yMax) };
+            lotOutlineMaterial.color = lotPlacementProblem == null ? new Color(.89f, .84f, .47f) : new Color(.93f, .34f, .23f);
+            DrawLotFootprint(record, lotOutline, lotPlacementWater);
             const int samplesPerEdge = 16;
-            founderOutline.positionCount = corners.Length * samplesPerEdge;
+            if (waterfrontGuide)
+            {
+                // The U marks the end that may extend across the shoreline.
+                float halfWidth = record.definition.WaterfrontSize.x * .5f;
+                float outer = record.definition.WaterfrontSize.y * .5f;
+                float split = record.definition.WaterfrontStart;
+                Vector2[] shore = { new(-halfWidth, split), new(-halfWidth, outer), new(halfWidth, outer), new(halfWidth, split) };
+                waterfrontGuide.positionCount = (shore.Length - 1) * samplesPerEdge + 1;
+                for (int edge = 0; edge < shore.Length - 1; edge++)
+                for (int sample = 0; sample < samplesPerEdge; sample++)
+                    waterfrontGuide.SetPosition(edge * samplesPerEdge + sample, LotOutlinePoint(record, WaterfrontWorldPoint(record,
+                        Vector2.Lerp(shore[edge], shore[edge + 1], (float)sample / samplesPerEdge)), lotPlacementWater));
+                waterfrontGuide.SetPosition(waterfrontGuide.positionCount - 1,
+                    LotOutlinePoint(record, WaterfrontWorldPoint(record, shore[^1]), lotPlacementWater));
+            }
+        }
+
+        private void DrawLotFootprint(DistrictLotRecord record, LineRenderer outline, WildlifeWaterAccess water)
+        {
+            var footprint = new DistrictLotFootprint(record);
+            var half = record.definition.Size * .5f;
+            Vector2[] corners = { -half, new Vector2(half.x, -half.y), half, new Vector2(-half.x, half.y) };
+            const int samplesPerEdge = 16;
+            outline.positionCount = corners.Length * samplesPerEdge;
             for (int edge = 0; edge < corners.Length; edge++)
             for (int sample = 0; sample < samplesPerEdge; sample++)
             {
-                var point = Vector2.Lerp(corners[edge], corners[(edge + 1) % corners.Length], (float)sample / samplesPerEdge);
-                founderOutline.SetPosition(edge * samplesPerEdge + sample,
-                    new Vector3(point.x, LotHeight(point) + .35f, point.y));
+                var local = Vector2.Lerp(corners[edge], corners[(edge + 1) % corners.Length], (float)sample / samplesPerEdge);
+                outline.SetPosition(edge * samplesPerEdge + sample, LotOutlinePoint(record, footprint.WorldPoint(local), water));
             }
+        }
+
+        private Vector3 LotOutlinePoint(DistrictLotRecord record, Vector2 point, WildlifeWaterAccess water)
+        {
+            float height = LotHeight(point);
+            if (record.definition.IsWaterfront && TryLotWater(point, height, water, out float level))
+                height = Mathf.Max(height, level);
+            return new Vector3(point.x, height + .35f, point.y);
         }
     }
 }

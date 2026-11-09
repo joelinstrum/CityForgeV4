@@ -35,7 +35,8 @@ namespace CityForge.Lots
                 remaining.Add(new LotGroundOverlay
                 {
                     texture = lot.overlayTexture, span = lot.overlayTextureSpan, min = min, max = -min,
-                    anchored = true, anchor = min + Vector2.one * (LotDefinition.TileMeters * lot.overlayTextureSpan / 2f)
+                    rotation = lot.overlayTextureRotation, anchored = true,
+                    anchor = FullTextureAnchor(lot.Size, lot.overlayTextureSpan, lot.overlayTextureRotation)
                 });
             }
             remaining.AddRange(lot.overlays);
@@ -80,6 +81,21 @@ namespace CityForge.Lots
                 }
             }
             return remaining;
+        }
+
+        internal static Vector2 FullTextureAnchor(Vector2 size, int span, int rotation)
+        {
+            var localSize = rotation % 2 == 0 ? size : new Vector2(size.y, size.x);
+            return QuarterTurn(-localSize * .5f + Vector2.one * (LotDefinition.TileMeters * span * .5f), rotation);
+        }
+
+        internal static Rect QuarterTurn(Rect area, int turns)
+        {
+            var a = QuarterTurn(area.min, turns);
+            var b = QuarterTurn(area.max, turns);
+            var min = Vector2.Min(a, b);
+            var max = Vector2.Max(a, b);
+            return Rect.MinMaxRect(min.x, min.y, max.x, max.y);
         }
 
         internal static Vector2 QuarterTurn(Vector2 point, int turns)

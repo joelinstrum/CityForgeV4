@@ -18,7 +18,7 @@ namespace CityForge.World
         private GameObject districtSelection;
         private Canvas menuCanvas;
         private Camera menuCamera;
-        internal const float DistrictSunScale = .75f;
+        internal const float DistrictSunScale = .65f;
         private const float RegionSunIntensity = 1.55f;
 
         private Terrain terrain;
@@ -47,7 +47,7 @@ namespace CityForge.World
         private readonly List<GameObject> trees = new List<GameObject>();
         private Text regionTitle, regionNote, navigationHint;
         private Image districtInfoBackground;
-        private const string OverviewNavigationHint = "Arrows / WASD: pan   ·   Wheel / + / −: zoom   ·   Q/E: rotate   ·   I: camera angle   ·   Home: reset   ·   Drag slab edge: orbit   ·   Click a district: enter   ·   L: town labels   ·   Esc: back";
+        private const string OverviewNavigationHint = "Arrows / WASD: pan   ·   Wheel / + / −: zoom   ·   Q/E: rotate   ·   I: camera angle   ·   Home: reset   ·   Drag slab edge: orbit   ·   Click: enter district   ·   Right-click: district actions   ·   L: town labels   ·   Esc: back";
         private const string DistrictNavigationHint = "I: district info   ·   Hold C + move up/down: camera tilt   ·   Wheel / + / −: zoom   ·   L: town labels   ·   Esc: back";
         private Texture2D woodlandField;
         private readonly Dictionary<Vector2Int, List<Vector2>> canopyCells = new();
@@ -312,7 +312,8 @@ namespace CityForge.World
             {
                 progress?.Invoke("Preparing region",.15f);yield return null;
                 if (snapshot?.info.lots != null) view.PlacedLots.AddRange(snapshot.info.lots);
-                if(snapshot!=null){view.TimeOfDay=snapshot.info.timeOfDay;view.RestoreSettlementData(snapshot.info);view.ForestAdditions=snapshot.info.forestAdditions??System.Array.Empty<ForestAdditionRecord>();view.ForestRemovals=snapshot.info.forestRemovals??System.Array.Empty<ForestRemovalStroke>();view.NativeCamps=snapshot.info.nativeCamps??System.Array.Empty<NativeCampRecord>();view.CombinedDistricts=snapshot.info.combinedDistricts??System.Array.Empty<CombinedDistrictGroup>();view.CreationSettings=snapshot.info.creation;view.legacyClimate=snapshot.info.climate;view.AnimalsEnabled=snapshot.info.animals;size=(RegionSize)snapshot.info.size;seed=snapshot.info.seed;regionName=snapshot.info.name;view.SavedRegionId=snapshot.info.id;view.Season=(RegionSeason)snapshot.info.season;view.TerrainHeightRange=snapshot.info.terrainHeightRange;view.LoadedMeadow=snapshot.meadow;view.LoadedMeadowDistrict=snapshot.info.meadowCacheDistrict;view.LoadedFromSnapshot=true;view.wantsMeadow=snapshot.info.meadow;view.Waterless=snapshot.info.waterless;view.Coastline=snapshot.info.coastline;view.CoastVersion=snapshot.info.coastVersion;view.MinimalRiverCrest=snapshot.info.minimalRiverCrest;view.StillWater=snapshot.info.stillWater;view.LakeWaterVersion=snapshot.info.lakeWaterVersion<0?-1:1;view.RiverBedVersion=snapshot.info.riverBedVersion;}
+                view.RestoreTownZones(snapshot?.info.townZones);
+                if(snapshot!=null){view.DeepHarborDistricts=snapshot.info.deepHarborDistricts??System.Array.Empty<int>();view.TimeOfDay=snapshot.info.timeOfDay;view.RestoreSettlementData(snapshot.info);view.ForestAdditions=snapshot.info.forestAdditions??System.Array.Empty<ForestAdditionRecord>();view.ForestRemovals=snapshot.info.forestRemovals??System.Array.Empty<ForestRemovalStroke>();view.NativeCamps=snapshot.info.nativeCamps??System.Array.Empty<NativeCampRecord>();view.CombinedDistricts=snapshot.info.combinedDistricts??System.Array.Empty<CombinedDistrictGroup>();view.CreationSettings=snapshot.info.creation;view.legacyClimate=snapshot.info.climate;view.AnimalsEnabled=snapshot.info.animals;size=(RegionSize)snapshot.info.size;seed=snapshot.info.seed;regionName=snapshot.info.name;view.SavedRegionId=snapshot.info.id;view.Season=(RegionSeason)snapshot.info.season;view.TerrainHeightRange=snapshot.info.terrainHeightRange;view.LoadedMeadow=snapshot.meadow;view.LoadedMeadowDistrict=snapshot.info.meadowCacheDistrict;view.LoadedFromSnapshot=true;view.wantsMeadow=snapshot.info.meadow;view.Waterless=snapshot.info.waterless;view.Coastline=snapshot.info.coastline;view.CoastVersion=snapshot.info.coastVersion;view.MinimalRiverCrest=snapshot.info.minimalRiverCrest;view.StillWater=snapshot.info.stillWater;view.LakeWaterVersion=snapshot.info.lakeWaterVersion<0?-1:1;view.RiverBedVersion=snapshot.info.riverBedVersion;}
                 if(view.LoadedMeadow!=null&&view.LoadedMeadowDistrict>=0)view.sessionMeadows[view.LoadedMeadowDistrict]=view.LoadedMeadow;
                 view.Size = size;
                 view.RegionName = string.IsNullOrWhiteSpace(regionName) ? "Test Region" : regionName.Trim();
@@ -632,6 +633,7 @@ namespace CityForge.World
             CameraTiltControls.Build(this,root.transform,font);
             StreamFishControls.Build(this,root.transform,font);
             gameObject.AddComponent<CityForge.UI.NatureToolbar>().Initialize(this,root.transform);
+            BuildTownConstructionMenu(root.transform, font);
             RefreshSeasonButtons();
             var diagnostics = gameObject.AddComponent<RegionPreviewDiagnostics>();
             diagnostics.Initialize(transform.Find("RegionLandCover").GetComponent<MeshRenderer>(),
@@ -740,6 +742,7 @@ namespace CityForge.World
 
         private void Update()
         {
+            RefreshTownConstruction();
             if(RemakeBlocksInput)
             {
                 if(remakeWarning&&Input.GetKeyDown(KeyCode.Escape))CloseRemakeWarning();
@@ -751,14 +754,21 @@ namespace CityForge.World
                     playerLotWorkspace.GetComponent<CityForge.UI.LotEditorPanel>().CancelInteraction();
                 return;
             }
-            if (UpdateFounderPlacement()) return;
+            if (townTools && townTools.HandleDistrictContext()) return;
+            if (UpdateLotPlacement()) return;
+            if (UpdateZoning()) return;
+            if (selectedDistrictLot != null && Input.GetKeyDown(KeyCode.Escape))
+            {
+                SelectDistrictLot(null);
+                return;
+            }
             if (townTools && !DistrictLoading && !IsSaving && Input.GetKeyDown(KeyCode.L))
                 townTools.ToggleLabels();
 
             if (SelectedDistrict >= 0 && Input.GetKeyDown(KeyCode.I))
                 SetDistrictInfoVisible(!regionTitle.gameObject.activeSelf);
 
-            if (Input.GetKeyDown(KeyCode.Escape) && !(townTools && townTools.Cancel()))
+            if (Input.GetKeyDown(KeyCode.Escape) && !DismissTownConstruction() && !(townTools && townTools.Cancel()))
             { var toolbar=GetComponent<CityForge.UI.NatureToolbar>();if(!toolbar||!toolbar.Dismiss()){if (SelectedDistrict >= 0) ShowOverview(); else ReturnToMenu();} }
             if (sampling && Time.realtimeSinceStartup >= sampleStart)
             {
@@ -783,7 +793,7 @@ namespace CityForge.World
         private bool orbitingSlab;
         private void OnGUI()
         {
-            if(SelectedDistrict>=0||RemakeBlocksInput||DistrictLoading||IsSaving){
+            if(RemakeBlocksInput||DistrictLoading||IsSaving||playerLotWorkspace||lotPlacementDraft!=null||founderPicker||zoneToolArmed){
                 orbitingSlab=false;
                 return;
             }
@@ -807,6 +817,11 @@ namespace CityForge.World
                 if (hits.Count > 0) return;
             }
             var ray = GetComponentInChildren<Camera>().ScreenPointToRay(position);
+            if (SelectedDistrict >= 0)
+            {
+                if (TrySelectDistrictLot(ray)) pointer.Use();
+                return;
+            }
             if(townTools&&townTools.HandleMapClick(ray)){
                 pointer.Use();
                 return;
@@ -913,7 +928,7 @@ namespace CityForge.World
             if(IsSaving)return;
             if(districtLoading)return;
             CloseFounderPicker();
-            CancelFounderPlacement();
+            CancelLotPlacement();
             GetComponent<RegionPreviewDiagnostics>().SetDiagnostic(false,1);
             float returnHeading=GetComponentInChildren<CityForgeCameraController>().CaptureRegionState().yaw;
             SelectedDistrict=-1;RebuildDistrictLots();if(districtSelection)districtSelection.SetActive(true);
@@ -1032,7 +1047,7 @@ namespace CityForge.World
         {
             ClosePlayerLot();
             CloseFounderPicker();
-            CancelFounderPlacement();
+            CancelLotPlacement(restoreUi: false);
             if(!skipPresentationCleanup){
                 // Stopping Editor Play mode also destroys this view without going through ReturnToMenu.
                 RestorePresentationSettings();

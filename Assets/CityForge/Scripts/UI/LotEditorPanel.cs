@@ -1,8 +1,10 @@
 using System;
 using System.IO;
+using System.Globalization;
 using System.Collections.Generic;
 using System.Linq;
 using CityForge.Lots;
+using CityForge.World;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.Events;
@@ -41,6 +43,9 @@ namespace CityForge.UI
         private readonly HashSet<Vector2Int> overlayStroke = new HashSet<Vector2Int>();
         private bool curvePath;
         private Button curveDraftCorners, curveSelectedCorners;
+        private LotEdgeBlendSlider edgeBlendSlider;
+        private Toggle recessedPathToggle;
+        private Text edgeBlendLabel;
         private RectTransform pathTools;
         private Button pathTool, finishPath, clearPath, choosePathMaterial;
         private readonly List<Button> pathWidthButtons = new List<Button>();
@@ -48,6 +53,7 @@ namespace CityForge.UI
         private readonly System.Random placementRandom = new System.Random();
         private LotEditorViewport viewport;
         private Font font;
+        private Text waterfrontRowsLabel;
         private RectTransform inspector, assetList, selectionToolbar, pathSelectionToolbar;
         private GameObject assetPopup, assetPopupOpener;
         private ScrollRect assetScroll;
@@ -106,7 +112,7 @@ namespace CityForge.UI
             lotSummary = Label(transform, "", 24, 104, 620, 16);
             lotSummary.color = new Color32(194, 202, 206, 255);
 
-            var categories = Tray("Categories", 22, 147, 614, 53);
+            var categories = Tray("Categories", 22, 147, 681, 53);
             AddCategory(categories, "", "All assets", LotGlyph.Catalog, 0);
             AddCategory(categories, "Buildings", "Buildings", LotGlyph.House, 1);
             AddCategory(categories, "Trees", "Trees", LotGlyph.Tree, 2);
@@ -123,6 +129,7 @@ namespace CityForge.UI
             overlayModeLabel.color = Gold;
             AddCategory(categories, "Landscaping", "Landscaping", LotGlyph.Landscaping, 7);
             if (!PlayerMode) AddCategory(categories, "Characters", "Characters", LotGlyph.Character, 8);
+            AddCategory(categories, LotAssetCatalog.StreetFurniture, LotAssetCatalog.StreetFurniture, LotGlyph.StreetFurniture, 9);
             pathTools = AddImage("Ground path controls", transform, PanelColor).rectTransform;
             Place(pathTools, Vector2.zero, Vector2.zero, new Vector2(22, 121), new Vector2(621, 167));
             AddOutline(pathTools.GetComponent<Image>(), Stroke);
@@ -164,7 +171,7 @@ namespace CityForge.UI
             scriptButton = Control(bar, "Script", 335, 8, 42, OpenCharacterScript, LotGlyph.Edit,
                 "Script · Configure the selected character's behavior", true);
 
-            pathSelectionToolbar = Tray("Path tools", 648, 147, 358, 53);
+            pathSelectionToolbar = Tray("Path tools", 713, 147, 358, 132);
             Control(pathSelectionToolbar, "Change material", 6, 8, 158,
                 () => OpenPathMaterialPopup(selectedPath), LotGlyph.Path, "Choose a new material for the selected path");
             curveSelectedCorners = Control(pathSelectionToolbar, "Curve corners", 170, 8, 134,
@@ -177,6 +184,41 @@ namespace CityForge.UI
                 }, description: "Toggle rounded corners for the selected path");
             Control(pathSelectionToolbar, "Delete path", 310, 8, 42, Delete, LotGlyph.Trash,
                 "Delete the entire path (Delete or Backspace)", true);
+            edgeBlendLabel = Label(pathSelectionToolbar, "Edge Blending", 10, 49, 150, 15);
+            var sliderTrack = AddImage("Edge Blending slider", pathSelectionToolbar, ButtonColor);
+            At(sliderTrack.rectTransform, 164, 56, 181, 22);
+            sliderTrack.raycastTarget = true;
+            var slideArea = new GameObject("Handle area", typeof(RectTransform)).GetComponent<RectTransform>();
+            slideArea.SetParent(sliderTrack.transform, false);
+            Place(slideArea, Vector2.zero, Vector2.one, new Vector2(8, 0), new Vector2(-8, 0));
+            var thumb = AddImage("Handle", slideArea, Gold);
+            thumb.rectTransform.sizeDelta = new Vector2(16, 0);
+            thumb.rectTransform.anchorMax = Vector2.up;
+            edgeBlendSlider = sliderTrack.gameObject.AddComponent<LotEdgeBlendSlider>();
+            edgeBlendSlider.targetGraphic = thumb;
+            edgeBlendSlider.handleRect = thumb.rectTransform;
+            edgeBlendSlider.maxValue = LotPathDefinition.MaxEdgeBlend;
+            edgeBlendSlider.wholeNumbers = true;
+            edgeBlendSlider.Commit = CommitEdgeBlend;
+            edgeBlendSlider.onValueChanged.AddListener(value =>
+            {
+                if (selectedPath == null) return;
+                int blend = (int)value;
+                viewport.PreviewPathEdgeBlend(selectedPath, blend);
+                edgeBlendLabel.text = $"Edge Blending {blend}%";
+                if (!edgeBlendSlider.PointerHeld) CommitEdgeBlend();
+            });
+
+            recessedPathToggle = Checkbox(pathSelectionToolbar, "Recess path", "Recess path · edge shadow",
+                10, 90, 335, false);
+            recessedPathToggle.onValueChanged.AddListener(value =>
+            {
+                var path = selectedPath;
+                if (path == null || PlayerMode) return;
+                if (!session.Edit(_ => path.recessed = value)) return;
+                viewport.PreviewPathEdgeBlend(path, path.edgeBlend);
+                Refresh(rebuildPreview: false);
+            });
 
             var viewTools = AddImage("Viewport controls", transform, PanelColor).rectTransform;
             Place(viewTools, Vector2.zero, Vector2.zero, new Vector2(22, 69), new Vector2(650, 115));
@@ -255,8 +297,14 @@ namespace CityForge.UI
                 Control(inspector, "Requirements & Bonus…", 15, 613, 312, OpenCapitalSettings,
                     description: "Set site requirements and a capital bonus for this lot");
 
+            if (!PlayerMode)
+                waterfrontRowsLabel = Control(inspector, "Waterfront rows", 15, 655, 312, OpenWaterfrontRows,
+                    description: "Set how many blue rows at the water-facing edge may extend over water").GetComponentInChildren<Text>();
+            if (!PlayerMode)
+                Control(inspector, "Zoning layout…", 15, 697, 312, OpenZoningLayout,
+                    description: "Set zone, density, wealth and the variable building slot");
             terrainInspector = AddImage("Terrain tile menu", inspector, ButtonColor).rectTransform;
-            At(terrainInspector, 15, PlayerMode ? 621 : 657, 312, 110);
+            At(terrainInspector, 15, PlayerMode ? 621 : 742, 312, 110);
             AddOutline(terrainInspector.GetComponent<Image>(), Stroke);
             Label(terrainInspector, "Overlay orientation", 10, 3, 290, 18).font = headingFont;
             terrainTileLabel = Label(terrainInspector, "", 10, 28, 290, 14);
@@ -277,20 +325,30 @@ namespace CityForge.UI
             else
             {
                 Control(footer, "New", 168, 3, 72, NewLot, description: "Start a new lot");
-                Control(footer, "Saved Lots", 248, 3, 99, OpenSavedLots,
+                Control(footer, "Saved Lots", 248, 3, 99, () => OpenSavedLots(LotType.Playable),
                     description: "Browse, load, or delete saved lots");
+                Control(footer, "Templates", 355, 3, 99, () => OpenSavedLots(LotType.Template),
+                    description: "Browse, load, or delete lot templates");
+                Control(footer, "Rotate Lot", 462, 3, 42, RotateLot, LotGlyph.RotateLot, "Rotate Lot", iconOnly: true);
+                Control(footer, "Zoning Lots", 512, 3, 104, () => OpenSavedLots(LotType.Zoning),
+                    description: "Browse adaptable zoning layouts");
+                var saveTemplate = Control(footer, "Save as Template", 0, 4, 152, () => Save(LotType.Template),
+                    description: "Save this layout as a reusable template");
+                PinRight((RectTransform)saveTemplate.transform, 133, 152);
             }
-            var save = Control(footer, PlayerMode ? "Apply" : "Save Lot", 0, 4, 118, Save, LotGlyph.Save,
+            var save = Control(footer, PlayerMode ? "Apply" : "Save Lot", 0, 4, 118, () => Save(!PlayerMode && session.Lot.zoningLayout.Configured ? LotType.Zoning : LotType.Playable), LotGlyph.Save,
                 PlayerMode ? "Apply landscaping to this lot" : "Save this lot to the library");
             PinRight((RectTransform)save.transform, 7, 118);
             MarkActive(save, true);
             var validate = Control(footer, "Validate", 0, 4, 103,
                 () => Refresh(Validate() ?? "No validation issues."), LotGlyph.Check, "Check asset references and lot boundaries");
-            PinRight((RectTransform)validate.transform, 133, 103);
+            int saveSpace = PlayerMode ? 0 : 160;
+            PinRight((RectTransform)validate.transform, 133 + saveSpace, 103);
             validation = Label(footer, "", 0, 4, 170, 15);
-            PinRight(validation.rectTransform, 247, 170);
-            status = Label(footer, "", 353, 4, 710, 15);
-            Place(status.rectTransform, Vector2.up, Vector2.one, new Vector2(353, -40), new Vector2(-430, -4));
+            PinRight(validation.rectTransform, 247 + saveSpace, 170);
+            int statusLeft = PlayerMode ? 353 : 625;
+            status = Label(footer, "", statusLeft, 4, 710, 15);
+            Place(status.rectTransform, Vector2.up, Vector2.one, new Vector2(statusLeft, -40), new Vector2(-430 - saveSpace, -4));
             status.horizontalOverflow = HorizontalWrapMode.Wrap;
 
             var bubble = AddImage("Tool description", transform, new Color32(9, 17, 24, 255));
@@ -392,7 +450,7 @@ namespace CityForge.UI
                 else if (Input.GetKeyDown(KeyCode.Minus) || Input.GetKeyDown(KeyCode.KeypadMinus))
                     viewport.ZoomBy(-1);
             }
-            if (!choices && ArmedPreviewAsset?.category == "Buildings" && Input.GetKeyDown(KeyCode.R))
+            if (!choices && CanRotatePlacement(ArmedPreviewAsset) && Input.GetKeyDown(KeyCode.R))
             {
                 placementYaw = (placementYaw + 90f) % 360f;
                 Refresh(rebuildPreview: false);
@@ -424,7 +482,7 @@ namespace CityForge.UI
             }
             if (!(Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl) ||
                   Input.GetKey(KeyCode.LeftCommand) || Input.GetKey(KeyCode.RightCommand))) return;
-            if (Input.GetKeyDown(KeyCode.S)) Save();
+            if (Input.GetKeyDown(KeyCode.S)) Save(session.Lot.type);
             if (Input.GetKeyDown(KeyCode.Z))
             {
                 if (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift)) session.Redo();
@@ -512,11 +570,179 @@ namespace CityForge.UI
                 Control(popup.rectTransform, value.ToString(), 5 + (i - 1) % 4 * 52, 5 + (i - 1) / 4 * 41, 46,
                     () =>
                     {
-                        session.Edit(lot => { if (changeWidth) lot.width = value; else lot.length = value; });
+                        session.Edit(lot =>
+                        {
+                            if (changeWidth) lot.width = value;
+                            else lot.length = value;
+                            lot.waterfrontRows = Mathf.Min(lot.waterfrontRows, lot.WaterfrontDepth - 1);
+                        });
                         CloseChoices();
                         Refresh();
                     });
             }
+        }
+
+        private void RotateLot()
+        {
+            if (PlayerMode || assetPopup) return;
+            if (drawingPath || drawingFence || groundPath.Finished || fencePath.Finished)
+            {
+                Refresh("Finish or clear the current sketch before rotating the lot.", rebuildPreview: false);
+                return;
+            }
+            CloseChoices();
+            StopOverlay();
+            session.Edit(lot => lot.RotateClockwise());
+            Refresh("Lot rotated 90° clockwise.");
+        }
+
+        private void OpenZoningLayout()
+        {
+            if (assetPopup || PlayerMode) return;
+            CloseChoices();
+            var lot = session.Lot;
+            var layout = lot.zoningLayout;
+            int zone = layout.Configured ? (int)layout.zone - 1 : 0;
+            int use = zone / 3, density = zone % 3, wealth = layout.Configured ? (int)layout.wealth - 1 : 0;
+            var slot = layout.Configured ? layout.BuildingSlot : new Rect(lot.LandBounds.center - lot.LandBounds.size * .25f,
+                lot.LandBounds.size * .5f);
+            var building = Selection;
+            var asset = building != null && catalog ? catalog.Find(building.assetId) : null;
+            var frame = CreateModal("Zoning layout");
+            Choices("Zone use", new[] { "Residential", "Commercial", "Industrial" }, 79, use, value => use = value);
+            Choices("Density", new[] { "1", "2", "3" }, 123, density, value => density = value);
+            Choices("Wealth", new[] { "$", "$$", "$$$" }, 167, wealth, value => wealth = value);
+            Label(frame, "Variable building slot · meters from the lot center", 20, 220, 520, 17);
+            var widthField = SlotField("Width", 20, 253, slot.width);
+            var depthField = SlotField("Depth", 285, 253, slot.height);
+            var xField = SlotField("Center X", 20, 298, slot.center.x);
+            var zField = SlotField("Center Z", 285, 298, slot.center.y);
+            bool replaceBuilding = false;
+            if (asset?.category == "Buildings")
+                Control(frame, "Use selected building as slot", 20, 348, 520, () =>
+                {
+                    var bounds = LotRuntimeLoader.Footprint(building, asset);
+                    widthField.text = MeterText(bounds.width);
+                    depthField.text = MeterText(bounds.height);
+                    xField.text = MeterText(bounds.center.x);
+                    zField.text = MeterText(bounds.center.y);
+                    replaceBuilding = true;
+                }, description: "Use this building's footprint and remove the model when applying");
+            var error = Label(frame, "", 20, 408, 520, 16);
+            At(error.rectTransform, 20, 408, 520, 66);
+            error.color = Gold;
+            Control(frame, "Apply layout", 373, 484, 167, ApplyLayout, LotGlyph.Check);
+
+            void Choices(string title, string[] labels, int y, int initial, Action<int> select)
+            {
+                Label(frame, title, 20, y, 100, 16);
+                var buttons = new Button[labels.Length];
+                for (int i = 0; i < labels.Length; i++)
+                {
+                    int value = i;
+                    buttons[i] = Control(frame, labels[i], 124 + i * 140, y, 132, () =>
+                    {
+                        select(value);
+                        for (int j = 0; j < buttons.Length; j++) MarkActive(buttons[j], j == value);
+                    });
+                    MarkActive(buttons[i], i == initial);
+                }
+            }
+
+            InputField SlotField(string title, int x, int y, float value)
+            {
+                Label(frame, title, x, y, 88, 16);
+                var field = Field(frame, "m", x + 95, y, 154);
+                field.gameObject.name = title + " input";
+                field.contentType = InputField.ContentType.DecimalNumber;
+                field.text = MeterText(value);
+                return field;
+            }
+
+            void ApplyLayout()
+            {
+                if (!ReadMeters(widthField, out float w) || !ReadMeters(depthField, out float d) ||
+                    !ReadMeters(xField, out float x) || !ReadMeters(zField, out float z))
+                {
+                    error.text = "Enter width, depth and center coordinates in meters.";
+                    return;
+                }
+                var next = new LotZoningLayout
+                {
+                    zone = (TownZone)(use * 3 + density + 1), wealth = (LotWealth)(wealth + 1),
+                    buildingCenter = new Vector2(x, z), buildingSize = new Vector2(w, d)
+                };
+                if (!next.Valid || !next.Fits(lot))
+                {
+                    error.text = "Fit the building slot inside the dry area of the lot.";
+                    return;
+                }
+                if (SlotOverlapsBuilding(lot, next, replaceBuilding ? building : null))
+                {
+                    error.text = "Move fixed buildings out of the variable slot.";
+                    return;
+                }
+                session.Edit(item =>
+                {
+                    item.zoningLayout = next;
+                    if (replaceBuilding) item.objects.Remove(building);
+                });
+                if (replaceBuilding) selected = null;
+                CloseAssetPopup();
+                Refresh($"{next.Label} zoning layout ready to save.", rebuildPreview: false);
+            }
+
+            static string MeterText(float value) => value.ToString("0.###", CultureInfo.InvariantCulture);
+            static bool ReadMeters(InputField field, out float value) =>
+                float.TryParse(field.text, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+        }
+
+        private bool SlotOverlapsBuilding(LotDefinition lot, LotZoningLayout layout, LotObjectDefinition except = null)
+        {
+            if (!catalog) return false;
+            foreach (var item in lot.objects)
+            {
+                if (item == except) continue;
+                var asset = catalog.Find(item.assetId);
+                if (asset?.category == "Buildings" && layout.BuildingSlot.Overlaps(LotRuntimeLoader.Footprint(item, asset)))
+                    return true;
+            }
+            return false;
+        }
+
+        private void OpenWaterfrontRows()
+        {
+            if (assetPopup) return;
+            CloseChoices();
+            var frame = CreateModal("Waterfront rows");
+            At(Label(frame, "Choose the blue rows that can extend over water. Keep at least one row on land.",
+                20, 65, 520, 16).rectTransform, 20, 65, 520, 58);
+            int depth = session.Lot.IsWaterfront ? session.Lot.WaterfrontDepth : session.Lot.length;
+            for (int i = 0; i < depth; i++)
+            {
+                int rows = i;
+                var option = Control(frame, rows == 0 ? "Land only" : $"{rows} {(rows == 1 ? "row" : "rows")}",
+                    20 + i % 4 * 131, 135 + i / 4 * 44, 124, () =>
+                    {
+                        session.Edit(lot =>
+                        {
+                            if (rows > 0 && !lot.IsWaterfront) lot.waterfrontSide = LotWaterfrontSide.South;
+                            lot.waterfrontRows = rows;
+                        });
+                        CloseAssetPopup();
+                    });
+                MarkActive(option, rows == session.Lot.waterfrontRows);
+            }
+            var traffic = Control(frame, "Attracts ship vessels", 20, 325, 290, () =>
+            {
+                session.Edit(lot => lot.harborVesselTraffic = lot.AttractsVessels
+                    ? HarborVesselTraffic.Disabled : HarborVesselTraffic.Enabled);
+                CloseAssetPopup();
+                OpenWaterfrontRows();
+            }, description: "Allow ambient vessel visits on a coast or major river");
+            traffic.interactable = session.Lot.IsWaterfront;
+            traffic.GetComponentInChildren<Text>().text = session.Lot.AttractsVessels
+                ? "Attracts ship vessels: On" : "Attracts ship vessels: Off";
         }
 
         private void CloseChoices()
@@ -532,9 +758,9 @@ namespace CityForge.UI
             if (assetPopup) return;
             CloseChoices();
             StopOverlay();
+            category = filter;
             Refresh(rebuildPreview: false);
             if (drawingPath) FinishGroundPath(false);
-            category = filter;
             if (filter == "Buildings")
             {
                 OpenBuildingPicker();
@@ -660,14 +886,14 @@ namespace CityForge.UI
         {
             armed = item.id;
             placementYaw = 0;
-            placementScale = 1f;
-            if (item.category == "Buildings" && varyPlacementSize)
+            placementScale = item.DefaultPlacementScale;
+            if (CanRotatePlacement(item) && varyPlacementSize)
             {
-                var preview = new LotObjectDefinition { assetId = item.id };
+                var preview = new LotObjectDefinition { assetId = item.id, scale = placementScale };
                 ApplyPlacementVariation(preview);
                 placementScale = preview.scale;
             }
-            if (item.IsCharacter || item.category == "Buildings") selected = null;
+            if (item.IsCharacter || CanRotatePlacement(item)) selected = null;
             selectedPath = null;
             moving = false;
             CloseAssetPopup();
@@ -855,13 +1081,35 @@ namespace CityForge.UI
             var character = Selection;
             if (assetPopup || !CanScript(character)) return;
             CloseChoices();
-            var settings = character.characterScript.configured ? character.characterScript : LotCharacterScript.Default;
+            var settings = character.characterScript;
+            if (!settings.configured)
+            {
+                settings.configured = true;
+                settings.idlePercent = LotCharacterScript.Default.idlePercent;
+                settings.walkTalkPercent = LotCharacterScript.Default.walkTalkPercent;
+            }
             var frame = CreateModal("Character Script");
             Label(frame, catalog.Find(character.assetId).label, 20, 49, 520, 17);
             Button randomizedTab = null, scriptedTab = null, apply = null;
             var randomized = AddImage("Randomized settings", frame, PanelColor).rectTransform;
             At(randomized, 20, 146, 520, 316);
-            var scripted = Label(frame, "Scripted sequences will be available in a future update.", 20, 152, 520, 17);
+            var scripted = AddImage("Scripted settings", frame, PanelColor).rectTransform;
+            At(scripted, 20, 146, 520, 250);
+            var dockWorker = Checkbox(scripted, "Dock Worker", "Dock Worker", 0, 0, 520,
+                settings.scriptedBehavior == LotScriptedBehavior.DockWorker);
+            var dockNote = Label(scripted, "Starts when a visiting ship is berthed at this harbor lot.",
+                8, 47, 495, 16);
+            At(dockNote.rectTransform, 8, 47, 495, 30);
+            var dockOptions = AddImage("Dock worker options", scripted, PanelColor).rectTransform;
+            At(dockOptions, 0, 80, 520, 182);
+            var delay = NumberField(dockOptions, "Arrival delay (seconds)", settings.dockArrivalDelay, 8);
+            var duration = NumberField(dockOptions, "Work time (seconds)", settings.DockWorkSeconds, 50);
+            var cargo = Checkbox(dockOptions, "Move cargo", "Move cargo on deck", 14, 92, 492, !settings.dockIdleOnly);
+            var stay = Checkbox(dockOptions, "Stay visible", "Stay visible on the lot between visits",
+                14, 137, 492, settings.dockStayVisible);
+            dockOptions.gameObject.SetActive(dockWorker.isOn);
+            dockWorker.onValueChanged.AddListener(value => dockOptions.gameObject.SetActive(value));
+            bool randomizedSelected = false;
             var error = Label(frame, "", 20, 483, 310, 15);
             error.color = Gold;
             randomizedTab = Control(frame, "Randomized", 20, 97, 256, () => SetTab(true));
@@ -879,8 +1127,8 @@ namespace CityForge.UI
                 AddOutline(actionPanels[i].GetComponent<Image>(), Stroke);
             }
 
-            var idle = PercentField(actionPanels[0], "Percent of time to be idle", settings.idlePercent);
-            var talk = PercentField(actionPanels[1], "Percent of time to talk", settings.walkTalkPercent);
+            var idle = NumberField(actionPanels[0], "Percent of time to be idle", settings.idlePercent, suffix: "%");
+            var talk = NumberField(actionPanels[1], "Percent of time to talk", settings.walkTalkPercent, suffix: "%");
             idle.onValueChanged.AddListener(_ => error.text = "");
             talk.onValueChanged.AddListener(_ => error.text = "");
             var paths = Checkbox(actionPanels[1], "Stay on paths", "Stay on paths", 14, 67, 492, settings.stayOnPaths);
@@ -893,8 +1141,9 @@ namespace CityForge.UI
             apply = Control(frame, "Apply", 445, 483, 95, ApplyScript, LotGlyph.Check);
             MarkActive(apply, true);
             ShowAction(0);
-            SetTab(true);
-            if (EventSystem.current) EventSystem.current.SetSelectedGameObject(randomizedTab.gameObject);
+            SetTab(settings.scriptedBehavior == LotScriptedBehavior.None);
+            if (EventSystem.current) EventSystem.current.SetSelectedGameObject(
+                (randomizedSelected ? randomizedTab : scriptedTab).gameObject);
 
             void SetTab(bool showRandomized)
             {
@@ -902,7 +1151,7 @@ namespace CityForge.UI
                 MarkActive(scriptedTab, !showRandomized);
                 randomized.gameObject.SetActive(showRandomized);
                 scripted.gameObject.SetActive(!showRandomized);
-                apply.interactable = showRandomized;
+                randomizedSelected = showRandomized;
                 error.text = "";
             }
 
@@ -917,13 +1166,28 @@ namespace CityForge.UI
 
             void ApplyScript()
             {
-                if (!int.TryParse(idle.text, out settings.idlePercent) ||
-                    !int.TryParse(talk.text, out settings.walkTalkPercent) || !settings.IsValid)
+                if (randomizedSelected && (!int.TryParse(idle.text, out settings.idlePercent) ||
+                    !int.TryParse(talk.text, out settings.walkTalkPercent) || !settings.IsValid))
                 {
                     error.text = "Enter percentages from 0 to 100.";
                     return;
                 }
                 if (!session.Lot.objects.Contains(character)) return;
+                settings.scriptedBehavior = !randomizedSelected && dockWorker.isOn
+                    ? LotScriptedBehavior.DockWorker : LotScriptedBehavior.None;
+                if (settings.scriptedBehavior == LotScriptedBehavior.DockWorker)
+                {
+                    if (!int.TryParse(delay.text, out int arrivalDelay) || arrivalDelay < 0 || arrivalDelay > 60 ||
+                        !int.TryParse(duration.text, out int workTime) || workTime < 1 || workTime > 120)
+                    {
+                        error.text = "Delay 0–60 s · Work 1–120 s";
+                        return;
+                    }
+                    settings.dockArrivalDelay = arrivalDelay;
+                    settings.dockWorkSeconds = workTime;
+                    settings.dockIdleOnly = !cargo.isOn;
+                    settings.dockStayVisible = stay.isOn;
+                }
                 settings.stayOnPaths = paths.isOn;
                 settings.enterBuildings = buildings.isOn;
                 settings.interactWithNpcs = interact.isOn;
@@ -934,10 +1198,10 @@ namespace CityForge.UI
             }
         }
 
-        private InputField PercentField(Transform parent, string caption, int value)
+        private InputField NumberField(Transform parent, string caption, int value, int top = 12, string suffix = "")
         {
-            Label(parent, caption, 14, 12, 400, 17);
-            var field = Field(parent, "%", 425, 12, 81);
+            Label(parent, caption, 14, top, 400, 17);
+            var field = Field(parent, suffix, 425, top, 81);
             field.gameObject.name = caption + " input";
             AddOutline(field.targetGraphic, Stroke);
             field.contentType = InputField.ContentType.IntegerNumber;
@@ -949,6 +1213,8 @@ namespace CityForge.UI
         private void OpenGroundTexturePopup()
         {
             if (assetPopup || PlayerMode) return;
+            category = "Textures";
+            Refresh(rebuildPreview: false);
             CloseChoices();
             if (drawingPath) FinishGroundPath(false);
             if (drawingFence) FinishFencePath(false);
@@ -1023,6 +1289,7 @@ namespace CityForge.UI
 
         private void EnterTerrain()
         {
+            category = "Terrain";
             terrainMode = true;
             selected = armed = dragged = null;
             selectedPath = null;
@@ -1121,7 +1388,7 @@ namespace CityForge.UI
             var frame = CreatePicker(path == null ? "Select path material" : "Change path material",
                 "Search by material or category", out var search);
             CreatePickerResults(frame, 103);
-            BindPickerSearch(search, query => PopulatePicker(query, LotPathMaterial.All, recentPathMaterials,
+            BindPickerSearch(search, query => PopulatePicker(query, LotPathMaterial.All.Where(item => item.IsAvailable).ToArray(), recentPathMaterials,
                 item => item.Id, item => item.Label, item => item.Group, item => item.Label + " " + item.Group,
                 item => item.Texture, _ => LotGlyph.Path, item => item.Id == path?.materialId,
                 item => ApplyPathMaterial(path, item), item => "Pave this path with " + item.Label,
@@ -1216,6 +1483,15 @@ namespace CityForge.UI
             recentAssets.Insert(0, id);
             if (recentAssets.Count > 32) recentAssets.RemoveAt(32);
             PlayerPrefs.SetString(RecentAssetsKey, string.Join("|", recentAssets));
+        }
+
+        private void CommitEdgeBlend()
+        {
+            var path = selectedPath;
+            if (path == null || PlayerMode) return;
+            int blend = (int)edgeBlendSlider.value;
+            if (session.Edit(_ => path.edgeBlend = blend))
+                Refresh(rebuildPreview: false);
         }
 
         private void ApplyPathMaterial(LotPathDefinition path, LotPathMaterial material)
@@ -1470,15 +1746,18 @@ namespace CityForge.UI
             get
             {
                 var asset = catalog && armed != null ? catalog.Find(armed) : null;
-                return asset?.IsCharacter == true || asset?.category == "Buildings" ? asset : null;
+                return asset?.IsCharacter == true || CanRotatePlacement(asset) ? asset : null;
             }
         }
+
+        private static bool CanRotatePlacement(LotAssetCatalogEntry asset) =>
+            asset?.category == "Buildings" || asset?.category == LotAssetCatalog.StreetFurniture;
 
         private Vector2? PreviewPlacementPosition(Vector2 point)
         {
             var asset = ArmedPreviewAsset;
             if (asset == null || !IsOnLot(point)) return null;
-            var position = SnapPoint(point);
+            var position = asset.IsCharacter ? SnapCharacter(point) : SnapPoint(point);
             var size = placementYaw % 180f == 0 ? asset.footprint : new Vector2(asset.footprint.y, asset.footprint.x);
             var half = (session.Lot.Size - size * placementScale) * .5f;
             return Mathf.Abs(position.x) <= half.x && Mathf.Abs(position.y) <= half.y ? position : (Vector2?)null;
@@ -1487,11 +1766,20 @@ namespace CityForge.UI
         private Vector2 SnapPoint(Vector2 point) =>
             snap ? new Vector2(Mathf.Round(point.x), Mathf.Round(point.y)) : point;
 
-        private Vector2 MovePosition(LotObjectDefinition item, Vector2 point)
+        private Vector2 SnapCharacter(Vector2 point)
         {
             var snapped = SnapPoint(point);
+            bool onDeck = LotCharacterDeck.TryHeight(session.Lot, point, out float height);
+            bool snappedOnDeck = LotCharacterDeck.TryHeight(session.Lot, snapped, out float snappedHeight);
+            // A narrow porch can fall between grid points. Keep the clicked deck point in that case.
+            return onDeck != snappedOnDeck || (onDeck && !Mathf.Approximately(height, snappedHeight)) ? point : snapped;
+        }
+
+        private Vector2 MovePosition(LotObjectDefinition item, Vector2 point)
+        {
             var asset = catalog ? catalog.Find(item.assetId) : null;
-            return asset?.category == "Fences" || asset?.category == "Buildings"
+            var snapped = asset?.IsCharacter == true ? SnapCharacter(point) : SnapPoint(point);
+            return asset?.category == "Fences" || CanRotatePlacement(asset)
                 ? LotFenceLayout.ClampPiece(session.Lot, item, asset, snapped)
                 : snapped;
         }
@@ -1565,7 +1853,7 @@ namespace CityForge.UI
             var footprint = LotRuntimeLoader.Footprint(item, asset).size * .5f;
             float max = Mathf.Min(1.15f, margin.x / footprint.x, margin.y / footprint.y);
             if (max < .85f) return;
-            item.scale = Mathf.Lerp(.85f, max, (float)placementRandom.NextDouble());
+            item.scale *= Mathf.Lerp(.85f, max, (float)placementRandom.NextDouble());
         }
 
         private void OnDestroy() => thumbnails.Dispose();
@@ -1693,20 +1981,21 @@ namespace CityForge.UI
             Refresh();
         }
 
-        private void OpenSavedLots()
+        private void OpenSavedLots(LotType type)
         {
             if (assetPopup) return;
             CloseChoices();
+            string itemName = type == LotType.Template ? "template" : type == LotType.Zoning ? "zoning lot" : "lot";
             LotLibrary.Entry[] entries;
-            try { entries = library.List(); }
+            try { entries = library.List(type); }
             catch (Exception error) when (error is IOException || error is UnauthorizedAccessException)
             {
-                Refresh("Could not open the saved lot library.");
+                Refresh($"Could not open the saved {itemName} library.");
                 return;
             }
 
-            var frame = CreateModal("Saved Lots");
-            var search = Field(frame, "Search saved lots", 20, 58, 520);
+            var frame = CreateModal(type == LotType.Template ? "Lot Templates" : type == LotType.Zoning ? "Zoning Lots" : "Saved Lots");
+            var search = Field(frame, $"Search saved {itemName}s", 20, 58, 520);
             var notice = Label(frame, "", 20, 437, 520, 15);
             notice.color = Gold;
             CreatePickerResults(frame, 105, 108);
@@ -1714,16 +2003,16 @@ namespace CityForge.UI
             var rows = new Dictionary<LotLibrary.Entry, Button>();
             bool confirmLoad = false, confirmDelete = false;
             Button load = null, delete = null;
-            load = Control(frame, "Load", 178, 484, 170, LoadSelected, description: "Open the selected saved lot");
+            load = Control(frame, "Load", 178, 484, 170, LoadSelected, description: $"Open the selected {itemName}");
             delete = Control(frame, "Delete", 358, 484, 182, DeleteSelected,
-                description: "Delete the selected saved lot from the library");
+                description: $"Delete the selected {itemName} from the library");
             BindPickerSearch(search, Render);
 
             void Render(string query)
             {
                 ClearPickerRows();
                 rows.Clear();
-                if (selectedEntry != null && selectedEntry.Lot.name.IndexOf(query, StringComparison.OrdinalIgnoreCase) < 0)
+                if (selectedEntry != null && !Matches(selectedEntry.Lot, query))
                 {
                     selectedEntry = null;
                     confirmLoad = confirmDelete = false;
@@ -1732,7 +2021,7 @@ namespace CityForge.UI
                 foreach (var entry in entries)
                 {
                     var lot = entry.Lot;
-                    if (lot.name.IndexOf(query, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                    if (!Matches(lot, query)) continue;
                     var row = Control(assetList, lot.name, 8, y, 504, () =>
                     {
                         selectedEntry = entry;
@@ -1745,7 +2034,9 @@ namespace CityForge.UI
                     At(title.rectTransform, 10, 1, 484, 32);
                     title.alignment = TextAnchor.MiddleLeft;
                     var details = Label(row.transform,
-                        $"{lot.width} × {lot.length} tiles  ·  Cost {lot.cost:N0}  ·  Monthly {lot.monthlyCost:N0}  ·  {entry.SavedUtc.ToLocalTime():g}",
+                        type == LotType.Zoning ? $"{lot.zoningLayout.Label}  ·  {lot.width} × {lot.length} tiles  ·  " +
+                            $"Slot {lot.zoningLayout.buildingSize.x:0.##} × {lot.zoningLayout.buildingSize.y:0.##} m" :
+                            $"{lot.width} × {lot.length} tiles  ·  Cost {lot.cost:N0}  ·  Monthly {lot.monthlyCost:N0}  ·  {entry.SavedUtc.ToLocalTime():g}",
                         10, 26, 484, 13);
                     details.color = new Color32(174, 189, 200, 255);
                     At(details.rectTransform, 10, 28, 484, 26);
@@ -1753,19 +2044,23 @@ namespace CityForge.UI
                     MarkActive(row, entry == selectedEntry);
                     y += 64;
                 }
-                if (y == 5) Label(assetList, entries.Length == 0 ? "No saved lots yet." : "No matching lots.", 12, 5, 484, 17);
+                if (y == 5) Label(assetList, entries.Length == 0 ? $"No saved {itemName}s yet." : $"No matching {itemName}s.", 12, 5, 484, 17);
                 assetList.sizeDelta = new Vector2(0, Mathf.Max(45, y + 5));
                 assetList.anchoredPosition = Vector2.zero;
                 assetScroll.StopMovement();
                 UpdateActions();
             }
 
+            bool Matches(LotDefinition lot, string query) =>
+                lot.name.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                (type == LotType.Zoning && lot.zoningLayout.Label.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0);
+
             void UpdateActions(string message = null)
             {
                 load.interactable = delete.interactable = selectedEntry != null;
                 load.GetComponentInChildren<Text>().text = confirmLoad ? "Discard and load" : "Load";
                 delete.GetComponentInChildren<Text>().text = confirmDelete ? "Confirm delete" : "Delete";
-                notice.text = message ?? (confirmDelete ? "Delete the selected lot permanently?"
+                notice.text = message ?? (confirmDelete ? $"Delete the selected {itemName} permanently?"
                     : confirmLoad ? "Discard the current unsaved changes?" : "");
             }
 
@@ -1782,6 +2077,7 @@ namespace CityForge.UI
                 try
                 {
                     var lot = library.Load(selectedEntry.Lot.id);
+                    if (lot.type != type) throw new InvalidDataException("Saved lot type changed.");
                     CloseAssetPopup();
                     OpenLot(lot);
                 }
@@ -1789,7 +2085,7 @@ namespace CityForge.UI
                     error is UnauthorizedAccessException || error is ArgumentException)
                 {
                     confirmLoad = false;
-                    UpdateActions("Could not load the selected lot.");
+                    UpdateActions($"Could not load the selected {itemName}.");
                 }
             }
 
@@ -1813,17 +2109,17 @@ namespace CityForge.UI
                     confirmDelete = false;
                     Refresh(rebuildPreview: false);
                     Render(search.text);
-                    UpdateActions("Saved lot deleted.");
+                    UpdateActions($"Saved {itemName} deleted.");
                 }
                 catch (Exception error) when (error is IOException || error is UnauthorizedAccessException)
                 {
                     confirmDelete = false;
-                    UpdateActions("Could not delete the selected lot.");
+                    UpdateActions($"Could not delete the selected {itemName}.");
                 }
             }
         }
 
-        private void Save()
+        private void Save(LotType type)
         {
             var problem = Validate();
             if (problem != null)
@@ -1839,18 +2135,27 @@ namespace CityForge.UI
                     goBack();
                     return;
                 }
-                library.Save(session.Lot);
-                session.MarkSaved();
-                Refresh("Lot saved.");
+                var saved = library.SaveAs(session.Lot, type);
+                bool copied = saved != session.Lot;
+                if (copied) session.Open(saved);
+                else session.MarkSaved();
+                Refresh(type == LotType.Template ? "Template saved." : type == LotType.Zoning ? "Zoning lot saved." :
+                    copied ? "Playable lot saved as a copy." : "Lot saved.",
+                    rebuildPreview: false);
             }
-            catch (Exception error) when (error is IOException || error is UnauthorizedAccessException)
+            catch (Exception error) when (error is IOException || error is InvalidDataException || error is UnauthorizedAccessException)
             {
-                Refresh("Could not save the lot.");
+                Refresh(type == LotType.Template ? "Could not save the template." : "Could not save the lot.");
             }
         }
 
         private string Validate()
         {
+            var zoning = session.Lot.zoningLayout;
+            if (zoning.Configured && (!zoning.Valid || !zoning.Fits(session.Lot)))
+                return "Fit the variable building slot inside the dry area of the lot.";
+            if (zoning.Configured && SlotOverlapsBuilding(session.Lot, zoning))
+                return "Move fixed buildings out of the variable slot.";
             if (!session.Lot.HasValidCapitalSettings()) return "Review the lot requirements and capital bonus.";
             foreach (var item in session.Lot.objects)
             {
@@ -1877,6 +2182,8 @@ namespace CityForge.UI
             confirmDiscard = false;
             var lot = session.Lot;
             if (selectedPath != null && !lot.paths.Contains(selectedPath)) selectedPath = null;
+            if (waterfrontRowsLabel)
+                waterfrontRowsLabel.text = lot.IsWaterfront ? $"Waterfront: {lot.waterfrontRows} {lot.waterfrontSide}  ▾" : "Waterfront: Land only  ▾";
             width.text = lot.width + "  ▾";
             length.text = lot.length + "  ▾";
             nameField.SetTextWithoutNotify(lot.name);
@@ -1891,7 +2198,8 @@ namespace CityForge.UI
             lotSubcategory.interactable = !PlayerMode && parentCategory != null;
             snapLabel.text = snap ? "Snap: On" : "Snap: Off";
             gridLabel.text = grid ? "Grid: On" : "Grid: Off";
-            lotTitle.text = lot.name;
+            lotTitle.text = lot.type == LotType.Template ? lot.name + "  ·  Template" :
+                lot.zoningLayout.Configured ? lot.name + "  ·  " + lot.zoningLayout.Label : lot.name;
             lotSummary.text = $"{lot.width} × {lot.length} tiles  ·  {lot.objects.Count} objects" + (session.Dirty ? "  ·  Unsaved changes" : "");
             var item = Selection;
             bool hasSelection = item != null;
@@ -1899,6 +2207,13 @@ namespace CityForge.UI
             if (!hasSelection) moving = false;
             selectionToolbar.gameObject.SetActive(hasSelection);
             pathSelectionToolbar.gameObject.SetActive(selectedPath != null);
+            recessedPathToggle.SetIsOnWithoutNotify(selectedPath?.recessed == true);
+            if (!edgeBlendSlider.PointerHeld)
+            {
+                int blend = selectedPath?.edgeBlend ?? 0;
+                edgeBlendSlider.SetValueWithoutNotify(blend);
+                edgeBlendLabel.text = $"Edge Blending {blend}%";
+            }
             MarkActive(curveSelectedCorners, selectedPath?.curved == true);
             MarkActive(curveDraftCorners, curvePath);
             MarkActive(selectTool, !moving && armed == null);
@@ -1941,14 +2256,15 @@ namespace CityForge.UI
                 : drawingFence ? "Click to add markers · Click the first marker to close · Esc to keep open"
                 : groundPath.Finished ? "Select path material to pave the amber ribbon"
                 : fencePath.Finished ? "Choose a fence to fill the purple path · Esc to discard the guide"
-                : moving ? "Click to move" : ArmedPreviewAsset?.category == "Buildings" ? "Click to place · R to rotate · Esc to cancel"
+                : moving ? "Click to move" : CanRotatePlacement(ArmedPreviewAsset) ? "Click to place · R to rotate · Esc to cancel"
                 : armed != null ? "Click to place" : "Drag an asset to move · Right drag to orbit · Scroll to zoom";
             var issue = Validate();
             validation.text = issue == null ? "No validation issues" : "Check lot boundaries / assets";
             validation.color = issue == null ? new Color32(142, 211, 141, 255) : Gold;
             status.text = $"{lot.width} × {lot.length}  |  {lot.objects.Count} objects" +
                 (session.Dirty ? "  |  Unsaved" : "") + "  |  " + (message ?? (drawingPath || groundPath.Finished || drawingFence || fencePath.Finished ? hint : issue ?? hint));
-            viewport.SetDraggedObject(dragged);
+            viewport.SetCharacterFocus(category == "Characters");
+            viewport.SetMoveState(dragged, moving);
             viewport.SetPlacementGhost(assetPopup ? null : ArmedPreviewAsset, PreviewPlacementPosition, placementYaw, placementScale);
             viewport.ShowGroundPath(drawingPath || groundPath.Finished ? groundPath : null, pathWidth, curvePath, GroundPathPoint);
             if (rebuildPreview) viewport.Refresh(lot, catalog, selected, selectedPath, grid,
@@ -2005,7 +2321,7 @@ namespace CityForge.UI
             At(button.GetComponentInChildren<LotEditorIcon>().rectTransform, 21, 2, 22, 22);
             var caption = button.GetComponentInChildren<Text>();
             caption.text = label;
-            caption.fontSize = 12;
+            caption.fontSize = label == LotAssetCatalog.StreetFurniture ? 9 : 12;
             At(caption.rectTransform, 0, 25, 64, 18);
             return button;
         }
@@ -2019,6 +2335,7 @@ namespace CityForge.UI
                 case "Fences": return LotGlyph.Fence;
                 case "Characters": return LotGlyph.Character;
                 case "Landscaping": return LotGlyph.Landscaping;
+                case LotAssetCatalog.StreetFurniture: return LotGlyph.StreetFurniture;
                 default: return LotGlyph.Catalog;
             }
         }
@@ -2129,6 +2446,32 @@ namespace CityForge.UI
             rect.anchorMax = max;
             rect.offsetMin = low;
             rect.offsetMax = high;
+        }
+    }
+    internal sealed class LotEdgeBlendSlider : Slider
+    {
+        internal bool PointerHeld { get; private set; }
+        internal Action Commit;
+
+        public override void OnPointerDown(PointerEventData eventData)
+        {
+            if (eventData.button == PointerEventData.InputButton.Left && IsActive() && IsInteractable())
+                PointerHeld = true;
+            base.OnPointerDown(eventData);
+        }
+
+        public override void OnPointerUp(PointerEventData eventData)
+        {
+            base.OnPointerUp(eventData);
+            if (eventData.button != PointerEventData.InputButton.Left || !PointerHeld) return;
+            PointerHeld = false;
+            Commit?.Invoke();
+        }
+
+        protected override void OnDisable()
+        {
+            PointerHeld = false;
+            base.OnDisable();
         }
     }
 }

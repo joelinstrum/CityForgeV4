@@ -1,3 +1,41 @@
+# CityForge V4 handoff · Harbors and Town zoning
+
+The checkpoint branch is `feature/harbors-and-town-zoning`. Use Unity **6000.1.12f1** and open `Assets/CityForge/Scenes/Gameplay/MainMenu.unity`. Read `AGENTS.md` and this handoff before changing terrain or rendering. Richmond is the local test region and Halifax is its capital. Use a copy for tests that edit or save the region.
+
+## Town construction and zoning
+
+- Place the capital's **Founder’s Building** to unlock the **Town / Nature** switch in districts with a town. Nature remains available before founding. The region overview has its own controls.
+- **Town → Civic Lots** and **Parks** filter the playable saved lot library and start standard district placement. **Town Info** shows the district’s towns, capital status and placed-lot count. Roads & Transit and Utilities are menu sections awaiting construction tools.
+- **Town → Zones** has Residential, Commercial and Industrial densities 1–3. Drag an 8-meter grid rectangle, release to commit, paint over existing zones to replace them, or select **Erase zoning**. The overlay displays while the Zones panel is open. Zoning checks district membership, water and lot overlap. Region saves store sparse cells in `SavedRegionInfo.townZones` and old saves open with an empty zoning map.
+- In the Lot Editor, **Zoning layout…** sets use, density and wealth ($–$$$). The blue outline reserves a variable building slot in meters. **Use selected building as slot** copies that building’s footprint and removes the selected model when applied. The saved **Zoning Lots** library is separate from regular playable lots and templates. Slot position and dimensions turn with the lot.
+- Next work is to import the buildings the user will provide, tag them by zone use, density, wealth and footprint, and connect eligible building selection to zoning layouts. Preserve the authored decoration, paths, fences and ground layers while filling the slot. Growth, demand and road access are still open design work.
+
+Start with `TownConstructionMenu.cs`, `TownZoning.cs`, `LotZoningLayout.cs`, `LotDefinition.cs`, `LotLibrary.cs`, and `LotEditorPanel.cs`.
+
+## Waterfront lots and harbor traffic
+
+- Author waterfront rows in the Lot Editor. Water starts on the south side by default. **Rotate Lot** turns the complete layout 90° and carries the water-facing edge with it. District placement tests eight orientations for waterfront lots and preserves the authored blue side. Select a placed lot to see its gold footprint and rotate by 45° or click **Move**, grab it and drag to a snapped destination. Existing quarter-turn saves retain their angles.
+- Right-click a district on the **region map** for town rename, capital transfer and **Design Coastline**. Deep Harbor changes the district shoreline only. The approved treatment is damp earth and wet rock, a steep shoreline with a minimum offshore depth, slate-gray water, wind chop and animated waves with harbor foam disabled. Beach surf remains available.
+- **Transportation → Harbor** and the Waterfront setting **Attracts ship vessels** enable visits. Older waterfront Harbor Council House lots are eligible by default. Routes enter from the district water edge and require a navigable coast or major river. Vessels cycle through the galleon, wooden cargo barge and pirate ship. The large hulls require more depth and clearance.
+- Ships berth broadside. When the Harbor Council House porch overhangs navigable water, its measured socket is the preferred berth, with slight hull overlap. Inland placements can get a timber landing and a temporary gangway. Preserve the user's preference for visible direct contact where possible. Pirate visits are ambient. Economy and crime modifiers are future work.
+- Harbor Council House defaults to 1.5×, matching two scale increments. Loading an older library copy below that scale enlarges it once, expands its lot if needed, and moves characters already on the deck with it. Already placed district lots are independent records.
+- Select an NPC and open **Script → Scripted → Dock Worker**. The per-NPC settings control arrival delay, work time, cargo movement and visibility between visits. Defaults are arrival at berth, 22 seconds of cargo movement, and hidden between visits. Up to two workers use the measured deck lanes. **Characters** mode prioritizes NPC picks and fades buildings to 70% in the editor. The Harbor Council House’s porch has authored character placement heights.
+
+Start with `DistrictLots.cs`, `FounderPlacement.cs`, `DistrictCoastline.cs`, `DeepHarborWater.cs`, `HarborVesselVisits.cs`, `HarborLanding.cs`, `HarborDockWorkers.cs`, and `LotCharacterDeck.cs`.
+
+## Paths and private assets
+
+- The Lot Editor includes street furniture, reusable templates, a path cursor showing center and width, PBR cobblestone and damaged brick, edge blending and a subtle recess treatment. The modern grass mesh trial was retired at the user's request.
+- This repository is public and source-only. The private Lot Editor catalog and art are under the ignored `Assets/CityForge/Resources/Lots/` tree. Keep Crest, licensed meshes, textures, region saves, and generated outputs out of Git.
+- Harbor prefabs live under `Lots/HarborTraffic`. The V3 barge comes from `Vehicles/WoodenBargeV01`. Local originals are `galleon.fbx` and `pirate-ship` (an FBX without an extension). The prepared galleon has 48,156 triangles near and 13,002 far. The pirate ship has 49,988 near and 13,496 far. Both use 2K textures. Lot Editor transport vehicles are deferred.
+- Private path materials live under `Lots/PathMaterials/PBR`. Street furniture models live under `Lots/V3StreetFurniture`. **CityForge → Lots → Prepare local catalog** can rebuild references when the private assets are present.
+
+## Verification
+
+This session exercised district shoreline depth and tint, foam-free waves, Halifax ship routing and direct porch contact, dock worker timing and cleanup, eight-step lot rotation, drag and teardown, the Town unlock and civic placement, all nine zoning tools and save/reopen, and zoning layout classification, slot rotation and library persistence in Unity Play Mode.
+
+---
+
 # CityForge V4 handoff · November 8, 2026
 
 Work in the existing CityForge V4 checkout at `/Users/joelinstrum/dev/CityForge - V4`. The checkpoint branch is `feature/regional-resources-and-capital-founding`. Read `AGENTS.md` and the checkout’s `HANDOFF.md` before changing landscape or rendering. This project uses Unity 6000.1.12f1.

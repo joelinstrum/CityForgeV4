@@ -296,6 +296,7 @@ namespace CityForge.World
                 }
             }
             progress?.Invoke("Applying terrain heights",.21f);yield return null;
+            yield return ShapeDeepHarborStages(heights);
             ApplyPlayerLakeBasins(heights);ApplyPlayerChannels(heights);
             if(view.IsCombinedDistrict){
                 float min=float.PositiveInfinity,max=float.NegativeInfinity;
@@ -384,6 +385,7 @@ namespace CityForge.World
             if(coastalOceans.Length>0)yield return PaintCoastalBeachStages(controlMaps,heights);
             else terrainData.SetAlphamaps(0,0,controlMaps);
             progress?.Invoke("Building landscape details",.7f);yield return null;
+            if (hasDeepHarbor) yield return BuildHarborStones();
             Measure("road mesh",BuildRoadMesh);if(View.MountainTest)Measure("mountain outcrops",()=>gameObject.AddComponent<MountainRockRenderer>().Initialize(this));if(View.RiverBedVersion>=2)Measure("river rocks",()=>gameObject.AddComponent<RiverBedRockRenderer>().Initialize(this));
             progress?.Invoke("Applying landscape lighting",.78f);yield return null;Measure("presentation",BuildPresentation);
             progress?.Invoke("Preparing water",.84f);yield return null;

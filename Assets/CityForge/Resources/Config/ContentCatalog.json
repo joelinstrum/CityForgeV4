@@ -314,6 +314,11 @@
           "legacyName": "Water"
         },
         {
+          "id": "harbor",
+          "name": "Harbor",
+          "legacyName": "Harbor"
+        },
+        {
           "id": "air",
           "name": "Air",
           "legacyName": "Air"
