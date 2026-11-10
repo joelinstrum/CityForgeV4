@@ -240,11 +240,13 @@ venv/
 /Assets/CityForge/Resources/Trees/ApprovedMixedForest/
 /Assets/CityForge/Resources/Trees/ApprovedMixedForest.meta
 
-# Original nature-editor shader source; generated UI artwork remains local.
+# UI shader source; generated UI artwork remains local.
 !/Assets/CityForge/Resources/UI/
 !/Assets/CityForge/Resources/UI.meta
 !/Assets/CityForge/Resources/UI/ForestRemovalCircle.shader
 !/Assets/CityForge/Resources/UI/ForestRemovalCircle.shader.meta
+!/Assets/CityForge/Resources/UI/TownButtonArtwork.shader
+!/Assets/CityForge/Resources/UI/TownButtonArtwork.shader.meta
 
 # Local Lot Editor catalog references private model assets.
 /Assets/CityForge/Resources/Lots/

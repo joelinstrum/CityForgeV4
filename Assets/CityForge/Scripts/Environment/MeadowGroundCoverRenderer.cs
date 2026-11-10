@@ -13,6 +13,7 @@ namespace CityForge
         public NativeMeadowBatch[] batches;
         public Camera presentationCamera;
         public CameraSystem.CameraMotionQuality navigationQuality;
+        public CameraSystem.CityForgeCameraController shoulderZoom;
         public bool adaptiveDensity = true;
         [Range(.1f,1f)] public float lod0Density = 1f;
         [Range(.1f,1f)] public float closestZoomDensity = 1f;
@@ -96,7 +97,7 @@ namespace CityForge
         }
         void LateUpdate()
         {
-            if(navigationQuality&&navigationQuality.NavigationWorkSuspended){submittedInstances=submittedBatches=0;submissionMilliseconds=0;submissionAllocatedBytes=0;return;}
+            if ((shoulderZoom && shoulderZoom.ZoomLevel >= 4) || (navigationQuality && navigationQuality.NavigationWorkSuspended)){submittedInstances=submittedBatches=0;submissionMilliseconds=0;submissionAllocatedBytes=0;return;}
             if (batches == null || !presentationCamera) return;
             if(!CacheValid)RebuildDensityCache();
             long start = Stopwatch.GetTimestamp(), allocation = GC.GetAllocatedBytesForCurrentThread();
@@ -108,6 +109,7 @@ namespace CityForge
             bool close=nav ? nav.ClosestTwoZoomLevels : orthographic && closestOrthographicThreshold>0 && camera.orthographicSize<=closestOrthographicThreshold;
             int aerialLevel = camera.orthographicSize > 220 ? 3 : camera.orthographicSize > 145 ? 2 : camera.orthographicSize > 90 ? 1 : 0;
             if(!adaptiveDensity)aerialLevel=0;
+            if (shoulderZoom) aerialLevel = Mathf.Max(aerialLevel, shoulderZoom.ZoomLevel - 1);
             // Merge AFTER thinning, retaining exactly the same matrices at every LOD.
             // Bounds remain per tile and submissions remain visible to reflection cameras.
             var drawBatches=combineCompatibleBatches&&orthographic?(close?mergedCloseLevels[aerialLevel]:mergedLevels[aerialLevel]):batches;

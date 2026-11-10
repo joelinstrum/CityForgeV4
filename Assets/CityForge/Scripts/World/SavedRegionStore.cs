@@ -32,6 +32,8 @@ namespace CityForge.World
         public ForestAdditionRecord[] forestAdditions;
         public DistrictLotRecord[] lots;
         public TownZoneCell[] townZones;
+        public int townZoneGridVersion;
+        public DistrictRoadRecord[] districtRoads;
         public int[] deepHarborDistricts;
         public int meadowCacheDistrict=-1;
         public float terrainHeightRange;
@@ -97,6 +99,8 @@ namespace CityForge.World
             var info=new SavedRegionInfo{animals=view.AnimalsEnabled,id=id??view.SavedRegionId??Guid.NewGuid().ToString("N"),name=name??view.RegionName,season=(int)view.Season,timeOfDay=view.TimeOfDay,terrainHeightRange=view.TerrainHeightRange,seed=view.Data.Seed,size=(int)view.Size,district=view.SelectedDistrict,meadow=view.PrefersMeadow,waterBodies=view.Data.WaterBodies,waterless=view.Waterless,coastline=view.Coastline,coastVersion=view.CoastVersion,minimalRiverCrest=view.MinimalRiverCrest,stillWater=false,lakeWaterVersion=LakeWaterRenderer.UsesCalmWater(view)?1:-1,riverBedVersion=view.RiverBedVersion,savedUtc=DateTime.UtcNow.ToString("O"),baselineVersion=baseline?baseline.generationVersion:0,camera=view.GetComponentInChildren<CameraSystem.CityForgeCameraController>().CaptureRegionState()};
             info.deepHarborDistricts = view.DeepHarborDistricts;
             info.townZones = view.CaptureTownZones();
+            info.townZoneGridVersion = PrototypeRegionView.TownZoneGridVersion;
+            info.districtRoads = view.CaptureDistrictRoads();
             if (view.PlacedLots.Count != 0) info.lots = view.PlacedLots.ToArray();
             info.climate=view.Climate;info.creation=view.CreationSettings;info.districts=view.Districts;info.combinedDistricts=view.CombinedDistricts;info.nativeCamps=view.NativeCamps;info.towns=view.Towns;info.resources=view.RegionalResources.Capture();info.development=view.Development;info.forestRemovals=view.ForestRemovals;info.forestAdditions=view.ForestAdditions;
             var pilot=view.ApprovedDistrict;info.meadowCacheDistrict=pilot?pilot.DistrictIndex:view.LoadedMeadowDistrict;
@@ -191,11 +195,12 @@ namespace CityForge.World
             PrototypeRegionView.ValidateLotRecords(info.lots, gridSide * gridSide);
             PrototypeRegionView.ValidateDeepHarbors(info.deepHarborDistricts, gridSide * gridSide);
             ValidateZones(info, gridSide);
+            PrototypeRegionView.ValidateDistrictRoads(info.districtRoads, gridSide * gridSide, NativeCampPlanner.MapSide(info.size, gridSide));
             return info;
         }
         private static void ValidateZones(SavedRegionInfo info, int gridSide) =>
             PrototypeRegionView.ValidateTownZones(info.townZones,
-                Mathf.RoundToInt(NativeCampPlanner.MapSide(info.size, gridSide) / Lots.LotDefinition.TileMeters));
+                NativeCampPlanner.MapSide(info.size, gridSide), info.townZoneGridVersion);
 
         static int Count(BinaryReader reader,int min,int max){int count=reader.ReadInt32();if(count<min||count>max)throw new InvalidDataException("Invalid snapshot dimensions.");return count;}
         static void WriteFloats(BinaryWriter writer,Array values){var buffer=new byte[Buffer.ByteLength(values)];Buffer.BlockCopy(values,0,buffer,0,buffer.Length);writer.Write(buffer);}
