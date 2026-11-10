@@ -48,7 +48,7 @@ namespace CityForge.World
         private Text regionTitle, regionNote, navigationHint;
         private Image districtInfoBackground;
         private const string OverviewNavigationHint = "Arrows / WASD: pan   ·   Wheel / + / −: zoom   ·   Q/E: rotate   ·   I: camera angle   ·   Home: reset   ·   Drag slab edge: orbit   ·   Click: enter district   ·   Right-click: district actions   ·   L: town labels   ·   Esc: back";
-        private const string DistrictNavigationHint = "I: district info   ·   Hold C + move up/down: camera tilt   ·   Wheel / + / −: zoom   ·   L: town labels   ·   Esc: back";
+        private const string DistrictNavigationHint = "I: district info   ·   Hold C + move up/down: camera tilt   ·   Wheel / + / −: zoom   ·   G: grid   ·   L: town labels   ·   Esc: back";
         private Texture2D woodlandField;
         private readonly Dictionary<Vector2Int, List<Vector2>> canopyCells = new();
         private readonly List<Vector2> treePositions = new List<Vector2>();
@@ -312,7 +312,8 @@ namespace CityForge.World
             {
                 progress?.Invoke("Preparing region",.15f);yield return null;
                 if (snapshot?.info.lots != null) view.PlacedLots.AddRange(snapshot.info.lots);
-                view.RestoreTownZones(snapshot?.info.townZones);
+                view.RestoreTownZones(snapshot?.info.townZones, snapshot?.info.townZoneGridVersion ?? 0);
+                view.RestoreDistrictRoads(snapshot?.info.districtRoads);
                 if(snapshot!=null){view.DeepHarborDistricts=snapshot.info.deepHarborDistricts??System.Array.Empty<int>();view.TimeOfDay=snapshot.info.timeOfDay;view.RestoreSettlementData(snapshot.info);view.ForestAdditions=snapshot.info.forestAdditions??System.Array.Empty<ForestAdditionRecord>();view.ForestRemovals=snapshot.info.forestRemovals??System.Array.Empty<ForestRemovalStroke>();view.NativeCamps=snapshot.info.nativeCamps??System.Array.Empty<NativeCampRecord>();view.CombinedDistricts=snapshot.info.combinedDistricts??System.Array.Empty<CombinedDistrictGroup>();view.CreationSettings=snapshot.info.creation;view.legacyClimate=snapshot.info.climate;view.AnimalsEnabled=snapshot.info.animals;size=(RegionSize)snapshot.info.size;seed=snapshot.info.seed;regionName=snapshot.info.name;view.SavedRegionId=snapshot.info.id;view.Season=(RegionSeason)snapshot.info.season;view.TerrainHeightRange=snapshot.info.terrainHeightRange;view.LoadedMeadow=snapshot.meadow;view.LoadedMeadowDistrict=snapshot.info.meadowCacheDistrict;view.LoadedFromSnapshot=true;view.wantsMeadow=snapshot.info.meadow;view.Waterless=snapshot.info.waterless;view.Coastline=snapshot.info.coastline;view.CoastVersion=snapshot.info.coastVersion;view.MinimalRiverCrest=snapshot.info.minimalRiverCrest;view.StillWater=snapshot.info.stillWater;view.LakeWaterVersion=snapshot.info.lakeWaterVersion<0?-1:1;view.RiverBedVersion=snapshot.info.riverBedVersion;}
                 if(view.LoadedMeadow!=null&&view.LoadedMeadowDistrict>=0)view.sessionMeadows[view.LoadedMeadowDistrict]=view.LoadedMeadow;
                 view.Size = size;
@@ -754,6 +755,16 @@ namespace CityForge.World
                     playerLotWorkspace.GetComponent<CityForge.UI.LotEditorPanel>().CancelInteraction();
                 return;
             }
+            if (transportModal)
+            {
+                if (Input.GetKeyDown(KeyCode.Escape)) CloseTransportModal();
+                return;
+            }
+            if (SelectedDistrict >= 0 && !DistrictLoading && !IsSaving && Input.GetKeyDown(KeyCode.G) &&
+                !(EventSystem.current && EventSystem.current.currentSelectedGameObject &&
+                  EventSystem.current.currentSelectedGameObject.TryGetComponent<InputField>(out var field) && field.isFocused))
+                ToggleDistrictGrid();
+            if (UpdateRoadPlacement() || UpdateRoadContext() || UpdateRoadPaths()) return;
             if (townTools && townTools.HandleDistrictContext()) return;
             if (UpdateLotPlacement()) return;
             if (UpdateZoning()) return;
@@ -793,12 +804,18 @@ namespace CityForge.World
         private bool orbitingSlab;
         private void OnGUI()
         {
-            if(RemakeBlocksInput||DistrictLoading||IsSaving||playerLotWorkspace||lotPlacementDraft!=null||founderPicker||zoneToolArmed){
+            if(RemakeBlocksInput||DistrictLoading||IsSaving||playerLotWorkspace||lotPlacementDraft!=null||founderPicker||zoneToolArmed||transportModal||RoadPlacementArmed){
                 orbitingSlab=false;
                 return;
             }
             var pointer = Event.current;
-            if(pointer.button!=0)return;
+            DrawRoadPathHandles(pointer);
+            if (pointer.button == 1)
+            {
+                HandleRoadContextPointer(pointer);
+                return;
+            }
+            if(pointer.button!=0 || HandleRoadPathPointer(pointer))return;
             if(orbitingSlab&&pointer.type==EventType.MouseDrag){
                 GetComponentInChildren<CityForgeCameraController>().OrbitRegion(pointer.delta);
                 pointer.Use();
@@ -901,6 +918,8 @@ namespace CityForge.World
             overviewButton.SetActive(false);
             RefreshTrees();
             yield return UpdateLandscapeModeStages();
+            RefreshDistrictGrid();
+            RebuildDistrictRoads();
             RebuildDistrictLots();
             if(NaturalLandscape&&IsCombinedDistrict){
                 var bounds=ActiveDistrictBounds;var rig=GetComponentInChildren<CityForgeCameraController>();
@@ -929,9 +948,12 @@ namespace CityForge.World
             if(districtLoading)return;
             CloseFounderPicker();
             CancelLotPlacement();
+            CancelRoadPlacement();
+            SetRoadPaths(false);
+            CloseRoadContext();
             GetComponent<RegionPreviewDiagnostics>().SetDiagnostic(false,1);
             float returnHeading=GetComponentInChildren<CityForgeCameraController>().CaptureRegionState().yaw;
-            SelectedDistrict=-1;RebuildDistrictLots();if(districtSelection)districtSelection.SetActive(true);
+            SelectedDistrict=-1;RefreshDistrictGrid();RebuildDistrictRoads();RebuildDistrictLots();if(districtSelection)districtSelection.SetActive(true);
             SetDistrictInfoVisible(true);
             navigationHint.text = OverviewNavigationHint;
             transform.Find("RegionLandCover").GetComponent<MeshFilter>().sharedMesh=wholeRegionMesh;
@@ -1045,6 +1067,7 @@ namespace CityForge.World
         }
         private void OnDestroy()
         {
+            ClearDistrictRoadPresentation();
             ClosePlayerLot();
             CloseFounderPicker();
             CancelLotPlacement(restoreUi: false);

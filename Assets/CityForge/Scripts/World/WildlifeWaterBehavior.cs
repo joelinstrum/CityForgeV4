@@ -39,7 +39,7 @@ namespace CityForge.World
             return Wet(p, land.Height(p), out water, out level);
         }
 
-        internal bool Wet(Vector2 p, float ground, out RegionWaterBody water, out float level)
+        internal bool Wet(Vector2 p, float ground, out RegionWaterBody water, out float level, float surfaceTolerance = .025f)
         {
             RefreshBounds();
             var uv = p / land.View.MapSide + Vector2.one * .5f;
@@ -51,7 +51,7 @@ namespace CityForge.World
                 // Reject land above fixed water levels before walking the polygon.
                 if (graded && !body.Contains(uv)) continue;
                 float surface = Level(body, p);
-                if (ground > surface + .025f || (!graded && !body.Contains(uv))) continue;
+                if (ground > surface + surfaceTolerance || (!graded && !body.Contains(uv))) continue;
                 water = body;
                 level = surface;
                 return true;

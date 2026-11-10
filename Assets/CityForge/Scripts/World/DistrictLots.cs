@@ -60,6 +60,7 @@ namespace CityForge.World
             lotFont = font;
             placeLotLabel = AddLotButton(lotActions.transform, font, "Place saved lot", 0, 220, () =>
             {
+                CancelRoadPlacement();
                 if (movingDistrictLot != null) CancelLotPlacement();
                 else if (PendingFounder != null) OpenFounderPicker();
                 else PlaceDraftLot();
@@ -71,7 +72,7 @@ namespace CityForge.World
                 RefreshLotFacing();
                 lotPlacementEvaluated = false;
             });
-            lotFacingButton = lotFacingLabel.GetComponentInParent<Button>();
+            lotFacingButton = lotFacingLabel.GetComponentInParent<Button>(includeInactive: true);
             AddLotButton(lotActions.transform, font, "Customize centered lot", 364, 190, () => CustomizeLot(font));
             lotFeedback = HudText(lotActions.transform, "Lot feedback", font, 16);
             Position(lotFeedback.rectTransform, new Vector2(0, -39), new Vector2(520, 29));
@@ -464,11 +465,11 @@ namespace CityForge.World
 
             public Vector2 WorldPoint(Vector2 local) => center + right * local.x + forward * local.y;
 
-            public bool Contains(Vector2 point)
+            public bool Contains(Vector2 point, float inset = 0f)
             {
                 var offset = point - center;
-                return Mathf.Abs(Vector2.Dot(offset, right)) <= half.x &&
-                    Mathf.Abs(Vector2.Dot(offset, forward)) <= half.y;
+                return Mathf.Abs(Vector2.Dot(offset, right)) <= half.x - inset &&
+                    Mathf.Abs(Vector2.Dot(offset, forward)) <= half.y - inset;
             }
 
             public bool OverlapsCircle(Vector2 point, float radius)
@@ -517,7 +518,9 @@ namespace CityForge.World
 
         private void RebuildDistrictLots()
         {
+            RefreshDirtRoadEndFades();
             districtLotRoots.Clear();
+            roadBuildings.Clear();
             dockWorkerHomes.Clear();
             if (selectedDistrictLot != null && (SelectedDistrict < 0 || !ActiveDistrictMembers.Contains(selectedDistrictLot.district)))
                 SelectDistrictLot(null);
@@ -574,6 +577,8 @@ namespace CityForge.World
                     if (definition.IsWaterfront && LotRuntimeLoader.Footprint(item, asset).Overlaps(definition.WaterfrontBounds))
                         point.y = Mathf.Max(point.y, record.waterfrontDeckHeight);
                     instance.position = point;
+                    if (asset.category == "Buildings")
+                        roadBuildings.Add(new RoadBuildingFootprint(instance, asset.footprint * item.scale));
                     if (item.assetId == LotCharacterDeck.HarborHouse)
                     {
                         harborPorch = instance;

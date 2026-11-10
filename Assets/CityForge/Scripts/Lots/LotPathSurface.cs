@@ -225,7 +225,8 @@ namespace CityForge.Lots
 
             var distance = new float[count];
             for (int i = 1; i < count; i++) distance[i] = distance[i - 1] + Vector2.Distance(points[i - 1], points[i]);
-            float length = path.closed ? 0 : distance[count - 1];
+            float length = distance[count - 1];
+            if (path.closed) length = -(length + Vector2.Distance(points[count - 1], points[0]));
             if (ground != null) return BuildTerrainRibbon(vertices, segments, tileSize, height, ground, path.width, distance, length, path.textureRotation);
             var ribbon = new List<Vector4>(vertices.Length);
             foreach (float along in distance)
@@ -260,6 +261,7 @@ namespace CityForge.Lots
             {
                 int a = segment * 2;
                 int b = (a + 2) % edges.Length;
+                float endDistance = b == 0 ? -length : distance[b / 2];
                 int along = Mathf.Max(1, Mathf.CeilToInt(Mathf.Max(Vector3.Distance(edges[a], edges[b]),
                     Vector3.Distance(edges[a + 1], edges[b + 1]))));
                 for (int row = segment == 0 ? 0 : 1; row <= along; row++)
@@ -276,7 +278,7 @@ namespace CityForge.Lots
                         vertices.Add(point);
                         uv.Add(LotGroundOverlay.QuarterTurn(planar, -textureRotation) / tileSize);
                         ribbon.Add(new Vector4((float)column / across * width, width,
-                            Mathf.Lerp(distance[a / 2], distance[b / 2], t), length));
+                            Mathf.Lerp(distance[a / 2], endDistance, t), length));
                     }
                     if (start == 0) continue;
                     for (int column = 0; column < across; column++)

@@ -12,11 +12,16 @@ namespace CityForge.UI
         public bool Closed=>path.Closed;
         public bool Finished=>path.Finished;
         public bool OpenPath;public float RibbonWidth;
+        public bool HandleEscape = true;
+        public bool RestrictUiToHud;
+        public bool FinishOverUi;
+        public Func<IReadOnlyList<Vector2>, string> LoopCompletionRequested;
         public bool DeferCompletion;public string ProcessingMessage="Creating…";
         public bool Processing {get;private set;}
         public event Action<bool> ProcessingChanged;
         RegionLoadingOverlay completionOverlay;bool acceptingCompletion;
         public Func<Vector2,Vector2> SnapPoint;
+        public Func<IReadOnlyList<Vector2>, bool, IReadOnlyList<Vector2>> ProjectGuide;
         public string DrawingHint;
         public Func<IReadOnlyList<Vector2>,string> CompletionRequested;
         public string Label="Outline";public string CompletedHint="Outline complete · Esc to clear";public bool AllowClosedUndo=true;
@@ -45,8 +50,9 @@ namespace CityForge.UI
         public void Arm()
         {
             Cancel();if(surface==null||!surface.Available)return;
+            terrainCollider=surface.Collider;if(!terrainCollider)return;
             savedCursor=Cursor.visible;Armed=true;waitRelease=Input.GetMouseButton(0);
-            terrainCollider=surface.Collider;colliderWasEnabled=terrainCollider.enabled;terrainCollider.enabled=true;
+            colliderWasEnabled=terrainCollider.enabled;terrainCollider.enabled=true;
             hint.gameObject.SetActive(true);Hint();
         }
         public void SetMessage(string message){hint.text=message;}
@@ -57,28 +63,29 @@ namespace CityForge.UI
             if(!Armed||Finished||Processing||surface==null||!surface.CanEdit)return false;
             if(SnapPoint!=null)p=SnapPoint(p);
             if(!surface.Contains(p))return false;
-            if(closeToStart)return !OpenPath&&Complete();
+            if(closeToStart)return (!OpenPath || LoopCompletionRequested != null) && Complete(closeLoop: true);
             if(!path.TryAdd(p))return false;
             markers.Add(Line("PointWireMarker"+points.Count));Rebuild();Hint();return true;
         }
-        public bool CompletePath()=>OpenPath&&Complete();
-        bool Complete()
+        public bool CompletePath()=>OpenPath&&Complete(closeLoop: false);
+        bool Complete(bool closeLoop)
         {
-            if(!Armed||Finished||Processing||!surface.CanEdit||points.Count<(OpenPath?2:3))return false;
+            if(!Armed||Finished||Processing||!surface.CanEdit||points.Count<(closeLoop?3:2))return false;
             if(DeferCompletion){
                 Processing=true;cursor.gameObject.SetActive(false);Cursor.visible=savedCursor;overlay.Clear();foreach(var marker in markers)marker.gameObject.SetActive(false);
                 SetMessage(ProcessingMessage);hint.gameObject.SetActive(false);ProcessingChanged?.Invoke(true);
                 completionOverlay=RegionLoadingOverlay.ShowOperation(ProcessingMessage);
-                completionOverlay.BeginDistrict(CompleteDeferred(),()=>{completionOverlay=null;Processing=false;if(hint)hint.gameObject.SetActive(Armed);ProcessingChanged?.Invoke(false);},error=>{if(Armed){SetMessage("Could not create waterway. Please adjust the route and try again.");foreach(var marker in markers)marker.gameObject.SetActive(true);}Debug.LogException(error);},ProcessingMessage);
+                completionOverlay.BeginDistrict(CompleteDeferred(closeLoop),()=>{completionOverlay=null;Processing=false;if(hint)hint.gameObject.SetActive(Armed);ProcessingChanged?.Invoke(false);},error=>{if(Armed){SetMessage("Could not create waterway. Please adjust the route and try again.");foreach(var marker in markers)marker.gameObject.SetActive(true);}Debug.LogException(error);},ProcessingMessage);
                 return true;
             }
-            return CompleteNow();
+            return CompleteNow(closeLoop);
         }
-        System.Collections.IEnumerator CompleteDeferred(){CompleteNow();yield break;}
-        bool CompleteNow()
+        System.Collections.IEnumerator CompleteDeferred(bool closeLoop){CompleteNow(closeLoop);yield break;}
+        bool CompleteNow(bool closeLoop)
         {
-            string error=CompletionRequested?.Invoke(points);if(!string.IsNullOrEmpty(error)){SetMessage(error);foreach(var marker in markers)marker.gameObject.SetActive(true);return false;}
-            if(OpenPath)path.TryFinishOpen();else path.TryClose();preview.Clear();Rebuild();Hint();acceptingCompletion=true;try{Completed?.Invoke(points);}finally{acceptingCompletion=false;}return true;
+            var request = closeLoop && LoopCompletionRequested != null ? LoopCompletionRequested : CompletionRequested;
+            string error=request?.Invoke(points);if(!string.IsNullOrEmpty(error)){SetMessage(error);foreach(var marker in markers)marker.gameObject.SetActive(true);return false;}
+            if(closeLoop)path.TryClose();else path.TryFinishOpen();preview.Clear();Rebuild();Hint();acceptingCompletion=true;try{Completed?.Invoke(points);}finally{acceptingCompletion=false;}return true;
         }
         public void UndoMarker()
         {
@@ -94,18 +101,24 @@ namespace CityForge.UI
         }
         void Rebuild()
         {
-            var vertices=new List<Vector3>();for(int i=1;i<points.Count;i++)Segment(vertices,points[i-1],points[i]);
-            if(Closed)Segment(vertices,points[points.Count-1],points[0]);
-            if(points.Count>0)vertices.Add(Ground(Closed?points[0]:points[points.Count-1]));
-            boundary.Clear();boundary.AddRange(vertices);UpdateWidths();
+            BuildGuide(boundary, ProjectGuide?.Invoke(points, Closed) ?? points, Closed);
+            UpdateWidths();
+        }
+        void BuildGuide(List<Vector3> target, IReadOnlyList<Vector2> guide, bool closed)
+        {
+            target.Clear();
+            for (int i = 1; i < guide.Count; i++) Segment(target, guide[i - 1], guide[i]);
+            if (closed) Segment(target, guide[guide.Count - 1], guide[0]);
+            if (guide.Count > 0) target.Add(Ground(closed ? guide[0] : guide[guide.Count - 1]));
         }
         void UpdateWidths()
         {
+            var displayPoints = ProjectGuide?.Invoke(points, Closed) ?? points;
             float width=Mathf.Clamp(cameraView.orthographicSize*.003f,.1f,2);
             for(int i=0;i<markers.Count;i++){
                 var marker=markers[i];marker.widthMultiplier=width*1.5f;marker.loop=true;marker.positionCount=24;
                 float radius=width*(i==0?5:3);
-                for(int j=0;j<24;j++){float a=j*Mathf.PI*2/24;marker.SetPosition(j,Ground(points[i]+new Vector2(Mathf.Cos(a),Mathf.Sin(a))*radius));}
+                for(int j=0;j<24;j++){float a=j*Mathf.PI*2/24;marker.SetPosition(j,Ground(displayPoints[i]+new Vector2(Mathf.Cos(a),Mathf.Sin(a))*radius));}
             }
         }
         public void Cancel()
@@ -119,15 +132,19 @@ namespace CityForge.UI
         bool OverUI()
         {
             if(!EventSystem.current)return false;if(pointer==null)pointer=new PointerEventData(EventSystem.current);
-            pointer.position=Input.mousePosition;hits.Clear();EventSystem.current.RaycastAll(pointer,hits);return hits.Count>0;
+            pointer.position=Input.mousePosition;hits.Clear();EventSystem.current.RaycastAll(pointer,hits);
+            if (!RestrictUiToHud) return hits.Count > 0;
+            foreach (var hit in hits)
+                if (hit.gameObject.transform.IsChildOf(canvasRect)) return true;
+            return false;
         }
         void Update()
         {
             if(!Armed||Processing)return;
             if(surface==null||!surface.Available){Cancel();return;}
-            if(Input.GetKeyDown(KeyCode.Escape)){Cancel();return;}
+            if(HandleEscape&&Input.GetKeyDown(KeyCode.Escape)){Cancel();return;}
             if(Input.GetKeyDown(KeyCode.Backspace))UndoMarker();
-            if(OpenPath&&Application.isFocused&&!OverUI()&&(Input.GetKeyDown(KeyCode.Return)||Input.GetKeyDown(KeyCode.KeypadEnter)))CompletePath();
+            if(OpenPath&&Application.isFocused&&(FinishOverUi||!OverUI())&&(Input.GetKeyDown(KeyCode.Return)||Input.GetKeyDown(KeyCode.KeypadEnter)))CompletePath();
             if(!Armed||Processing)return;
             bool valid=Application.isFocused&&surface.CanEdit&&!OverUI();RaycastHit hit=default;
             if(valid)valid=terrainCollider&&terrainCollider.Raycast(cameraView.ScreenPointToRay(Input.mousePosition),out hit,100000)&&surface.Contains(new Vector2(hit.point.x,hit.point.z));
@@ -135,9 +152,15 @@ namespace CityForge.UI
             if(waitRelease&&!Input.GetMouseButton(0))waitRelease=false;
             UpdateWidths();preview.Clear();if(!valid)return;
             RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect,Input.mousePosition,null,out var local);cursor.rectTransform.anchoredPosition=local;if(Finished)return;
-            bool snap=false;if(!OpenPath&&points.Count>=3){var first=cameraView.WorldToScreenPoint(Ground(points[0]));snap=first.z>0&&Vector2.Distance(new Vector2(first.x,first.y),Input.mousePosition)<=24;}
+            bool snap=false;if((!OpenPath || LoopCompletionRequested != null)&&points.Count>=3){var first=cameraView.WorldToScreenPoint(Ground((ProjectGuide?.Invoke(points, false) ?? points)[0]));snap=first.z>0&&Vector2.Distance(new Vector2(first.x,first.y),Input.mousePosition)<=24;}
             var p=snap?points[0]:new Vector2(hit.point.x,hit.point.z);if(SnapPoint!=null)p=SnapPoint(p);
-            if(points.Count>0){var line=new List<Vector3>();Segment(line,points[points.Count-1],p);line.Add(Ground(p));preview.AddRange(line);}
+            if (ProjectGuide != null && points.Count > 0)
+            {
+                var guide = new List<Vector2>(points);
+                if (!snap) guide.Add(p);
+                BuildGuide(preview, ProjectGuide(guide, snap), snap);
+            }
+            else if(points.Count>0){Segment(preview,points[points.Count-1],p);preview.Add(Ground(p));}
             if(!waitRelease&&Input.GetMouseButtonDown(0))PlaceMarker(p,snap);
         }
         void LateUpdate()
@@ -150,10 +173,13 @@ namespace CityForge.UI
                 RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect,b,null,out var end);overlay.Add(start,end);
             }
             void Draw(List<Vector3> line){for(int i=1;i<line.Count;i++)DrawSegment(line[i-1],line[i]);}
-            Draw(boundary);Draw(preview);
+            bool replaceBoundary = ProjectGuide != null && preview.Count > 0;
+            if (!replaceBoundary) Draw(boundary);
+            Draw(preview);
             if(RibbonWidth>0){
                 void Ribbon(List<Vector3> line){for(int i=1;i<line.Count;i++){var a=new Vector2(line[i-1].x,line[i-1].z);var b=new Vector2(line[i].x,line[i].z);var d=b-a;if(d.sqrMagnitude<.0001f)continue;var normal=new Vector2(-d.y,d.x).normalized*RibbonWidth*.5f;DrawSegment(Ground(a-normal),Ground(b-normal));DrawSegment(Ground(a+normal),Ground(b+normal));}}
-                Ribbon(boundary);Ribbon(preview);
+                if (!replaceBoundary) Ribbon(boundary);
+                Ribbon(preview);
             }
             overlay.SetVerticesDirty();
         }

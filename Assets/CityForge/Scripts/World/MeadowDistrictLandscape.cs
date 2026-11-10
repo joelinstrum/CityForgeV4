@@ -77,6 +77,25 @@ namespace CityForge.World
         const string SmallPlantsPreference="CityForge.Meadow.SmallPlants";
         TreeInstance[] fullTreeInstances,matureTreeInstances;
         MeadowRuntimeVegetation groundCover;
+
+        private void EnsureGroundCover()
+        {
+            if (groundCover) return;
+            var go = new GameObject("Streamed small plants");
+            go.transform.SetParent(transform, false);
+            groundCover = go.AddComponent<MeadowRuntimeVegetation>();
+            groundCover.Initialize(this, View.GetComponentInChildren<Camera>());
+        }
+
+        internal void RefreshRoadShoulders(IReadOnlyList<DistrictRoadRecord> roads)
+        {
+            if (!groundCover && roads.Count == 0) return;
+            var details = new RoadShoulderDetails(roads, View.ActiveDistrictMembers, View.Data.Seed);
+            if (!groundCover && !details.HasDirt) return;
+            EnsureGroundCover();
+            groundCover.SetRoadShoulders(details);
+            groundCover.gameObject.SetActive(SmallPlantsEnabled || details.HasDirt);
+        }
         Transform shorelinePlants;
         // Juvenile poplars, maple shrubs and small willows in the extracted baseline.
         GameObject[] mountainEvergreens;
@@ -110,10 +129,14 @@ namespace CityForge.World
             if(enabled!=SmallPlantsEnabled){SetNativePresentation(enabled?fullTreeInstances:matureTreeInstances);SmallPlantsEnabled=enabled;}
             if(enabled){
                 if(!shorelinePlants){BuildShoreline();shorelinePlants=transform.Find("Seeded shoreline and understory");}
-                if(!groundCover){var go=new GameObject("Streamed small plants");go.transform.SetParent(transform,false);groundCover=go.AddComponent<MeadowRuntimeVegetation>();groundCover.Initialize(this,View.GetComponentInChildren<Camera>());}
+                EnsureGroundCover();
             }
             if(shorelinePlants)shorelinePlants.gameObject.SetActive(enabled);
-            if(groundCover)groundCover.gameObject.SetActive(enabled);
+            if (groundCover)
+            {
+                if (changed) groundCover.InvalidateWaterEdits();
+                groundCover.gameObject.SetActive(enabled || groundCover.HasRoadShoulders);
+            }
             if(changed)RefreshLakeEnvironments();
             var caption=View.transform.Find("RegionHud/SmallPlants/Caption");if(caption)caption.GetComponent<UnityEngine.UI.Text>().text="SMALL PLANTS: "+(enabled?"ON":"OFF");
         }

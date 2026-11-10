@@ -25,7 +25,10 @@ namespace CityForge.World
 
     public sealed partial class PrototypeRegionView
     {
-        private const int MaxZonedCells = 32768;
+        internal const int TownZoneGridVersion = 1;
+        private const float LegacyTownZoneCellMeters = 8f;
+        private const int LegacyMaxZonedCells = 32768;
+        private const int MaxZonedCells = LegacyMaxZonedCells * 4;
         private const int MaxZoneDragSide = 32;
         private static readonly Color[] ZoneColors =
         {
@@ -51,16 +54,25 @@ namespace CityForge.World
         internal TownZoneCell[] CaptureTownZones() => townZones.OrderBy(pair => pair.Key.y).ThenBy(pair => pair.Key.x)
             .Select(pair => new TownZoneCell { x = pair.Key.x, z = pair.Key.y, zone = pair.Value }).ToArray();
 
-        private void RestoreTownZones(TownZoneCell[] cells)
+        private void RestoreTownZones(TownZoneCell[] cells, int gridVersion)
         {
             if (cells == null) return;
-            foreach (var cell in cells) townZones.Add(new Vector2Int(cell.x, cell.z), cell.zone);
+            int scale = gridVersion == 0 ? 2 : 1;
+            foreach (var cell in cells)
+                for (int z = 0; z < scale; z++)
+                    for (int x = 0; x < scale; x++)
+                        townZones.Add(new Vector2Int(cell.x * scale + x, cell.z * scale + z), cell.zone);
         }
 
-        internal static void ValidateTownZones(TownZoneCell[] cells, int mapCells)
+        internal static void ValidateTownZones(TownZoneCell[] cells, float mapSide, int gridVersion)
         {
+            if (gridVersion < 0 || gridVersion > TownZoneGridVersion)
+                throw new InvalidDataException("Unsupported town zoning grid.");
             if (cells == null) return;
-            if (cells.Length > MaxZonedCells) throw new InvalidDataException("Too many zoned cells.");
+            bool legacy = gridVersion == 0;
+            int mapCells = Mathf.RoundToInt(mapSide / (legacy ? LegacyTownZoneCellMeters : DistrictGridCellMeters));
+            if (cells.Length > (legacy ? LegacyMaxZonedCells : MaxZonedCells))
+                throw new InvalidDataException("Too many zoned cells.");
             var seen = new HashSet<Vector2Int>();
             foreach (var cell in cells)
                 if (cell.x < 0 || cell.x >= mapCells || cell.z < 0 || cell.z >= mapCells ||
@@ -72,22 +84,32 @@ namespace CityForge.World
         private void ShowZoning()
         {
             string[] names = { "Residential", "Commercial", "Industrial" };
+            var concept = Resources.Load<Texture2D>("UI/TownConstruction/ZoneConcept");
+            var artwork = new[]
+            {
+                new Rect(550, 560, 186, 105), new Rect(791, 560, 186, 105), new Rect(1031, 560, 186, 105)
+            };
             for (int use = 0; use < names.Length; use++)
             {
-                int y = -52 - 43 * use;
-                var label = FounderText(townPanel, names[use], new Vector2(-185, 70 - 43 * use), new Vector2(152, 34), 17);
-                label.alignment = TextAnchor.MiddleLeft;
+                var card = FounderRect(townPanel, names[use] + " zoning", new Vector2(-178 + use * 231, -5),
+                    new Vector2(219, 174));
+                StyleTownPanel(card, new Color(.14f, .15f, .15f));
+                if (concept)
+                    TownArtwork(card, names[use] + " illustration", concept, artwork[use],
+                        new Vector2(0, 28), new Vector2(186, 105));
+                FounderText(card, names[use], new Vector2(0, -28), new Vector2(203, 26), 20).color = TownGold;
                 for (int density = 1; density <= 3; density++)
                 {
                     var zone = (TownZone)(use * 3 + density);
-                    zoneButtons[(int)zone] = TownButton(townPanel, lotFont, density.ToString(),
-                        183 + (density - 1) * 116, y, 108, () => ArmZone(zone));
+                    zoneButtons[(int)zone] = TownButton(card, lotFont, density.ToString(),
+                        17 + (density - 1) * 63, -131, 58, () => ArmZone(zone));
                 }
             }
-            zoneButtons[0] = TownButton(townPanel, lotFont, "Erase zoning", 14, -192, 150, () => ArmZone(TownZone.None));
+
+            zoneButtons[0] = TownButton(townPanel, lotFont, "Erase zoning", 18, -113, 108, () => ArmZone(TownZone.None));
             zoneStatus = FounderText(townPanel, "Choose a zone and density, then drag on the map.",
-                new Vector2(79, -89), new Vector2(390, 46), 15);
-            zoneStatus.alignment = TextAnchor.MiddleLeft;
+                new Vector2(0, -112), new Vector2(800, 28), 16);
+            zoneStatus.color = TownGold;
             EnsureZoneSurfaces();
             RefreshZoneOverlay();
             zoneRenderer.enabled = true;
@@ -181,7 +203,7 @@ namespace CityForge.World
             var camera = GetComponentInChildren<Camera>();
             if (!collider || !camera || !collider.Raycast(camera.ScreenPointToRay(Input.mousePosition), out var hit, camera.farClipPlane))
                 return false;
-            float half = MapSide * .5f, tile = LotDefinition.TileMeters;
+            float half = MapSide * .5f, tile = DistrictGridCellMeters;
             cell = new Vector2Int(Mathf.FloorToInt((hit.point.x + half) / tile), Mathf.FloorToInt((hit.point.z + half) / tile));
             return true;
         }
@@ -193,18 +215,20 @@ namespace CityForge.World
             int count = townZones.Count;
             foreach (var cell in bounds.allPositionsWithin)
             {
-                var center = ZoneCorner(cell) + Vector2.one * (LotDefinition.TileMeters * .5f);
+                var center = ZoneCorner(cell) + Vector2.one * (DistrictGridCellMeters * .5f);
                 if (!InActiveDistrict(center)) return "Keep zoning inside the active district.";
                 if (zone == TownZone.None) continue;
                 if (!townZones.ContainsKey(cell) && ++count > MaxZonedCells) return "This region has reached its zoning limit.";
-                var footprint = new DistrictLotFootprint(center, Vector2.one * (LotDefinition.TileMeters * .5f));
+                var footprint = new DistrictLotFootprint(center, Vector2.one * (DistrictGridCellMeters * .5f));
                 foreach (var lot in PlacedLots)
                     if (footprint.Overlaps(new DistrictLotFootprint(lot))) return "Keep zoning clear of placed lots.";
                 var lower = ZoneCorner(cell);
                 for (int z = 0; z < 3; z++)
                 for (int x = 0; x < 3; x++)
                 {
-                    var point = lower + new Vector2(.2f + 3.8f * x, .2f + 3.8f * z);
+                    const float inset = .2f;
+                    const float step = (DistrictGridCellMeters - 2 * inset) * .5f;
+                    var point = lower + new Vector2(inset + step * x, inset + step * z);
                     if (water != null ? water.Wet(point, out _, out _) : !IsTownLand(point / MapSide + Vector2.one * .5f))
                         return "Zone dry land.";
                 }
@@ -227,7 +251,7 @@ namespace CityForge.World
         }
 
         private Vector2 ZoneCorner(Vector2Int cell) =>
-            (Vector2)cell * LotDefinition.TileMeters - Vector2.one * (MapSide * .5f);
+            (Vector2)cell * DistrictGridCellMeters - Vector2.one * (MapSide * .5f);
 
         private void EnsureZoneSurfaces()
         {
@@ -259,15 +283,15 @@ namespace CityForge.World
         }
 
         private void RefreshZoneOverlay() => FillZoneMesh(zoneMesh, townZones.Where(pair =>
-            InActiveDistrict(ZoneCorner(pair.Key) + Vector2.one * (LotDefinition.TileMeters * .5f))), .15f);
+            InActiveDistrict(ZoneCorner(pair.Key) + Vector2.one * (DistrictGridCellMeters * .5f))), .15f);
 
         private void FillZoneMesh(Mesh mesh, IEnumerable<KeyValuePair<Vector2Int, TownZone>> cells, float lift)
         {
             var vertices = new List<Vector3>();
             var triangles = new List<int>[ZoneColors.Length];
             for (int i = 0; i < triangles.Length; i++) triangles[i] = new List<int>();
-            const float inset = .18f;
-            float edge = LotDefinition.TileMeters - inset;
+            const float inset = .09f;
+            float edge = DistrictGridCellMeters - inset;
             foreach (var cell in cells)
             {
                 var corner = ZoneCorner(cell.Key);
@@ -276,7 +300,7 @@ namespace CityForge.World
                 Add(inset, edge);
                 Add(edge, edge);
                 Add(edge, inset);
-                Add(LotDefinition.TileMeters * .5f, LotDefinition.TileMeters * .5f);
+                Add(DistrictGridCellMeters * .5f, DistrictGridCellMeters * .5f);
                 var indices = triangles[(int)cell.Value];
                 for (int side = 0; side < 4; side++)
                 {
