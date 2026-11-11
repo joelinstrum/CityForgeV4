@@ -37,6 +37,8 @@ internal static class LotCatalogSetup
             FoundersBuilding("brick-state-house", "Brick State House", "BrickStateHouse", 12f),
             FoundersBuilding("harbor-council-house", "Harbor Council House", "HarborCouncilHouse", 12f),
             FoundersBuilding("agrarian-assembly-hall", "Agrarian Assembly Hall", "AgrarianAssemblyHall", 12f),
+            FrontierLogCabin(),
+            SmallColonialCabin(),
             V3Building("wooden-cottage", "Wooden Cottage", "WoodenCottage", "residential", "founders", 8f),
             V3Building("plymouth-store", "Plymouth Store", "PlymouthStore", "commercial", "founders", 9.26f, ".jpeg", ".jpeg"),
             V3Building("small-school", "Small School", "SmallSchool", "civics", "founders", 9f, ".jpg", ".png"),
@@ -78,7 +80,7 @@ internal static class LotCatalogSetup
         var catalog = AssetDatabase.LoadAssetAtPath<LotAssetCatalog>(CatalogPath);
         var entries = (catalog ? catalog.entries : System.Array.Empty<LotAssetCatalogEntry>()).ToList();
         bool changed = false;
-        foreach (var entry in candidates.Concat(meadowPoplars).Concat(Characters()).Concat(Landscaping()).Where(item => item.prefab))
+        foreach (var entry in candidates.Concat(meadowPoplars).Concat(Characters()).Concat(Landscaping()).Concat(Corn()).Concat(Wheat()).Where(item => item.prefab))
         {
             var existing = entries.Find(item => item != null && item.id == entry.id);
             if (existing == null)
@@ -107,12 +109,15 @@ internal static class LotCatalogSetup
             }
             else if ((entry.category == "Buildings" || entry.IsCharacter) &&
                 (existing.group != entry.group || existing.eraId != entry.eraId ||
-                    existing.fromYear != entry.fromYear || existing.toYear != entry.toYear))
+                    existing.fromYear != entry.fromYear || existing.toYear != entry.toYear ||
+                    existing.growableZone != entry.growableZone || existing.growableWealth != entry.growableWealth))
             {
                 existing.group = entry.group;
                 existing.eraId = entry.eraId;
                 existing.fromYear = entry.fromYear;
                 existing.toYear = entry.toYear;
+                existing.growableZone = entry.growableZone;
+                existing.growableWealth = entry.growableWealth;
                 changed = true;
             }
             else if (string.IsNullOrEmpty(existing.group) && !string.IsNullOrEmpty(entry.group))
@@ -199,6 +204,24 @@ internal static class LotCatalogSetup
         }
     }
 
+    private static LotAssetCatalogEntry SmallColonialCabin()
+    {
+        var cabin = V3Building("small-colonial-cabin", "Small Colonial Cabin", "SmallColonialCabin",
+            "residential", "founders", 7.5f, ".jpg", ".png");
+        cabin.growableZone = TownZone.Residential1;
+        cabin.growableWealth = LotWealth.Low;
+        return cabin;
+    }
+
+    private static LotAssetCatalogEntry FrontierLogCabin()
+    {
+        var cabin = V3Building("frontier-log-cabin", "Frontier Log Cabin", "FrontierLogCabin",
+            "residential", "founders", 7.462412f);
+        cabin.growableZone = TownZone.Residential1;
+        cabin.growableWealth = LotWealth.Low;
+        return cabin;
+    }
+
     private static LotAssetCatalogEntry V3Building(string id, string label, string folder, string category,
         string era, float span, string colorExtension = ".jpg", string normalExtension = ".jpg")
     {
@@ -255,6 +278,63 @@ internal static class LotCatalogSetup
         GardenModel("ornate-garden-bench", "Ornate garden bench", "Benches", "GardenBench", 1.8f, "Color.jpg", "Normal.jpg"),
         GardenModel("stone-garden-fountain", "Stone garden fountain", "Fountains", "StoneFountain", 3f, "Color.jpg", "Normal.png")
     };
+
+    private static System.Collections.Generic.IEnumerable<LotAssetCatalogEntry> Corn()
+    {
+        const string root = DirectoryPath + "/Landscaping/Vegetables/Corn/";
+        var color = AssetDatabase.LoadAssetAtPath<Texture2D>(root + "Corn_Base_Color.tga");
+        if (!color) yield break;
+        var labels = new[] { "Corn · Mature", "Corn · Medium", "Corn · Short", "Corn · Young", "Corn · Seedling" };
+        Material material = null;
+        for (int i = 0; i < labels.Length; i++)
+        {
+            int variant = i + 2;
+            var model = AssetDatabase.LoadAssetAtPath<GameObject>(root + $"Corn_V{variant}.fbx");
+            if (!model) continue;
+            var size = FenceBounds(model).size;
+            if (size.x <= .001f || size.y <= .001f || size.z <= .001f) continue;
+            material ??= GardenMaterial(root + "Corn.mat", color, root + "Corn_Normal.tga", cutout: true);
+            var entry = Entry($"corn-v{variant}", labels[i], "Landscaping", model,
+                new Vector2(size.x, size.z), true, true);
+            entry.group = "Vegetables";
+            entry.materialOverride = material;
+            yield return entry;
+        }
+    }
+
+    private static System.Collections.Generic.IEnumerable<LotAssetCatalogEntry> Wheat()
+    {
+        const string root = DirectoryPath + "/Landscaping/Vegetables/Wheat/";
+        var color = AssetDatabase.LoadAssetAtPath<Texture2D>(root + "Wheat_Base_Color.tga");
+        if (!color) yield break;
+        var variants = new[]
+        {
+            ("Wheat_V1", "Wheat · Plant 1"),
+            ("Wheat_V2", "Wheat · Plant 2"),
+            ("Wheat_V3", "Wheat · Plant 3"),
+            ("Wheat_Group_V1", "Wheat · Clump"),
+            ("Wheat_dry_V1", "Wheat · Dry plant 1"),
+            ("Wheat_dry_V2", "Wheat · Dry plant 2"),
+            ("Wheat_dry_V3", "Wheat · Dry plant 3"),
+            ("Wheat_dry_V4", "Wheat · Dry plant 4"),
+            ("Wheat_dry_Group_V1", "Wheat · Dry clump 1"),
+            ("Wheat_dry_Group_V2", "Wheat · Dry clump 2")
+        };
+        Material material = null;
+        foreach (var (modelName, label) in variants)
+        {
+            var model = AssetDatabase.LoadAssetAtPath<GameObject>(root + modelName + ".fbx");
+            if (!model) continue;
+            var size = FenceBounds(model).size;
+            if (size.x <= .001f || size.y <= .001f || size.z <= .001f) continue;
+            material ??= GardenMaterial(root + "Wheat.mat", color, root + "Wheat_Normal.tga", cutout: true);
+            var entry = Entry(modelName.ToLowerInvariant().Replace('_', '-'), label, "Landscaping", model,
+                new Vector2(size.x, size.z), true, true);
+            entry.group = "Vegetables";
+            entry.materialOverride = material;
+            yield return entry;
+        }
+    }
 
     private static LotAssetCatalogEntry Cypress(string id, string label, string model)
     {

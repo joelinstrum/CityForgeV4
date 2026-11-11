@@ -1,4 +1,5 @@
 using System;
+using CityForge.World;
 using UnityEngine;
 
 namespace CityForge.Lots
@@ -12,7 +13,14 @@ namespace CityForge.Lots
         public string group;
         public string subcategory;
         public string eraId;
+        public TownZone growableZone;
+        public LotWealth growableWealth;
+        public string GrowableLabel => new LotZoningLayout { zone = growableZone, wealth = growableWealth }.Label;
         public string idleState;
+        internal bool CanPreviewGrowable(TownZone zone, LotWealth wealth, string era) =>
+            prefab && category == "Buildings" && growableZone == zone && growableWealth == wealth &&
+            (string.IsNullOrEmpty(era) || eraId == era);
+
         public bool IsCharacter => category == "Characters";
         internal float DefaultPlacementScale => id == LotCharacterDeck.HarborHouse ? 1.5f : 1f;
         public GameObject prefab;

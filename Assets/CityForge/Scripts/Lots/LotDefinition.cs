@@ -19,9 +19,11 @@ namespace CityForge.Lots
     [Serializable]
     public sealed class LotDefinition
     {
-        public const int MaxTiles = 16;
-        public const float TileMeters = 8f;
-        public int schema = 1;
+        internal const int CurrentSchema = 2;
+        private const int LegacyMaxTiles = 16;
+        public const int MaxTiles = 32;
+        public const float TileMeters = 4f;
+        public int schema = CurrentSchema;
         public bool harborHouseScaleUpdated;
         public LotType type;
         public LotZoningLayout zoningLayout;
@@ -36,8 +38,8 @@ namespace CityForge.Lots
         public List<LotRequiredResource> requiredResources = new List<LotRequiredResource>();
         public bool requiresKiln;
         public LotCapitalBonus capitalBonus;
-        public int width = 3;
-        public int length = 4;
+        public int width = 6;
+        public int length = 8;
         public int waterfrontRows;
         public HarborVesselTraffic harborVesselTraffic;
         public LotWaterfrontSide waterfrontSide;
@@ -93,6 +95,9 @@ namespace CityForge.Lots
             {
                 zoningLayout.buildingCenter = LotGroundOverlay.QuarterTurn(zoningLayout.buildingCenter, 1);
                 zoningLayout.buildingSize = new Vector2(zoningLayout.buildingSize.y, zoningLayout.buildingSize.x);
+                zoningLayout.frontage = (LotFrontage)(((int)zoningLayout.frontage + 1) % 4);
+                zoningLayout.entrance = LotGroundOverlay.QuarterTurn(zoningLayout.entrance, 1);
+                zoningLayout.driveway = LotGroundOverlay.QuarterTurn(zoningLayout.driveway, 1);
             }
             if (IsWaterfront) waterfrontSide = (LotWaterfrontSide)(((int)waterfrontSide + 1) % 4);
             baseTextureRotation = (baseTextureRotation + 1) % 4;
@@ -121,7 +126,18 @@ namespace CityForge.Lots
         public static LotDefinition Parse(string json)
         {
             var lot = JsonUtility.FromJson<LotDefinition>(json);
-            if (lot == null || lot.schema != 1 || !Guid.TryParseExact(lot.id, "N", out _) ||
+            if (lot?.schema == 1)
+            {
+                if (lot.width < 1 || lot.width > LegacyMaxTiles || lot.length < 1 || lot.length > LegacyMaxTiles ||
+                    lot.waterfrontRows < 0 || lot.waterfrontRows >= lot.WaterfrontDepth)
+                    throw new InvalidDataException("Invalid legacy lot dimensions.");
+                // Geometry and object positions already use meters. Only the tile counts change.
+                lot.width *= 2;
+                lot.length *= 2;
+                lot.waterfrontRows *= 2;
+                lot.schema = CurrentSchema;
+            }
+            if (lot == null || lot.schema != CurrentSchema || !Guid.TryParseExact(lot.id, "N", out _) ||
                 string.IsNullOrWhiteSpace(lot.name) || !ValidSize(lot.width, lot.length) ||
                 !Enum.IsDefined(typeof(LotWaterfrontSide), lot.waterfrontSide) ||
                 !Enum.IsDefined(typeof(HarborVesselTraffic), lot.harborVesselTraffic) ||

@@ -760,6 +760,7 @@ namespace CityForge.World
                 if (Input.GetKeyDown(KeyCode.Escape)) CloseTransportModal();
                 return;
             }
+            UpdateLotGrowth();
             if (SelectedDistrict >= 0 && !DistrictLoading && !IsSaving && Input.GetKeyDown(KeyCode.G) &&
                 !(EventSystem.current && EventSystem.current.currentSelectedGameObject &&
                   EventSystem.current.currentSelectedGameObject.TryGetComponent<InputField>(out var field) && field.isFocused))

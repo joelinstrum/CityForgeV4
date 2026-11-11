@@ -577,6 +577,7 @@ namespace CityForge.World
                 movingDistrictLot.district = record.district;
                 movingDistrictLot.RotationSteps = record.RotationSteps;
                 movingDistrictLot.waterfrontDeckHeight = record.waterfrontDeckHeight;
+                if (movingDistrictLot.definition.type == LotType.Zoning) QueueLotGrowth();
                 CancelLotPlacement();
                 RebuildDistrictLots();
                 selectedLotFeedback.text = "Lot moved. Save the region to keep it.";

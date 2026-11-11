@@ -8,7 +8,7 @@ namespace CityForge.World
 {
     public sealed partial class PrototypeRegionView
     {
-        internal const float DistrictGridCellMeters = 4f;
+        internal const float DistrictGridCellMeters = LotDefinition.TileMeters;
         private bool showDistrictGrid;
         private MeshFilter districtGrid;
 
