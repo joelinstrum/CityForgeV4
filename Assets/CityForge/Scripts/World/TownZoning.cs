@@ -21,7 +21,10 @@ namespace CityForge.World
     {
         public int x, z;
         public TownZone zone;
+        public TownZoneFacing facing;
     }
+
+    public enum TownZoneFacing { None, East, North, West, South }
 
     public sealed partial class PrototypeRegionView
     {
@@ -38,6 +41,7 @@ namespace CityForge.World
         };
 
         private readonly Dictionary<Vector2Int, TownZone> townZones = new();
+        private readonly Dictionary<Vector2Int, TownZoneFacing> residentialFacing = new();
         private readonly Button[] zoneButtons = new Button[10];
         private readonly List<RaycastResult> zoneUiHits = new();
         private Mesh zoneMesh, zonePreviewMesh;
@@ -49,10 +53,15 @@ namespace CityForge.World
         private Vector2Int? zoneDragStart;
         private RectInt? zoneDragBounds;
         private string zoneProblem;
+        private TownZoneFacing zoneDragFrontage;
+        private bool flipResidentialFacing;
         private WildlifeWaterAccess zoneWater;
 
         internal TownZoneCell[] CaptureTownZones() => townZones.OrderBy(pair => pair.Key.y).ThenBy(pair => pair.Key.x)
-            .Select(pair => new TownZoneCell { x = pair.Key.x, z = pair.Key.y, zone = pair.Value }).ToArray();
+            .Select(pair => new TownZoneCell
+            {
+                x = pair.Key.x, z = pair.Key.y, zone = pair.Value, facing = residentialFacing.GetValueOrDefault(pair.Key)
+            }).ToArray();
 
         private void RestoreTownZones(TownZoneCell[] cells, int gridVersion)
         {
@@ -61,7 +70,11 @@ namespace CityForge.World
             foreach (var cell in cells)
                 for (int z = 0; z < scale; z++)
                     for (int x = 0; x < scale; x++)
-                        townZones.Add(new Vector2Int(cell.x * scale + x, cell.z * scale + z), cell.zone);
+                    {
+                        var key = new Vector2Int(cell.x * scale + x, cell.z * scale + z);
+                        townZones.Add(key, cell.zone);
+                        if (cell.facing != TownZoneFacing.None) residentialFacing.Add(key, cell.facing);
+                    }
         }
 
         internal static void ValidateTownZones(TownZoneCell[] cells, float mapSide, int gridVersion)
@@ -77,6 +90,8 @@ namespace CityForge.World
             foreach (var cell in cells)
                 if (cell.x < 0 || cell.x >= mapCells || cell.z < 0 || cell.z >= mapCells ||
                     cell.zone < TownZone.Residential1 || cell.zone > TownZone.Industrial3 ||
+                    cell.facing < TownZoneFacing.None || cell.facing > TownZoneFacing.South ||
+                    (cell.facing != TownZoneFacing.None && ResidentialDepth(cell.zone) == 0) ||
                     !seen.Add(new Vector2Int(cell.x, cell.z)))
                     throw new InvalidDataException("Invalid town zone cell.");
         }
@@ -120,9 +135,11 @@ namespace CityForge.World
             CancelZoneDrag();
             SelectDistrictLot(null);
             activeZone = zone;
+            flipResidentialFacing = false;
             zoneToolArmed = true;
             for (int i = 0; i < zoneButtons.Length; i++) MarkTownButton(zoneButtons[i], i == (int)zone);
             zoneStatus.text = zone == TownZone.None ? "Drag over cells to erase their zoning." :
+                ResidentialDepth(zone) > 0 ? ResidentialDragHint(zone) :
                 "Drag to zone land. Drag over an existing zone to replace it.";
         }
 
@@ -144,7 +161,7 @@ namespace CityForge.World
 
         private bool UpdateZoning()
         {
-            if (!zoneToolArmed || !TownConstructionVisible || !CanBuildTown || IsSaving)
+            if (!Application.isFocused || !zoneToolArmed || !TownConstructionVisible || !CanBuildTown || IsSaving)
             {
                 if (zoneDragStart.HasValue) CancelZoneDrag();
                 return false;
@@ -156,8 +173,16 @@ namespace CityForge.World
                 return true;
             }
 
+            bool flipped = ResidentialDepth(activeZone) > 0 && Input.GetKeyDown(KeyCode.Tab);
+            if (flipped)
+            {
+                flipResidentialFacing = !flipResidentialFacing;
+                if (!zoneDragStart.HasValue)
+                    zoneStatus.text = flipResidentialFacing ? "Facing away from the road · Tab to flip" : ResidentialDragHint(activeZone);
+            }
+
             bool down = Input.GetMouseButtonDown(0), up = Input.GetMouseButtonUp(0);
-            if (!down && !zoneDragStart.HasValue) return false;
+            if (!down && !zoneDragStart.HasValue) return flipped;
             var events = EventSystem.current;
             bool overUi = events && events.IsPointerOverGameObject();
             if (events && (down || up))
@@ -166,12 +191,13 @@ namespace CityForge.World
                 events.RaycastAll(new PointerEventData(events) { position = Input.mousePosition }, zoneUiHits);
                 overUi = zoneUiHits.Count > 0;
             }
-            if (!overUi && TryZoneCell(out var cell)) ProcessZoneDrag(cell, down, up);
+            if (!overUi && TryZoneCell(out var cell)) ProcessZoneDrag(cell, down, up, flipped);
+            else if (flipped && zoneDragBounds is RectInt preview) RefreshZonePreview(preview);
             if (up || (!down && !Input.GetMouseButton(0))) CancelZoneDrag();
             return down || up || zoneDragStart.HasValue;
         }
 
-        private void ProcessZoneDrag(Vector2Int cell, bool down, bool up)
+        private void ProcessZoneDrag(Vector2Int cell, bool down, bool up, bool flipped)
         {
             if (down)
             {
@@ -182,17 +208,30 @@ namespace CityForge.World
             var min = Vector2Int.Min(start, cell);
             var max = Vector2Int.Max(start, cell) + Vector2Int.one;
             var bounds = new RectInt(min, max - min);
-            if (!zoneDragBounds.HasValue || zoneDragBounds.Value != bounds)
+            if (zoneDragBounds != bounds)
             {
                 zoneDragBounds = bounds;
-                zoneProblem = ZoneSiteProblem(bounds, activeZone, zoneWater);
-                zoneStatus.text = zoneProblem ?? $"{bounds.width} × {bounds.height} cells · Release to apply";
-                zonePreviewRenderer.enabled = bounds.width <= MaxZoneDragSide && bounds.height <= MaxZoneDragSide;
-                if (zonePreviewRenderer.enabled)
-                    FillZoneMesh(zonePreviewMesh, PreviewZoneCells(bounds, zoneProblem == null ? activeZone : TownZone.None), .27f);
+                zoneProblem = ZoneSiteProblem(bounds, activeZone, zoneWater, out zoneDragFrontage);
+                RefreshZonePreview(bounds);
             }
+            else if (flipped) RefreshZonePreview(bounds);
             if (up && zoneProblem == null)
-                zoneStatus.text = ApplyTownZone(bounds, activeZone) ?? "Zoning updated. Save the region to keep it.";
+                zoneStatus.text = ApplyTownZone(bounds, activeZone) ?? (activeZone == TownZone.Residential1
+                    ? ResidentialPaintStatus(bounds, zoneDragFrontage) : "Zoning updated. Save the region to keep it.");
+        }
+
+        private void RefreshZonePreview(RectInt bounds)
+        {
+            bool residential = ResidentialDepth(activeZone) > 0;
+            string action = activeZone == TownZone.None ? "Release to erase" :
+                residential ? "Tab to flip · Release to apply" : "Release to apply";
+            zoneStatus.text = zoneProblem ?? $"{bounds.width} × {bounds.height} cells · {action}";
+            zonePreviewRenderer.enabled = residential
+                ? zoneProblem == null || (long)bounds.width * bounds.height <= MaxZoneDragSide * MaxZoneDragSide
+                : bounds.width <= MaxZoneDragSide && bounds.height <= MaxZoneDragSide;
+            if (zonePreviewRenderer.enabled)
+                FillZoneMesh(zonePreviewMesh, PreviewZoneCells(bounds, zoneProblem == null ? activeZone : TownZone.None),
+                    .27f, zoneProblem == null ? ResidentialFacing(zoneDragFrontage) : TownZoneFacing.None);
         }
 
         private bool TryZoneCell(out Vector2Int cell)
@@ -208,9 +247,18 @@ namespace CityForge.World
             return true;
         }
 
-        private string ZoneSiteProblem(RectInt bounds, TownZone zone, WildlifeWaterAccess water)
+        private string ZoneSiteProblem(RectInt bounds, TownZone zone, WildlifeWaterAccess water, out TownZoneFacing frontage)
         {
-            if (bounds.width < 1 || bounds.height < 1 || bounds.width > MaxZoneDragSide || bounds.height > MaxZoneDragSide)
+            frontage = TownZoneFacing.None;
+            if (bounds.width < 1 || bounds.height < 1) return "Select at least one cell.";
+            int maxDepth = ResidentialDepth(zone);
+            if (maxDepth > 0)
+            {
+                if ((long)bounds.width * bounds.height > MaxZonedCells) return "This region has reached its zoning limit.";
+                var problem = ResidentialFrontageProblem(bounds, maxDepth, out frontage);
+                if (problem != null) return problem;
+            }
+            else if (bounds.width > MaxZoneDragSide || bounds.height > MaxZoneDragSide)
                 return $"Zone up to {MaxZoneDragSide} × {MaxZoneDragSide} cells at once.";
             int count = townZones.Count;
             foreach (var cell in bounds.allPositionsWithin)
@@ -239,13 +287,17 @@ namespace CityForge.World
         private string ApplyTownZone(RectInt bounds, TownZone zone)
         {
             if (!CanBuildTown || IsSaving) return "Establish the town center before zoning.";
-            var problem = ZoneSiteProblem(bounds, zone, DistrictLotWater());
+            var problem = ZoneSiteProblem(bounds, zone, DistrictLotWater(), out var frontage);
             if (problem != null) return problem;
+            var facing = ResidentialFacing(frontage);
             foreach (var cell in bounds.allPositionsWithin)
             {
                 if (zone == TownZone.None) townZones.Remove(cell);
                 else townZones[cell] = zone;
+                if (facing != TownZoneFacing.None) residentialFacing[cell] = facing;
+                else residentialFacing.Remove(cell);
             }
+            if (zone == TownZone.Residential1) QueueLotGrowth();
             if (zoneRenderer) RefreshZoneOverlay();
             return null;
         }
@@ -263,10 +315,27 @@ namespace CityForge.World
                 material.SetColor("_BaseColor", color);
                 LotGroundTexture.ConfigureTransparentLayer(material, 1);
                 return material;
-            }).ToArray();
+            }).Append(CreateArrowMaterial()).ToArray();
             zoneRenderer = CreateSurface("District zoning", out zoneMesh);
             zonePreviewRenderer = CreateSurface("Zoning drag preview", out zonePreviewMesh);
             zonePreviewRenderer.enabled = false;
+            var previewMaterials = (Material[])zoneMaterials.Clone();
+            // Draw the drag over saved arrows, including when the selected cells will be erased.
+            StylePreview(TownZone.None, new Color(.92f, .18f, .16f, .92f));
+            for (var zone = TownZone.Residential1; zone <= TownZone.Residential3; zone++)
+                StylePreview(zone, ZoneColors[(int)zone]);
+            previewMaterials[^1] = Own(new Material(zoneMaterials[^1]));
+            LotGroundTexture.ConfigureTransparentLayer(previewMaterials[^1], 4);
+            zonePreviewRenderer.sharedMaterials = previewMaterials;
+
+            void StylePreview(TownZone zone, Color color)
+            {
+                int index = (int)zone;
+                var material = Own(new Material(zoneMaterials[index]));
+                material.SetColor("_BaseColor", color);
+                LotGroundTexture.ConfigureTransparentLayer(material, 3);
+                previewMaterials[index] = material;
+            }
 
             MeshRenderer CreateSurface(string title, out Mesh mesh)
             {
@@ -282,13 +351,23 @@ namespace CityForge.World
             }
         }
 
-        private void RefreshZoneOverlay() => FillZoneMesh(zoneMesh, townZones.Where(pair =>
-            InActiveDistrict(ZoneCorner(pair.Key) + Vector2.one * (DistrictGridCellMeters * .5f))), .15f);
+        private void RefreshZoneOverlay()
+        {
+            var districtMembers = ActiveDistrictMembers;
+            var developed = PlacedLots.Where(lot => districtMembers.Contains(lot.district))
+                .Select(lot => new DistrictLotFootprint(lot)).ToArray();
+            FillZoneMesh(zoneMesh, townZones.Where(pair =>
+            {
+                var center = ZoneCorner(pair.Key) + Vector2.one * (DistrictGridCellMeters * .5f);
+                return InActiveDistrict(center) && !developed.Any(lot => lot.Contains(center, .001f));
+            }), .15f);
+        }
 
-        private void FillZoneMesh(Mesh mesh, IEnumerable<KeyValuePair<Vector2Int, TownZone>> cells, float lift)
+        private void FillZoneMesh(Mesh mesh, IEnumerable<KeyValuePair<Vector2Int, TownZone>> cells, float lift,
+            TownZoneFacing previewFacing = TownZoneFacing.None)
         {
             var vertices = new List<Vector3>();
-            var triangles = new List<int>[ZoneColors.Length];
+            var triangles = new List<int>[ZoneColors.Length + 1];
             for (int i = 0; i < triangles.Length; i++) triangles[i] = new List<int>();
             const float inset = .09f;
             float edge = DistrictGridCellMeters - inset;
@@ -307,6 +386,14 @@ namespace CityForge.World
                     indices.Add(first + side);
                     indices.Add(first + (side + 1) % 4);
                     indices.Add(first + 4);
+                }
+
+                if (ResidentialDepth(cell.Value) > 0)
+                {
+                    var facing = mesh == zonePreviewMesh ? previewFacing : residentialFacing.GetValueOrDefault(cell.Key);
+                    if (facing != TownZoneFacing.None)
+                        AddResidentialArrow(vertices, triangles[^1], corner + Vector2.one * (DistrictGridCellMeters * .5f),
+                            facing, lift + .045f);
                 }
 
                 void Add(float x, float z)

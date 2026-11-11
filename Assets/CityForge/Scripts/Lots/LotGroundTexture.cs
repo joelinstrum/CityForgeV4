@@ -86,7 +86,7 @@ namespace CityForge.Lots
         internal static Vector2 FullTextureAnchor(Vector2 size, int span, int rotation)
         {
             var localSize = rotation % 2 == 0 ? size : new Vector2(size.y, size.x);
-            return QuarterTurn(-localSize * .5f + Vector2.one * (LotDefinition.TileMeters * span * .5f), rotation);
+            return QuarterTurn(-localSize * .5f + Vector2.one * (LotGroundTexture.RepeatMeters * span * .5f), rotation);
         }
 
         internal static Rect QuarterTurn(Rect area, int turns)
@@ -117,6 +117,8 @@ namespace CityForge.Lots
             new LotGroundTexture("", "Olive Green", "", new Color32(112, 125, 64, 255)),
             new LotGroundTexture("lush-grass", "Lush Grass", "Lots/GroundTextures/lush-grass", new Color32(93, 132, 55, 255)),
             new LotGroundTexture("patchy-grass", "Patchy Grass", "Lots/GroundTextures/patchy-grass", new Color32(135, 128, 79, 255)),
+            new LotGroundTexture("low-wealth-4x4", "Low Wealth Grass · 4 × 4", "Lots/GroundTextures/low-wealth-4x4-tile",
+                new Color32(112, 125, 64, 255), 2),
             new LotGroundTexture("packed-earth", "Packed Earth", "Lots/PathMaterials/packed-earth", new Color32(130, 97, 67, 255))
         };
 
@@ -130,20 +132,23 @@ namespace CityForge.Lots
 
         public readonly string Id, Label;
         public readonly Color Fallback;
+        public readonly int DefaultSpan;
         private readonly string resource;
 
-        private LotGroundTexture(string id, string label, string resource, Color fallback)
+        private LotGroundTexture(string id, string label, string resource, Color fallback, int defaultSpan = 1)
         {
             Id = id;
             Label = label;
             this.resource = resource;
             Fallback = fallback;
+            DefaultSpan = defaultSpan;
         }
 
         public Texture2D Texture => resource.Length == 0 ? null : Resources.Load<Texture2D>(resource);
         public static LotGroundTexture Find(bool overlay, string id) =>
             Array.Find(overlay ? Overlay : Base, entry => entry.Id == (id ?? ""));
-        public static Vector2 Repeat(Vector2 size, int span) => size / (LotDefinition.TileMeters * span);
+        internal const float RepeatMeters = 8f;
+        public static Vector2 Repeat(Vector2 size, int span) => size / (RepeatMeters * span);
 
         internal static void ConfigureTransparentLayer(Material material, int order)
         {

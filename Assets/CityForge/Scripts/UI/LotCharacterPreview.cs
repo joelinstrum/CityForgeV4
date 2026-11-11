@@ -151,7 +151,7 @@ namespace CityForge.UI
             actor.talking = false;
         }
 
-        public void Tick(float delta, string dragged)
+        public void Tick(float delta, ICollection<string> dragged)
         {
             if (delta <= 0) return;
             previewTime += delta;
@@ -159,7 +159,7 @@ namespace CityForge.UI
             {
                 var actor = pair.Value;
                 if (!actor.settings.configured) continue;
-                if (pair.Key == dragged || actor.onDeck || actor.settings.idlePercent == 100 ||
+                if (dragged?.Contains(pair.Key) == true || actor.onDeck || actor.settings.idlePercent == 100 ||
                     actor.settings.scriptedBehavior != LotScriptedBehavior.None)
                 {
                     actor.Animate(actor.idle);

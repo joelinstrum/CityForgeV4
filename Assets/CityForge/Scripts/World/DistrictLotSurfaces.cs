@@ -9,17 +9,23 @@ namespace CityForge.World
     internal sealed class DistrictLotSurfaces : MonoBehaviour
     {
         private readonly List<UnityEngine.Object> assets = new();
+        private static readonly int BaseColor = Shader.PropertyToID("_BaseColor");
+        // The meadow grade lifts lot materials more than the Lot Editor's preview.
+        private static readonly Color GradedGround = new(.59f, .60f, .52f, 1f);
+        private static readonly Color GradedPath = new(.635f, .56f, .49f, 1f);
+        private static readonly Color GradedBuilding = new(.79f, .79f, .79f, 1f);
 
-        internal void Build(LotDefinition lot, Func<Vector2, float> terrainHeight, float deckHeight = 0f)
+        internal void Build(LotDefinition lot, Func<Vector2, float> terrainHeight, float deckHeight, bool meadowGrade)
         {
             var bounds = new Rect(-lot.Size * .5f, lot.Size);
+            var groundTint = meadowGrade ? GradedGround : Color.white;
             if (!string.IsNullOrEmpty(lot.baseTexture) && LotGroundTexture.Find(false, lot.baseTexture) is { } ground)
             {
                 var texture = ground.Texture;
                 AddSurface("Lot base", Grid(lot.LandBounds, p => LotGroundTexture.Repeat(
                     LotGroundOverlay.QuarterTurn(p, -lot.baseTextureRotation) + lot.SizeForRotation(lot.baseTextureRotation) * .5f,
                     lot.baseTextureSpan), .035f),
-                    texture, texture ? Color.white : ground.Fallback);
+                    texture, (texture ? Color.white : ground.Fallback) * groundTint);
             }
 
             AddOverlay(lot.overlayTexture, lot.overlayTextureSpan, bounds, bounds.center, lot.overlayTextureRotation, 0);
@@ -34,6 +40,8 @@ namespace CityForge.World
                 var path = lot.paths[i];
                 var style = LotPathMaterial.Find(path.materialId);
                 var material = style.CreateMaterial();
+                if (meadowGrade && material.HasProperty(BaseColor))
+                    material.SetColor(BaseColor, material.GetColor(BaseColor) * GradedPath);
                 if (path.edgeBlend > 0 || path.recessed) LotPathMaterial.ApplyEdgeTreatment(material, path, path.edgeBlend, i);
                 AddSurface(style.Label + " path", LotPathSurface.BuildMesh(path, style.TileSize, .10f + i * .0005f, PathHeight), material);
             }
@@ -59,7 +67,7 @@ namespace CityForge.World
                 if (area.width <= 0 || area.height <= 0) return;
                 AddSurface("Lot overlay", Grid(area, p => Vector2.one * .5f +
                     LotGroundTexture.Repeat(LotGroundOverlay.QuarterTurn(p - center, -rotation), span), .065f),
-                    texture, Color.white, order);
+                    texture, groundTint, order);
             }
 
             Mesh Grid(Rect area, Func<Vector2, Vector2> textureCoordinate, float lift)
@@ -89,6 +97,25 @@ namespace CityForge.World
                 var mesh = new Mesh { vertices = vertices, uv = uv, triangles = indices };
                 mesh.RecalculateNormals();
                 return mesh;
+            }
+        }
+
+        internal static void MatchGradedBuilding(Transform instance)
+        {
+            var properties = new MaterialPropertyBlock();
+            foreach (var renderer in instance.GetComponentsInChildren<Renderer>())
+            {
+                var materials = renderer.sharedMaterials;
+                for (int i = 0; i < materials.Length; i++)
+                {
+                    var material = materials[i];
+                    if (!material || !material.HasProperty(BaseColor)) continue;
+                    renderer.GetPropertyBlock(properties, i);
+                    if (properties.isEmpty) renderer.GetPropertyBlock(properties);
+                    var color = properties.HasColor(BaseColor) ? properties.GetColor(BaseColor) : material.GetColor(BaseColor);
+                    properties.SetColor(BaseColor, color * GradedBuilding);
+                    renderer.SetPropertyBlock(properties, i);
+                }
             }
         }
 

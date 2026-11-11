@@ -21,15 +21,15 @@ internal static class LotEditorChecks
         var inspector = workspace.transform.Find("Lot inspector");
         var dimensions = new[] { inspector.Find("Width dropdown").GetComponent<Button>(),
             inspector.Find("Length dropdown").GetComponent<Button>() };
-        Require(dimensions[0].GetComponentInChildren<Text>().text.StartsWith("3 ") &&
-            dimensions[1].GetComponentInChildren<Text>().text.StartsWith("4 "), "Default is 3 × 4.");
-        Choose(dimensions[0], inspector, "Width choices", "16");
+        Require(dimensions[0].GetComponentInChildren<Text>().text.StartsWith("6 ") &&
+            dimensions[1].GetComponentInChildren<Text>().text.StartsWith("8 "), "Default is 6 × 8 on the 4 m grid.");
+        Choose(dimensions[0], inspector, "Width choices", "32");
         Choose(dimensions[1], inspector, "Length choices", "1");
-        Require(dimensions[0].GetComponentInChildren<Text>().text.StartsWith("16 ") &&
+        Require(dimensions[0].GetComponentInChildren<Text>().text.StartsWith("32 ") &&
             dimensions[1].GetComponentInChildren<Text>().text.StartsWith("1 "), "Both size limits apply.");
         var footer = workspace.transform.Find("Status bar");
         footer.Find("Undo").GetComponent<Button>().onClick.Invoke();
-        Require(dimensions[1].GetComponentInChildren<Text>().text.StartsWith("4 "), "Undo restores length.");
+        Require(dimensions[1].GetComponentInChildren<Text>().text.StartsWith("8 "), "Undo restores length.");
         footer.Find("Redo").GetComponent<Button>().onClick.Invoke();
         Require(dimensions[1].GetComponentInChildren<Text>().text.StartsWith("1 "), "Redo reapplies length.");
 
@@ -53,6 +53,15 @@ internal static class LotEditorChecks
         var catalog = LotAssetCatalog.Load();
         Require(catalog && catalog.Find("farmhouse")?.prefab && catalog.Find("poplar")?.prefab &&
             catalog.Find("wood-fence")?.prefab, "Local catalog resolves three assets.");
+        var legacy = new LotDefinition { schema = 1, width = 2, length = 3, waterfrontRows = 1 };
+        var upgraded = LotDefinition.Parse(JsonUtility.ToJson(legacy));
+        Require(upgraded.width == 4 && upgraded.length == 6 && upgraded.waterfrontRows == 2 &&
+            upgraded.Size == new Vector2(16, 24) && upgraded.waterfrontRows * LotDefinition.TileMeters == 8,
+            "Legacy lots preserve their physical and waterfront dimensions.");
+        var upgradedAgain = LotDefinition.Parse(JsonUtility.ToJson(upgraded));
+        Require(upgradedAgain.Size == upgraded.Size && upgradedAgain.waterfrontRows == upgraded.waterfrontRows,
+            "An upgraded lot does not migrate a second time.");
+
         var authored = new LotDefinition();
         authored.objects.Add(new LotObjectDefinition { assetId = "farmhouse", yaw = 90 });
         authored.objects.Add(new LotObjectDefinition { assetId = "poplar", position = new Vector2(-9, 10) });
@@ -79,12 +88,12 @@ internal static class LotEditorChecks
                 authored.objects.Count == 4, "Cosmetic override leaves base data intact.");
             reopened.width = 16;
             Reject(() => LotCustomizationService.CreateOverride(authored, reopened, catalog));
-            reopened.width = 3;
+            reopened.width = authored.width;
             reopened.objects[0].yaw = 0;
             Reject(() => LotCustomizationService.CreateOverride(authored, reopened, catalog));
             cosmetic.objects.Add(new LotObjectDefinition { assetId = "farmhouse" });
             Reject(() => LotCustomizationService.Apply(authored, cosmetic, catalog));
-            authored.length = 17;
+            authored.length = LotDefinition.MaxTiles + 1;
             Reject(() => LotDefinition.Parse(JsonUtility.ToJson(authored)));
         }
         finally

@@ -7,6 +7,7 @@ using CityForge.Lots;
 using CityForge.UI;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.Rendering.Universal;
 
 namespace CityForge.World
 {
@@ -518,6 +519,7 @@ namespace CityForge.World
 
         private void RebuildDistrictLots()
         {
+            if (zoneRenderer && zoneRenderer.enabled) RefreshZoneOverlay();
             RefreshDirtRoadEndFades();
             districtLotRoots.Clear();
             roadBuildings.Clear();
@@ -547,6 +549,9 @@ namespace CityForge.World
             lotInstances = new GameObject("Placed lots").transform;
             lotInstances.SetParent(transform, false);
             var active = new HashSet<int>(ActiveDistrictMembers);
+            var camera = GetComponentInChildren<Camera>();
+            bool meadowGrade = ApprovedDistrict && camera &&
+                camera.GetUniversalAdditionalCameraData().renderPostProcessing;
             foreach (var record in PlacedLots)
             {
                 if (!active.Contains(record.district)) continue;
@@ -578,7 +583,10 @@ namespace CityForge.World
                         point.y = Mathf.Max(point.y, record.waterfrontDeckHeight);
                     instance.position = point;
                     if (asset.category == "Buildings")
+                    {
+                        if (meadowGrade) DistrictLotSurfaces.MatchGradedBuilding(instance);
                         roadBuildings.Add(new RoadBuildingFootprint(instance, asset.footprint * item.scale));
+                    }
                     if (item.assetId == LotCharacterDeck.HarborHouse)
                     {
                         harborPorch = instance;
@@ -597,7 +605,7 @@ namespace CityForge.World
                 }
                 if (definition.AttractsVessels && ApprovedDistrict && ApprovedDistrict.DisplayTerrain)
                     HarborLanding.Build(root, ApprovedDistrict, record, harborPorch);
-                root.gameObject.AddComponent<DistrictLotSurfaces>().Build(definition, LotHeight, record.waterfrontDeckHeight);
+                root.gameObject.AddComponent<DistrictLotSurfaces>().Build(definition, LotHeight, record.waterfrontDeckHeight, meadowGrade);
             }
             SelectDistrictLot(selectedDistrictLot);
         }
@@ -619,7 +627,9 @@ namespace CityForge.World
                     !float.IsFinite(record.center.x) || !float.IsFinite(record.center.y) ||
                     record.rotation < 0 || record.rotation > 3 || record.definition == null || !float.IsFinite(record.waterfrontDeckHeight))
                     throw new InvalidDataException("Invalid placed lot.");
-                LotDefinition.Parse(JsonUtility.ToJson(record.definition));
+                var validated = LotDefinition.Parse(JsonUtility.ToJson(record.definition));
+                if (record.definition.schema != LotDefinition.CurrentSchema)
+                    record.definition = validated;
             }
         }
     }
