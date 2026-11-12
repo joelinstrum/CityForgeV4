@@ -45,6 +45,11 @@ Shader "Hidden/CityForge/Meadow Grass Grade"
                 // Normalize the tint so its hue adjustment does not silently change exposure.
                 float3 tint = IsGammaSpace() ? _GrassTint.rgb : LinearToGammaSpace(_GrassTint.rgb);
                 color*=tint/max(.001,dot(tint,float3(.2126,.7152,.0722)));
+                // Pull both grass layers toward a leaf green while keeping their light and dark detail.
+                const float3 lumaWeights = float3(.2126,.7152,.0722);
+                const float3 grassGreen = float3(.58,1,.43);
+                float3 green = grassGreen * (dot(color,lumaWeights) / dot(grassGreen,lumaWeights));
+                color=lerp(color,green,.65);
                 color=GammaToLinearSpace(LinearToGammaSpace(color)*_Brightness);
                 if (!IsGammaSpace()) color=GammaToLinearSpace(color);
                 return float4(color,source.a);

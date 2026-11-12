@@ -63,7 +63,7 @@ namespace CityForge.World
             camera=land.View.GetComponentInChildren<CityForge.CameraSystem.CityForgeCameraController>();
             foreach (var actor in land.View.PlacedActors)
             {
-                if (actor.pedestrian || !land.Contains(actor.position)) continue;
+                if (actor.pedestrian || actor.tree || !land.Contains(actor.position)) continue;
                 var species = Array.Find(library.species, entry => entry != null && entry.id == actor.assetId);
                 if (species != null && species.prefab) AddPlacedAnimal(species, actor.position);
             }

@@ -63,21 +63,6 @@ namespace CityForge.World
             return $"{layout.name} needs {size.x} cells along the road and {size.y} cells deep.";
         }
 
-        private string ResidentialPaintStatus(RectInt bounds, TownZoneFacing facing)
-        {
-            var options = FoundersGrowthLayouts(out var problem);
-            if (options.Length == 0) return problem;
-            bool alongX = facing is TownZoneFacing.East or TownZoneFacing.West;
-            var painted = alongX ? new Vector2Int(bounds.height, bounds.width) : bounds.size;
-            foreach (var (layout, _) in options)
-            {
-                var required = GrowthFrontageSize(layout);
-                if (painted.x >= required.x && painted.y >= required.y)
-                    return $"Checking this site for {layout.name}…";
-            }
-            return GrowthSpaceHint(options[^1].Layout);
-        }
-
         private static Vector2Int GrowthLotCells(LotDefinition layout, int rotation) =>
             Vector2Int.RoundToInt(layout.SizeForRotation(rotation) / DistrictGridCellMeters);
 
@@ -137,7 +122,7 @@ namespace CityForge.World
                 growthDistrict = SelectedDistrict;
                 QueueLotGrowth();
             }
-            if (!CanBuildTown || IsSaving || lotPlacementDraft != null || detonateLastPoint.HasValue ||
+            if (!CanBuildTown || IsSaving || movingDistrictLot != null || detonateLastPoint.HasValue ||
                 Time.unscaledTime < nextLotGrowth) return;
             nextLotGrowth = float.PositiveInfinity;
             IEnumerable<Vector2Int> pending = fullGrowthCheckQueued ? residentialFacing.Keys : localGrowthCells;
@@ -152,6 +137,9 @@ namespace CityForge.World
                 return;
             }
 
+            // Keep larger footprints first and give equal-sized templates a chance at each site.
+            var sizeGroups = options.GroupBy(option => option.Layout.width * option.Layout.length)
+                .Select(group => group.ToArray()).ToArray();
             var water = DistrictLotWater();
             var grownNames = new System.Collections.Generic.HashSet<string>();
             bool hasResidential = false;
@@ -163,7 +151,7 @@ namespace CityForge.World
                     !InActiveDistrict(ZoneCorner(cell) +
                     Vector2.one * (DistrictGridCellMeters * .5f))) continue;
                 hasResidential = true;
-                foreach (var (layout, buildings) in options)
+                foreach (var (layout, buildings) in GrowthOptions(sizeGroups))
                 {
                     int rotation = (8 - (int)facing - (int)layout.zoningLayout.frontage) % 4;
                     var size = GrowthLotCells(layout, rotation);
@@ -191,8 +179,9 @@ namespace CityForge.World
                         continue;
                     }
 
-                    record.definition = LotGrowableBuildings.Materialize(layout,
-                        buildings[UnityEngine.Random.Range(0, buildings.Length)]);
+                    var building = buildings[UnityEngine.Random.Range(0, buildings.Length)];
+                    record.definition = LotGrowableBuildings.Materialize(layout, building);
+                    AddResidentialEntryPath(record, building);
                     record.id = Guid.NewGuid().ToString("N");
                     PlacedLots.Add(record);
                     grownNames.Add(layout.name);
@@ -206,6 +195,17 @@ namespace CityForge.World
             }
             else if (hasResidential)
                 ShowGrowthStatus(blocked ?? GrowthSpaceHint(options[^1].Layout));
+        }
+
+        private static IEnumerable<(LotDefinition Layout, LotObjectDefinition[] Buildings)> GrowthOptions(
+            (LotDefinition Layout, LotObjectDefinition[] Buildings)[][] sizeGroups)
+        {
+            foreach (var group in sizeGroups)
+            {
+                int start = group.Length > 1 ? UnityEngine.Random.Range(0, group.Length) : 0;
+                for (int i = 0; i < group.Length; i++)
+                    yield return group[(start + i) % group.Length];
+            }
         }
 
         private void ShowGrowthStatus(string message)

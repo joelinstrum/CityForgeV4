@@ -22,6 +22,7 @@ Shader "CityForge/Lot Path Blend"
         [HideInInspector] _DirtEndFade("Standalone Dirt Ends", Vector) = (0,0,0,0)
         _EdgeBlend("Edge Blend in Meters", Float) = 0
         _Recessed("Recessed Edge Shadow", Float) = 0
+        _PathOpacity("Path Opacity", Range(0,1)) = 1
     }
     SubShader
     {
@@ -59,6 +60,7 @@ Shader "CityForge/Lot Path Blend"
             float4 _DirtJunctionAxes[32];
             float _EdgeBlend;
             float _Recessed;
+            float _PathOpacity;
             TEXTURE2D(_RoadWearMap);
             SAMPLER(sampler_RoadWearMap);
             TEXTURE2D(_RoadShoulderMask);
@@ -299,7 +301,7 @@ Shader "CityForge/Lot Path Blend"
                     color.rgb *= 1 - .20 * shadow;
                 }
                 color.rgb = MixFog(color.rgb, input.fog);
-                color.a = opacity;
+                color.a = opacity * _PathOpacity;
                 return color;
             }
             ENDHLSL

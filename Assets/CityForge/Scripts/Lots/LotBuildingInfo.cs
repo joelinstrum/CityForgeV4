@@ -13,9 +13,21 @@ namespace CityForge.Lots
         public LotFrontage facing;
         public LotEntryType entryType;
         public float width;
+        public Vector3 dimensions;
+        public bool dimensionsOnly;
+
+        internal bool HasDimensions => Positive(dimensions.x) && Positive(dimensions.y) && Positive(dimensions.z);
+
+        internal static bool Positive(float value) => float.IsFinite(value) && value > 0f;
 
         private static string PathFor(string id) => Path.Combine(Application.persistentDataPath,
             "BuildingInfo", Uri.EscapeDataString(id) + ".json");
+
+        internal static LotBuildingInfo LoadEntry(string id)
+        {
+            var info = Load(id);
+            return info != null && !info.dimensionsOnly ? info : null;
+        }
 
         internal static LotBuildingInfo Load(string id)
         {

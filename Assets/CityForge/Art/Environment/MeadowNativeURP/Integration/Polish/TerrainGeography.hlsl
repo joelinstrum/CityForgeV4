@@ -15,14 +15,14 @@ TEXTURE2D(_GeographyAlbedo4); TEXTURE2D(_GeographyNormal4); float4 _GeographySur
 TEXTURE2D(_GeographyAlbedo5); TEXTURE2D(_GeographyNormal5); float4 _GeographySurface5; half3 _GeographyAlbedoBias5; half3 _GeographyAlbedoMean5;
 
 // Share the terrain's repeat sampler. A zero texture weight skips its sampling.
-#define CITYFORGE_GEOGRAPHY_SURFACE(I,W) \
+#define CITYFORGE_GEOGRAPHY_SURFACE(I,W,DETAIL) \
     if (W > .018h) { \
         float4 surface = _GeographySurface##I; \
         if (surface.x > 0) { \
             float2 texUV = world * surface.x; \
             half3 color = SAMPLE_TEXTURE2D_GRAD(_GeographyAlbedo##I,sampler_Splat0,texUV,worldDx*(surface.x*albedoMipScale),worldDy*(surface.x*albedoMipScale)).rgb; \
             half3 mean = _GeographyAlbedoMean##I; \
-            if (mean.g > 0) color = lerp(mean, color, textureDetail); \
+            if (mean.g > 0) color = lerp(mean, color, DETAIL); \
             blendColor += W * max(0, color * surface.w + _GeographyAlbedoBias##I); \
             half3 layerNormal = half3(0,0,1); \
             if (surface.z > 0 && normalDetail > 0) { \
@@ -62,12 +62,14 @@ void ApplyTerrainGeography(float2 world, half coverage, inout half3 albedo, inou
     }
     half3 blendColor = 0, blendNormal = 0;
     half blendSmoothness = 0, blended = 0;
-    CITYFORGE_GEOGRAPHY_SURFACE(0,a.x)
-    CITYFORGE_GEOGRAPHY_SURFACE(1,a.y)
-    CITYFORGE_GEOGRAPHY_SURFACE(2,a.z)
-    CITYFORGE_GEOGRAPHY_SURFACE(3,a.w)
-    CITYFORGE_GEOGRAPHY_SURFACE(4,b.x)
-    CITYFORGE_GEOGRAPHY_SURFACE(5,b.y)
+    // Compensate for the loss of grass texture contrast in distant mips.
+    half grassDetail = lerp(1,1.55,smoothstep(.06,.24,footprint));
+    CITYFORGE_GEOGRAPHY_SURFACE(0,a.x,grassDetail)
+    CITYFORGE_GEOGRAPHY_SURFACE(1,a.y,grassDetail)
+    CITYFORGE_GEOGRAPHY_SURFACE(2,a.z,textureDetail)
+    CITYFORGE_GEOGRAPHY_SURFACE(3,a.w,textureDetail)
+    CITYFORGE_GEOGRAPHY_SURFACE(4,b.x,textureDetail)
+    CITYFORGE_GEOGRAPHY_SURFACE(5,b.y,textureDetail)
     half remaining = saturate(1 - blended * coverage);
     albedo = albedo * remaining + blendColor * coverage;
     normalTS = normalize(normalTS * remaining + blendNormal * coverage);

@@ -18,7 +18,8 @@ namespace CityForge.UI
         private RegionTown[] contextTowns = Array.Empty<RegionTown>();
         private int contextDistrict = -1;
         private Vector2? contextPress;
-        private bool coastlineChoices;
+        private bool coastlineChoices, confirmingDistrictReset;
+        private Button resetDistrictAction;
 
         private bool DistrictContextOpen => districtContext && districtContext.gameObject.activeSelf;
         private RegionTown ContextTown => contextTowns.Length == 0 ? null : contextTowns[districtTownChoice.value];
@@ -39,10 +40,13 @@ namespace CityForge.UI
             dismiss.targetGraphic = shade;
             dismiss.transition = Selectable.Transition.None;
             dismiss.onClick.AddListener(CloseDistrictContext);
-            districtPanel = Rect(districtContext, "District actions", Vector2.zero, new Vector2(510, 304));
-            districtPanel.gameObject.AddComponent<Image>().color = Panel;
-            contextTitle = Label(districtPanel, "Heading", "", new Vector2(-40, 125), new Vector2(386, 34), 23);
-            MakeButton(districtPanel, "Close", new Vector2(207, 125), new Vector2(70, 32), CloseDistrictContext);
+            districtPanel = Rect(districtContext, "District actions", Vector2.zero, new Vector2(510, 366));
+            var background = districtPanel.gameObject.AddComponent<Image>();
+            background.color = Panel;
+            RegionBrassArtwork.SetImage(background, "panel", sliced: true);
+            contextTitle = Label(districtPanel, "Heading", "", new Vector2(-40, 156), new Vector2(386, 34), 26);
+            var close = MakeButton(districtPanel, "Close", new Vector2(218, 147), new Vector2(35, 35), CloseDistrictContext);
+            RegionBrassArtwork.SetButton(close, "close");
 
             districtTownChoice = DefaultControls.CreateDropdown(new DefaultControls.Resources()).GetComponent<Dropdown>();
             districtTownChoice.name = "District town";
@@ -52,6 +56,13 @@ namespace CityForge.UI
             choiceRect.sizeDelta = new Vector2(460, 34);
             districtTownChoice.captionText.font = districtTownChoice.itemText.font = font;
             districtTownChoice.captionText.supportRichText = districtTownChoice.itemText.supportRichText = false;
+            if (RegionBrassArtwork.SetImage(districtTownChoice.GetComponent<Image>(), "button"))
+            {
+                districtTownChoice.captionText.color = Gold;
+                districtTownChoice.captionText.rectTransform.offsetMin = new Vector2(16f, 2f);
+                var arrow = choiceRect.Find("Arrow");
+                if (arrow && arrow.TryGetComponent<Image>(out var arrowImage)) arrowImage.color = Gold;
+            }
             districtTownChoice.onValueChanged.AddListener(_ => RefreshDistrictContext());
 
             renameAction = MakeButton(districtPanel, "Change name of town", new Vector2(-116, 38), new Vector2(224, 36), () =>
@@ -81,8 +92,30 @@ namespace CityForge.UI
             districtRename = MakeInput(districtPanel, "New town name", new Vector2(-74, -96), new Vector2(312, 34));
             districtRename.characterLimit = RegionTown.NameLimit;
             applyRename = MakeButton(districtPanel, "Save name", new Vector2(160, -96), new Vector2(140, 34), SubmitDistrictRename);
-            contextStatus = Label(districtPanel, "Status", "", new Vector2(0, -130), new Vector2(465, 29), 15);
+            resetDistrictAction = MakeButton(districtPanel, "Delete District", new Vector2(0, -137),
+                new Vector2(460, 35), ConfirmDistrictReset);
+            contextStatus = Label(districtPanel, "Status", "", new Vector2(0, -167), new Vector2(465, 29), 15);
+            foreach (var button in new[] { renameAction, capitalAction, coastlineAction, beachChoice, harborChoice, applyRename, resetDistrictAction })
+                RegionBrassArtwork.SetButton(button, "button", bakedCaption: false);
             districtContext.gameObject.SetActive(false);
+        }
+
+        private void ConfirmDistrictReset()
+        {
+            if (!confirmingDistrictReset)
+            {
+                confirmingDistrictReset = true;
+                resetDistrictAction.GetComponentInChildren<Text>().text = "Confirm reset";
+                bool combined = view.DistrictMembers(contextDistrict).Length > 1;
+                contextStatus.text = combined ? "Reset all joined districts and dissolve the group?"
+                    : "Clear player changes and restore original nature?";
+                return;
+            }
+
+            var problem = view.ResetDistrict(contextDistrict);
+            contextTowns = view.Towns.Where(town => town.DistrictIndex(view.GridSide) == contextDistrict).ToArray();
+            RefreshDistrictContext();
+            contextStatus.text = problem ?? "District reset. Save the region to keep it.";
         }
 
         private void SubmitDistrictRename()
@@ -105,6 +138,8 @@ namespace CityForge.UI
 
         private void RefreshDistrictContext()
         {
+            confirmingDistrictReset = false;
+            resetDistrictAction.GetComponentInChildren<Text>().text = "Delete District";
             int chosen = districtTownChoice.value;
             districtTownChoice.ClearOptions();
             districtTownChoice.AddOptions(contextTowns.Select(town => town.name + (town.capital ? " (Capital)" : "")).ToList());

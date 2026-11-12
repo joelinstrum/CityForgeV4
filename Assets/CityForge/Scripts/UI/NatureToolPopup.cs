@@ -20,6 +20,7 @@ namespace CityForge.UI
         public RectTransform SunHost {get;private set;}
         public event Action<int> OptionChanged;
         public event Action<int> OptionInvoked;
+        public event Action<string> TreePlacementRequested;
         public event Action<string,int,bool> ActorPlacementRequested;
         public event Action<string,float> SettingChanged;
         readonly Dictionary<NatureTool,int> selected=new();
@@ -109,7 +110,11 @@ namespace CityForge.UI
                     Label(content,"PlantingSize","200 m circumference",new Vector2(0,0),new Vector2(400,28),20,Gold);
                     var view=GetComponentInParent<PrototypeRegionView>();bool mixed=view&&view.ApprovedDistrict&&view.ApprovedDistrict.MixedForest;Choice("Species","Tree type",mixed?new[]{"Mixed woodland","Chestnut","Locust","Larch"}:new[]{"Native woodland"},32);
                 }else{
-                    Choice("Species","Tree type",new[]{"Mixed woodland","Chestnut","Locust","Larch"},0);
+                    var catalog = LotAssetCatalog.Load();
+                    var trees = catalog ? catalog.entries.Where(asset => asset != null && asset.prefab && asset.IsSeasonalTree).ToArray()
+                        : Array.Empty<LotAssetCatalogEntry>();
+                    ShowActorRows(trees.OrderBy(tree => tree.label)
+                        .Select(tree => (tree.label, (Action)(() => TreePlacementRequested?.Invoke(tree.id)))).ToArray());
                 }
                 TextButton(content,"RemoveTrees","Remove Trees",new Vector2(0,-104),new Vector2(400,38),()=>OptionInvoked?.Invoke(1));
             }else if(Category==NatureTool.Animals){
@@ -170,15 +175,15 @@ namespace CityForge.UI
         private void ShowActorRows((string label, Action choose)[] rows)
         {
             foreach (Transform child in content) { child.gameObject.SetActive(false); Destroy(child.gameObject); }
-            var mask = Box(content, "Character list", Vector2.zero, new Vector2(400, 108), new Color(.12f,.14f,.10f));
+            var mask = Box(content, "Placement list", Vector2.zero, new Vector2(400, 108), new Color(.12f,.14f,.10f));
             mask.gameObject.AddComponent<RectMask2D>();
             var scroll = mask.gameObject.AddComponent<ScrollRect>();
             scroll.viewport = mask.rectTransform;
             scroll.horizontal = false;
             scroll.movementType = ScrollRect.MovementType.Clamped;
-            scroll.content = TopRect(mask.transform, "Character rows", Vector2.zero, new Vector2(400, rows.Length * 34));
+            scroll.content = TopRect(mask.transform, "Placement rows", Vector2.zero, new Vector2(400, rows.Length * 34));
             for (int i = 0; i < rows.Length; i++)
-                TextButton(scroll.content, "Character row " + i, rows[i].label, new Vector2(0,-i*34), new Vector2(400,32), rows[i].choose);
+                TextButton(scroll.content, "Placement row " + i, rows[i].label, new Vector2(0,-i*34), new Vector2(400,32), rows[i].choose);
         }
 
         Button TextButton(Transform parent,string name,string text,Vector2 position,Vector2 size,Action clicked)

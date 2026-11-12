@@ -15,9 +15,8 @@ namespace CityForge.UI
         {
             view=source;toolbar=tools;Wire=gameObject.AddComponent<PointWireTool>();
             Wire.Initialize(view.GetComponentInChildren<Camera>(),hud,new DistrictSurface(view),new Color(.18f,.7f,1));
-            Wire.Label="Lake / pond";Wire.CompletedHint="Lake created · Esc to finish · Select Lake / Pond to draw another";Wire.AllowClosedUndo=false;
+            Wire.Label="Lake / pond";Wire.RepeatOnCompletion=true;Wire.AllowClosedUndo=false;
             Wire.CompletionRequested=points=>view.ApprovedDistrict.CreatePlayerLake(points);
-            Wire.Completed+=_=>toolbar.Dismiss();
             toolbar.ToolSelected+=_=>Cancel();toolbar.Popup.OptionChanged+=_=>Cancel();
             toolbar.Popup.WaterBodySelected+=(adding,kind)=>{if(adding&&kind==0)Arm();else Cancel();};
         }

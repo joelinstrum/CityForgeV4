@@ -23,6 +23,8 @@ namespace CityForge.Lots
 
     internal sealed class LotPathMaterial
     {
+        internal const string ResidentialFootpath = "residential-footpath";
+
         public static readonly LotPathMaterial[] All =
         {
             new LotPathMaterial("cobblestone", "Cobblestone", "Paving", new Color32(122, 116, 107, 255), 2f),
@@ -36,32 +38,40 @@ namespace CityForge.Lots
             new LotPathMaterial("timber-deck", "Timber Deck", "Paving", new Color32(111, 79, 50, 255), 4f),
             new LotPathMaterial("concrete", "Concrete", "Paving", new Color32(168, 167, 159, 255), 3f),
             new LotPathMaterial("gravel", "Gravel", "Natural", new Color32(135, 124, 105, 255), 3f, 1f),
-            new LotPathMaterial("packed-earth", "Packed Earth", "Natural", new Color32(130, 97, 67, 255), 3f)
+            new LotPathMaterial("packed-earth", "Packed Earth", "Natural", new Color32(130, 97, 67, 255), 3f),
+            new LotPathMaterial(ResidentialFootpath, "Soft Dirt Footpath", "Natural", new Color32(130, 110, 82, 255), 3f),
+            new LotPathMaterial("rich-brown-garden-soil", "Rich Brown Garden Soil", "Natural",
+                new Color32(106, 76, 53, 255), 3f, requiresTexture: true),
+            new LotPathMaterial("tilled-garden-soil", "Tilled Garden Soil", "Natural",
+                new Color32(127, 96, 66, 255), 3f, requiresTexture: true),
+            new LotPathMaterial("garden-soil", "Realistic Garden Soil", "Natural",
+                new Color32(114, 85, 60, 255), 3f, requiresTexture: true)
         };
 
         public readonly string Id, Label, Group;
         public readonly Color Fallback;
         public readonly Vector2 TileSize;
 
-        private readonly bool requiresPbr;
+        private readonly bool requiresPbr, requiresTexture;
         private Material PbrMaterial => Resources.Load<Material>("Lots/PathMaterials/PBR/" + Id);
-        public bool IsAvailable => !requiresPbr || PbrMaterial;
+        public bool IsAvailable => (!requiresPbr || PbrMaterial) && (!requiresTexture || ColorTexture);
 
         private LotPathMaterial(string id, string label, string group, Color fallback, float tileX, float tileZ = 0f,
-            bool requiresPbr = false)
+            bool requiresPbr = false, bool requiresTexture = false)
         {
             Id = id;
             Label = label;
             Group = group;
             Fallback = fallback;
             this.requiresPbr = requiresPbr;
+            this.requiresTexture = requiresTexture;
             TileSize = new Vector2(tileX, tileZ > 0f ? tileZ : tileX);
         }
 
         private static Texture2D deckTexture;
         private Texture2D ColorTexture => Id == "timber-deck"
             ? deckTexture ? deckTexture : (deckTexture = CreateDeckTexture())
-            : Resources.Load<Texture2D>("Lots/PathMaterials/" + Id);
+            : Resources.Load<Texture2D>("Lots/PathMaterials/" + (Id == ResidentialFootpath ? "packed-earth" : Id));
 
         private static Texture2D CreateDeckTexture()
         {
@@ -124,6 +134,7 @@ namespace CityForge.Lots
                 material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent + LotGroundOverlay.MaxCount + 10 + order;
             }
             material.SetFloat("_EdgeBlend", path.BlendMeters(value));
+            material.SetFloat("_PathOpacity", path.materialId == ResidentialFootpath ? .58f : 1f);
             material.SetFloat("_Recessed", path.recessed ? 1f : 0f);
         }
 

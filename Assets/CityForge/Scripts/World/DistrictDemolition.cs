@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -12,6 +13,8 @@ namespace CityForge.World
         private bool detonateArmed;
         private bool detonateHovered;
         private Vector2? detonateLastPoint;
+        private DistrictLotRecord detonateHoverLot;
+        private DistrictRoadRecord detonateHoverRoad;
         private readonly HashSet<DistrictLotRecord> detonateLots = new();
         private readonly HashSet<DistrictRoadRecord> detonateRoads = new();
 
@@ -85,6 +88,16 @@ namespace CityForge.World
             if (!detonateArmed) return false;
             if (!CanDetonate || !Application.isFocused || Input.GetKeyDown(KeyCode.Escape))
                 SetDetonate(false);
+            else if (!detonateLastPoint.HasValue)
+            {
+                var (lot, road) = DetonateTarget(Input.mousePosition);
+                if (lot != detonateHoverLot || road != detonateHoverRoad)
+                {
+                    detonateHoverLot = lot;
+                    detonateHoverRoad = road;
+                    RefreshDetonatePreview();
+                }
+            }
             return true;
         }
 
@@ -99,16 +112,19 @@ namespace CityForge.World
                     ClearDetonateStroke();
                     detonateLastPoint = screen;
                     CollectDetonateTarget(screen);
+                    RefreshDetonatePreview();
                     break;
                 case EventType.MouseDrag:
                 case EventType.MouseUp:
                     if (!detonateLastPoint.HasValue) return;
                     var previous = detonateLastPoint.Value;
                     int steps = Mathf.Max(1, Mathf.CeilToInt(Vector2.Distance(previous, screen) / 6f));
+                    int previousCount = detonateLots.Count + detonateRoads.Count;
                     for (int i = 1; i <= steps; i++)
                         CollectDetonateTarget(Vector2.Lerp(previous, screen, (float)i / steps));
                     detonateLastPoint = screen;
                     if (pointer.type == EventType.MouseUp) CommitDetonateStroke();
+                    else if (previousCount != detonateLots.Count + detonateRoads.Count) RefreshDetonatePreview();
                     break;
                 default:
                     return;
@@ -119,13 +135,78 @@ namespace CityForge.World
 
         private void CollectDetonateTarget(Vector2 screen)
         {
-            if (RoadContextOverUi(screen)) return;
-            var camera = GetComponentInChildren<Camera>();
-            if (!camera) return;
-            var lot = PickDistrictLot(camera.ScreenPointToRay(screen));
+            var (lot, road) = DetonateTarget(screen);
             if (lot != null) detonateLots.Add(lot);
-            else if (RoadTerrain && TryRoadGround(screen, out var point) && PickDistrictRoad(point) is { } road)
-                detonateRoads.Add(road);
+            if (road != null) detonateRoads.Add(road);
+        }
+
+        private (DistrictLotRecord Lot, DistrictRoadRecord Road) DetonateTarget(Vector2 screen)
+        {
+            if (RoadContextOverUi(screen)) return default;
+            var camera = GetComponentInChildren<Camera>();
+            if (!camera) return default;
+            var lot = PickDistrictLot(camera.ScreenPointToRay(screen));
+            if (lot != null) return (lot, null);
+            return (null, RoadTerrain && TryRoadGround(screen, out var point) ? PickDistrictRoad(point) : null);
+        }
+
+        private void RefreshDetonatePreview()
+        {
+            if (detonateLots.Count + detonateRoads.Count == 0 && detonateHoverLot == null && detonateHoverRoad == null)
+            {
+                if (zonePreviewRenderer) zonePreviewRenderer.enabled = false;
+                return;
+            }
+
+            var tiles = new HashSet<Vector2Int>();
+            var origin = ZoneCorner(Vector2Int.zero);
+            float tile = DistrictGridCellMeters;
+            foreach (var lot in detonateLots.Append(detonateHoverLot))
+            {
+                if (lot == null) continue;
+                var footprint = new DistrictLotFootprint(lot);
+                var bounds = footprint.Bounds;
+                foreach (var cell in Cells(bounds.min, bounds.max).allPositionsWithin)
+                    if (footprint.Overlaps(new DistrictLotFootprint(ZoneCorner(cell) + Vector2.one * (tile * .5f),
+                        Vector2.one * (tile * .5f))))
+                        tiles.Add(cell);
+            }
+
+            foreach (var road in detonateRoads.Append(detonateHoverRoad))
+            {
+                if (road == null) continue;
+                var line = RoadCenterline(road);
+                int segments = road.closed ? line.Count : line.Count - 1;
+                float radius = road.width * .5f;
+                for (int i = 0; i < segments; i++)
+                {
+                    var start = line[i];
+                    var end = line[(i + 1) % line.Count];
+                    int steps = Mathf.Max(1, Mathf.CeilToInt(Vector2.Distance(start, end) / (radius * .5f)));
+                    for (int step = 0; step <= steps; step++)
+                    {
+                        var point = Vector2.Lerp(start, end, (float)step / steps);
+                        foreach (var cell in Cells(point - Vector2.one * radius, point + Vector2.one * radius).allPositionsWithin)
+                        {
+                            var corner = ZoneCorner(cell);
+                            var nearest = Vector2.Max(corner, Vector2.Min(corner + Vector2.one * tile, point));
+                            if ((nearest - point).sqrMagnitude < radius * radius) tiles.Add(cell);
+                        }
+                    }
+                }
+            }
+
+            EnsureZoneSurfaces();
+            FillZoneMesh(zonePreviewMesh, tiles.Where(cell => InActiveDistrict(ZoneCorner(cell) + Vector2.one * (tile * .5f)))
+                .Select(cell => new KeyValuePair<Vector2Int, TownZone>(cell, TownZone.None)), .32f);
+            zonePreviewRenderer.enabled = tiles.Count > 0;
+
+            RectInt Cells(Vector2 min, Vector2 max)
+            {
+                var first = Vector2Int.FloorToInt((min - origin) / tile);
+                var last = Vector2Int.CeilToInt((max - origin) / tile);
+                return new RectInt(first, last - first);
+            }
         }
 
         private void CommitDetonateStroke()
@@ -152,6 +233,9 @@ namespace CityForge.World
             detonateLastPoint = null;
             detonateLots.Clear();
             detonateRoads.Clear();
+            detonateHoverLot = null;
+            detonateHoverRoad = null;
+            if (zonePreviewRenderer && !zoneDragStart.HasValue) zonePreviewRenderer.enabled = false;
         }
     }
 }

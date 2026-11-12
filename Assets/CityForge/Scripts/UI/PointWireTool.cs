@@ -12,7 +12,10 @@ namespace CityForge.UI
         public bool Closed=>path.Closed;
         public bool Finished=>path.Finished;
         public bool OpenPath;public float RibbonWidth;
+        public Color? RibbonFillColor;
+        readonly List<Vector2> ribbonPoints = new();
         public bool HandleEscape = true;
+        public bool RepeatOnCompletion;
         public bool RestrictUiToHud;
         public bool FinishOverUi;
         public Func<IReadOnlyList<Vector2>, string> LoopCompletionRequested;
@@ -75,7 +78,7 @@ namespace CityForge.UI
                 Processing=true;cursor.gameObject.SetActive(false);Cursor.visible=savedCursor;overlay.Clear();foreach(var marker in markers)marker.gameObject.SetActive(false);
                 SetMessage(ProcessingMessage);hint.gameObject.SetActive(false);ProcessingChanged?.Invoke(true);
                 completionOverlay=RegionLoadingOverlay.ShowOperation(ProcessingMessage);
-                completionOverlay.BeginDistrict(CompleteDeferred(closeLoop),()=>{completionOverlay=null;Processing=false;if(hint)hint.gameObject.SetActive(Armed);ProcessingChanged?.Invoke(false);},error=>{if(Armed){SetMessage("Could not create waterway. Please adjust the route and try again.");foreach(var marker in markers)marker.gameObject.SetActive(true);}Debug.LogException(error);},ProcessingMessage);
+                completionOverlay.BeginDistrict(CompleteDeferred(closeLoop),()=>{completionOverlay=null;Processing=false;if(hint)hint.gameObject.SetActive(Armed);ProcessingChanged?.Invoke(false);RearmAfterCompletion();},error=>{if(Armed){SetMessage("Could not create waterway. Please adjust the route and try again.");foreach(var marker in markers)marker.gameObject.SetActive(true);}Debug.LogException(error);},ProcessingMessage);
                 return true;
             }
             return CompleteNow(closeLoop);
@@ -85,8 +88,15 @@ namespace CityForge.UI
         {
             var request = closeLoop && LoopCompletionRequested != null ? LoopCompletionRequested : CompletionRequested;
             string error=request?.Invoke(points);if(!string.IsNullOrEmpty(error)){SetMessage(error);foreach(var marker in markers)marker.gameObject.SetActive(true);return false;}
-            if(closeLoop)path.TryClose();else path.TryFinishOpen();preview.Clear();Rebuild();Hint();acceptingCompletion=true;try{Completed?.Invoke(points);}finally{acceptingCompletion=false;}return true;
+            if(closeLoop)path.TryClose();else path.TryFinishOpen();preview.Clear();Rebuild();Hint();acceptingCompletion=true;try{Completed?.Invoke(points);}finally{acceptingCompletion=false;}
+            if (!Processing) RearmAfterCompletion();
+            return true;
         }
+        void RearmAfterCompletion()
+        {
+            if (RepeatOnCompletion && Armed && Finished) Arm();
+        }
+
         public void UndoMarker()
         {
             if(!Armed||Processing||points.Count==0)return;
@@ -174,6 +184,15 @@ namespace CityForge.UI
             }
             void Draw(List<Vector3> line){for(int i=1;i<line.Count;i++)DrawSegment(line[i-1],line[i]);}
             bool replaceBoundary = ProjectGuide != null && preview.Count > 0;
+            if (RibbonWidth > 0f && RibbonFillColor is Color fillColor)
+            {
+                overlay.color = fillColor;
+                if (!replaceBoundary) DrawFilledRibbon(boundary);
+                DrawFilledRibbon(preview);
+                overlay.SetVerticesDirty();
+                return;
+            }
+
             if (!replaceBoundary) Draw(boundary);
             Draw(preview);
             if(RibbonWidth>0){
@@ -183,6 +202,38 @@ namespace CityForge.UI
             }
             overlay.SetVerticesDirty();
         }
+        void DrawFilledRibbon(List<Vector3> line)
+        {
+            if (line.Count < 2) return;
+            ribbonPoints.Clear();
+            foreach (var point in line)
+                ribbonPoints.Add(new Vector2(point.x, point.z));
+
+            bool loop = ribbonPoints.Count > 2 && ribbonPoints[0] == ribbonPoints[^1];
+            if (loop) ribbonPoints.RemoveAt(ribbonPoints.Count - 1);
+            int segments = loop ? ribbonPoints.Count : ribbonPoints.Count - 1;
+            for (int i = 0; i < segments; i++)
+            {
+                int next = (i + 1) % ribbonPoints.Count;
+                var a = ribbonPoints[i];
+                var b = ribbonPoints[next];
+                if (a == b) continue;
+                var sideA = Lots.LotPathSurface.RibbonSide(ribbonPoints, null, loop, i, RibbonWidth);
+                var sideB = Lots.LotPathSurface.RibbonSide(ribbonPoints, null, loop, next, RibbonWidth);
+                if (Project(a - sideA, out var leftA) && Project(a + sideA, out var rightA) &&
+                    Project(b + sideB, out var rightB) && Project(b - sideB, out var leftB))
+                    overlay.AddFill(leftA, rightA, rightB, leftB);
+            }
+
+            bool Project(Vector2 point, out Vector2 local)
+            {
+                local = default;
+                var screen = cameraView.WorldToScreenPoint(Ground(point));
+                return screen.z > 0f &&
+                    RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect, screen, null, out local);
+            }
+        }
+
         void OnDisable(){Cancel();}
         void OnDestroy(){Cancel();if(material)Destroy(material);if(cursor)Destroy(cursor.gameObject);if(hint)Destroy(hint.gameObject);if(overlay)Destroy(overlay.gameObject);}
     }
@@ -193,6 +244,7 @@ namespace CityForge.UI
         public void Clear(){segments.Clear();fills.Clear();SetVerticesDirty();}
         public void AddFill(Vector2 a, Vector2 b, Vector2 c, Vector2 d)
         {
+            if (fills.Count + segments.Count * 2 >= 60000) return;
             fills.Add(a);
             fills.Add(b);
             fills.Add(c);

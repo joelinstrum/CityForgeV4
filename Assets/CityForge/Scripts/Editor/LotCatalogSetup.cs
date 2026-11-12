@@ -39,6 +39,8 @@ internal static class LotCatalogSetup
             FoundersBuilding("agrarian-assembly-hall", "Agrarian Assembly Hall", "AgrarianAssemblyHall", 12f),
             FrontierLogCabin(),
             SmallColonialCabin(),
+            FoundersHome("low-wealth-front-gable", "Front Gable House", "LowWealthFrontGable"),
+            FoundersHome("low-wealth-side-gable", "Side Gable House", "LowWealthSideGable"),
             V3Building("wooden-cottage", "Wooden Cottage", "WoodenCottage", "residential", "founders", 8f),
             V3Building("plymouth-store", "Plymouth Store", "PlymouthStore", "commercial", "founders", 9.26f, ".jpeg", ".jpeg"),
             V3Building("small-school", "Small School", "SmallSchool", "civics", "founders", 9f, ".jpg", ".png"),
@@ -67,6 +69,8 @@ internal static class LotCatalogSetup
             Fence("meadow-fence-04", "Meadow wood fence 04", "04"),
             Fence("meadow-fence-05", "Meadow wood fence 05", "05"),
             Tree("poplar", "Poplar", "Deciduous", meadow + "Showcase/Flora/prefab_Baked_01_Poplar.prefab", 3),
+            LondonPlane("a"),
+            LondonPlane("b"),
             Tree("silver-maple", "Silver maple", "Deciduous", resources + "Trees/ForestBroadleaf/SilverMapleA/Summer.prefab", 5),
             Tree("siberian-elm", "Siberian elm", "Deciduous", resources + "Trees/SiberianElm/SiberianElmA.prefab", 5),
             Tree("balsam-fir", "Balsam fir", "Evergreen", resources + "Trees/MountainEvergreen/BalsamFir.prefab", 4),
@@ -81,15 +85,29 @@ internal static class LotCatalogSetup
             $"meadow-poplar-{variant:00}", $"Meadow poplar {variant:00}", "Deciduous",
             meadow + $"Showcase/Flora/prefab_Baked_{variant:00}_Poplar.prefab", 3));
 
+        var foundersHomes = Enumerable.Range(1, 9).Select(variant => FoundersHome(
+            $"low-wealth-home-{variant:00}", $"Founder's Home {variant:00}", $"LowWealthHome{variant:00}",
+            span: variant == 6 ? 9.375f : 7.5f));
+
         var catalog = AssetDatabase.LoadAssetAtPath<LotAssetCatalog>(CatalogPath);
         var entries = (catalog ? catalog.entries : System.Array.Empty<LotAssetCatalogEntry>()).ToList();
         bool changed = false;
-        foreach (var entry in candidates.Concat(meadowPoplars).Concat(Characters()).Concat(Landscaping()).Concat(Corn()).Concat(Wheat()).Where(item => item.prefab))
+        foreach (var entry in candidates.Concat(PlaceableSeasonalTrees.CatalogEntries()).Concat(foundersHomes).Concat(meadowPoplars).Concat(Characters()).Concat(Landscaping()).Concat(Corn()).Concat(Wheat()).Where(item => item.prefab))
         {
             var existing = entries.Find(item => item != null && item.id == entry.id);
             if (existing == null)
             {
                 entries.Add(entry);
+                changed = true;
+            }
+            else if (entry.autumnPrefab && entry.winterPrefab && (existing.prefab != entry.prefab ||
+                existing.autumnPrefab != entry.autumnPrefab || existing.winterPrefab != entry.winterPrefab))
+            {
+                existing.prefab = entry.prefab;
+                existing.autumnPrefab = entry.autumnPrefab;
+                existing.winterPrefab = entry.winterPrefab;
+                existing.label = entry.label;
+                existing.footprint = entry.footprint;
                 changed = true;
             }
             else if (entry.id == "wood-fence-section" && existing.prefab != entry.prefab)
@@ -229,6 +247,14 @@ internal static class LotCatalogSetup
         cabin.growableZone = TownZone.Residential1;
         cabin.growableWealth = LotWealth.Low;
         return cabin;
+    }
+
+    private static LotAssetCatalogEntry FoundersHome(string id, string label, string folder, float span = 7.5f)
+    {
+        var home = V3Building(id, label, folder, "residential", "founders", span, ".jpg", ".png");
+        home.growableZone = TownZone.Residential1;
+        home.growableWealth = LotWealth.Low;
+        return home;
     }
 
     private static LotAssetCatalogEntry V3Building(string id, string label, string folder, string category,
@@ -729,6 +755,16 @@ internal static class LotCatalogSetup
             }
         }
         return bounds;
+    }
+
+    private static LotAssetCatalogEntry LondonPlane(string variant)
+    {
+        string root = DirectoryPath + $"/V3LondonPlanes/Tree-{variant}-";
+        var entry = Tree($"london-plane-{variant}", $"London Plane {variant.ToUpperInvariant()}",
+            "Deciduous", root + "summer.prefab", 6f);
+        entry.autumnPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(root + "autumn.prefab");
+        entry.winterPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(root + "winter.prefab");
+        return entry;
     }
 
     private static LotAssetCatalogEntry Tree(string id, string label, string group, string path, float footprint,

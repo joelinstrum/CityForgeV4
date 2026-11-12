@@ -46,6 +46,11 @@ namespace CityForge.UI
                 Popup.Show(NatureTool.None);
                 view.ArmDistrictActor(id, count, pedestrian);
             };
+            Popup.TreePlacementRequested += id =>
+            {
+                Popup.Show(NatureTool.None);
+                view.ArmDistrictActor(id, 1, pedestrian: false, tree: true);
+            };
             ToolSelected += _ => view.CancelDistrictActor();
             Popup.OptionChanged+=option=>{if(Selected==NatureTool.Sun)for(int i=0;i<3;i++){seasons[i].gameObject.SetActive(option==0);weather[i].gameObject.SetActive(option==1);}};
             Popup.Show(NatureTool.None);sunMenu.gameObject.SetActive(false);ForestBrush=gameObject.AddComponent<ForestRemovalBrush>();ForestBrush.Initialize(view,this,hud);LakeOutline=gameObject.AddComponent<LakeOutlineTool>();LakeOutline.Initialize(view,this,hud);RiverRoute=gameObject.AddComponent<RiverRouteTool>();RiverRoute.Initialize(view,this,hud);gameObject.AddComponent<WaterRemovalTool>().Initialize(view,this);HideLegacy(hud);Refresh();

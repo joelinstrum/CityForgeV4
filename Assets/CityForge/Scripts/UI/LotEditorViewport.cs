@@ -5,6 +5,9 @@ using CityForge.Lots;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
+using CityForge.World;
 
 namespace CityForge.UI
 {
@@ -20,6 +23,14 @@ namespace CityForge.UI
         private Transform stage, content;
         private Camera cameraView;
         private Light previewLight;
+        private MeadowRuntimeBaseline previewBaseline;
+        private Volume previewCalibration;
+        private VolumeProfile previewProfile;
+        private ColorAdjustments previewGrade;
+        public RegionTimeOfDay PreviewTime { get; private set; }
+        private PrototypeRegionView districtView;
+        private float baselineSunIntensity;
+        private SphericalHarmonicsL2 daylightProbe;
         private Material draftingMaterial;
         private Transform overlayPreview;
         private Material overlayPreviewMaterial;
@@ -91,9 +102,25 @@ namespace CityForge.UI
             cameraView.clearFlags = CameraClearFlags.SolidColor;
             cameraView.backgroundColor = new Color32(28, 37, 46, 255);
             cameraView.cullingMask = 1 << PreviewLayer;
-            cameraView.allowHDR = false;
-            var cameraData = cameraView.GetComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();
-            if (cameraData) cameraData.renderPostProcessing = false;
+            cameraView.allowHDR = true;
+            var cameraData = cameraView.GetUniversalAdditionalCameraData();
+            cameraData.renderPostProcessing = true;
+            cameraData.volumeLayerMask = 1 << PreviewLayer;
+            districtView = GetComponentInParent<PrototypeRegionView>();
+            if (!districtView) districtView = FindFirstObjectByType<PrototypeRegionView>();
+            PreviewTime = districtView && districtView.SelectedDistrict >= 0
+                ? districtView.TimeOfDay : RegionTimeOfDay.Afternoon;
+            night = PreviewTime == RegionTimeOfDay.Night;
+            previewBaseline = Resources.Load<MeadowRuntimeBaseline>("Region/MeadowRuntimeBaseline");
+            var template = previewBaseline && previewBaseline.sunTemplate
+                ? previewBaseline.sunTemplate.GetComponentInChildren<Light>() : null;
+            baselineSunIntensity = (template ? template.intensity : 1.55f) * PrototypeRegionView.DistrictSunScale;
+            if (previewBaseline && previewBaseline.volume)
+                CreatePreviewVolume("Lot baseline grade", previewBaseline.volume, 30f);
+            previewProfile = ScriptableObject.CreateInstance<VolumeProfile>();
+            previewProfile.Add<Tonemapping>().mode.Override(TonemappingMode.ACES);
+            previewGrade = previewProfile.Add<ColorAdjustments>(false);
+            previewCalibration = CreatePreviewVolume("Lot daylight grade", previewProfile, 31f);
             previewLight = new GameObject("Lot preview light").AddComponent<Light>();
             previewLight.transform.SetParent(stage, false);
             previewLight.type = LightType.Directional;
@@ -105,11 +132,23 @@ namespace CityForge.UI
             draftingTexture = DraftingTexture();
         }
 
-        public bool ToggleNight()
+        private Volume CreatePreviewVolume(string label, VolumeProfile profile, float priority)
         {
-            night = !night;
+            var volume = new GameObject(label).AddComponent<Volume>();
+            volume.gameObject.layer = PreviewLayer;
+            volume.transform.SetParent(stage, false);
+            volume.isGlobal = true;
+            volume.priority = priority;
+            volume.sharedProfile = profile;
+            return volume;
+        }
+
+        public void CyclePreviewTime()
+        {
+            var times = PrototypeRegionView.DaylightChoices;
+            PreviewTime = times[(Array.IndexOf(times, PreviewTime) + 1) % times.Length];
+            night = PreviewTime == RegionTimeOfDay.Night;
             ApplyLighting();
-            return night;
         }
 
         public bool ToggleAnimations()
@@ -188,25 +227,19 @@ namespace CityForge.UI
             }
         }
 
-        private readonly List<Renderer> previewTrees = new();
-        private readonly List<Renderer> previewPaths = new();
+        private readonly List<Renderer> previewLitSurfaces = new();
         private MaterialPropertyBlock previewLighting;
         private readonly UnityEngine.Rendering.SphericalHarmonicsL2[] previewProbe = new UnityEngine.Rendering.SphericalHarmonicsL2[1];
 
-        private void LightPreviewTree(Renderer renderer) =>
-            ApplyPreviewProbe(renderer, World.PrototypeRegionView.LotDaylightProbe());
-
-        private void LightPreviewPath(Renderer renderer)
+        private void RegisterLitSurface(Renderer renderer)
         {
-            // The lot stage has its own sun. Keep its path fill independent of the scene's sky probe.
-            var fill = new UnityEngine.Rendering.SphericalHarmonicsL2();
-            fill.AddAmbientLight(new Color(.12f, .13f, .14f));
-            ApplyPreviewProbe(renderer, fill);
+            previewLitSurfaces.Add(renderer);
+            ApplyPreviewProbe(renderer, daylightProbe);
         }
 
         private void ApplyPreviewProbe(Renderer renderer, UnityEngine.Rendering.SphericalHarmonicsL2 probe)
         {
-            previewProbe[0] = night ? probe * .18f : probe;
+            previewProbe[0] = probe;
             previewLighting ??= new MaterialPropertyBlock();
             renderer.GetPropertyBlock(previewLighting);
             previewLighting.CopySHCoefficientArraysFrom(previewProbe);
@@ -216,15 +249,41 @@ namespace CityForge.UI
 
         private void ApplyLighting()
         {
-            previewLight.transform.rotation = night ? Quaternion.Euler(32f, 115f, 0f) : Quaternion.Euler(50f, -35f, 0f);
-            previewLight.color = night ? new Color(.59f, .73f, 1f) : Color.white;
-            previewLight.intensity = night ? .09f : .90f;
+            var time = PreviewTime;
+            bool linear = QualitySettings.activeColorSpace == ColorSpace.Linear;
+            bool calibrated = time == RegionTimeOfDay.Noon || time == RegionTimeOfDay.Afternoon;
+            var defaults = linear ? PrototypeRegionView.LinearAfternoonDefaults : PrototypeRegionView.AfternoonDefaults;
+            float elevation = districtView ? districtView.AfternoonElevation : defaults[0];
+            float sunlight = districtView ? districtView.AfternoonSunlight : defaults[1];
+            float ambient = districtView ? districtView.AfternoonAmbient : defaults[2];
+            PrototypeRegionView.ApplySun(previewLight, time, Quaternion.Euler(36f, 65f, 0f),
+                baselineSunIntensity, new Color(1f, .98f, .93f));
+            if (calibrated)
+                PrototypeRegionView.ApplyCalibratedSun(previewLight, time, baselineSunIntensity, elevation, sunlight, linear);
+            previewLight.shadows = calibrated ? LightShadows.Soft : LightShadows.Hard;
+            previewLight.shadowStrength = calibrated && districtView ? districtView.AfternoonShadowStrength : defaults[3];
+            var lightData = previewLight.GetUniversalAdditionalLightData();
+            lightData.usePipelineSettings = false;
+            lightData.softShadowQuality = SoftShadowQuality.Low;
+            previewCalibration.enabled = calibrated;
+            float exposure = districtView ? districtView.AfternoonExposure : defaults[4];
+            PrototypeRegionView.ApplyCalibratedGrade(previewGrade, time, exposure, linear);
+
+            var probe = PrototypeRegionView.LotDaylightProbe();
+            if (previewBaseline && previewBaseline.ambientSH?.Length == 27)
+                for (int channel = 0; channel < 3; channel++)
+                for (int coefficient = 0; coefficient < 9; coefficient++)
+                    probe[channel, coefficient] = previewBaseline.ambientSH[channel * 9 + coefficient] *
+                        (channel == 2 ? 1.28f : 1.20f);
+            var tint = calibrated ? PrototypeRegionView.CalibratedAmbientTint(time) : Color.white;
+            daylightProbe = PrototypeRegionView.TintDistrictProbe(probe, time, calibrated ? ambient : 1f, tint) * .90f;
+            if (calibrated && linear)
+                daylightProbe.AddDirectionalLight(MeadowDistrictLandscape.AfternoonSkyDirection,
+                    new Color(.80f, .89f, 1f), .49f * ambient / 1.096f);
             cameraView.backgroundColor = night ? new Color32(10, 16, 27, 255) : new Color32(28, 37, 46, 255);
             UpdateDraftingLighting();
-            foreach (var tree in previewTrees)
-                if (tree) LightPreviewTree(tree);
-            foreach (var path in previewPaths)
-                if (path) LightPreviewPath(path);
+            foreach (var renderer in previewLitSurfaces)
+                if (renderer) ApplyPreviewProbe(renderer, daylightProbe);
         }
 
         private void UpdateDraftingLighting()
@@ -237,7 +296,7 @@ namespace CityForge.UI
         }
 
         public void Refresh(LotDefinition lot, LotAssetCatalog catalog, string selected, HashSet<string> selectedGroup,
-            LotPathDefinition selectedPath, bool grid, Rect? selectedTile, bool showGrowablePreview)
+            LotPathDefinition selectedPath, bool grid, Rect? selectedTile, LotObjectDefinition growablePreview)
         {
             selectedObject = selected;
             footprintRoot = null;
@@ -265,8 +324,7 @@ namespace CityForge.UI
             pathSelectionGuide.gameObject.SetActive(false);
             instances.Clear();
             pickTargets.Clear();
-            previewTrees.Clear();
-            previewPaths.Clear();
+            previewLitSurfaces.Clear();
             selectionFootprints.Clear();
             entryMarker = null;
             draggingEntryMarker = false;
@@ -286,9 +344,13 @@ namespace CityForge.UI
             UpdateDraftingLighting();
             var border = Material(new Color32(234, 215, 154, 255), unlit: true);
             Box("Drafting surface", new Vector3(0, -.92f, 0), new Vector3(768, .1f, 768), draftingMaterial);
-            Box("Gray surroundings", new Vector3(0, -.38f, 0), new Vector3(size.x + 8, .35f, size.y + 8), surroundings);
-            Box("Ground", new Vector3(0, -.2f, 0), new Vector3(groundSize.x, .4f, groundSize.y), groundMaterial)
-                .transform.localRotation = Quaternion.Euler(0, lot.baseTextureRotation * 90f, 0);
+            var surround = Box("Gray surroundings", new Vector3(0, -.38f, 0),
+                new Vector3(size.x + 8, .35f, size.y + 8), surroundings);
+            var groundBox = Box("Ground", new Vector3(0, -.2f, 0),
+                new Vector3(groundSize.x, .4f, groundSize.y), groundMaterial);
+            groundBox.transform.localRotation = Quaternion.Euler(0, lot.baseTextureRotation * 90f, 0);
+            RegisterLitSurface(surround.GetComponent<Renderer>());
+            RegisterLitSurface(groundBox.GetComponent<Renderer>());
             if (lot.IsWaterfront)
             {
                 var water = lot.WaterfrontBounds;
@@ -306,7 +368,7 @@ namespace CityForge.UI
 
             if (grid)
             {
-                var line = Material(new Color32(191, 200, 147, 255), unlit: true);
+                var line = Material(new Color32(150, 160, 119, 255), unlit: true);
                 var minor = Material(new Color32(136, 152, 104, 128), unlit: true);
                 LotGroundTexture.ConfigureTransparentLayer(minor, LotGroundOverlay.MaxCount + 2);
                 for (int x = 1; x < lot.width * 2; x++)
@@ -324,14 +386,8 @@ namespace CityForge.UI
             {
                 footprintMaterial = Material(new Color32(96, 219, 241, 255), unlit: true);
                 DrawBuildingFootprint(zoning.BuildingSlot);
-                var building = showGrowablePreview && catalog && !string.IsNullOrEmpty(zoning.previewBuildingId)
-                    ? catalog.Find(zoning.previewBuildingId) : null;
-                if (building != null && building.CanPreviewGrowable(zoning.zone, zoning.wealth, lot.firstEraId))
-                {
-                    var placement = zoning.hasEntrance
-                        ? LotGrowableBuildings.PlaceInSlot(zoning, building) : zoning.BuildingPreview();
-                    if (placement != null) DrawBuildingPreview(placement, building);
-                }
+                var building = growablePreview != null && catalog ? catalog.Find(growablePreview.assetId) : null;
+                if (building != null) DrawBuildingPreview(growablePreview, building);
 
                 void DrawBuildingPreview(LotObjectDefinition placement, LotAssetCatalogEntry building)
                 {
@@ -345,6 +401,7 @@ namespace CityForge.UI
                     {
                         renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                         renderer.sharedMaterials = FadeBuildingMaterials(renderer.sharedMaterials);
+                        RegisterLitSurface(renderer);
                     }
                 }
                 if (zoning.hasEntrance)
@@ -384,11 +441,7 @@ namespace CityForge.UI
                         buildingMaterials.Add(renderer, original);
                         if (characterFocus) renderer.sharedMaterials = FadeBuildingMaterials(original);
                     }
-                    if (asset.category == "Trees" || asset.category == "Landscaping" && asset.group == "Trees")
-                    {
-                        previewTrees.Add(renderer);
-                        LightPreviewTree(renderer);
-                    }
+                    RegisterLitSurface(renderer);
                     if (renderer is MeshRenderer || renderer is SkinnedMeshRenderer || renderer is BillboardRenderer)
                         pickTargets.Add((item.id, renderer));
                 }
@@ -427,8 +480,7 @@ namespace CityForge.UI
                     selectedPathRenderer = renderer;
                     selectedPathOrder = i;
                 }
-                previewPaths.Add(renderer);
-                LightPreviewPath(renderer);
+                RegisterLitSurface(renderer);
             }
 
             characterPreview.EndRefresh();
@@ -482,6 +534,7 @@ namespace CityForge.UI
                 new Vector3(localSize.x, .005f, localSize.y), material).GetComponent<Renderer>();
             overlay.transform.localRotation = Quaternion.Euler(0, rotation * 90, 0);
             overlay.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            RegisterLitSurface(overlay);
         }
 
         public void PreviewOverlayTile(Rect tile)
@@ -851,7 +904,7 @@ namespace CityForge.UI
             if (!target || target.width != width || target.height != height)
             {
                 ReleaseTarget();
-                target = new RenderTexture(width, height, 24) { name = "Lot editor viewport" };
+                target = new RenderTexture(width, height, 24, RenderTextureFormat.DefaultHDR) { name = "Lot editor viewport" };
                 cameraView.targetTexture = target;
                 cameraView.aspect = (float)width / height;
                 image.texture = target;
@@ -1180,6 +1233,7 @@ namespace CityForge.UI
             ReleaseTarget();
             ClearPlacementGhost();
             if (stage) Destroy(stage.gameObject);
+            if (previewProfile) Destroy(previewProfile);
             Destroy(draftingTexture);
             foreach (var mesh in pathMeshes) Destroy(mesh);
             foreach (var material in materials) Destroy(material);
