@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using CityForge.Lots;
 using UnityEngine;
 
 namespace CityForge.World
@@ -87,6 +88,66 @@ namespace CityForge.World
                 bestDepth = depth;
                 bestFacing = facing;
             }
+        }
+
+        private void AddResidentialEntryPath(DistrictLotRecord record, LotObjectDefinition building)
+        {
+            var lot = record.definition;
+            var layout = lot.zoningLayout;
+            if (!layout.autoPaths || layout.faceAwayFromRoad || lot.paths.Count > 0) return;
+            var info = LotBuildingInfo.LoadEntry(building.assetId);
+            var asset = LotAssetCatalog.Load()?.Find(building.assetId);
+            if (asset == null || (info == null && !building.assetId.StartsWith("v3-building-low-wealth-",
+                    System.StringComparison.Ordinal))) return;
+
+            int frontage = (int)layout.frontage;
+            var forward = LotGroundOverlay.QuarterTurn(Vector2.down, frontage);
+            var entry = info != null
+                ? building.position + LotGroundOverlay.QuarterTurn(info.entrance * building.scale,
+                    Mathf.RoundToInt(building.yaw / 90f))
+                : building.position + forward * (asset.footprint.y * building.scale * .5f);
+            var front = LotGroundOverlay.QuarterTurn(lot.LandBounds, -frontage);
+            var aligned = LotGroundOverlay.QuarterTurn(entry, -frontage);
+            const float halfPath = .5f;
+            if (aligned.x < front.xMin + halfPath || aligned.x > front.xMax - halfPath ||
+                aligned.y < front.yMin || aligned.y > front.yMax) return;
+
+            var footprint = new DistrictLotFootprint(record);
+            float setback = aligned.y - front.yMin;
+            var edge = footprint.WorldPoint(entry + forward * setback);
+            var outward = footprint.WorldPoint(entry + forward) - footprint.WorldPoint(entry);
+            bool alongZ = Mathf.Abs(outward.y) > .5f;
+            float sign = alongZ ? Mathf.Sign(outward.y) : Mathf.Sign(outward.x);
+            float across = alongZ ? edge.x : edge.y;
+            float edgeAlong = (alongZ ? edge.y : edge.x) * sign;
+            float gap = DistrictGridCellMeters;
+            foreach (var filter in districtRoadMeshes.Values)
+            {
+                var mesh = filter.sharedMesh;
+                var bounds = mesh.bounds;
+                var near = new Vector3(edge.x, bounds.center.y, edge.y);
+                if (bounds.SqrDistance(near) > DistrictGridCellMeters * DistrictGridCellMeters) continue;
+                var vertices = mesh.vertices;
+                var triangles = mesh.triangles;
+                for (int i = 0; i < triangles.Length; i += 3)
+                {
+                    if (!RoadTriangleSpan(vertices[triangles[i]], vertices[triangles[i + 1]],
+                        vertices[triangles[i + 2]], across - .02f, across + .02f, alongZ,
+                        out float low, out float high)) continue;
+                    float first = sign > 0f ? low : -high;
+                    float last = sign > 0f ? high : -low;
+                    if (last < edgeAlong - .15f || first - edgeAlong >= gap) continue;
+                    gap = Mathf.Max(-.15f, first - edgeAlong);
+                }
+            }
+
+            float length = setback + gap;
+            if (gap >= DistrictGridCellMeters || length < .10f) return;
+            lot.paths.Add(new LotPathDefinition
+            {
+                points = new[] { entry, entry + forward * length },
+                width = 1, materialId = LotPathMaterial.ResidentialFootpath, edgeBlend = 75
+            });
         }
 
         // Project the part of the pavement triangle within the frontage's transverse interval.

@@ -585,8 +585,13 @@ namespace CityForge.World
             }
             record.id = Guid.NewGuid().ToString("N");
             PlacedLots.Add(record);
-            if (capital != null) capital.awaitingFoundersBuilding = false;
-            CancelLotPlacement();
+            if (capital != null)
+            {
+                capital.awaitingFoundersBuilding = false;
+                CancelLotPlacement();
+            }
+            else
+                lotPlacementEvaluated = false;
             RebuildDistrictLots();
             lotFeedback.text = capital != null ? "Founder’s Building placed. Save the region to keep it." :
                 "Lot placed. Save the region to keep it.";

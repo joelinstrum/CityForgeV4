@@ -13,7 +13,7 @@ namespace CityForge.World
 
     public sealed partial class PrototypeRegionView
     {
-        private static readonly RegionTimeOfDay[] DaylightChoices =
+        internal static readonly RegionTimeOfDay[] DaylightChoices =
         {
             RegionTimeOfDay.Morning, RegionTimeOfDay.Noon, RegionTimeOfDay.Afternoon,
             RegionTimeOfDay.Evening, RegionTimeOfDay.Night
@@ -28,8 +28,8 @@ namespace CityForge.World
         private GameObject afternoonLightingPanel;
         private readonly float[] afternoonLighting = (float[])AfternoonDefaults.Clone();
         private static bool LinearLighting => QualitySettings.activeColorSpace == ColorSpace.Linear;
-        private static readonly float[] LinearAfternoonDefaults = { 31f, 2.7379f, 1.096f, .62f, .68f };
-        private static readonly float[] AfternoonDefaults = { 36f, 1.23f, .98f, .62f, .05f };
+        internal static readonly float[] LinearAfternoonDefaults = { 31f, 2.7379f, 1.096f, .62f, .68f };
+        internal static readonly float[] AfternoonDefaults = { 36f, 1.23f, .98f, .62f, .05f };
         private bool afternoonCalibration = true;
         internal bool UseAfternoonCalibration => TimeOfDay == RegionTimeOfDay.Afternoon && afternoonCalibration;
         internal float AfternoonElevation => afternoonLighting[0];
@@ -224,6 +224,22 @@ namespace CityForge.World
                 new Color(.105f, .095f, .08f), 1f, TimeOfDay);
         }
 
+        private const float NoonElevation = 55f;
+        private static readonly Color NoonSunColor = new Color(1f, .99f, .965f);
+
+        internal static Color CalibratedAmbientTint(RegionTimeOfDay time) =>
+            time == RegionTimeOfDay.Noon ? new Color(.98f, .995f, 1.015f) : new Color(.96f, .985f, 1.035f);
+
+        internal static void ApplyCalibratedGrade(ColorAdjustments grade, RegionTimeOfDay time, float exposure, bool linear)
+        {
+            bool noon = time == RegionTimeOfDay.Noon;
+            grade.postExposure.Override(noon ? exposure - .16f : exposure);
+            grade.contrast.overrideState = linear;
+            grade.contrast.value = noon ? 3f : 6f;
+            grade.saturation.overrideState = linear || noon;
+            grade.saturation.value = noon ? -7f : 0f;
+        }
+
         internal static void ApplySun(Light light, RegionTimeOfDay time, Quaternion afternoonRotation,
             float afternoonIntensity, Color afternoonColor)
         {
@@ -232,8 +248,8 @@ namespace CityForge.World
             // Map east is +X, west is -X, and south is -Z.
             var (rotation, intensity, color) = time switch
             {
-                RegionTimeOfDay.Morning => (Quaternion.Euler(23f, 270f, 0), .68f, new Color(1f, .84f, .66f)),
-                RegionTimeOfDay.Noon => (Quaternion.Euler(68f, 0f, 0), 1f, new Color(1f, .99f, .96f)),
+                RegionTimeOfDay.Morning => (Quaternion.Euler(23f, 270f, 0), .85f, new Color(1f, .84f, .66f)),
+                RegionTimeOfDay.Noon => (Quaternion.Euler(NoonElevation, 33f, 0f), .76f, NoonSunColor),
                 RegionTimeOfDay.Evening => (Quaternion.Euler(12f, 90f, 0), .44f, new Color(1f, .68f, .43f)),
                 RegionTimeOfDay.Night => (Quaternion.Euler(38f, 285f, 0), .17f, new Color(.66f, .78f, 1f)),
                 _ => (Quaternion.Euler(afternoon.x, 65f, 0), 1f, afternoonColor)
@@ -241,6 +257,17 @@ namespace CityForge.World
             light.transform.rotation = rotation;
             light.intensity = afternoonIntensity * intensity;
             light.color = color;
+        }
+
+        internal static void ApplyCalibratedSun(Light light, RegionTimeOfDay time, float baseIntensity,
+            float elevation, float sunlight, bool linear)
+        {
+            bool noon = time == RegionTimeOfDay.Noon;
+            light.transform.rotation = noon ? Quaternion.Euler(NoonElevation, 33f, 0f)
+                : Quaternion.Euler(elevation, linear ? 25f : 65f, 0f);
+            // The higher noon sun puts more light onto roofs and terrain.
+            light.intensity = baseIntensity * sunlight * (noon ? (linear ? .70f : .76f) : 1f);
+            light.color = noon ? NoonSunColor : linear ? new Color(1f, .927f, .8058f) : new Color(1f, .97f, .90f);
         }
 
         internal static void ApplyAmbient(SphericalHarmonicsL2 probe, Color sky, Color equator, Color ground,
@@ -268,7 +295,7 @@ namespace CityForge.World
 
         private static (float level, Color tint) AmbientPreset(RegionTimeOfDay time) => time switch
             {
-                RegionTimeOfDay.Morning => (.84f, new Color(1f, .97f, .94f)),
+                RegionTimeOfDay.Morning => (1.05f, new Color(1f, .97f, .94f)),
                 RegionTimeOfDay.Evening => (.58f, new Color(1f, .90f, .84f)),
                 RegionTimeOfDay.Night => (.19f, new Color(.56f, .72f, 1f)),
                 _ => (1f, Color.white)
@@ -283,8 +310,8 @@ namespace CityForge.World
         private ColorAdjustments afternoonColor;
         private float seasonalShadowStrength;
         internal bool CalibratedAfternoon => !IsRegionOverview && View.UseAfternoonCalibration;
-        internal bool LinearAfternoon => CalibratedAfternoon && QualitySettings.activeColorSpace == ColorSpace.Linear;
-        private static readonly Vector3 AfternoonSkyDirection = new Vector3(.70f, .12f, -.70f).normalized;
+        internal bool LinearAfternoon => (CalibratedAfternoon || UseBalancedNoon(View.TimeOfDay)) && QualitySettings.activeColorSpace == ColorSpace.Linear;
+        internal static readonly Vector3 AfternoonSkyDirection = new Vector3(.70f, .12f, -.70f).normalized;
         internal SphericalHarmonicsL2 AddAfternoonSkyFill(SphericalHarmonicsL2 probe)
         {
             if (LinearAfternoon)
@@ -292,8 +319,9 @@ namespace CityForge.World
             return probe;
         }
 
-        internal float DistrictAmbientScale => CalibratedAfternoon ? View.AfternoonAmbient : 1f;
-        internal Color DistrictAmbientTint => CalibratedAfternoon ? new Color(.96f, .985f, 1.035f) : Color.white;
+        internal float DistrictAmbientScale => (CalibratedAfternoon || UseBalancedNoon(View.TimeOfDay)) ? View.AfternoonAmbient : 1f;
+        internal Color DistrictAmbientTint => CalibratedAfternoon || UseBalancedNoon(View.TimeOfDay)
+            ? PrototypeRegionView.CalibratedAmbientTint(View.TimeOfDay) : Color.white;
 
         private void BuildAfternoonCalibrationVolume()
         {
@@ -316,18 +344,14 @@ namespace CityForge.World
         private void ApplyAfternoonExposure()
         {
             if (!afternoonCalibrationVolume) return;
-            afternoonCalibrationVolume.enabled = CalibratedAfternoon;
-            afternoonColor.postExposure.Override(View.AfternoonExposure);
-            afternoonColor.contrast.overrideState = LinearAfternoon;
-            afternoonColor.contrast.value = 6f;
-            afternoonColor.saturation.overrideState = LinearAfternoon;
-            afternoonColor.saturation.value = 0f;
+            afternoonCalibrationVolume.enabled = CalibratedAfternoon || UseBalancedNoon(View.TimeOfDay);
+            PrototypeRegionView.ApplyCalibratedGrade(afternoonColor, View.TimeOfDay, View.AfternoonExposure, LinearAfternoon);
         }
 
         private readonly List<(Light light, Quaternion rotation, float intensity, Color color, bool pipelineBias, float depthBias, float normalBias)> districtSuns = new();
 
         private bool UseBalancedNoon(RegionTimeOfDay time) =>
-            time == RegionTimeOfDay.Noon && !IsRegionOverview && View.Climate == RegionClimate.Temperate;
+            time == RegionTimeOfDay.Noon && !IsRegionOverview;
 
         internal void ApplyDistrictSun()
         {
@@ -349,17 +373,10 @@ namespace CityForge.World
                 sun.light.shadows = refined || balanced ? LightShadows.Soft : LightShadows.Hard;
                 if (refined)
                     sun.light.color = new Color(sun.color.r, sun.color.g * .985f, sun.color.b * .955f);
-                sun.light.shadowStrength = CalibratedAfternoon ? View.AfternoonShadowStrength : seasonalShadowStrength;
-                if (CalibratedAfternoon)
-                {
-                    sun.light.transform.rotation = Quaternion.Euler(View.AfternoonElevation, LinearAfternoon ? 25f : 65f, 0f);
-                    sun.light.intensity = sun.intensity * View.AfternoonSunlight;
-                    sun.light.color = LinearAfternoon ? new Color(1f, .927f, .8058f) : new Color(1f, .97f, .90f);
-                }
-                if (!balanced) continue;
-                sun.light.transform.rotation = Quaternion.Euler(49f, 33f, 0);
-                sun.light.color = new Color(1f, .965f, .91f);
-                sun.light.intensity = sun.intensity * 1.13f;
+                sun.light.shadowStrength = CalibratedAfternoon || balanced ? View.AfternoonShadowStrength : seasonalShadowStrength;
+                if (CalibratedAfternoon || balanced)
+                    PrototypeRegionView.ApplyCalibratedSun(sun.light, time, sun.intensity,
+                        View.AfternoonElevation, View.AfternoonSunlight, LinearAfternoon);
             }
         }
 

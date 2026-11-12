@@ -194,6 +194,12 @@ namespace CityForge.World
         {
             if (!TownConstructionVisible || !CanBuildTown || IsSaving) return;
             CancelRoadPlacement();
+            if (section == TownSection.Zones && townSection == section && townPanel && !townPanel.gameObject.activeSelf)
+            {
+                CancelZoneDrag();
+                townPanel.gameObject.SetActive(true);
+                return;
+            }
             bool toggleOff = townSection == section;
             CloseTownSection();
             if (toggleOff) return;

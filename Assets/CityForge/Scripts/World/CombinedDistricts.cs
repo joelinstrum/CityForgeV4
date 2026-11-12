@@ -50,14 +50,16 @@ namespace CityForge.World
         public void Initialize(PrototypeRegionView source)
         {
             view=source;var hud=view.transform.Find("RegionHud");panel=new GameObject("CombineDistricts",typeof(RectTransform));panel.transform.SetParent(hud,false);
-            var rect=panel.GetComponent<RectTransform>();rect.anchorMin=rect.anchorMax=rect.pivot=Vector2.one;rect.anchoredPosition=new Vector2(-25,-135);rect.sizeDelta=new Vector2(260,150);
-            toggle=MakeButton("COMBINE DISTRICTS",0,()=>SetActive(!Active));apply=MakeButton("APPLY",48,Apply);
-            var text=new GameObject("Hint",typeof(RectTransform),typeof(Text));text.transform.SetParent(panel.transform,false);hint=text.GetComponent<Text>();hint.font=Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");hint.fontSize=15;hint.color=new Color(.95f,.83f,.46f);hint.alignment=TextAnchor.UpperRight;hint.raycastTarget=false;var hr=text.GetComponent<RectTransform>();hr.anchorMin=hr.anchorMax=hr.pivot=Vector2.one;hr.anchoredPosition=new Vector2(0,-98);hr.sizeDelta=new Vector2(380,60);
+            var rect=panel.GetComponent<RectTransform>();rect.anchorMin=rect.anchorMax=rect.pivot=new Vector2(0,1);rect.anchoredPosition=new Vector2(579,-114);rect.sizeDelta=new Vector2(192,150);
+            toggle=MakeButton("COMBINE DISTRICTS",0,()=>SetActive(!Active));apply=MakeButton("APPLY",57,Apply);
+            CityForge.UI.RegionBrassArtwork.SetButton(toggle,"combine");
+            CityForge.UI.RegionBrassArtwork.SetButton(apply,"button",bakedCaption:false);
+            var text=new GameObject("Hint",typeof(RectTransform),typeof(Text));text.transform.SetParent(panel.transform,false);hint=text.GetComponent<Text>();hint.font=Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");hint.fontSize=15;hint.color=new Color(.95f,.83f,.46f);hint.alignment=TextAnchor.UpperRight;hint.raycastTarget=false;var hr=text.GetComponent<RectTransform>();hr.anchorMin=hr.anchorMax=hr.pivot=Vector2.one;hr.anchoredPosition=new Vector2(0,-114);hr.sizeDelta=new Vector2(380,60);
             ids=new Texture2D(view.GridSide,view.GridSide,TextureFormat.RGBAFloat,false,true){filterMode=FilterMode.Point,wrapMode=TextureWrapMode.Clamp,name="District grouping and selection"};RefreshBorders();
         }
         Button MakeButton(string caption,float y,UnityEngine.Events.UnityAction click)
         {
-            var go=new GameObject(caption,typeof(RectTransform),typeof(Image),typeof(Button));go.transform.SetParent(panel.transform,false);var r=go.GetComponent<RectTransform>();r.anchorMin=r.anchorMax=r.pivot=Vector2.one;r.anchoredPosition=new Vector2(0,-y);r.sizeDelta=new Vector2(260,42);var button=go.GetComponent<Button>();button.onClick.AddListener(click);
+            var go=new GameObject(caption,typeof(RectTransform),typeof(Image),typeof(Button));go.transform.SetParent(panel.transform,false);var r=go.GetComponent<RectTransform>();r.anchorMin=r.anchorMax=r.pivot=Vector2.one;r.anchoredPosition=new Vector2(0,-y);r.sizeDelta=new Vector2(192,54);var button=go.GetComponent<Button>();button.onClick.AddListener(click);
             var label=new GameObject("Caption",typeof(RectTransform),typeof(Text));label.transform.SetParent(go.transform,false);var t=label.GetComponent<Text>();t.font=Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");t.text=caption;t.fontSize=18;t.color=Color.white;t.alignment=TextAnchor.MiddleCenter;t.raycastTarget=false;var tr=t.rectTransform;tr.anchorMin=Vector2.zero;tr.anchorMax=Vector2.one;tr.offsetMin=tr.offsetMax=Vector2.zero;return button;
         }
         public void SetActive(bool active){Active=active;selected.Clear();hint.text=active?"Select 2–4 districts sharing an edge":"";RefreshBorders();}
@@ -74,8 +76,8 @@ namespace CityForge.World
         {
             if(!ids)return;var colors=new Color[view.DistrictCount];for(int i=0;i<colors.Length;i++){var group=view.DistrictMembers(i);colors[i]=new Color((group.Min()+1f)/(view.DistrictCount+1),selected.Contains(i)?1:0,group.Length>1?1:0,1);}ids.SetPixels(colors);ids.Apply();
             if(!relief)relief=view.GetComponentInChildren<RegionReliefMap>(true);if(relief)relief.SetDistrictGroups(ids);
-            if(view.SelectedDistrict<0){int count=view.DistrictCount-view.CombinedDistricts.Sum(g=>g.cells.Length-1);var title=view.transform.Find("RegionHud/RegionTitle");if(title)title.GetComponent<Text>().text=view.RegionName+" / "+count+" DISTRICTS";var heading=view.transform.Find("RegionHud/DistrictSelection/Heading");if(heading)heading.GetComponent<Text>().text=count+" DISTRICTS · CLICK THE MAP TO ENTER";}
-            toggle.GetComponent<Image>().color=Active?new Color(.64f,.43f,.10f):new Color(.13f,.15f,.13f,.96f);toggle.GetComponentInChildren<Text>().text=Active?"● COMBINE DISTRICTS":"COMBINE DISTRICTS";apply.gameObject.SetActive(Active);apply.interactable=DistrictConnections.Valid(selected,view.GridSide);apply.GetComponent<Image>().color=new Color(.35f,.31f,.18f);
+            view.RefreshOverviewHeading();
+            if(!CityForge.UI.RegionBrassArtwork.SetSelected(toggle,"combine",Active))toggle.GetComponent<Image>().color=Active?new Color(.64f,.43f,.10f):new Color(.13f,.15f,.13f,.96f);toggle.GetComponentInChildren<Text>().text=Active?"● COMBINE DISTRICTS":"COMBINE DISTRICTS";apply.gameObject.SetActive(Active);apply.interactable=DistrictConnections.Valid(selected,view.GridSide);apply.GetComponent<Image>().color=new Color(.35f,.31f,.18f);
         }
         void Update(){if(panel)panel.SetActive(view.SelectedDistrict<0&&!view.DistrictLoading);}
         void OnDestroy(){if(ids)Destroy(ids);}

@@ -14,8 +14,10 @@ namespace CityForge.Lots
         public TownZone zone;
         public LotWealth wealth;
         public string previewBuildingId;
-        public float previewYawOffset;
-        public float previewScale;
+        public bool faceAwayFromRoad;
+        public bool autoPaths;
+        public float buildingScale;
+        internal float BuildingScale => buildingScale == 0f ? 1f : buildingScale;
         public bool restrictGrowthBuildings;
         public string[] growthBuildingIds;
 
@@ -32,13 +34,6 @@ namespace CityForge.Lots
         public bool Configured => zone != TownZone.None;
         public Rect BuildingSlot => new Rect(buildingCenter - buildingSize * .5f, buildingSize);
 
-        internal LotObjectDefinition BuildingPreview() => new LotObjectDefinition
-        {
-            assetId = previewBuildingId, position = buildingCenter,
-            yaw = 90f * (int)frontage + previewYawOffset,
-            scale = previewScale > 0 ? previewScale : 1f
-        };
-
         internal LotZoningLayout SeedBuilding(LotObjectDefinition building, LotAssetCatalogEntry asset)
         {
             var next = this;
@@ -47,8 +42,6 @@ namespace CityForge.Lots
             next.buildingCenter = bounds.center;
             next.buildingSize = bounds.size;
             next.previewBuildingId = asset.id;
-            next.previewYawOffset = building.yaw - 90f * (int)frontage;
-            next.previewScale = building.scale;
             return next;
         }
 
@@ -65,6 +58,7 @@ namespace CityForge.Lots
 
         internal bool Valid => !Configured || (zone >= TownZone.Residential1 && zone <= TownZone.Industrial3 &&
             wealth >= LotWealth.Low && wealth <= LotWealth.High &&
+            BuildingScale >= .25f && BuildingScale <= 3f &&
             frontage >= LotFrontage.South && frontage <= LotFrontage.East &&
             (!hasEntrance || Finite(entrance)) && (!hasDriveway || Finite(driveway)) &&
             float.IsFinite(buildingCenter.x) && float.IsFinite(buildingCenter.y) &&
@@ -76,10 +70,10 @@ namespace CityForge.Lots
             size.x <= buildingSize.x * 1.10f + .001f &&
             size.y <= buildingSize.y * 1.10f + .001f;
 
-        internal string BuildingFitProblem(LotDefinition lot, LotObjectDefinition building,
-            LotAssetCatalogEntry asset, LotAssetCatalog catalog)
+        internal string BuildingFitProblem(LotDefinition lot, Rect bounds, LotAssetCatalog catalog, bool withinSlot = false)
         {
-            var bounds = LotRuntimeLoader.Footprint(building, asset);
+            if (withinSlot && (!Contains(BuildingSlot, bounds.min) || !Contains(BuildingSlot, bounds.max)))
+                return "Keep the building inside the reserved area.";
             if (!AcceptsBuildingSize(bounds.size))
                 return "This building exceeds the footprint's 10% allowance.";
             if (hasEntrance)

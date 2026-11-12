@@ -16,6 +16,7 @@ namespace CityForge.World
         public int district;
         public Vector2 position;
         public bool pedestrian;
+        public bool tree;
 
         internal static void Validate(DistrictPlacedActor[] actors, int districts, float mapSide)
         {
@@ -34,7 +35,8 @@ namespace CityForge.World
         private const int MaxPlacedActors = 512;
         internal readonly List<DistrictPlacedActor> PlacedActors = new();
         private string armedDistrictActor;
-        private bool armedPedestrian;
+        private bool armedPedestrian, armedTree;
+        private Transform placedTreeRoot;
         private int armedActorCount;
 
         private sealed class Pedestrian
@@ -56,11 +58,17 @@ namespace CityForge.World
         private bool pedestrianRoutesDirty;
         private float pedestrianTick;
 
-        internal void ArmDistrictActor(string id, int count, bool pedestrian)
+        internal void ArmDistrictActor(string id, int count, bool pedestrian, bool tree = false)
         {
             armedDistrictActor = id;
             armedActorCount = count;
             armedPedestrian = pedestrian;
+            armedTree = tree;
+            if (tree)
+            {
+                ShowDistrictMessage("Click dry ground to plant the tree · Esc to cancel");
+                return;
+            }
             ShowDistrictMessage(pedestrian ? "Click dry ground near a sidewalk or road · Esc to cancel"
                 : "Click suitable terrain to place wildlife · Esc to cancel");
         }
@@ -78,7 +86,24 @@ namespace CityForge.World
                 return true;
             }
 
-            if (armedPedestrian)
+            if (armedTree)
+            {
+                var asset = LotAssetCatalog.Load()?.Find(armedDistrictActor);
+                var water = DistrictLotWater();
+                bool wet = water != null ? water.Wet(point, out _, out _) : !IsTownLand(point / MapSide + Vector2.one * .5f);
+                if (asset == null || !asset.IsSeasonalTree || wet || PickDistrictRoad(point) != null ||
+                    PlacedLots.Any(lot => new DistrictLotFootprint(lot).Contains(point)) ||
+                    PlacedActors.Any(actor => actor.tree && (actor.position - point).sqrMagnitude < 4f))
+                {
+                    ShowDistrictMessage("Plant on open, dry ground.");
+                    return true;
+                }
+                var record = NewActor(point);
+                PlacedActors.Add(record);
+                PresentPlacedTree(record, asset);
+                ShowDistrictMessage($"{asset.label} planted.");
+            }
+            else if (armedPedestrian)
             {
                 var asset = LotAssetCatalog.Load()?.Find(armedDistrictActor);
                 if (asset == null || !asset.prefab || !asset.IsCharacter) return true;
@@ -120,12 +145,11 @@ namespace CityForge.World
                 }
                 ShowDistrictMessage(armedActorCount == 1 ? "Animal placed." : $"Placed {armedActorCount} animals.");
             }
-            CancelDistrictActor();
             return true;
 
             DistrictPlacedActor NewActor(Vector2 position) => new DistrictPlacedActor
             {
-                assetId = armedDistrictActor, pedestrian = armedPedestrian, position = position,
+                assetId = armedDistrictActor, pedestrian = armedPedestrian, tree = armedTree, position = position,
                 district = DistrictAtWorld(new Vector3(position.x, 0f, position.y))
             };
         }
@@ -133,6 +157,7 @@ namespace CityForge.World
         private void RebuildPlacedPedestrians()
         {
             CancelDistrictActor();
+            RebuildPlacedTrees();
             if (pedestrianRoot) { pedestrianRoot.gameObject.SetActive(false); Destroy(pedestrianRoot.gameObject); }
             pedestrianRoot = null;
             pedestrians.Clear();
@@ -148,6 +173,37 @@ namespace CityForge.World
                 if (record.pedestrian && active.Contains(record.district) && catalog.Find(record.assetId) is { } asset &&
                     asset.prefab && asset.IsCharacter)
                     SetPedestrianRoute(CreatePedestrian(record, asset));
+        }
+
+        private void RebuildPlacedTrees()
+        {
+            if (placedTreeRoot)
+            {
+                placedTreeRoot.gameObject.SetActive(false);
+                Destroy(placedTreeRoot.gameObject);
+                placedTreeRoot = null;
+            }
+
+            if (SelectedDistrict < 0 || !PlacedActors.Any(actor => actor.tree)) return;
+            var catalog = LotAssetCatalog.Load();
+            if (!catalog) return;
+            var active = new HashSet<int>(ActiveDistrictMembers);
+            foreach (var record in PlacedActors)
+                if (record.tree && active.Contains(record.district) && catalog.Find(record.assetId) is { } asset &&
+                    asset.prefab && asset.IsSeasonalTree)
+                    PresentPlacedTree(record, asset);
+        }
+
+        private void PresentPlacedTree(DistrictPlacedActor record, LotAssetCatalogEntry asset)
+        {
+            if (!placedTreeRoot)
+            {
+                placedTreeRoot = new GameObject("Individually planted trees").transform;
+                placedTreeRoot.SetParent(transform, false);
+            }
+            var instance = LotRuntimeLoader.InstantiateObject(new LotObjectDefinition { assetId = asset.id, scale = 1f },
+                asset, placedTreeRoot, VisualSeason);
+            instance.transform.position = new Vector3(record.position.x, LotHeight(record.position), record.position.y);
         }
 
         private Pedestrian CreatePedestrian(DistrictPlacedActor record, LotAssetCatalogEntry asset)

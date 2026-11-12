@@ -49,7 +49,7 @@ namespace CityForge.World
         private Material[] zoneMaterials;
         private Text zoneStatus;
         private TownZone activeZone;
-        private bool zoneToolArmed;
+        private bool zoneToolArmed, restoreZonePanelAfterDrag;
         private Vector2Int? zoneDragStart;
         private RectInt? zoneDragBounds;
         private string zoneProblem;
@@ -127,7 +127,6 @@ namespace CityForge.World
             zoneStatus.color = TownGold;
             EnsureZoneSurfaces();
             RefreshZoneOverlay();
-            zoneRenderer.enabled = true;
         }
 
         private void ArmZone(TownZone zone)
@@ -148,11 +147,12 @@ namespace CityForge.World
             CancelZoneDrag();
             zoneToolArmed = false;
             zoneStatus = null;
-            if (zoneRenderer) zoneRenderer.enabled = false;
         }
 
         private void CancelZoneDrag()
         {
+            if (restoreZonePanelAfterDrag && townPanel) townPanel.gameObject.SetActive(true);
+            restoreZonePanelAfterDrag = false;
             zoneDragStart = null;
             zoneDragBounds = null;
             zoneWater = null;
@@ -202,6 +202,8 @@ namespace CityForge.World
             if (down)
             {
                 zoneDragStart = cell;
+                restoreZonePanelAfterDrag = townPanel && townPanel.gameObject.activeSelf;
+                if (restoreZonePanelAfterDrag) townPanel.gameObject.SetActive(false);
                 zoneWater = DistrictLotWater();
             }
             if (zoneDragStart is not Vector2Int start) return;
@@ -215,9 +217,14 @@ namespace CityForge.World
                 RefreshZonePreview(bounds);
             }
             else if (rotated) RefreshZonePreview(bounds);
-            if (up && zoneProblem == null)
-                zoneStatus.text = ApplyTownZone(bounds, activeZone) ?? (activeZone == TownZone.Residential1
-                    ? ResidentialPaintStatus(bounds, ResidentialFacing(zoneDragFrontage)) : "Zoning updated. Save the region to keep it.");
+            if (!up || zoneProblem != null) return;
+            var problem = ApplyTownZone(bounds, activeZone);
+            if (problem == null)
+            {
+                restoreZonePanelAfterDrag = false;
+                zoneStatus.text = "Drag to continue zoning · Esc to exit";
+            }
+            else zoneStatus.text = problem;
         }
 
         private void RefreshZonePreview(RectInt bounds)
@@ -300,7 +307,7 @@ namespace CityForge.World
                 else residentialFacing.Remove(cell);
             }
             if (affectsGrowth) QueueZoningGrowth(bounds);
-            if (zoneRenderer) RefreshZoneOverlay();
+            RefreshZoneOverlay();
             return null;
         }
 
@@ -355,6 +362,11 @@ namespace CityForge.World
 
         private void RefreshZoneOverlay()
         {
+            if (!zoneRenderer && (SelectedDistrict < 0 || townZones.Count == 0)) return;
+            EnsureZoneSurfaces();
+            zoneRenderer.enabled = SelectedDistrict >= 0;
+            if (!zoneRenderer.enabled) return;
+
             var districtMembers = ActiveDistrictMembers;
             var developed = PlacedLots.Where(lot => districtMembers.Contains(lot.district))
                 .Select(lot => new DistrictLotFootprint(lot)).ToArray();

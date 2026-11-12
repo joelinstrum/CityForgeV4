@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Collections.Generic;
 using System.Collections;
 using CityForge.CameraSystem;
@@ -47,7 +48,7 @@ namespace CityForge.World
         private readonly List<GameObject> trees = new List<GameObject>();
         private Text regionTitle, regionNote, navigationHint;
         private Image districtInfoBackground;
-        private const string OverviewNavigationHint = "Arrows / WASD: pan   ·   Wheel / + / −: zoom   ·   Q/E: rotate   ·   I: camera angle   ·   Home: reset   ·   Drag slab edge: orbit   ·   Click: enter district   ·   Right-click: district actions   ·   L: town labels   ·   Esc: back";
+        private const string OverviewNavigationHint = "Click a district to enter · Right-click for district actions";
         private const string DistrictNavigationHint = "I: district info   ·   Hold C + move up/down: camera tilt   ·   Wheel / + / −: zoom   ·   G: grid   ·   L: town labels   ·   Esc: back";
         private Texture2D woodlandField;
         private readonly Dictionary<Vector2Int, List<Vector2>> canopyCells = new();
@@ -63,11 +64,18 @@ namespace CityForge.World
         bool? hudDistrictMode;
         const float DistrictActionSize = 42f;
         RawImage districtSaveIcon, districtBackIcon;
+        private Image regionBrand;
         Text districtMessage;
         public void SetSeason(RegionSeason season)
         {
             if(!System.Enum.IsDefined(typeof(RegionSeason),season))throw new System.ArgumentOutOfRangeException(nameof(season));
+            bool changed = Season != season;
             Season=season;if(approvedDistrict)approvedDistrict.SetSeason(VisualSeason);
+            if (changed)
+            {
+                if (hasSeasonalLotTrees) RebuildDistrictLots();
+                RebuildPlacedTrees();
+            }
             RefreshSeasonButtons();
         }
         void RefreshSeasonButtons()
@@ -77,8 +85,9 @@ namespace CityForge.World
             if (hudDistrictMode != district)
             {
                 hudDistrictMode = district;
-                LayoutHudAction(districtSaveIcon, district, district ? -77f : -245f, "SAVE REGION");
-                LayoutHudAction(districtBackIcon, district, -25f, "RETURN TO MENU");
+                LayoutHudAction(districtSaveIcon, district, district ? -77f : -86f, "SAVE REGION", "save");
+                LayoutHudAction(districtBackIcon, district, -25f, "RETURN TO MENU", "back");
+                LayoutRegionHeading(district);
                 ShowDistrictMessage("");
             }
             RefreshRemakeButton();
@@ -432,7 +441,7 @@ namespace CityForge.World
             if(!deferLegacyTrees){legacyTreesReady=true;BuildTrees(seed);}
             Debug.Log($"Region build timing: fields/heights {dataMs} ms, terrain/surface {surfaceMs-dataMs} ms, trees {buildTimer.ElapsedMilliseconds-surfaceMs} ms.");
             loadingProgress?.Invoke("Preparing region controls",.34f);yield return null;
-            BuildHud(regionName, seed);
+            BuildHud(regionName);
             if(Data.Biomes==null)gameObject.AddComponent<MeadowGrassRenderer>().enabled=false;
             Debug.Log("CityForge: generated buildable coastal prototype, seed " + seed);
         }
@@ -482,7 +491,7 @@ namespace CityForge.World
 
         private CityForge.UI.RegionResourcesOverlay resourceOverlay;
 
-        private void BuildHud(string regionName, int seed)
+        private void BuildHud(string regionName)
         {
             var root = new GameObject("RegionHud", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             root.transform.SetParent(transform);
@@ -507,14 +516,18 @@ namespace CityForge.World
             districtInfoBackground.color = new Color(.06f, .07f, .06f, .94f);
             districtInfoBackground.raycastTarget = false;
             infoBackground.SetActive(false);
+            regionBrand = new GameObject("CityForge brass crest", typeof(RectTransform), typeof(Image)).GetComponent<Image>();
+            regionBrand.transform.SetParent(root.transform, false);
+            regionBrand.raycastTarget = false;
+            regionBrand.preserveAspect = true;
+            if (!CityForge.UI.RegionBrassArtwork.SetImage(regionBrand, "brand")) regionBrand.enabled = false;
+            Position(regionBrand.rectTransform, new Vector2(25f, -13f), new Vector2(190f, 83f));
             var title = HudText(root.transform, "RegionTitle", font, 26);
             regionTitle = title;
-            title.text = (string.IsNullOrWhiteSpace(regionName) ? "TEST REGION" : regionName)
-                + "  /  FOUR DISTRICTS";
             Position(title.rectTransform, new Vector2(25f, -20f), new Vector2(1250f, 42f));
             var subtitle = HudText(root.transform, "PrototypeNote", font, 17);
             regionNote = subtitle;
-            subtitle.text = Size.ToString().ToUpperInvariant() + "  ·  " + MapSide.ToString("N0") + " × " + MapSide.ToString("N0") + " m  ·  SEED " + seed;
+            RefreshOverviewHeading();
             Position(subtitle.rectTransform, new Vector2(25f, -64f), new Vector2(1250f, 30f));
             var controls = HudText(root.transform, "Controls", font, 17);
             navigationHint = controls;
@@ -596,6 +609,7 @@ namespace CityForge.World
             districtMessage.rectTransform.offsetMax = new Vector2(-12, 0);
             ShowDistrictMessage("");
             var rig = GetComponentInChildren<CityForgeCameraController>();
+            CityForge.UI.RegionOverviewPresentation.Create(this, rig, root.transform, font);
             var zoomLabel = HudText(root.transform, "ZoomLabel", font, 16);
             zoomLabel.rectTransform.anchorMin = zoomLabel.rectTransform.anchorMax = zoomLabel.rectTransform.pivot = new Vector2(1,1);
             zoomLabel.rectTransform.anchoredPosition = new Vector2(-25,-87);
@@ -646,9 +660,9 @@ namespace CityForge.World
         {
             if(Districts==null)return;
             districtSelection=new GameObject("DistrictSelection",typeof(RectTransform));districtSelection.transform.SetParent(parent,false);
-            Position(districtSelection.GetComponent<RectTransform>(),new Vector2(25,-115),new Vector2(430,235));
+            Position(districtSelection.GetComponent<RectTransform>(),new Vector2(25,-182),new Vector2(430,235));
             var heading=HudText(districtSelection.transform,"Heading",font,17);
-            heading.text=DistrictCount+" DISTRICTS · CLICK THE MAP TO ENTER";
+            heading.text="Click the map to enter";
             Position(heading.rectTransform,Vector2.zero,new Vector2(430,30));
             foreach(var district in Districts){
                 if(GridSide>2)break;
@@ -656,6 +670,7 @@ namespace CityForge.World
                 var button=new GameObject("District_"+index,typeof(RectTransform),typeof(Image),typeof(Button));button.transform.SetParent(districtSelection.transform,false);
                 Position(button.GetComponent<RectTransform>(),new Vector2(0,-35-index*45),new Vector2(430,40));
                 button.GetComponent<Image>().color=new Color(.08f,.11f,.09f,.88f);
+                CityForge.UI.RegionBrassArtwork.SetImage(button.GetComponent<Image>(),"button");
                 var label=HudText(button.transform,"Caption",font,17);label.text=district.name+"  ·  "+RegionBiomeMap.Label(district.biome)+"  ·  "+Mathf.RoundToInt(district.woodlandFraction*100)+"% woodland";
                 label.alignment=TextAnchor.MiddleLeft;label.rectTransform.anchorMin=Vector2.zero;label.rectTransform.anchorMax=Vector2.one;label.rectTransform.offsetMin=new Vector2(12,0);label.rectTransform.offsetMax=Vector2.zero;
                 button.GetComponent<Button>().onClick.AddListener(()=>RequestDistrict(index));
@@ -688,16 +703,46 @@ namespace CityForge.World
             return icon;
         }
 
-        static void LayoutHudAction(RawImage icon, bool district, float right, string overviewCaption)
+        internal void RefreshOverviewHeading()
+        {
+            if (SelectedDistrict >= 0 || !regionTitle || !regionNote) return;
+
+            int count = DistrictCount - CombinedDistricts.Sum(group => group.cells.Length - 1);
+            regionTitle.text = string.IsNullOrWhiteSpace(RegionName) ? "TEST REGION" : RegionName;
+            string districts = count == 1 ? "district" : "districts";
+            regionNote.text = $"{count} {districts}  ·  {Size.ToString().ToUpperInvariant()}  ·  {MapSide:N0} × {MapSide:N0} m";
+        }
+
+        private void LayoutRegionHeading(bool district)
+        {
+            if (!regionBrand || !regionTitle || !regionNote) return;
+            regionBrand.gameObject.SetActive(!district);
+            float left = !district && regionBrand.enabled ? 230f : 25f;
+            regionTitle.fontSize = district ? 26 : 42;
+            regionNote.fontSize = district ? 17 : 15;
+            Position(regionTitle.rectTransform, new Vector2(left, district ? -20f : -13f), new Vector2(district ? 1250f : 1000f, district ? 42f : 54f));
+            Position(regionNote.rectTransform, new Vector2(left, -64f), new Vector2(district ? 1250f : 1000f, 30f));
+        }
+
+        static void LayoutHudAction(RawImage icon, bool district, float right, string overviewCaption, string artwork)
         {
             var rect = (RectTransform)icon.transform.parent;
-            rect.anchoredPosition = new Vector2(right, -25);
-            rect.sizeDelta = district ? Vector2.one * DistrictActionSize : new Vector2(205, 48);
+            var image = rect.GetComponent<Image>();
+            var button = rect.GetComponent<Button>();
+            bool styled = !district && CityForge.UI.RegionBrassArtwork.SetImage(image, artwork);
+            if (!styled)
+            {
+                image.sprite = null;
+                image.color = new Color(.13f, .15f, .13f, .95f);
+            }
+            if (!district && !styled && artwork == "save") right = -245f;
+            rect.anchoredPosition = new Vector2(right, -25f);
+            rect.sizeDelta = district ? Vector2.one * DistrictActionSize : styled ? Vector2.one * 53f : new Vector2(205f, 48f);
             var caption = rect.Find("Caption").GetComponent<Text>();
-            caption.gameObject.SetActive(!district);
+            caption.gameObject.SetActive(!district && !styled);
             caption.text = overviewCaption;
             icon.gameObject.SetActive(district);
-            rect.GetComponent<Button>().targetGraphic = district ? icon : rect.GetComponent<Image>();
+            button.targetGraphic = district ? icon : image;
         }
 
         void ShowDistrictMessage(string message)
@@ -929,7 +974,7 @@ namespace CityForge.World
             foreach (var line in GetComponentsInChildren<LineRenderer>(true)) line.gameObject.SetActive(false);
             GetComponentInChildren<CityForgeCameraController>().FrameArea(DistrictSide,VerticalHeight,center);
             regionTitle.text=RegionName+"  /  "+(GridSide==2?DistrictNames[index]+" District":$"District {index%GridSide+1}–{index/GridSide+1}");
-            regionNote.text=DistrictSide.ToString("N0")+" × "+DistrictSide.ToString("N0")+" m  ·  SEED "+Data.Seed;
+            regionNote.text=DistrictSide.ToString("N0")+" × "+DistrictSide.ToString("N0")+" m";
             if(Districts!=null)regionNote.text+="  ·  "+RegionBiomeMap.Label(Districts[index].biome);
             overviewButton.SetActive(false);
             RefreshTrees();
@@ -977,8 +1022,7 @@ namespace CityForge.World
             if(waterSurface){waterSurface.position=Vector3.up*SeaLevel; waterSurface.localScale=Vector3.one*(MapSide/10);}
             foreach (var line in GetComponentsInChildren<LineRenderer>(true)) line.gameObject.SetActive(true);
             GetComponentInChildren<CityForgeCameraController>().FrameRegion(MapSide,VerticalHeight,returnHeading);
-            regionTitle.text=RegionName+"  /  "+DistrictCount+" DISTRICTS";
-            regionNote.text=Size.ToString().ToUpperInvariant()+"  ·  "+MapSide.ToString("N0")+" × "+MapSide.ToString("N0")+" m  ·  SEED "+Data.Seed;
+            RefreshOverviewHeading();
             overviewButton.SetActive(false); RefreshTrees(); UpdateLandscapeMode();
         }
 

@@ -388,36 +388,66 @@ namespace CityForge.World
             float low = float.PositiveInfinity, high = float.NegativeInfinity;
             float shoreHeight = float.NegativeInfinity, highestWater = float.NegativeInfinity;
             bool outerEdgeWet = false;
+            int rearDry = 0, rearSamples = 0;
             var footprint = new DistrictLotFootprint(record);
-            for (float z = -half.y; z <= half.y; z += spacing)
             for (float x = -half.x; x <= half.x; x += spacing)
             {
-                var point = WaterfrontPoint(new Vector2(x, z));
-                if (!inDistrict(point)) return "Keep the whole waterfront lot inside the district.";
-                float height = ground(point);
-                var level = waterLevel(point, height);
-                if (z >= lot.WaterfrontStart)
+                float bankHeight = float.NegativeInfinity;
+                for (float z = -half.y; z <= half.y; z += spacing)
                 {
+                    var point = WaterfrontPoint(new Vector2(x, z));
+                    if (!inDistrict(point)) return "Keep the whole waterfront lot inside the district.";
+                    float height = ground(point);
+                    var level = waterLevel(point, height);
+                    if (z == -half.y)
+                    {
+                        rearSamples++;
+                        if (!level.HasValue) rearDry++;
+                    }
                     if (level.HasValue)
                     {
                         highestWater = Mathf.Max(highestWater, level.Value);
                         if (z == half.y) outerEdgeWet = true;
+                        continue;
                     }
-                    if (z > lot.WaterfrontStart) continue;
 
-                    // The split belongs to both bands. Sample just inland for the bank.
-                    point = WaterfrontPoint(new Vector2(x, z - .10f));
-                    height = ground(point);
-                    level = waterLevel(point, height);
-                    shoreHeight = Mathf.Max(shoreHeight, height);
+                    if (z > lot.WaterfrontStart) continue;
+                    // Use the last dry sample in each column for deck height.
+                    bankHeight = height;
+                    low = Mathf.Min(low, height);
+                    high = Mathf.Max(high, height);
                 }
-                if (!editing && level.HasValue) return "Keep the land rows on dry ground.";
-                low = Mathf.Min(low, height);
-                high = Mathf.Max(high, height);
-                if (!editing && high - low > 2f) return "Choose flatter ground for the land rows.";
+                shoreHeight = Mathf.Max(shoreHeight, bankHeight);
             }
-            if (!editing && !outerEdgeWet) return "Extend the blue end out over water.";
+
+            if (!editing)
+            {
+                if (!outerEdgeWet) return "Extend the blue end out over water.";
+                if (rearDry * 2 < rearSamples) return "Keep the landward edge connected to dry ground.";
+
+                // Cell centers estimate area without counting the shoreline itself as an extra row.
+                int wetCells = 0, cells = 0;
+                for (float z = -half.y + spacing * .5f; z < half.y; z += spacing)
+                for (float x = -half.x + spacing * .5f; x < half.x; x += spacing)
+                {
+                    var point = WaterfrontPoint(new Vector2(x, z));
+                    if (!inDistrict(point)) return "Keep the whole waterfront lot inside the district.";
+                    var level = waterLevel(point, ground(point));
+                    cells++;
+                    if (!level.HasValue) continue;
+                    wetCells++;
+                    highestWater = Mathf.Max(highestWater, level.Value);
+                }
+
+                float allowedWetFraction = Mathf.Max(.5f, lot.waterfrontRows / (float)lot.WaterfrontDepth);
+                if (wetCells > cells * allowedWetFraction)
+                    return "Move the waterfront lot farther onto land.";
+                if (high - low > 2f) return "Choose flatter ground for the land rows.";
+            }
+
             record.waterfrontDeckHeight = Mathf.Max(shoreHeight, highestWater + .4f);
+            if (!float.IsFinite(record.waterfrontDeckHeight))
+                record.waterfrontDeckHeight = ground(record.center);
             return null;
 
             Vector2 WaterfrontPoint(Vector2 local) =>
@@ -523,10 +553,13 @@ namespace CityForge.World
             return false;
         }
 
+        private bool hasSeasonalLotTrees;
+
         private void RebuildDistrictLots()
         {
             pedestrianRoutesDirty = true;
-            if (zoneRenderer && zoneRenderer.enabled) RefreshZoneOverlay();
+            hasSeasonalLotTrees = false;
+            RefreshZoneOverlay();
             RefreshDirtRoadEndFades();
             districtLotRoots.Clear();
             roadBuildings.Clear();
@@ -585,7 +618,8 @@ namespace CityForge.World
                     bool dockWorker = asset.IsCharacter && definition.AttractsVessels &&
                         item.characterScript.scriptedBehavior == LotScriptedBehavior.DockWorker;
                     if (dockWorker && !item.characterScript.dockStayVisible) continue;
-                    var instance = LotRuntimeLoader.InstantiateObject(item, asset, root).transform;
+                    hasSeasonalLotTrees |= asset.IsSeasonalTree;
+                    var instance = LotRuntimeLoader.InstantiateObject(item, asset, root, VisualSeason).transform;
                     var point = instance.position;
                     point.y = LotHeight(new Vector2(point.x, point.z));
                     if (definition.IsWaterfront && LotRuntimeLoader.Footprint(item, asset).Overlaps(definition.WaterfrontBounds))

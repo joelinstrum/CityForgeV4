@@ -14,6 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   applyRefinement: 1
   saturation: 1.1
-  brightness: 1.24
-  tint: {r: 0.98, g: 1.15, b: 0.55, a: 1}
+  brightness: 1.12
+  tint: {r: 1, g: 1, b: 1, a: 1}
   variationStrength: 1.9

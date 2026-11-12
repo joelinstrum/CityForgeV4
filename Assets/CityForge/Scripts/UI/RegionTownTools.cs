@@ -51,11 +51,13 @@ namespace CityForge.UI
 
             markerRoot = Rect(hud, "Town markers", Vector2.zero, Vector2.zero);
             var topLeft = new Vector2(0, 1);
-            addTown = MakeButton(hud, "Add Town", new Vector2(25, -155), new Vector2(168, 40), BeginPlacement);
+            addTown = MakeButton(hud, "Add Town", new Vector2(25, -114), new Vector2(174, 54), BeginPlacement);
+            RegionBrassArtwork.SetButton(addTown, "add-town");
             var buttonRect = (RectTransform)addTown.transform;
             buttonRect.anchorMin = buttonRect.anchorMax = buttonRect.pivot = topLeft;
 
-            manageTowns = MakeButton(hud, "Manage Towns", new Vector2(201, -155), new Vector2(168, 40), OpenManager);
+            manageTowns = MakeButton(hud, "Manage Towns", new Vector2(207, -114), new Vector2(182, 54), OpenManager);
+            RegionBrassArtwork.SetButton(manageTowns, "manage-towns");
             var manageRect = (RectTransform)manageTowns.transform;
             manageRect.anchorMin = manageRect.anchorMax = manageRect.pivot = topLeft;
 
@@ -67,6 +69,7 @@ namespace CityForge.UI
             instruction.gameObject.SetActive(false);
             BuildDialog();
             BuildManager();
+            RegionCameraGizmo.Create(hud, view, mapCamera, font);
             BuildDistrictContext();
         }
 
@@ -345,7 +348,7 @@ namespace CityForge.UI
 
         void AutogenerateName()
         {
-            townNames ??= new PlaceNameGenerator("TownNames", RegionTown.NameLimit);
+            townNames ??= new PlaceNameGenerator("TownNames", RegionTown.NameLimit, randomSuffix: false);
             var name = townNames.Next(townName.text);
             if (name == null)
             {

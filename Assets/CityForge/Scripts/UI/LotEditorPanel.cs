@@ -62,6 +62,11 @@ namespace CityForge.UI
         private ScrollRect assetScroll;
         private GameObject choices;
         private Text width, length, status, selectedLabel, snapLabel, gridLabel;
+        private RectTransform growthPreviewTools;
+        private Button previousGrowthPreview, nextGrowthPreview;
+        private Text growthPreviewLabel;
+        private LotObjectDefinition[] growthPreviews = Array.Empty<LotObjectDefinition>();
+        private string growthPreviewLotId, growthPreviewId;
         private Text lotTitle, lotSummary, validation, tooltip;
         private Font headingFont;
         private LotToolDescription tooltipOwner;
@@ -251,12 +256,11 @@ namespace CityForge.UI
                 LotGlyph.Snap, "Toggle snapping to one-meter increments").GetComponentInChildren<Text>();
             Control(viewTools, "Top / Iso", 226, 5, 115, viewport.TopDown, LotGlyph.View, "Switch between top-down and isometric views");
             Button lighting = null;
-            lighting = Control(viewTools, "Day", 347, 5, 89, () =>
+            lighting = Control(viewTools, viewport.PreviewTime.ToString(), 347, 5, 89, () =>
             {
-                bool night = viewport.ToggleNight();
-                lighting.GetComponentInChildren<Text>().text = night ? "Night" : "Day";
-                MarkActive(lighting, night);
-            }, LotGlyph.Lighting, "Toggle day and night lighting in the lot preview");
+                viewport.CyclePreviewTime();
+                lighting.GetComponentInChildren<Text>().text = viewport.PreviewTime.ToString();
+            }, description: "Cycle the district lighting presets in the lot preview");
             Button animation = null;
             animation = Control(viewTools, "Suspend animation", 442, 5, 179, () =>
             {
@@ -264,6 +268,17 @@ namespace CityForge.UI
                 animation.GetComponentInChildren<Text>().text = paused ? "Resume animation" : "Suspend animation";
                 MarkActive(animation, paused);
             }, description: "Pause or resume animations in the lot preview");
+
+            growthPreviewTools = AddImage("Growable building preview", transform, PanelColor).rectTransform;
+            Place(growthPreviewTools, Vector2.zero, Vector2.zero, new Vector2(656, 69), new Vector2(986, 115));
+            AddOutline(growthPreviewTools.GetComponent<Image>(), Stroke);
+            previousGrowthPreview = Control(growthPreviewTools, "←", 5, 5, 38, () => CycleGrowthPreview(-1),
+                description: "Previous eligible building");
+            nextGrowthPreview = Control(growthPreviewTools, "→", 287, 5, 38, () => CycleGrowthPreview(1),
+                description: "Next eligible building");
+            growthPreviewLabel = Label(growthPreviewTools, "Preview building", 49, 2, 232, 15);
+            At(growthPreviewLabel.rectTransform, 49, 2, 232, 42);
+            growthPreviewLabel.alignment = TextAnchor.MiddleCenter;
 
             inspector = AddImage("Lot inspector", transform, PanelColor).rectTransform;
             Place(inspector, Vector2.right, Vector2.one, new Vector2(-350, 55), new Vector2(-7, -64));
@@ -740,15 +755,15 @@ namespace CityForge.UI
             var asset = building != null && catalog ? catalog.Find(building.assetId) : null;
             var frame = CreateModal("Growable layout");
             Place(frame, Vector2.one * .5f, Vector2.one * .5f,
-                new Vector2(-280, -340), new Vector2(280, 340));
-            Label(frame, "Variable building slot · meters from the lot center", 20, 220, 520, 17);
+                new Vector2(-280, -384), new Vector2(280, 384));
+            Label(frame, "Variable building slot · meters from the lot center", 20, 220, 608, 17);
             var widthField = SlotField("Width", 20, 253, slot.width);
             var depthField = SlotField("Depth", 285, 253, slot.height);
             var xField = SlotField("Center X", 20, 298, slot.center.x);
             var zField = SlotField("Center Z", 285, 298, slot.center.y);
             bool replaceBuilding = false;
             if (asset?.category == "Buildings")
-                Control(frame, "Use selected building as slot", 20, 348, 520, () =>
+                Control(frame, "Use selected building as slot", 20, 348, 608, () =>
                 {
                     var bounds = LotRuntimeLoader.Footprint(building, asset);
                     widthField.text = MeterText(bounds.width);
@@ -757,35 +772,36 @@ namespace CityForge.UI
                     zField.text = MeterText(bounds.center.y);
                     replaceBuilding = true;
                 }, description: "Use this building's footprint and remove the model when applying");
-            var previewBuildingId = layout.previewBuildingId;
-            var previewButton = Control(frame, "Preview building", 282, 397, 258, () => { },
-                description: "Cycle compatible preview buildings. Apply to see the model at 70% opacity.");
-            var previewLabel = previewButton.GetComponentInChildren<Text>();
-            previewButton.onClick.AddListener(CyclePreviewBuilding);
-            UpdatePreviewChoice();
             Choices("Zone use", new[] { "Residential", "Commercial", "Industrial" }, 79, use, value => use = value);
             Choices("Density", new[] { "1", "2", "3" }, 123, density, value => density = value);
             Choices("Wealth", new[] { "$", "$$", "$$$" }, 167, wealth, value => wealth = value);
             var frontage = layout.frontage;
-            Label(frame, "Frontage", 20, 397, 88, 16);
-            var frontageButton = Control(frame, frontage.ToString(), 115, 397, 154, () => { });
+            Label(frame, "Road edge", 20, 397, 88, 16);
+            var frontageButton = Control(frame, frontage.ToString(), 115, 397, 154, () => { },
+                description: "Edge of the template that follows the zoning arrow.");
             var frontageLabel = frontageButton.GetComponentInChildren<Text>();
             frontageButton.onClick.AddListener(() =>
             {
                 frontage = (LotFrontage)(((int)frontage + 1) % 4);
                 frontageLabel.text = frontage.ToString();
             });
-            Label(frame, "Entrance coordinates", 20, 445, 260, 16);
-            var entranceX = SlotField("House X", 20, 477, layout.hasEntrance ? layout.entrance.x : (float?)null);
-            var entranceZ = SlotField("House Z", 285, 477, layout.hasEntrance ? layout.entrance.y : (float?)null);
-            var drivewayX = SlotField("Driveway X", 20, 520, layout.hasDriveway ? layout.driveway.x : (float?)null);
-            var drivewayZ = SlotField("Driveway Z", 285, 520, layout.hasDriveway ? layout.driveway.y : (float?)null);
-            var error = Label(frame, "", 20, 569, 520, 16);
-            At(error.rectTransform, 20, 569, 520, 49);
+            bool faceAwayFromRoad = layout.faceAwayFromRoad;
+            Choices("House faces", new[] { "Face Road", "Face Away from Road" }, 441,
+                faceAwayFromRoad ? 1 : 0, value => faceAwayFromRoad = value == 1, buttonWidth: 190);
+            bool autoPaths = layout.autoPaths;
+            Choices("Auto Paths", new[] { "Off", "On" }, 485,
+                autoPaths ? 1 : 0, value => autoPaths = value == 1);
+            Label(frame, "Entrance coordinates", 20, 533, 260, 16);
+            var entranceX = SlotField("House X", 20, 565, layout.hasEntrance ? layout.entrance.x : (float?)null);
+            var entranceZ = SlotField("House Z", 285, 565, layout.hasEntrance ? layout.entrance.y : (float?)null);
+            var drivewayX = SlotField("Driveway X", 20, 608, layout.hasDriveway ? layout.driveway.x : (float?)null);
+            var drivewayZ = SlotField("Driveway Z", 285, 608, layout.hasDriveway ? layout.driveway.y : (float?)null);
+            var error = Label(frame, "", 20, 657, 608, 16);
+            At(error.rectTransform, 20, 657, 608, 49);
             error.color = Gold;
-            Control(frame, "Place entry marker", 285, 435, 248,
+            Control(frame, "Place entry marker", 285, 523, 248,
                 () => ApplyLayout(placeEntryMarker: true));
-            Control(frame, "Choose which buildings can be placed here", 20, 622, 345, () =>
+            Control(frame, "Choose which buildings can be placed here", 20, 710, 345, () =>
             {
                 if (string.IsNullOrEmpty(lot.firstEraId))
                 {
@@ -794,19 +810,18 @@ namespace CityForge.UI
                 }
                 ApplyLayout(openBuildingChoices: true);
             });
-            Control(frame, "Apply layout", 373, 622, 167, () => ApplyLayout(), LotGlyph.Check);
+            Control(frame, "Apply layout", 373, 710, 167, () => ApplyLayout(), LotGlyph.Check);
 
-            void Choices(string title, string[] labels, int y, int initial, Action<int> select)
+            void Choices(string title, string[] labels, int y, int initial, Action<int> select, int buttonWidth = 132)
             {
                 Label(frame, title, 20, y, 100, 16);
                 var buttons = new Button[labels.Length];
                 for (int i = 0; i < labels.Length; i++)
                 {
                     int value = i;
-                    buttons[i] = Control(frame, labels[i], 124 + i * 140, y, 132, () =>
+                    buttons[i] = Control(frame, labels[i], 124 + i * (buttonWidth + 8), y, buttonWidth, () =>
                     {
                         select(value);
-                        UpdatePreviewChoice();
                         for (int j = 0; j < buttons.Length; j++) MarkActive(buttons[j], j == value);
                     });
                     MarkActive(buttons[i], i == initial);
@@ -815,28 +830,6 @@ namespace CityForge.UI
 
             TownZone SelectedZone() => (TownZone)(use * 3 + density + 1);
             LotWealth SelectedWealth() => (LotWealth)(wealth + 1);
-
-            LotAssetCatalogEntry[] PreviewChoices() => catalog ? catalog.entries
-                .Where(item => item != null && layout.AllowsGrowthBuilding(item.id) && item.CanPreviewGrowable(SelectedZone(), SelectedWealth(), lot.firstEraId))
-                .OrderBy(item => item.label).ToArray() : Array.Empty<LotAssetCatalogEntry>();
-
-            void UpdatePreviewChoice()
-            {
-                var choices = PreviewChoices();
-                var choice = Array.Find(choices, item => item.id == previewBuildingId);
-                previewBuildingId = choice?.id;
-                previewButton.interactable = choices.Length > 0;
-                previewLabel.text = choice != null ? choice.label :
-                    choices.Length > 0 ? "Preview building: None" : "No compatible buildings";
-            }
-
-            void CyclePreviewBuilding()
-            {
-                var choices = PreviewChoices();
-                int next = Array.FindIndex(choices, item => item.id == previewBuildingId) + 1;
-                previewBuildingId = next < choices.Length ? choices[next].id : null;
-                UpdatePreviewChoice();
-            }
 
             InputField SlotField(string title, int x, int y, float? value)
             {
@@ -864,11 +857,10 @@ namespace CityForge.UI
                 }
                 var next = new LotZoningLayout
                 {
-                    zone = SelectedZone(), wealth = SelectedWealth(), previewBuildingId = previewBuildingId,
+                    zone = SelectedZone(), wealth = SelectedWealth(), previewBuildingId = layout.previewBuildingId,
                     restrictGrowthBuildings = layout.restrictGrowthBuildings,
                     growthBuildingIds = layout.growthBuildingIds,
-                    previewYawOffset = previewBuildingId == layout.previewBuildingId ? layout.previewYawOffset : 0,
-                    previewScale = previewBuildingId == layout.previewBuildingId ? layout.previewScale : 1f,
+                    faceAwayFromRoad = faceAwayFromRoad, autoPaths = autoPaths, buildingScale = layout.buildingScale,
                     buildingCenter = new Vector2(x, z), buildingSize = new Vector2(w, d),
                     frontage = frontage, hasEntrance = hasEntrance, entrance = entrance,
                     hasDriveway = hasDriveway, driveway = driveway
@@ -903,16 +895,7 @@ namespace CityForge.UI
                     OpenGrowthBuildingChoices();
                     return;
                 }
-                var preview = catalog && !string.IsNullOrEmpty(previewBuildingId) ? catalog.Find(previewBuildingId) : null;
-                string previewProblem = null;
-                if (preview != null)
-                {
-                    var placement = next.hasEntrance
-                        ? LotGrowableBuildings.PlaceInSlot(next, preview) : next.BuildingPreview();
-                    previewProblem = placement == null ? $"Set an entry point in Building info for {preview.label}."
-                        : next.BuildingFitProblem(lot, placement, preview, catalog);
-                }
-                Refresh(previewProblem ?? $"{next.Label} growable layout ready to save. Building fit allows 10% extra.");
+                Refresh($"{next.Label} growable layout ready to save. Building fit allows 10% extra.");
             }
 
             static bool ReadAnchor(InputField x, InputField z, out bool present, out Vector2 point)
@@ -937,23 +920,34 @@ namespace CityForge.UI
             var era = CityForgeTimeline.Eras.FirstOrDefault(period => period.id == lot.firstEraId);
             if (!layout.Configured || era == null) return;
 
-            var frame = CreateModal("Choose which buildings can be placed here", 660, 570);
+            const int modalWidth = 990;
+            const int modalHeight = 855;
+            const int rowWidth = modalWidth - 52;
+            const int rowHeight = 68;
+            const int previewSize = 56;
+            var frame = CreateModal("Choose which buildings can be placed here", modalWidth, modalHeight);
             string use = (int)layout.zone <= 3 ? "Residential" : (int)layout.zone <= 6 ? "Commercial" : "Industrial";
-            Label(frame, $"{era.Name} / {use} / {layout.Label}", 20, 57, 620, 18);
-            Label(frame, "Growth randomly picks from the checked buildings that fit.", 20, 91, 620, 16);
-            var feedback = Label(frame, "", 20, 489, 620, 16);
+            Label(frame, $"{era.Name} / {use} / {layout.Label}", 20, 57, modalWidth - 40, 18);
+            Label(frame, "Growth randomly picks from the checked buildings that fit.", 20, 91, modalWidth - 40, 16);
+            var feedback = Label(frame, "", 20, modalHeight - 81, modalWidth - 40, 16);
             CreatePickerResults(frame, 134, 82);
 
             var eligible = catalog ? catalog.entries
                 .Where(asset => asset != null && asset.CanPreviewGrowable(layout.zone, layout.wealth, era.id))
                 .OrderBy(asset => asset.label, StringComparer.OrdinalIgnoreCase).ToArray()
                 : Array.Empty<LotAssetCatalogEntry>();
-            var selectedIds = new HashSet<string>(eligible.Where(asset => layout.AllowsGrowthBuilding(asset.id))
-                .Select(asset => asset.id));
+            var fit = eligible.ToDictionary(asset => asset.id,
+                asset => LotGrowableBuildings.PlacementProblem(lot, asset, catalog, out _));
+            var selectedIds = new HashSet<string>(eligible.Where(asset => fit[asset.id] == null &&
+                layout.AllowsGrowthBuilding(asset.id)).Select(asset => asset.id));
             int y = 6;
             foreach (var asset in eligible)
             {
-                var row = Checkbox(assetList, asset.id, asset.label, 6, y, 608, selectedIds.Contains(asset.id));
+                string problem = fit[asset.id];
+                string label = problem == null ? asset.label : $"{asset.label} · {(problem == "Missing entry point" ? problem : "Does not fit")}";
+                var row = Checkbox(assetList, asset.id, label, 6, y, rowWidth, selectedIds.Contains(asset.id),
+                    rowHeight: rowHeight, trailingWidth: previewSize + 16);
+                row.interactable = problem == null;
                 row.onValueChanged.AddListener(value =>
                 {
                     if (value) selectedIds.Add(asset.id);
@@ -963,21 +957,22 @@ namespace CityForge.UI
                 var thumbnail = new GameObject("Building thumbnail", typeof(RectTransform), typeof(RawImage))
                     .GetComponent<RawImage>();
                 thumbnail.transform.SetParent(row.transform, false);
-                At(thumbnail.rectTransform, 574, 2, 28, 28);
+                At(thumbnail.rectTransform, rowWidth - previewSize - 8, (rowHeight - previewSize) / 2,
+                    previewSize, previewSize);
                 thumbnail.raycastTarget = false;
                 thumbnail.texture = thumbnails.Get(asset);
-                y += 37;
+                y += rowHeight + 5;
             }
             assetList.sizeDelta = new Vector2(0, y);
             if (eligible.Length == 0)
                 Label(assetList, "No buildings match this era, zoning and wealth.", 8, 6, 590, 16);
 
-            Control(frame, "Back to layout", 20, 524, 175, () =>
+            Control(frame, "Back to layout", 20, modalHeight - 46, 175, () =>
             {
                 CloseAssetPopup();
                 OpenZoningLayout();
             });
-            Control(frame, "Apply building choices", 418, 524, 222, () =>
+            Control(frame, "Apply building choices", modalWidth - 242, modalHeight - 46, 222, () =>
             {
                 if (selectedIds.Count == 0)
                 {
@@ -1210,9 +1205,12 @@ namespace CityForge.UI
             CloseAssetPopup();
             var frame = CreateModal("Building info · " + asset.label, 1040, 660);
             var saved = LotBuildingInfo.Load(asset.id);
-            var facing = saved?.facing ?? LotFrontage.South;
-            var type = saved?.entryType ?? LotEntryType.Pedestrian;
-            var entrance = saved?.entrance ?? new Vector2(0f, -asset.footprint.y * .5f);
+            var entry = saved != null && !saved.dimensionsOnly ? saved : null;
+            const float metersPerFoot = .3048f;
+            var facing = entry?.facing ?? (LotGrowableBuildings.FrontageOffset(asset.id) == 180f
+                ? LotFrontage.North : LotFrontage.South);
+            var type = entry?.entryType ?? LotEntryType.Pedestrian;
+            var entrance = entry?.entrance ?? new Vector2(0f, asset.footprint.y * (facing == LotFrontage.North ? .5f : -.5f));
             float halfSpan = Mathf.Max(1f, Mathf.Max(asset.footprint.x, asset.footprint.y) * .65f);
             halfSpan = Mathf.Max(halfSpan, Mathf.Max(Mathf.Abs(entrance.x), Mathf.Abs(entrance.y)) * 1.15f);
 
@@ -1242,12 +1240,17 @@ namespace CityForge.UI
             Label(frame, "Entry width (m)", 610, 222, 185, 17);
             var width = Field(frame, "Width in meters", 805, 222, 210);
             width.contentType = InputField.ContentType.DecimalNumber;
-            width.text = (saved != null && saved.width > 0f ? saved.width : DefaultWidth()).ToString(CultureInfo.InvariantCulture);
-            Label(frame, "Entry faces", 610, 277, 185, 17);
+            width.text = (entry != null && entry.width > 0f ? entry.width : DefaultWidth()).ToString(CultureInfo.InvariantCulture);
+            Label(frame, "Door side on model", 610, 277, 185, 17);
             var side = Control(frame, facing.ToString(), 805, 277, 210, () => { });
             var coordinates = Label(frame, "", 610, 333, 408, 16);
-            var feedback = Label(frame, "", 610, 390, 408, 16);
-            At(feedback.rectTransform, 610, 390, 408, 66);
+            var dimensions = saved != null && saved.HasDimensions ? saved.dimensions : ApproximateBuildingDimensions(asset);
+            Label(frame, "Approximate building dimensions (ft)", 610, 372, 408, 16);
+            var buildingWidth = DimensionField("Width (X)", 400, dimensions.x);
+            var buildingLength = DimensionField("Length (Z)", 444, dimensions.z);
+            var buildingHeight = DimensionField("Height", 488, dimensions.y);
+            var feedback = Label(frame, "", 610, 541, 408, 16);
+            At(feedback.rectTransform, 610, 541, 408, 42);
 
             typeButton.onClick.AddListener(() =>
             {
@@ -1269,18 +1272,28 @@ namespace CityForge.UI
                 UpdateMarker();
             };
 
-            Control(frame, "Save building info", 805, 582, 210, () =>
+            Control(frame, "Save building info", 805, 597, 210, () =>
             {
                 if (!ReadWidth(out float meters))
                 {
                     feedback.text = "Enter a positive width.";
                     return;
                 }
+                if (!ReadPositive(buildingWidth, out float x) || !ReadPositive(buildingLength, out float z) ||
+                    !ReadPositive(buildingHeight, out float y))
+                {
+                    feedback.text = "Enter positive building dimensions in feet.";
+                    return;
+                }
                 try
                 {
-                    new LotBuildingInfo { entrance = entrance, facing = facing, entryType = type, width = meters }.Save(asset.id);
+                    new LotBuildingInfo
+                    {
+                        entrance = entrance, facing = facing, entryType = type, width = meters,
+                        dimensions = new Vector3(x, y, z) * metersPerFoot
+                    }.Save(asset.id);
                     CloseAssetPopup();
-                    Refresh($"Saved entry point for {asset.label}.");
+                    Refresh($"Saved building info for {asset.label}.");
                     returnToBuildings();
                 }
                 catch (Exception error) when (error is System.IO.IOException || error is UnauthorizedAccessException)
@@ -1292,8 +1305,20 @@ namespace CityForge.UI
             UpdateMarker();
 
             float DefaultWidth() => type == LotEntryType.Vehicle ? 3f : 1f;
-            bool ReadWidth(out float meters) => float.TryParse(width.text, NumberStyles.Float,
-                CultureInfo.InvariantCulture, out meters) && float.IsFinite(meters) && meters > 0f;
+            bool ReadWidth(out float meters) => ReadPositive(width, out meters);
+            static bool ReadPositive(InputField field, out float meters) =>
+                float.TryParse(field.text, NumberStyles.Float, CultureInfo.InvariantCulture, out meters) &&
+                LotBuildingInfo.Positive(meters);
+
+            InputField DimensionField(string label, int y, float value)
+            {
+                Label(frame, label, 610, y, 185, 17);
+                var field = Field(frame, "Feet", 805, y, 210);
+                field.gameObject.name = label + " input";
+                field.contentType = InputField.ContentType.DecimalNumber;
+                field.text = (value / metersPerFoot).ToString("0.##", CultureInfo.InvariantCulture);
+                return field;
+            }
             void UpdateMarker()
             {
                 var uv = entrance / (2f * halfSpan) + Vector2.one * .5f;
@@ -1305,6 +1330,24 @@ namespace CityForge.UI
                 Place(widthLine.rectTransform, uv - direction * halfWidth, uv + direction * halfWidth, -thickness, thickness);
                 coordinates.text = $"Entry position: X {entrance.x:0.00} m · Z {entrance.y:0.00} m";
             }
+        }
+
+        private static Vector3 ApproximateBuildingDimensions(LotAssetCatalogEntry asset)
+        {
+            var model = LotRuntimeLoader.InstantiateObject(new LotObjectDefinition { assetId = asset.id, scale = 1f },
+                asset, null);
+            var renderers = model.GetComponentsInChildren<Renderer>();
+            float height = 0f;
+            if (renderers.Length > 0)
+            {
+                var bounds = renderers[0].bounds;
+                foreach (var renderer in renderers) bounds.Encapsulate(renderer.bounds);
+                height = bounds.size.y;
+            }
+            model.SetActive(false);
+            if (Application.isPlaying) Destroy(model);
+            else DestroyImmediate(model);
+            return new Vector3(asset.footprint.x, height, asset.footprint.y);
         }
 
         private void OpenBuildingPicker(CityForgeTimeline.Era era = null, LotContentCatalog.Category use = null,
@@ -2939,8 +2982,46 @@ namespace CityForge.UI
             viewport.SetPlacementGhost(assetPopup ? null : ArmedPreviewAsset, PreviewPlacementPosition, placementYaw, placementScale);
             viewport.ShowGroundPath(drawingPath || groundPath.Finished ? groundPath : null, pathWidth, curvePath, GroundPathPoint);
             viewport.PickingEntryMarker = pickingLotEntrance;
-            if (rebuildPreview) viewport.Refresh(lot, catalog, selected, selectedGroup, selectedPath, grid,
-                terrainTile.HasValue ? TileBounds(terrainTile.Value) : (Rect?)null, showGrowablePreview: !PlayerMode);
+            growthPreviewTools.gameObject.SetActive(!PlayerMode && lot.zoningLayout.Configured);
+            if (rebuildPreview)
+                viewport.Refresh(lot, catalog, selected, selectedGroup, selectedPath, grid,
+                    terrainTile.HasValue ? TileBounds(terrainTile.Value) : (Rect?)null, ResolveGrowthPreview(lot));
+        }
+
+        private LotObjectDefinition ResolveGrowthPreview(LotDefinition lot)
+        {
+            if (PlayerMode || !lot.zoningLayout.Configured) return null;
+            if (growthPreviewLotId != lot.id)
+            {
+                growthPreviewLotId = lot.id;
+                growthPreviewId = lot.zoningLayout.previewBuildingId;
+            }
+
+            growthPreviews = LotGrowableBuildings.Candidates(lot, catalog)
+                .OrderBy(building => catalog.Find(building.assetId).label, StringComparer.OrdinalIgnoreCase).ToArray();
+            int index = Array.FindIndex(growthPreviews, building => building.assetId == growthPreviewId);
+            if (index < 0) index = 0;
+            bool hasPreview = growthPreviews.Length > 0;
+            previousGrowthPreview.interactable = nextGrowthPreview.interactable = growthPreviews.Length > 1;
+            if (!hasPreview)
+            {
+                growthPreviewLabel.text = "Preview building\nNo eligible buildings";
+                return null;
+            }
+
+            var preview = growthPreviews[index];
+            growthPreviewId = preview.assetId;
+            growthPreviewLabel.text = $"Preview building · {index + 1}/{growthPreviews.Length}\n{catalog.Find(preview.assetId).label}";
+            return preview;
+        }
+
+        private void CycleGrowthPreview(int direction)
+        {
+            int count = growthPreviews.Length;
+            if (count < 2) return;
+            int index = Array.FindIndex(growthPreviews, building => building.assetId == growthPreviewId);
+            growthPreviewId = growthPreviews[(index + direction + count) % count].assetId;
+            Refresh();
         }
 
         private Button Control(Transform parent, string title, float x, float y, float size, Action action,
@@ -2955,7 +3036,7 @@ namespace CityForge.UI
             AddOutline(image, Stroke);
             if (glyph != LotGlyph.None)
                 AddGlyph(image.transform, glyph, iconOnly ? (size - 24) / 2 : 8, iconOnly ? 6 : 9, iconOnly ? 24 : 18);
-            var label = AddText("Label", image.transform, iconOnly ? "" : title, font, 16, TextAnchor.MiddleCenter);
+            var label = AddText("Label", image.transform, iconOnly ? "" : title, font, 17, TextAnchor.MiddleCenter);
             Place(label.rectTransform, Vector2.zero, Vector2.one,
                 glyph != LotGlyph.None && !iconOnly ? new Vector2(29, 0) : Vector2.zero, new Vector2(-4, 0));
             if (description != null) Describe(button, description);
@@ -3066,20 +3147,20 @@ namespace CityForge.UI
         private static void PinRight(RectTransform rect, float right, float width) =>
             Place(rect, Vector2.one, Vector2.one, new Vector2(-right - width, -40), new Vector2(-right, -4));
 
-        private Toggle Checkbox(Transform parent, string name, string label, float x, float y, float width, bool value)
+        private Toggle Checkbox(Transform parent, string name, string label, float x, float y, float width, bool value, float rowHeight = 32, float trailingWidth = 0)
         {
             var background = AddImage(name, parent, ButtonColor);
-            At(background.rectTransform, x, y, width, 32);
+            At(background.rectTransform, x, y, width, rowHeight);
             background.raycastTarget = true;
             var toggle = background.gameObject.AddComponent<Toggle>();
             toggle.targetGraphic = background;
             var box = AddImage("Checkbox", background.transform, PanelColor);
-            At(box.rectTransform, 9, 6, 20, 20);
+            At(box.rectTransform, 9, (rowHeight - 20) / 2, 20, 20);
             AddOutline(box, Stroke);
             AddGlyph(box.transform, LotGlyph.Check, 0, 0, 20);
             toggle.graphic = box.GetComponentInChildren<LotEditorIcon>();
-            var caption = Label(background.transform, label, 38, 0, width - 43, 16);
-            At(caption.rectTransform, 38, 0, width - 43, 32);
+            var caption = Label(background.transform, label, 38, 0, width - 43 - trailingWidth, 16);
+            At(caption.rectTransform, 38, 0, width - 43 - trailingWidth, rowHeight);
             toggle.SetIsOnWithoutNotify(value);
             return toggle;
         }

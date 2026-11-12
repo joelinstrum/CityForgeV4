@@ -9,6 +9,7 @@ namespace CityForge.Lots
         internal static float FrontageOffset(string assetId) => assetId switch
         {
             "v3-building-frontier-log-cabin" or "v3-building-small-colonial-cabin" => 180f,
+            string id when id.StartsWith("v3-building-low-wealth-", System.StringComparison.Ordinal) => 180f,
             _ => 0f
         };
 
@@ -16,8 +17,9 @@ namespace CityForge.Lots
         {
             var layout = lot.zoningLayout;
             // Growth appends its chosen building after the authored objects.
-            if (lot.type != LotType.Zoning || !layout.Configured || layout.hasEntrance || lot.objects.Count == 0) return;
+            if (lot.type != LotType.Zoning || !layout.Configured || layout.hasEntrance || layout.faceAwayFromRoad || lot.objects.Count == 0) return;
             var building = lot.objects[lot.objects.Count - 1];
+            if (building.assetId is not ("v3-building-frontier-log-cabin" or "v3-building-small-colonial-cabin")) return;
             float offset = FrontageOffset(building.assetId);
             float oldYaw = 90f * (int)layout.frontage;
             if (offset != 0f && building.position == layout.buildingCenter &&
@@ -33,25 +35,65 @@ namespace CityForge.Lots
                 return System.Array.Empty<LotObjectDefinition>();
             return catalog.entries
                 .Where(asset => asset != null && layout.AllowsGrowthBuilding(asset.id) && asset.CanPreviewGrowable(layout.zone, layout.wealth, lot.firstEraId))
-                .Select(asset => PlaceInSlot(layout, asset))
-                .Where(building => building != null &&
-                    layout.BuildingFitProblem(lot, building, catalog.Find(building.assetId), catalog) == null)
+                .Select(asset => PlacementProblem(lot, asset, catalog, out var building) == null ? building : null)
+                .Where(building => building != null)
                 .ToArray();
         }
 
-        internal static LotObjectDefinition PlaceInSlot(LotZoningLayout layout, LotAssetCatalogEntry asset)
+        internal static string PlacementProblem(LotDefinition lot, LotAssetCatalogEntry asset, LotAssetCatalog catalog,
+            out LotObjectDefinition building)
         {
+            const float maxUpscale = 1.2f;
+            var layout = lot.zoningLayout;
             var info = LotBuildingInfo.Load(asset.id);
-            if (layout.hasEntrance && info == null) return null;
-            float offset = info == null ? FrontageOffset(asset.id) : -90f * (int)info.facing;
-            float yaw = Mathf.Repeat(90f * (int)layout.frontage + offset, 360f);
-            var position = layout.buildingCenter;
-            if (layout.hasEntrance)
+            var entry = info != null && !info.dimensionsOnly ? info : null;
+            building = null;
+            if (layout.hasEntrance && entry == null) return "Missing entry point";
+
+            float offset = entry == null ? FrontageOffset(asset.id) : -90f * (int)entry.facing;
+            float yaw = Mathf.Repeat(90f * (int)layout.frontage + offset + (layout.faceAwayFromRoad ? 180f : 0f), 360f);
+            var anchor = layout.hasEntrance
+                ? LotGroundOverlay.QuarterTurn(entry.entrance, Mathf.RoundToInt(yaw / 90f)) : Vector2.zero;
+            var footprint = info != null && info.HasDimensions
+                ? new Vector2(info.dimensions.x, info.dimensions.z) : asset.footprint;
+            var placement = new LotObjectDefinition { assetId = asset.id, yaw = yaw };
+            SetScale(layout.BuildingScale);
+            var problem = layout.BuildingFitProblem(lot, LotRuntimeLoader.Footprint(placement, asset, footprint), catalog);
+            if (problem != null) return problem;
+
+            // The rendered footprint can be wider than the authored estimate.
+            var expansionFootprint = Vector2.Max(asset.footprint, footprint);
+            float low = placement.scale;
+            float high = Mathf.Min(3f, low * maxUpscale);
+            if (high > low && FitsAt(low))
             {
-                var anchor = LotGroundOverlay.QuarterTurn(info.entrance, Mathf.RoundToInt(yaw / 90f));
-                position = layout.entrance - anchor;
+                if (FitsAt(high)) low = high;
+                else
+                {
+                    for (int i = 0; i < 10; i++)
+                    {
+                        float middle = (low + high) * .5f;
+                        if (FitsAt(middle)) low = middle;
+                        else high = middle;
+                    }
+                }
             }
-            return new LotObjectDefinition { assetId = asset.id, position = position, yaw = yaw, scale = 1f };
+            SetScale(low);
+            building = placement;
+            return null;
+
+            void SetScale(float scale)
+            {
+                placement.scale = scale;
+                placement.position = layout.hasEntrance ? layout.entrance - anchor * scale : layout.buildingCenter;
+            }
+
+            bool FitsAt(float scale)
+            {
+                SetScale(scale);
+                var bounds = LotRuntimeLoader.Footprint(placement, asset, expansionFootprint);
+                return layout.BuildingFitProblem(lot, bounds, catalog, withinSlot: true) == null;
+            }
         }
 
         internal static LotDefinition Materialize(LotDefinition layout, LotObjectDefinition building)

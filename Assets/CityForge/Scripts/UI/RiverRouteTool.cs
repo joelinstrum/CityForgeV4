@@ -13,7 +13,7 @@ namespace CityForge.UI
             view=source;toolbar=tools;Wire=gameObject.AddComponent<PointWireTool>();Wire.Initialize(view.GetComponentInChildren<Camera>(),hud,new Surface(view),new Color(.2f,.65f,1));Wire.OpenPath=true;Wire.AllowClosedUndo=false;Wire.DeferCompletion=true;
             bool viewEnabled=true,cameraEnabled=true;var controls=view.GetComponentInChildren<CityForge.CameraSystem.CityForgeCameraController>();
             Wire.ProcessingChanged+=busy=>{if(busy){viewEnabled=view.enabled;cameraEnabled=controls.enabled;view.enabled=false;controls.enabled=false;}else if(view){view.enabled=viewEnabled;controls.enabled=cameraEnabled;}};
-            Wire.CompletionRequested=p=>view.ApprovedDistrict.CreatePlayerChannel(p,Stream);Wire.Completed+=_=>{Wire.Cancel();toolbar.Dismiss();};Wire.SnapPoint=p=>view.SnapChannelPoint(p,Wire.Points.Count==0,Stream);
+            Wire.CompletionRequested=p=>view.ApprovedDistrict.CreatePlayerChannel(p,Stream);Wire.RepeatOnCompletion=true;Wire.SnapPoint=p=>view.SnapChannelPoint(p,Wire.Points.Count==0,Stream);
             toolbar.ToolSelected+=_=>Wire.Cancel();toolbar.Popup.OptionChanged+=_=>Wire.Cancel();toolbar.Popup.WaterBodySelected+=(adding,kind)=>{if(adding&&kind>0)Arm(kind==1);else Wire.Cancel();};
         }
         public void Arm(bool stream)

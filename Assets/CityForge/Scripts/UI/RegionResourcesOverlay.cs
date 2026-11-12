@@ -93,11 +93,16 @@ namespace CityForge.UI
             markerRoot.anchorMin = markerRoot.anchorMax = markerRoot.pivot = new Vector2(.5f, .5f);
             markerRoot.anchoredPosition = Vector2.zero;
 
-            toggle = Action(hud, "Resources", 0, 0, 205, 42, Toggle);
-            Right((RectTransform)toggle.transform, -25, -304);
+            toggle = Action(hud, "Resources", 0, 0, 174, 54, Toggle);
+            RegionBrassArtwork.SetButton(toggle, "resources");
+            var action = (RectTransform)toggle.transform;
+            action.anchorMin = action.anchorMax = action.pivot = new Vector2(0f, 1f);
+            action.anchoredPosition = new Vector2(397f, -114f);
             panel = Rect(hud, "Resources panel", 0, 0, 360, 304);
             Right(panel, -25, -354);
-            panel.gameObject.AddComponent<Image>().color = new Color(.08f, .12f, .10f, .97f);
+            var panelImage = panel.gameObject.AddComponent<Image>();
+            panelImage.color = new Color(.08f, .12f, .10f, .97f);
+            RegionBrassArtwork.SetImage(panelImage, "panel", sliced: true);
             Label(panel, "REGIONAL RESOURCES", 16, -10, 328, 26, 19);
             modeSelect = Select(panel, "Resources mode", -42, new[] { "Overview", "Individual Resource", "Settlement Suitability" });
             modeSelect.onValueChanged.AddListener(value => { mode = (Mode)value; RefreshMode(); });
@@ -258,7 +263,8 @@ namespace CityForge.UI
             bool next = active && overview && view.Relief;
             if (next == visible) return;
             visible = next;
-            toggle.image.color = active ? ActiveColor : ButtonColor;
+            if (!RegionBrassArtwork.SetSelected(toggle, "resources", active))
+                toggle.image.color = active ? ActiveColor : ButtonColor;
             panel.gameObject.SetActive(visible);
             markerRoot.gameObject.SetActive(visible);
             if (visible) Refresh();

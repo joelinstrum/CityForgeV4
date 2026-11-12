@@ -119,6 +119,7 @@ namespace CityForge.World
                 roadWire.Initialize(districtCamera, hud, new RoadWireSurface(this),
                     new Color(1f, .72f, .30f));
                 roadWire.OpenPath = true;
+                roadWire.RibbonFillColor = new Color(.50f, .52f, .55f);
                 roadWire.HandleEscape = false;
                 roadWire.RestrictUiToHud = true;
                 roadWire.FinishOverUi = true;
@@ -126,7 +127,7 @@ namespace CityForge.World
                 roadWire.SnapPoint = SnapRoadExtensionStart;
                 roadWire.CompletionRequested = points => PlaceDistrictRoad(points, false);
                 roadWire.LoopCompletionRequested = points => PlaceDistrictRoad(points, true);
-                roadWire.Completed += _ => CancelRoadPlacement();
+                roadWire.RepeatOnCompletion = true;
 
                 roadControls = FounderRect(hud, "Road placement controls", new Vector2(0, 161), new Vector2(242, 40));
                 roadControls.anchorMin = roadControls.anchorMax = roadControls.pivot = new Vector2(.5f, 0);

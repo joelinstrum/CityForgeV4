@@ -464,7 +464,7 @@ namespace CityForge.World
             if(wildlife){wildlife.gameObject.SetActive(false);Destroy(wildlife.gameObject);wildlife=null;}Sharks=null;
             if(IsRegionOverview)return;
             var active = new HashSet<int>(View.ActiveDistrictMembers);
-            bool hasPlaced = View.PlacedActors.Exists(actor => !actor.pedestrian && active.Contains(actor.district));
+            bool hasPlaced = View.PlacedActors.Exists(actor => !actor.pedestrian && !actor.tree && active.Contains(actor.district));
             if (!View.AnimalsEnabled && !hasPlaced) return;
             EnsurePlacedWildlife();
             if (View.AnimalsEnabled && CoastalSharkPopulation.Applies(this))

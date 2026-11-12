@@ -10,8 +10,8 @@ namespace CityForge.CameraSystem
     {
         public const float IsometricPitch = 35.26439f;
         private const float PointerTiltSensitivity = .06f;
-        private const float MinOrbitPitch = 22f;
-        private const float MaxOverviewPitch = 52f;
+        private const float MaxOverviewPitch = 90f;
+        private float MinimumPitch => reliefFraming ? 0f : 15f;
         private float MaximumPitch => reliefFraming ? MaxOverviewPitch : IsometricPitch;
         [SerializeField] private Vector3 focus = Vector3.zero;
         [SerializeField, Range(15f, IsometricPitch)] private float pitch = IsometricPitch;
@@ -25,7 +25,7 @@ namespace CityForge.CameraSystem
         [SerializeField] private float viewTilt=-1;
         [SerializeField] private float perspectiveFieldOfView=60;
         public float ViewTilt => viewTilt<0?(lowerView?0:1):viewTilt;
-        public float ViewPitch => Mathf.Lerp(12,Mathf.Clamp(pitch,15f,MaximumPitch),ViewTilt);
+        public float ViewPitch => Mathf.Lerp(12,Mathf.Clamp(pitch,MinimumPitch,MaximumPitch),ViewTilt);
         public void SetViewTilt(float value){viewTilt=Mathf.Clamp01(value);lowerView=viewTilt<1;viewCamera=GetComponent<Camera>();viewCamera.orthographic=!lowerView;ApplyPose();}
         public bool LowerView => lowerView;
         public float OrthographicSetback {get;private set;}
@@ -146,11 +146,28 @@ namespace CityForge.CameraSystem
             ApplyPose();
         }
 
+        internal void SnapRegionAxis(Vector3 axis)
+        {
+            if (!reliefFraming) return;
+            bool opposite = Vector3.Dot(-transform.forward, axis) > .999f;
+            if (axis == Vector3.up)
+            {
+                pitch = 90f;
+                yaw = 0f;
+            }
+            else
+            {
+                pitch = 0f;
+                yaw = (axis == Vector3.right ? 270f : 180f) + (opposite ? 180f : 0f);
+            }
+            SetViewTilt(1f);
+        }
+
         internal void OrbitRegion(Vector2 pointerDelta)
         {
             if(!reliefFraming)return;
             yaw=Mathf.Repeat(yaw-pointerDelta.x*.16f,360f);
-            pitch=Mathf.Clamp(ViewPitch-pointerDelta.y*.10f,MinOrbitPitch,MaxOverviewPitch);
+            pitch=Mathf.Clamp(ViewPitch-pointerDelta.y*.10f,0f,MaxOverviewPitch);
             // Use the overview projection throughout the drag so changing
             // pitch cannot dolly the camera or resize the map.
             SetViewTilt(1f);
@@ -163,7 +180,7 @@ namespace CityForge.CameraSystem
             if(state.hasViewTilt&&!float.IsFinite(state.viewTilt))throw new System.IO.InvalidDataException("Invalid saved camera tilt.");
             if(!float.IsFinite(state.focus.x)||!float.IsFinite(state.focus.y)||!float.IsFinite(state.focus.z)||!float.IsFinite(state.pitch)||!float.IsFinite(state.yaw)||!float.IsFinite(state.distance)||!float.IsFinite(state.size)||state.size<3||state.distance<5)throw new System.IO.InvalidDataException("Invalid saved camera.");
             viewTilt=state.hasViewTilt?Mathf.Clamp01(state.viewTilt):(state.lowerView?0:1);lowerView=viewTilt<1;viewCamera=GetComponent<Camera>();viewCamera.orthographic=!lowerView;
-            focus=state.focus;pitch=Mathf.Clamp(state.pitch,15f,MaximumPitch);yaw=state.yaw;distance=state.distance;orthographicSize=state.size;ZoomLevel=Mathf.Clamp(state.zoom,0,5);ApplyPose();ZoomChanged?.Invoke(ZoomLevel);
+            focus=state.focus;pitch=Mathf.Clamp(state.pitch,MinimumPitch,MaximumPitch);yaw=state.yaw;distance=state.distance;orthographicSize=state.size;ZoomLevel=Mathf.Clamp(state.zoom,0,5);ApplyPose();ZoomChanged?.Invoke(ZoomLevel);
         }
 
         public void ToggleViewAngle()
@@ -200,12 +217,12 @@ namespace CityForge.CameraSystem
         public void ApplyPose()
         {
             if (viewCamera == null) viewCamera = GetComponent<Camera>();
-            pitch=Mathf.Clamp(pitch,15f,MaximumPitch);
+            pitch=Mathf.Clamp(pitch,MinimumPitch,MaximumPitch);
             if(viewCamera.orthographicSize!=orthographicSize)viewCamera.orthographicSize=orthographicSize;
             float tilt=ViewTilt;
             // At close overview zooms the rays are effectively parallel. Use the
             // orthographic camera there to keep the full range of zoom steps.
-            bool perspectiveRelief=reliefFraming&&tilt>=1&&orthographicSize>distance*.015f;
+            bool perspectiveRelief=reliefFraming&&tilt>=1&&pitch>0f&&pitch<90f&&orthographicSize>distance*.015f;
             if(regionSide>0){lowerView=tilt<1;viewCamera.orthographic=!lowerView&&!perspectiveRelief;}
             var posePitch = Mathf.Lerp(12,pitch,tilt);
             var lowDistance=orthographicSize/Mathf.Tan(perspectiveFieldOfView*.5f*Mathf.Deg2Rad);
@@ -221,7 +238,7 @@ namespace CityForge.CameraSystem
             var poseDistance=distance;
             // Orthographic projection is unchanged by retreating along the viewing ray.
             // Keep tall district terrain in front of the camera at every zoom level.
-            if(tilt>0&&regionSide>0&&!perspectiveRelief){
+            if(tilt>0&&regionSide>0&&!perspectiveRelief&&posePitch>=10f){
                 float screenDepth=orthographicSize/Mathf.Tan(posePitch*Mathf.Deg2Rad);
                 float topDepth=(shadowTerrainHeight+80f-focus.y)/Mathf.Sin(posePitch*Mathf.Deg2Rad);
                 poseDistance=Mathf.Max(poseDistance,screenDepth+topDepth+30f);
@@ -254,9 +271,9 @@ namespace CityForge.CameraSystem
                 // Fit the depth range to the terrain currently on screen. Huge empty
                 // foreground/background ranges waste directional shadow texels.
                 var depthMargin = orthographicSize * 2f + shadowTerrainHeight;
-                if(perspectiveRelief)depthMargin=Mathf.Max(depthMargin,regionSide+shadowTerrainHeight);
+                if(perspectiveRelief || (reliefFraming && posePitch < 10f))depthMargin=Mathf.Max(depthMargin,regionSide+shadowTerrainHeight);
                 near=lowerView ? .5f : Mathf.Max(1f,poseDistance-depthMargin);far=poseDistance+depthMargin;
-                if(FitShadowDepth&&!lowerView&&!perspectiveRelief)
+                if(FitShadowDepth&&!lowerView&&!perspectiveRelief&&posePitch>=10f)
                 {
                     // Orthographic screen Y and world height bound depth exactly:
                     // depth = distance + screenY*cot(pitch) - (height-focusY)/sin(pitch).

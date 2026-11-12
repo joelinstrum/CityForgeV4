@@ -24,6 +24,15 @@ namespace CityForge.Lots
         public bool IsCharacter => category == "Characters";
         internal float DefaultPlacementScale => id == LotCharacterDeck.HarborHouse ? 1.5f : 1f;
         public GameObject prefab;
+        public GameObject autumnPrefab, winterPrefab;
+        internal bool IsSeasonalTree => category == "Trees" && autumnPrefab && winterPrefab;
+
+        internal GameObject PrefabFor(RegionSeason season) => season switch
+        {
+            RegionSeason.Fall when autumnPrefab => autumnPrefab,
+            RegionSeason.Winter when winterPrefab => winterPrefab,
+            _ => prefab
+        };
         public Vector2 footprint;
         public bool playerPlaceable;
         public int fromYear, toYear;
@@ -55,12 +64,12 @@ namespace CityForge.Lots
 
     public static class LotRuntimeLoader
     {
-        public static GameObject InstantiateObject(LotObjectDefinition item, LotAssetCatalogEntry asset, Transform parent)
+        public static GameObject InstantiateObject(LotObjectDefinition item, LotAssetCatalogEntry asset, Transform parent, RegionSeason season = RegionSeason.Summer)
         {
             if (asset == null || !asset.prefab) throw new InvalidOperationException("Missing lot asset: " + item.assetId);
             var wrapper = new GameObject(asset.label);
             wrapper.transform.SetParent(parent, false);
-            var model = UnityEngine.Object.Instantiate(asset.prefab, wrapper.transform, false);
+            var model = UnityEngine.Object.Instantiate(asset.PrefabFor(season), wrapper.transform, false);
             if (asset.materialOverride)
                 foreach (var renderer in model.GetComponentsInChildren<Renderer>())
                 {
@@ -140,10 +149,10 @@ namespace CityForge.Lots
                 bounds.yMin >= -half.y - tolerance && bounds.yMax <= half.y + tolerance;
         }
 
-        public static Rect Footprint(LotObjectDefinition item, LotAssetCatalogEntry asset)
+        public static Rect Footprint(LotObjectDefinition item, LotAssetCatalogEntry asset, Vector2? footprintOverride = null)
         {
             var size = (item.fenceLength > 0 && asset.fenceSpan > 0
-                ? new Vector2(item.fenceLength + asset.fencePostWidth, Mathf.Max(asset.fenceDepth, asset.fencePostWidth)) : asset.footprint) * item.scale;
+                ? new Vector2(item.fenceLength + asset.fencePostWidth, Mathf.Max(asset.fenceDepth, asset.fencePostWidth)) : (footprintOverride ?? asset.footprint)) * item.scale;
             var angle = item.yaw * Mathf.Deg2Rad;
             var c = Mathf.Abs(Mathf.Cos(angle));
             var s = Mathf.Abs(Mathf.Sin(angle));

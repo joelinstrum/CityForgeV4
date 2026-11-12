@@ -20,6 +20,7 @@ namespace CityForge.UI
                 typeof(CanvasScaler), typeof(GraphicRaycaster), typeof(Image));
             var canvas = root.GetComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.pixelPerfect = true;
             canvas.sortingOrder = 100;
             var scaler = root.GetComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
