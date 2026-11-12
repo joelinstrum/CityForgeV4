@@ -69,6 +69,8 @@ namespace CityForge.World
             if(kept.Count==source.Length&&visibleRemoved==0)return 0;
             fullTreeInstances=kept.ToArray();
             RefreshEditedForest();
+            if (Geography) foreach (var center in valid)
+                Geography.Invalidate(TerrainGeography.Pad(new Rect(center,Vector2.zero),radius + 20f));
             return source.Length-fullTreeInstances.Length;
         }
     }

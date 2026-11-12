@@ -1,3 +1,4 @@
+#include "TerrainGeography.hlsl"
 
 #ifndef UNIVERSAL_TERRAIN_LIT_PASSES_INCLUDED
 #define UNIVERSAL_TERRAIN_LIT_PASSES_INCLUDED
@@ -486,17 +487,22 @@ void SplatmapFragment(
     smoothness=lerp(smoothness,.035h,meadowMatte);
     metallic=lerp(metallic,0.0h,meadowMatte);
 #endif
+
+#if !defined(TERRAIN_SPLAT_BASEPASS) && !defined(TERRAIN_SPLAT_ADDPASS)
+    float2 meadowWorldXZ=IN.positionWS.xz;
+    float broad=sin(meadowWorldXZ.x*.065+sin(meadowWorldXZ.y*.049))*sin(meadowWorldXZ.y*.072);
+    float secondary=sin(meadowWorldXZ.x*.56+sin(meadowWorldXZ.y*.41))*sin(meadowWorldXZ.y*.67);
+    half3 calm=half3(.135,.205,.072)*(1+broad*.055+secondary*.018);
+    float distant=saturate((distance(IN.positionWS,_WorldSpaceCameraPos)-20)/90);
+    albedo=lerp(albedo,calm,saturate(splatControl.g+splatControl.b)*lerp(.48,.78,distant));
+#endif
+
+#if !defined(TERRAIN_SPLAT_BASEPASS) && !defined(TERRAIN_SPLAT_ADDPASS)
+    ApplyTerrainGeography(IN.positionWS.xz,saturate(splatControl.g+splatControl.b+splatControl.a),albedo,normalTS,smoothness);
+#endif
     InputData inputData;
     InitializeInputData(IN, normalTS, inputData);
     SetupTerrainDebugTextureData(inputData, IN.uvMainAndLM.xy);
-#if !defined(TERRAIN_SPLAT_BASEPASS) && !defined(TERRAIN_SPLAT_ADDPASS)
-    float2 meadowP=inputData.positionWS.xz;
-    float broad=sin(meadowP.x*.065+sin(meadowP.y*.049))*sin(meadowP.y*.072);
-    float secondary=sin(meadowP.x*.56+sin(meadowP.y*.41))*sin(meadowP.y*.67);
-    half3 calm=half3(.135,.205,.072)*(1+broad*.055+secondary*.018);
-    float distant=saturate((distance(inputData.positionWS,_WorldSpaceCameraPos)-20)/90);
-    albedo=lerp(albedo,calm,saturate(splatControl.g+splatControl.b)*lerp(.48,.78,distant));
-#endif
 
 #if defined(_DBUFFER)
     half3 specular = half3(0.0h, 0.0h, 0.0h);

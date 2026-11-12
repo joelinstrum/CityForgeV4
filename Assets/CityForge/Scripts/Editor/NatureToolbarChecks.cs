@@ -29,7 +29,7 @@ namespace CityForge.Editor
                 foreach(string category in new[]{"Terrain","Water","Trees","Animals","Sun"}){
                     var button=root.Find(category).GetComponent<Button>();Require(button.GetComponentsInChildren<Text>(true).Length==0,"Main toolbar has labels");button.onClick.Invoke();
                     Require(toolbar.Selected.ToString()==category&&popup.gameObject.activeInHierarchy,"Category popup missing");
-                    int options=category=="Water"||category=="Animals"||category=="Sun"?2:3;
+                    int options=category=="Water"||category=="Sun"?2:3;
                     for(int i=0;i<options;i++){
                         popup.transform.Find("Option"+i).GetComponent<Button>().onClick.Invoke();yield return Frames();Require(popup.Option==i&&popup.transform.Find("Explanation").GetComponent<Text>().text.Length>10,"Option/explanation missing");
                     }

@@ -4,6 +4,8 @@ using System.Globalization;
 using UnityEngine;
 using UnityEngine.UI;
 using CityForge.World;
+using CityForge.Lots;
+using System.Linq;
 namespace CityForge.UI
 {
     /// <summary>Category options and transient editor settings; no terrain or population mutation.</summary>
@@ -18,6 +20,7 @@ namespace CityForge.UI
         public RectTransform SunHost {get;private set;}
         public event Action<int> OptionChanged;
         public event Action<int> OptionInvoked;
+        public event Action<string,int,bool> ActorPlacementRequested;
         public event Action<string,float> SettingChanged;
         readonly Dictionary<NatureTool,int> selected=new();
         readonly Dictionary<string,float> values=new();
@@ -59,13 +62,16 @@ namespace CityForge.UI
         {
             Category=tool;gameObject.SetActive(tool!=NatureTool.None);if(tool==NatureTool.None)return;
             foreach(var old in optionObjects){old.SetActive(false);Destroy(old);}optionObjects.Clear();
-            heading.text=tool switch{NatureTool.Terrain=>"Terraforming",NatureTool.Water=>"Water",NatureTool.Trees=>"Forests",NatureTool.Animals=>"Animals",_=>"Weather & seasons"};
-            int count=tool==NatureTool.Water||tool==NatureTool.Animals||tool==NatureTool.Sun?2:3;
+            heading.text=tool switch{NatureTool.Terrain=>"Terraforming",NatureTool.Water=>"Water",NatureTool.Trees=>"Forests",NatureTool.Animals=>"Animals & characters",_=>"Weather & seasons"};
+            int count=tool==NatureTool.Water||tool==NatureTool.Sun?2:3;
             for(int i=0;i<count;i++){
                 int index=i;var back=Box(transform,"Option"+i,new Vector2(22,-76-i*80),new Vector2(72,66),Color.clear);var button=back.gameObject.AddComponent<Button>();button.targetGraphic=back;
                 var colors=button.colors;colors.highlightedColor=new Color(1,1,.9f);colors.selectedColor=Color.white;button.colors=colors;
                 if(tool==NatureTool.Terrain){var glyph=Label(back.transform,"Icon",new[]{"^","v","="}[i],new Vector2(0,-5),new Vector2(72,56),38,Gold);glyph.fontStyle=FontStyle.Bold;glyph.alignment=TextAnchor.MiddleCenter;}
-                else{
+                else if(tool==NatureTool.Animals&&i==2){
+                    var glyph=Label(back.transform,"Icon","NPC",new Vector2(0,-12),new Vector2(72,44),21,Gold);
+                    glyph.alignment=TextAnchor.MiddleCenter;
+                }else{
                     int tile=tool==NatureTool.Water?1:tool==NatureTool.Trees?2:tool==NatureTool.Animals?3:(i==0?6:4);
                     var icon=AtlasButton(back.transform,"Icon",tile,new Vector2(4,-1),new Vector2(64,64));icon.interactable=false;var c=icon.colors;c.disabledColor=Color.white;icon.colors=c;icon.GetComponent<RawImage>().raycastTarget=false;
                     if((tool==NatureTool.Trees&&i<2)||tool==NatureTool.Water||tool==NatureTool.Animals){var badge=Label(back.transform,"Badge",tool==NatureTool.Water?new[]{"+","×"}[i]:tool==NatureTool.Trees?new[]{"+","×","1"}[i]:i==0?"1":"+",new Vector2(51,-46),new Vector2(20,20),15,Gold);badge.fontStyle=FontStyle.Bold;}
@@ -81,7 +87,7 @@ namespace CityForge.UI
         }
         public void SelectOption(int index)
         {
-            int count=Category==NatureTool.Water||Category==NatureTool.Animals||Category==NatureTool.Sun?2:3;if(index<0||index>=count)return;
+            int count=Category==NatureTool.Water||Category==NatureTool.Sun?2:3;if(index<0||index>=count)return;
             Option=index;selected[Category]=index;WaterTypesOpen=false;WaterBody=-1;
             for(int i=0;i<optionObjects.Count;i++)optionObjects[i].GetComponent<Image>().color=i==index?new Color(.35f,.32f,.21f,.62f):new Color(.17f,.19f,.14f,.35f);
             foreach(Transform child in content){child.gameObject.SetActive(false);Destroy(child.gameObject);}status.text="";SunHost.gameObject.SetActive(Category==NatureTool.Sun);
@@ -107,14 +113,74 @@ namespace CityForge.UI
                 }
                 TextButton(content,"RemoveTrees","Remove Trees",new Vector2(0,-104),new Vector2(400,38),()=>OptionInvoked?.Invoke(1));
             }else if(Category==NatureTool.Animals){
-                title.text=index==0?"Individual animal":"Animal herd";explanation.text=index==0?"Choose an animal to add to the district.":"Add a group of animals together.";
-                var species=new List<string>();var library=Resources.Load<WildlifeLibrary>("Wildlife/TemperateWildlife");if(library)foreach(var animal in library.species)if(animal.prefab&&!species.Contains(animal.id))species.Add(animal.id.Replace('_',' '));
-                if(species.Count==0)species.Add("Deer");Choice("Species","Animal",species.ToArray(),0);if(index==1)Slider("Count","Herd size",2,20,5,70,"",true);
+                if (index == 2)
+                {
+                    title.text = "Characters";
+                    ShowCharacterEras();
+                }
+                else
+                {
+                    title.text = index == 0 ? "Individual animal" : "Animal herd";
+                    explanation.text = "Choose a species, then click the district to place it.";
+                    var library = Resources.Load<WildlifeLibrary>("Wildlife/TemperateWildlife");
+                    var species = library ? library.species.Where(animal => animal != null && animal.prefab)
+                        .GroupBy(animal => animal.id).Select(group => group.First()).ToArray() : Array.Empty<WildlifeSpecies>();
+                    if (species.Length == 0) explanation.text = "The local wildlife catalog is unavailable.";
+                    else
+                    {
+                        Choice("Species", "Animal", species.Select(animal => animal.id.Replace('_', ' ')).ToArray(), 0);
+                        if (index == 1) Slider("Count", "Herd size", 2, 20, 5, 60, "", true);
+                        TextButton(content, "PlaceAnimal", "Place " + (index == 0 ? "animal" : "herd"),
+                            new Vector2(0, index == 0 ? -69 : -115), new Vector2(400, 32), () =>
+                            {
+                                int speciesIndex = Mathf.Clamp(ChoiceIndex("Species"), 0, species.Length - 1);
+                                ActorPlacementRequested?.Invoke(species[speciesIndex].id,
+                                    index == 0 ? 1 : Mathf.RoundToInt(Value("Count", 5)), false);
+                            });
+                    }
+                }
             }else{
                 title.text=index==0?"Seasons":"Weather";explanation.text=index==0?"Choose the season for this district.":"Choose clear skies, rain or snow.";
             }
             OptionChanged?.Invoke(index);
         }
+        private void ShowCharacterEras()
+        {
+            explanation.text = "Choose an era to browse its characters.";
+            var catalog = LotAssetCatalog.Load();
+            var eras = CityForgeTimeline.Eras.Where(era => CharactersFor(catalog, era).Length > 0).ToArray();
+            ShowActorRows(eras.Select(era => (era.Name, (Action)(() => ShowCharacters(catalog, era)))).ToArray());
+            if (eras.Length == 0) explanation.text = "The local character catalog is empty.";
+        }
+
+        private void ShowCharacters(LotAssetCatalog catalog, CityForgeTimeline.Era era)
+        {
+            explanation.text = era.Name + " · Characters walk along sidewalks or road shoulders.";
+            var rows = new List<(string, Action)> { ("< Back to eras", ShowCharacterEras) };
+            foreach (var asset in CharactersFor(catalog, era))
+                rows.Add((asset.label, () => ActorPlacementRequested?.Invoke(asset.id, 1, true)));
+            ShowActorRows(rows.ToArray());
+        }
+
+        private static LotAssetCatalogEntry[] CharactersFor(LotAssetCatalog catalog, CityForgeTimeline.Era era) =>
+            catalog ? catalog.entries.Where(asset => asset != null && asset.prefab && asset.IsCharacter &&
+                (string.IsNullOrEmpty(asset.eraId) ? asset.fromYear <= era.LastYear && asset.toYear >= era.FirstYear
+                    : asset.eraId == era.id)).OrderBy(asset => asset.label).ToArray() : Array.Empty<LotAssetCatalogEntry>();
+
+        private void ShowActorRows((string label, Action choose)[] rows)
+        {
+            foreach (Transform child in content) { child.gameObject.SetActive(false); Destroy(child.gameObject); }
+            var mask = Box(content, "Character list", Vector2.zero, new Vector2(400, 108), new Color(.12f,.14f,.10f));
+            mask.gameObject.AddComponent<RectMask2D>();
+            var scroll = mask.gameObject.AddComponent<ScrollRect>();
+            scroll.viewport = mask.rectTransform;
+            scroll.horizontal = false;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.content = TopRect(mask.transform, "Character rows", Vector2.zero, new Vector2(400, rows.Length * 34));
+            for (int i = 0; i < rows.Length; i++)
+                TextButton(scroll.content, "Character row " + i, rows[i].label, new Vector2(0,-i*34), new Vector2(400,32), rows[i].choose);
+        }
+
         Button TextButton(Transform parent,string name,string text,Vector2 position,Vector2 size,Action clicked)
         {
             var back=Box(parent,name,position,size,new Color(.2f,.23f,.17f));var button=back.gameObject.AddComponent<Button>();button.targetGraphic=back;

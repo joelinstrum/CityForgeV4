@@ -58,6 +58,10 @@ internal static class LotCatalogSetup
             StreetFurniture("simple-street-lamppost", "Simple street lamppost", "Lighting", 3.6f, byHeight: true),
             StreetFurniture("three-lantern-lamppost", "Three-lantern lamppost", "Lighting", .9f),
             Fence("wood-fence", "Wood fence", "01"),
+            V3Fence("wood-fence-section", "Rustic Fence", "RusticFence",
+                "Model", "", 2.4f, repeatable: true, iron: false),
+            V3Fence("rustic-fence-half", "Rustic Fence Half Section", "RusticFenceHalf",
+                "Model", "", 1.2f, repeatable: true, iron: false),
             Fence("meadow-fence-02", "Meadow wood fence 02", "02"),
             Fence("meadow-fence-03", "Meadow wood fence 03", "03"),
             Fence("meadow-fence-04", "Meadow wood fence 04", "04"),
@@ -86,6 +90,11 @@ internal static class LotCatalogSetup
             if (existing == null)
             {
                 entries.Add(entry);
+                changed = true;
+            }
+            else if (entry.id == "wood-fence-section" && existing.prefab != entry.prefab)
+            {
+                entries[entries.IndexOf(existing)] = entry;
                 changed = true;
             }
             else if ((existing.fenceSpan <= 0 && entry.fenceSpan > 0) || (!existing.fencePost && entry.fencePost))

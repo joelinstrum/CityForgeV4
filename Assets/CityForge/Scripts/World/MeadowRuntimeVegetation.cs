@@ -11,6 +11,21 @@ namespace CityForge.World
         const float TileSide = RoadShoulderDetails.TileSide;
         MeadowDistrictLandscape landscape;Camera camera;CityForge.CameraSystem.CameraMotionQuality motion;
         CityForge.CameraSystem.CityForgeCameraController cameraControls;
+        readonly Dictionary<Material, Material> grassMaterials = new();
+        Shader grassShader;
+
+        Material GrassMaterial(Material source)
+        {
+            if (grassMaterials.TryGetValue(source, out var existing)) return existing;
+            if (!grassShader) grassShader = Resources.Load<Shader>("Region/RuntimeGrassTuft");
+            if (!grassShader || !grassShader.isSupported || !source.HasProperty("_BaseColorMap")) return source;
+            var material = new Material(grassShader) { name = source.name + " (runtime tuft)", enableInstancing = true };
+            material.SetTexture("_BaseMap", source.GetTexture("_BaseColorMap"));
+            material.SetFloat("_Cutoff", source.HasProperty("_AlphaCutoff") ? source.GetFloat("_AlphaCutoff") : .2f);
+            grassMaterials.Add(source, material);
+            return material;
+        }
+
         RoadShoulderDetails roadShoulders;
         RiverBedRockAssets shoulderStones;
         internal bool HasRoadShoulders => roadShoulders?.HasDirt == true;
@@ -41,7 +56,7 @@ namespace CityForge.World
         }
         readonly Dictionary<Vector2Int,GameObject> tiles=new();
         readonly List<Vector2Int> expired=new();
-        readonly List<Vector2Int> pending=new();int nextPending;
+        readonly List<(Vector2Int Cell, float Priority)> pending=new();int nextPending;
         IEnumerator building;Vector2Int buildingCell;double tileCpuMilliseconds;long sliceStart;
         const double SliceBudgetMilliseconds=2;
         public double MaximumStreamingSliceMilliseconds {get;private set;}
@@ -67,7 +82,7 @@ namespace CityForge.World
         void LateUpdate()
         {
             if(!landscape||!camera||(motion&&motion.NavigationWorkSuspended))return;
-            if (!landscape.SmallPlantsEnabled && cameraControls && cameraControls.ZoomLevel >= 4) return;
+            if (cameraControls && cameraControls.ZoomLevel >= 4) return;
             var ray=new Ray(camera.transform.position,camera.transform.forward);var plane=new Plane(Vector3.up,Vector3.up*landscape.View.SeaLevel);
             if(!plane.Raycast(ray,out var distance))return;var focus=camera.transform.position+camera.transform.forward*distance;
             var cell=Vector2Int.FloorToInt(new Vector2(focus.x,focus.z)/TileSide);int radius=Mathf.CeilToInt(Mathf.Clamp(camera.orthographicSize*2.4f+32,96,256)/TileSide);
@@ -79,19 +94,44 @@ namespace CityForge.World
                 foreach(var key in expired){Destroy(tiles[key]);tiles.Remove(key);}
                 pending.Clear();nextPending=0;
                 for(int z=cell.y-radius;z<=cell.y+radius;z++)for(int x=cell.x-radius;x<=cell.x+radius;x++){
-                    var key=new Vector2Int(x,z);if(!tiles.ContainsKey(key)&&!(building!=null&&key==buildingCell)&&Intersects(key)&&(landscape.SmallPlantsEnabled||roadShoulders?.HasTile(key)==true))pending.Add(key);
+                    var key=new Vector2Int(x,z);
+                    if(tiles.ContainsKey(key)||(building!=null&&key==buildingCell)||!Intersects(key)||
+                        (!landscape.SmallPlantsEnabled&&roadShoulders?.HasTile(key)!=true))continue;
+                    var center=((Vector2)key+Vector2.one*.5f)*TileSide;
+                    var screen=camera.WorldToViewportPoint(new Vector3(center.x,landscape.Height(center),center.y));
+                    // Prefer the visible area, including one tile of padding near the frame edges.
+                    var screenOffset=new Vector2(screen.x-.5f,screen.y-.5f);
+                    float padding = TileSide / (2f * Mathf.Max(1f, camera.orthographicSize));
+                    bool visible=screen.z>0&&Mathf.Abs(screenOffset.x)<.5f+padding/camera.aspect&&Mathf.Abs(screenOffset.y)<.5f+padding;
+                    pending.Add((key,visible?screenOffset.sqrMagnitude:10f+(key-cell).sqrMagnitude));
                 }
-                pending.Sort((a,b)=>(a-cell).sqrMagnitude.CompareTo((b-cell).sqrMagnitude));
+                pending.Sort((a,b)=>a.Priority.CompareTo(b.Priority));
             }
             // Preserve the tile RNG across resumable slices. Partial tiles stay hidden.
             sliceStart=System.Diagnostics.Stopwatch.GetTimestamp();
-            if(building==null&&nextPending<pending.Count){buildingCell=pending[nextPending++];building=BuildTile(buildingCell);tileCpuMilliseconds=0;}
-            if(building!=null){
-                bool running=building.MoveNext();
-                double used=(System.Diagnostics.Stopwatch.GetTimestamp()-sliceStart)*1000.0/System.Diagnostics.Stopwatch.Frequency;
-                tileCpuMilliseconds+=used;MaximumStreamingSliceMilliseconds=Math.Max(MaximumStreamingSliceMilliseconds,used);
-                if(!running){(building as IDisposable)?.Dispose();building=null;LastTileBuildMilliseconds=tileCpuMilliseconds;MaximumTileBuildMilliseconds=Math.Max(MaximumTileBuildMilliseconds,tileCpuMilliseconds);BuiltTiles++;}
+            while (!BudgetSpent)
+            {
+                if (building == null)
+                {
+                    if (nextPending == pending.Count) break;
+                    buildingCell = pending[nextPending++].Cell;
+                    building = BuildTile(buildingCell);
+                    tileCpuMilliseconds = 0;
+                }
+                long tileStart = System.Diagnostics.Stopwatch.GetTimestamp();
+                bool running = building.MoveNext();
+                tileCpuMilliseconds += (System.Diagnostics.Stopwatch.GetTimestamp() - tileStart) * 1000.0 /
+                    System.Diagnostics.Stopwatch.Frequency;
+                if (running) break;
+                (building as IDisposable)?.Dispose();
+                building = null;
+                LastTileBuildMilliseconds = tileCpuMilliseconds;
+                MaximumTileBuildMilliseconds = Math.Max(MaximumTileBuildMilliseconds,tileCpuMilliseconds);
+                BuiltTiles++;
             }
+            double used = (System.Diagnostics.Stopwatch.GetTimestamp() - sliceStart) * 1000.0 /
+                System.Diagnostics.Stopwatch.Frequency;
+            MaximumStreamingSliceMilliseconds = Math.Max(MaximumStreamingSliceMilliseconds,used);
         }
         bool Intersects(Vector2Int key){var p=(Vector2)key*TileSide;var o=landscape.Origin;return p.x+TileSide>o.x&&p.y+TileSide>o.y&&p.x<o.x+landscape.Side&&p.y<o.y+landscape.Side;}
         IEnumerator BuildTile(Vector2Int cell)
@@ -113,7 +153,7 @@ namespace CityForge.World
                 float edge=Mathf.Max(forest,bank);float keep=type>=2?quietPatch*Mathf.Lerp(.12f,.7f,edge):Mathf.Lerp(.27f,.82f,Mathf.Max(quietPatch,edge));if(R()>keep)continue;
                 float scale=.8f+R()*.35f;Vector3 size=type<2?new Vector3(scale,scale*(.43f+.16f*forest),scale):Vector3.one*(type==2?.43f+R()*.2f:.65f+R()*.25f);
                 var matrix=Matrix4x4.TRS(new Vector3(p.x,landscape.Height(p),p.y),Quaternion.Euler(0,R()*360,0),size);
-                foreach(var piece in baseline.plants[type].pieces){var key=(piece.mesh,piece.material,piece.submesh);if(!lists.TryGetValue(key,out var list))lists[key]=list=new List<Matrix4x4>();list.Add(matrix*piece.local);}
+                foreach(var piece in baseline.plants[type].pieces){var key=(piece.mesh,type<2?GrassMaterial(piece.material):piece.material,piece.submesh);if(!lists.TryGetValue(key,out var list))lists[key]=list=new List<Matrix4x4>();list.Add(matrix*piece.local);}
             }
             if(landscape.SmallPlantsEnabled&&baseline.forestFloorPlants!=null)for(int k=0;k<180;k++){
                 if(k%32==0&&BudgetSpent)yield return null;
@@ -224,10 +264,11 @@ namespace CityForge.World
                 renderer.closestZoomDensity = shoulder ? 1f : baseline.closestZoomDensity;
                 renderer.closestOrthographicThreshold = baseline.referenceViewSize * 1.35f;
                 renderer.shoulderZoom = shoulder ? cameraControls : null;
+                renderer.groundCoverZoom = shoulder ? null : cameraControls;
                 renderer.batches = batches.ToArray();
                 return renderer;
             }
         }
-        void OnDestroy(){(building as IDisposable)?.Dispose();building=null;foreach(var tile in tiles.Values)if(tile){foreach(var renderer in tile.GetComponentsInChildren<MeadowGroundCoverRenderer>(true))renderer.batches=null;}tiles.Clear();}
+        void OnDestroy(){(building as IDisposable)?.Dispose();building=null;foreach(var tile in tiles.Values)if(tile){foreach(var renderer in tile.GetComponentsInChildren<MeadowGroundCoverRenderer>(true))renderer.batches=null;}tiles.Clear();foreach(var material in grassMaterials.Values)if(material)Destroy(material);grassMaterials.Clear();}
     }
 }

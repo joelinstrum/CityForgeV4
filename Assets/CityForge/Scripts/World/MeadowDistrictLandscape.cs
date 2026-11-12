@@ -77,6 +77,7 @@ namespace CityForge.World
         const string SmallPlantsPreference="CityForge.Meadow.SmallPlants";
         TreeInstance[] fullTreeInstances,matureTreeInstances;
         MeadowRuntimeVegetation groundCover;
+        internal TerrainGeography Geography { get; private set; }
 
         private void EnsureGroundCover()
         {
@@ -151,12 +152,12 @@ namespace CityForge.World
         public void ApplySeasonShadows(RegionSeason season)
         {
             if(View.Climate==RegionClimate.Tropical)season=RegionSeason.Summer;
+            seasonalShadowStrength = season == RegionSeason.Winter ? .52f : .62f;
             foreach(var light in GetComponentsInChildren<Light>())
             {
                 if(light.type!=LightType.Directional)continue;
-                light.shadowStrength=season==RegionSeason.Winter?.52f:.62f;
-                // Preserve the approved crisp silhouettes through every seasonal refresh.
-                light.shadows=LightShadows.Hard;
+                light.shadowStrength = CalibratedAfternoon ? View.AfternoonShadowStrength : seasonalShadowStrength;
+                light.shadows=(UseBalancedNoon(View.TimeOfDay) || (!IsRegionOverview && View.UseRefinedAfternoon)) ? LightShadows.Soft : LightShadows.Hard;
                 light.GetUniversalAdditionalLightData().softShadowQuality=SoftShadowQuality.Low;
             }
         }
@@ -404,6 +405,7 @@ namespace CityForge.World
             }
             if(GeneratedRiverDistrict&&HasNaturalRiverBanks()){progress?.Invoke("Painting generated stream banks",.69f);if(UsedSavedTerrain)controlMaps=(float[,,])controlMaps.Clone();
                 yield return PaintGeneratedRiverBanks(controlMaps);}
+            ApplySoftMeadowBlend(ref controlMaps);
             progress?.Invoke("Painting coastal beaches",.695f);
             if(coastalOceans.Length>0)yield return PaintCoastalBeachStages(controlMaps,heights);
             else terrainData.SetAlphamaps(0,0,controlMaps);
@@ -443,6 +445,12 @@ namespace CityForge.World
                 }
 
             }
+            if (!IsRegionOverview && !ApprovedForestAssets.CheckpointReplay)
+            {
+                progress?.Invoke("Blending geographical ground cover", .98f);
+                Geography = gameObject.AddComponent<TerrainGeography>();
+                yield return Geography.Initialize(this);
+            }
             if(!IsRegionOverview&&View.NativeCamps.Length>0){PaintCampCourtyards();gameObject.AddComponent<NativeCampDistrict>().Initialize(this);}
             SetSeason(View.VisualSeason);
             RefreshWildlife();
@@ -454,10 +462,25 @@ namespace CityForge.World
         public DistrictWildlife Wildlife=>wildlife;
         public void RefreshWildlife(){
             if(wildlife){wildlife.gameObject.SetActive(false);Destroy(wildlife.gameObject);wildlife=null;}Sharks=null;
-            if(!View.AnimalsEnabled||IsRegionOverview)return;
+            if(IsRegionOverview)return;
+            var active = new HashSet<int>(View.ActiveDistrictMembers);
+            bool hasPlaced = View.PlacedActors.Exists(actor => !actor.pedestrian && active.Contains(actor.district));
+            if (!View.AnimalsEnabled && !hasPlaced) return;
+            EnsurePlacedWildlife();
+            if (View.AnimalsEnabled && CoastalSharkPopulation.Applies(this))
+            {
+                Sharks = wildlife.gameObject.AddComponent<CoastalSharkPopulation>();
+                Sharks.Initialize(this);
+            }
+        }
+
+        internal DistrictWildlife EnsurePlacedWildlife()
+        {
+            if (wildlife) return wildlife;
             var holder=new GameObject("District temperate wildlife");holder.transform.SetParent(transform,false);
-            wildlife=holder.AddComponent<DistrictWildlife>();wildlife.Initialize(this);
-            if(CoastalSharkPopulation.Applies(this)){Sharks=holder.AddComponent<CoastalSharkPopulation>();Sharks.Initialize(this);}
+            wildlife = holder.AddComponent<DistrictWildlife>();
+            wildlife.Initialize(this, View.AnimalsEnabled);
+            return wildlife;
         }
         float[,,] lakeBaseAlphamaps;
         int lakeBedOffset=-1;
@@ -611,6 +634,7 @@ namespace CityForge.World
             for(int dz=-1;dz<=1;dz++)for(int dx=-1;dx<=1;dx++)if(canopy.TryGetValue(cell+new Vector2Int(dx,dz),out var list))foreach(var tree in list){float d=Vector2.Distance(p,tree)/Baseline.canopyRadius;if(d<1)value+=Mathf.SmoothStep(0,1,1-d)*.6f;}
             return Mathf.Clamp01(value);
         }
+        internal float GeographyCanopy(Vector2 p)=>SampleCanopy(p,canopy,20f);
         public float Canopy(Vector2 p)=>SampleCanopy(p,canopy,Baseline.canopyRadius);
         static float SampleCanopy(Vector2 p,Dictionary<Vector2Int,List<Vector2>> canopy,float radius)
         {
@@ -813,7 +837,6 @@ namespace CityForge.World
                     {
                         light.color = new Color(1, .98f, .93f);
                         light.intensity *= PrototypeRegionView.DistrictSunScale;
-                        districtSuns.Add((light, light.transform.rotation, light.intensity, light.color));
                         if (View.RiverBedVersion < 5)
                         {
                             // The pipeline defaults visibly detach thin leg shadows from the ground.
@@ -823,11 +846,16 @@ namespace CityForge.World
                         }
                     }
                     if(View.RiverBedVersion>=5){light.shadowBias=.15f;light.shadowNormalBias=.5f;}
+                    if (light.type == LightType.Directional)
+                        districtSuns.Add((light, light.transform.rotation, light.intensity, light.color,
+                            light.GetUniversalAdditionalLightData().usePipelineSettings, light.shadowBias, light.shadowNormalBias));
                 }
             }
+            seasonalShadowStrength = View.VisualSeason == RegionSeason.Winter && View.Climate != RegionClimate.Tropical ? .52f : .62f;
             ApplyDistrictDaylight(View.TimeOfDay);
             if(Baseline.windTemplate)Instantiate(Baseline.windTemplate,transform);
             var volume=new GameObject("Approved meadow volume").AddComponent<Volume>();volume.transform.SetParent(transform,false);volume.isGlobal=true;volume.priority=30;volume.sharedProfile=Baseline.volume;
+            BuildAfternoonCalibrationVolume();
         }
         public void ApplyPresentation(bool enabled)
         {
@@ -842,9 +870,11 @@ namespace CityForge.World
                 if(Baseline.cameraSettingsTemplate){var backup=new GameObject("Legacy camera settings");backup.transform.SetParent(transform,false);savedCamera=backup.AddComponent<Camera>();savedCamera.CopyFrom(camera);savedCamera.enabled=false;savedPipelineSettings=JsonUtility.ToJson(camera.GetUniversalAdditionalCameraData());var wasEnabled=camera.enabled;var ortho=camera.orthographic;var size=camera.orthographicSize;camera.CopyFrom(Baseline.cameraSettingsTemplate.GetComponent<Camera>());camera.enabled=wasEnabled;camera.orthographic=ortho;camera.orthographicSize=size;JsonUtility.FromJsonOverwrite(Baseline.cameraPipelineSettings,camera.GetUniversalAdditionalCameraData());if(View.Data.Biomes!=null){camera.ResetWorldToCameraMatrix();camera.ResetProjectionMatrix();camera.enabled=true;camera.targetTexture=null;camera.rect=new Rect(0,0,1,1);}}
                 savedAmbientMode=RenderSettings.ambientMode;savedSky=RenderSettings.ambientSkyColor;savedEquator=RenderSettings.ambientEquatorColor;savedGround=RenderSettings.ambientGroundColor;savedAmbient=RenderSettings.ambientLight;savedIntensity=RenderSettings.ambientIntensity;savedReflection=RenderSettings.reflectionIntensity;savedSkybox=RenderSettings.skybox;savedProbe=RenderSettings.ambientProbe;settingsApplied=true;SetFramePacing60(FramePacing60);
                 RenderSettings.ambientMode=Baseline.ambientMode;RenderSettings.ambientSkyColor=Baseline.ambientSky;RenderSettings.ambientEquatorColor=Baseline.ambientEquator;RenderSettings.ambientGroundColor=Baseline.ambientGround;RenderSettings.ambientLight=Baseline.ambientLight;RenderSettings.ambientIntensity=Baseline.ambientIntensity*1.20f;RenderSettings.reflectionIntensity=Baseline.reflectionIntensity;RenderSettings.skybox=Baseline.skybox;
+                if (!IsRegionOverview) savedFoliageShadowCutout = Shader.GetGlobalFloat(FoliageShadowCutout);
                 ApplyDistrictDaylight(View.TimeOfDay);
                 RenderSettings.fog=false;
             } else if(!enabled&&settingsApplied){RenderSettings.ambientMode=savedAmbientMode;RenderSettings.ambientSkyColor=savedSky;RenderSettings.ambientEquatorColor=savedEquator;RenderSettings.ambientGroundColor=savedGround;RenderSettings.ambientLight=savedAmbient;RenderSettings.ambientIntensity=savedIntensity;RenderSettings.reflectionIntensity=savedReflection;RenderSettings.skybox=savedSkybox;RenderSettings.ambientProbe=savedProbe;settingsApplied=false;Application.targetFrameRate=savedFrameRate;QualitySettings.vSyncCount=savedVSync;
+                if (!IsRegionOverview) Shader.SetGlobalFloat(FoliageShadowCutout, savedFoliageShadowCutout);
                 if(savedCamera){
                     var controller=View?View.GetComponentInChildren<CityForge.CameraSystem.CityForgeCameraController>():null;
                     var camera=controller?controller.GetComponent<Camera>():null;

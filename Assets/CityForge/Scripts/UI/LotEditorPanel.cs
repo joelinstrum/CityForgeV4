@@ -120,6 +120,7 @@ namespace CityForge.UI
             AddOutline(surface, Stroke);
             viewport = surface.gameObject.AddComponent<LotEditorViewport>();
             viewport.Initialize(surface, Click, BeginMove, PreviewMove, EndMove);
+            viewport.CommitEntryMarker = CommitEntryMarker;
             viewport.ConfigureFootprintEditing(CommitBuildingFootprint, SnapPoint, () =>
             {
                 selected = null;
@@ -390,6 +391,12 @@ namespace CityForge.UI
             if (choices)
             {
                 CloseChoices();
+                return;
+            }
+            if (pickingLotEntrance)
+            {
+                pickingLotEntrance = false;
+                Refresh();
                 return;
             }
             if (repeatSource != null)
@@ -768,7 +775,7 @@ namespace CityForge.UI
                 frontage = (LotFrontage)(((int)frontage + 1) % 4);
                 frontageLabel.text = frontage.ToString();
             });
-            Label(frame, "Entrance coordinates · leave both blank if unused", 20, 445, 520, 16);
+            Label(frame, "Entrance coordinates", 20, 445, 260, 16);
             var entranceX = SlotField("House X", 20, 477, layout.hasEntrance ? layout.entrance.x : (float?)null);
             var entranceZ = SlotField("House Z", 285, 477, layout.hasEntrance ? layout.entrance.y : (float?)null);
             var drivewayX = SlotField("Driveway X", 20, 520, layout.hasDriveway ? layout.driveway.x : (float?)null);
@@ -776,7 +783,18 @@ namespace CityForge.UI
             var error = Label(frame, "", 20, 569, 520, 16);
             At(error.rectTransform, 20, 569, 520, 49);
             error.color = Gold;
-            Control(frame, "Apply layout", 373, 622, 167, ApplyLayout, LotGlyph.Check);
+            Control(frame, "Place entry marker", 285, 435, 248,
+                () => ApplyLayout(placeEntryMarker: true));
+            Control(frame, "Choose which buildings can be placed here", 20, 622, 345, () =>
+            {
+                if (string.IsNullOrEmpty(lot.firstEraId))
+                {
+                    error.text = "Set the lot’s era in the Lot Editor before choosing buildings.";
+                    return;
+                }
+                ApplyLayout(openBuildingChoices: true);
+            });
+            Control(frame, "Apply layout", 373, 622, 167, () => ApplyLayout(), LotGlyph.Check);
 
             void Choices(string title, string[] labels, int y, int initial, Action<int> select)
             {
@@ -799,7 +817,7 @@ namespace CityForge.UI
             LotWealth SelectedWealth() => (LotWealth)(wealth + 1);
 
             LotAssetCatalogEntry[] PreviewChoices() => catalog ? catalog.entries
-                .Where(item => item != null && item.CanPreviewGrowable(SelectedZone(), SelectedWealth(), lot.firstEraId))
+                .Where(item => item != null && layout.AllowsGrowthBuilding(item.id) && item.CanPreviewGrowable(SelectedZone(), SelectedWealth(), lot.firstEraId))
                 .OrderBy(item => item.label).ToArray() : Array.Empty<LotAssetCatalogEntry>();
 
             void UpdatePreviewChoice()
@@ -830,7 +848,7 @@ namespace CityForge.UI
                 return field;
             }
 
-            void ApplyLayout()
+            void ApplyLayout(bool openBuildingChoices = false, bool placeEntryMarker = false)
             {
                 if (!ReadMeters(widthField, out float w) || !ReadMeters(depthField, out float d) ||
                     !ReadMeters(xField, out float x) || !ReadMeters(zField, out float z))
@@ -847,6 +865,8 @@ namespace CityForge.UI
                 var next = new LotZoningLayout
                 {
                     zone = SelectedZone(), wealth = SelectedWealth(), previewBuildingId = previewBuildingId,
+                    restrictGrowthBuildings = layout.restrictGrowthBuildings,
+                    growthBuildingIds = layout.growthBuildingIds,
                     previewYawOffset = previewBuildingId == layout.previewBuildingId ? layout.previewYawOffset : 0,
                     previewScale = previewBuildingId == layout.previewBuildingId ? layout.previewScale : 1f,
                     buildingCenter = new Vector2(x, z), buildingSize = new Vector2(w, d),
@@ -871,9 +891,27 @@ namespace CityForge.UI
                 });
                 if (replaceBuilding) selected = null;
                 CloseAssetPopup();
+                if (placeEntryMarker)
+                {
+                    armed = null;
+                    pickingLotEntrance = true;
+                    Refresh();
+                    return;
+                }
+                if (openBuildingChoices)
+                {
+                    OpenGrowthBuildingChoices();
+                    return;
+                }
                 var preview = catalog && !string.IsNullOrEmpty(previewBuildingId) ? catalog.Find(previewBuildingId) : null;
-                var previewProblem = preview != null
-                    ? next.BuildingFitProblem(lot, next.BuildingPreview(), preview, catalog) : null;
+                string previewProblem = null;
+                if (preview != null)
+                {
+                    var placement = next.hasEntrance
+                        ? LotGrowableBuildings.PlaceInSlot(next, preview) : next.BuildingPreview();
+                    previewProblem = placement == null ? $"Set an entry point in Building info for {preview.label}."
+                        : next.BuildingFitProblem(lot, placement, preview, catalog);
+                }
                 Refresh(previewProblem ?? $"{next.Label} growable layout ready to save. Building fit allows 10% extra.");
             }
 
@@ -890,6 +928,71 @@ namespace CityForge.UI
             static string MeterText(float value) => value.ToString("0.###", CultureInfo.InvariantCulture);
             static bool ReadMeters(InputField field, out float value) =>
                 float.TryParse(field.text, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+        }
+
+        private void OpenGrowthBuildingChoices()
+        {
+            var lot = session.Lot;
+            var layout = lot.zoningLayout;
+            var era = CityForgeTimeline.Eras.FirstOrDefault(period => period.id == lot.firstEraId);
+            if (!layout.Configured || era == null) return;
+
+            var frame = CreateModal("Choose which buildings can be placed here", 660, 570);
+            string use = (int)layout.zone <= 3 ? "Residential" : (int)layout.zone <= 6 ? "Commercial" : "Industrial";
+            Label(frame, $"{era.Name} / {use} / {layout.Label}", 20, 57, 620, 18);
+            Label(frame, "Growth randomly picks from the checked buildings that fit.", 20, 91, 620, 16);
+            var feedback = Label(frame, "", 20, 489, 620, 16);
+            CreatePickerResults(frame, 134, 82);
+
+            var eligible = catalog ? catalog.entries
+                .Where(asset => asset != null && asset.CanPreviewGrowable(layout.zone, layout.wealth, era.id))
+                .OrderBy(asset => asset.label, StringComparer.OrdinalIgnoreCase).ToArray()
+                : Array.Empty<LotAssetCatalogEntry>();
+            var selectedIds = new HashSet<string>(eligible.Where(asset => layout.AllowsGrowthBuilding(asset.id))
+                .Select(asset => asset.id));
+            int y = 6;
+            foreach (var asset in eligible)
+            {
+                var row = Checkbox(assetList, asset.id, asset.label, 6, y, 608, selectedIds.Contains(asset.id));
+                row.onValueChanged.AddListener(value =>
+                {
+                    if (value) selectedIds.Add(asset.id);
+                    else selectedIds.Remove(asset.id);
+                    feedback.text = "";
+                });
+                var thumbnail = new GameObject("Building thumbnail", typeof(RectTransform), typeof(RawImage))
+                    .GetComponent<RawImage>();
+                thumbnail.transform.SetParent(row.transform, false);
+                At(thumbnail.rectTransform, 574, 2, 28, 28);
+                thumbnail.raycastTarget = false;
+                thumbnail.texture = thumbnails.Get(asset);
+                y += 37;
+            }
+            assetList.sizeDelta = new Vector2(0, y);
+            if (eligible.Length == 0)
+                Label(assetList, "No buildings match this era, zoning and wealth.", 8, 6, 590, 16);
+
+            Control(frame, "Back to layout", 20, 524, 175, () =>
+            {
+                CloseAssetPopup();
+                OpenZoningLayout();
+            });
+            Control(frame, "Apply building choices", 418, 524, 222, () =>
+            {
+                if (selectedIds.Count == 0)
+                {
+                    feedback.text = "Choose at least one building.";
+                    return;
+                }
+                layout.restrictGrowthBuildings = true;
+                layout.growthBuildingIds = eligible.Where(asset => selectedIds.Contains(asset.id))
+                    .Select(asset => asset.id).ToArray();
+                if (!layout.AllowsGrowthBuilding(layout.previewBuildingId))
+                    layout.previewBuildingId = "";
+                session.Edit(draft => draft.zoningLayout = layout);
+                CloseAssetPopup();
+                OpenZoningLayout();
+            }, LotGlyph.Check).interactable = eligible.Length > 0;
         }
 
         private bool SlotOverlapsBuilding(LotDefinition lot, LotZoningLayout layout, LotObjectDefinition except = null)
@@ -978,7 +1081,13 @@ namespace CityForge.UI
                 Label(frame.transform, "Choose a style to fill the guide", 20, 103, 280, 16);
             }
 
-            CreatePickerResults(frame, 147);
+            if (fencePicker)
+            {
+                Control(frame.transform, "Select all sections", 20, 147, 256, SelectAllFenceSections);
+                Control(frame.transform, "Surround lot", 284, 147, 256, SurroundLotWithFence);
+            }
+
+            CreatePickerResults(frame, fencePicker ? 191 : 147);
             BindPickerSearch(search, PopulateAssets);
         }
 
@@ -989,7 +1098,7 @@ namespace CityForge.UI
             return frame;
         }
 
-        private RectTransform CreateModal(string title)
+        private RectTransform CreateModal(string title, float width = 560, float height = 540)
         {
             ClearRepeat();
             assetPopupOpener = EventSystem.current ? EventSystem.current.currentSelectedGameObject : null;
@@ -1001,10 +1110,10 @@ namespace CityForge.UI
             viewport.SetPlacementGhost(null, null);
             var frame = AddImage("Picker window", shade.transform, PanelColor);
             Place(frame.rectTransform, Vector2.one * .5f, Vector2.one * .5f,
-                new Vector2(-280, -270), new Vector2(280, 270));
+                new Vector2(-width, -height) * .5f, new Vector2(width, height) * .5f);
             AddOutline(frame, Gold);
-            Label(frame.transform, title, 20, 9, 440, 24).font = headingFont;
-            Control(frame.transform, "Close", 468, 10, 72, CloseAssetPopup);
+            Label(frame.transform, title, 20, 9, width - 120, 24).font = headingFont;
+            Control(frame.transform, "Close", width - 92, 10, 72, CloseAssetPopup);
             return frame.rectTransform;
         }
 
@@ -1095,7 +1204,111 @@ namespace CityForge.UI
             CloseAssetPopup();
         }
 
-        private void OpenBuildingPicker()
+        private bool pickingLotEntrance;
+        private void OpenBuildingInfo(LotAssetCatalogEntry asset, Action returnToBuildings)
+        {
+            CloseAssetPopup();
+            var frame = CreateModal("Building info · " + asset.label, 1040, 660);
+            var saved = LotBuildingInfo.Load(asset.id);
+            var facing = saved?.facing ?? LotFrontage.South;
+            var type = saved?.entryType ?? LotEntryType.Pedestrian;
+            var entrance = saved?.entrance ?? new Vector2(0f, -asset.footprint.y * .5f);
+            float halfSpan = Mathf.Max(1f, Mathf.Max(asset.footprint.x, asset.footprint.y) * .65f);
+            halfSpan = Mathf.Max(halfSpan, Mathf.Max(Mathf.Abs(entrance.x), Mathf.Abs(entrance.y)) * 1.15f);
+
+            var plan = new GameObject("Building plan", typeof(RectTransform), typeof(RawImage), typeof(LotEntryPlanInput))
+                .GetComponent<RawImage>();
+            plan.transform.SetParent(frame, false);
+            At(plan.rectTransform, 20, 68, 560, 560);
+            plan.texture = thumbnails.GetPlan(asset, halfSpan);
+            var marker = AddImage("Entry point", plan.transform, Gold);
+            marker.raycastTarget = false;
+            var widthLine = AddImage("Entry width", plan.transform, Gold);
+            widthLine.raycastTarget = false;
+
+            Label(frame, "Drag the marker to the doorway or driveway.", 610, 70, 408, 18);
+            var orientation = Label(frame, "North is up · East is right", 610, 109, 350, 16);
+            string[] directions = { "North is up · East is right", "North is right · East is down",
+                "North is down · East is left", "North is left · East is up" };
+            int planTurns = 0;
+            Control(frame, "Rotate plan", 973, 109, 42, () =>
+            {
+                planTurns = (planTurns + 1) % 4;
+                plan.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -90f * planTurns);
+                orientation.text = directions[planTurns];
+            }, LotGlyph.Rotate, "Rotate plan clockwise 90 degrees", iconOnly: true);
+            Label(frame, "Entry type", 610, 167, 185, 17);
+            var typeButton = Control(frame, type.ToString(), 805, 167, 210, () => { });
+            Label(frame, "Entry width (m)", 610, 222, 185, 17);
+            var width = Field(frame, "Width in meters", 805, 222, 210);
+            width.contentType = InputField.ContentType.DecimalNumber;
+            width.text = (saved != null && saved.width > 0f ? saved.width : DefaultWidth()).ToString(CultureInfo.InvariantCulture);
+            Label(frame, "Entry faces", 610, 277, 185, 17);
+            var side = Control(frame, facing.ToString(), 805, 277, 210, () => { });
+            var coordinates = Label(frame, "", 610, 333, 408, 16);
+            var feedback = Label(frame, "", 610, 390, 408, 16);
+            At(feedback.rectTransform, 610, 390, 408, 66);
+
+            typeButton.onClick.AddListener(() =>
+            {
+                type = type == LotEntryType.Pedestrian ? LotEntryType.Vehicle : LotEntryType.Pedestrian;
+                typeButton.GetComponentInChildren<Text>().text = type.ToString();
+                width.text = DefaultWidth().ToString(CultureInfo.InvariantCulture);
+            });
+            side.onClick.AddListener(() =>
+            {
+                facing = (LotFrontage)(((int)facing + 1) % 4);
+                side.GetComponentInChildren<Text>().text = facing.ToString();
+                UpdateMarker();
+            });
+            width.onValueChanged.AddListener(_ => UpdateMarker());
+            plan.GetComponent<LotEntryPlanInput>().PlaceEntry = uv =>
+            {
+                entrance = (uv * 2f - Vector2.one) * halfSpan;
+                feedback.text = "";
+                UpdateMarker();
+            };
+
+            Control(frame, "Save building info", 805, 582, 210, () =>
+            {
+                if (!ReadWidth(out float meters))
+                {
+                    feedback.text = "Enter a positive width.";
+                    return;
+                }
+                try
+                {
+                    new LotBuildingInfo { entrance = entrance, facing = facing, entryType = type, width = meters }.Save(asset.id);
+                    CloseAssetPopup();
+                    Refresh($"Saved entry point for {asset.label}.");
+                    returnToBuildings();
+                }
+                catch (Exception error) when (error is System.IO.IOException || error is UnauthorizedAccessException)
+                {
+                    feedback.text = "Could not save building info.";
+                    Debug.LogWarning(error.Message);
+                }
+            });
+            UpdateMarker();
+
+            float DefaultWidth() => type == LotEntryType.Vehicle ? 3f : 1f;
+            bool ReadWidth(out float meters) => float.TryParse(width.text, NumberStyles.Float,
+                CultureInfo.InvariantCulture, out meters) && float.IsFinite(meters) && meters > 0f;
+            void UpdateMarker()
+            {
+                var uv = entrance / (2f * halfSpan) + Vector2.one * .5f;
+                Place(marker.rectTransform, uv, uv, -Vector2.one * 6, Vector2.one * 6);
+                float halfWidth = ReadWidth(out float meters) ? Mathf.Min(meters / (4f * halfSpan), .5f) : 0f;
+                bool horizontal = facing is LotFrontage.North or LotFrontage.South;
+                var direction = horizontal ? Vector2.right : Vector2.up;
+                var thickness = horizontal ? new Vector2(0, 1.5f) : new Vector2(1.5f, 0);
+                Place(widthLine.rectTransform, uv - direction * halfWidth, uv + direction * halfWidth, -thickness, thickness);
+                coordinates.text = $"Entry position: X {entrance.x:0.00} m · Z {entrance.y:0.00} m";
+            }
+        }
+
+        private void OpenBuildingPicker(CityForgeTimeline.Era era = null, LotContentCatalog.Category use = null,
+            string query = "", bool editingInfo = false)
         {
             var frame = CreateModal("Buildings");
             var breadcrumb = Label(frame, "", 112, 58, 428, 17);
@@ -1103,9 +1316,10 @@ namespace CityForge.UI
             var variation = Checkbox(frame, "Vary placement size", "Vary placement size (up to ±15%)",
                 20, 145, 520, varyPlacementSize);
             variation.onValueChanged.AddListener(value => varyPlacementSize = value);
-            CreatePickerResults(frame, 187);
-            CityForgeTimeline.Era era = null;
-            LotContentCatalog.Category use = null;
+            var editInfo = Checkbox(frame, "Edit building info", "Edit building info instead of placing", 20, 185, 520, editingInfo);
+            editInfo.gameObject.SetActive(!PlayerMode);
+            CreatePickerResults(frame, PlayerMode ? 187 : 226);
+            search.SetTextWithoutNotify(query);
             var uses = LotClassification.Categories;
             Button back = null;
             back = Control(frame, "Back", 20, 58, 80, Back, LotGlyph.Back);
@@ -1140,7 +1354,15 @@ namespace CityForge.UI
                         LotClassification.SubcategoryName(use.id, item.subcategory) ?? "";
                     PopulatePicker(search.text, choices, uncategorizedRecents, item => item.id, item => item.label,
                         Subcategory, item => item.label + " " + Subcategory(item),
-                        thumbnails.Get, _ => LotGlyph.House, _ => false, ArmAsset,
+                        thumbnails.Get, _ => LotGlyph.House, _ => false, item =>
+                        {
+                            if (editInfo.isOn && !PlayerMode)
+                            {
+                                var previousQuery = search.text;
+                                OpenBuildingInfo(item, () => OpenBuildingPicker(era, use, previousQuery, editingInfo: true));
+                            }
+                            else ArmAsset(item);
+                        },
                         item => "Preview and place " + item.label, "No buildings in this category");
                     return;
                 }
@@ -1474,7 +1696,9 @@ namespace CityForge.UI
                         });
                         Refresh();
                         Populate(search.text);
-                    }, item => overlay && item.Id.Length != 0 ? "Drag to place " + item.Label : "Apply " + item.Label,
+                    }, item => !overlay && item.Id.Length == 0
+                        ? "Use the district terrain"
+                        : overlay && item.Id.Length != 0 ? "Drag to place " + item.Label : "Apply " + item.Label,
                     "No matching textures");
             }
         }
@@ -1796,6 +2020,40 @@ namespace CityForge.UI
                 ? LotFenceLayout.ClampToLot(SnapPoint(point), session.Lot.Size * .5f)
                 : (Vector2?)null;
 
+        private void SelectAllFenceSections()
+        {
+            CloseAssetPopup();
+            var fences = session.Lot.objects.Where(item =>
+                CanEdit(item) && catalog && catalog.Find(item.assetId)?.category == "Fences").ToArray();
+            if (fences.Length == 0)
+            {
+                Refresh("No editable fence sections on this lot.");
+                return;
+            }
+
+            ClearFencePath();
+            ClearRepeat();
+            selectedPath = null;
+            armed = dragged = null;
+            moving = false;
+            selected = fences[0].id;
+            if (fences.Length > 1)
+                foreach (var fence in fences) selectedGroup.Add(fence.id);
+            Refresh($"Selected {fences.Length} fence sections.");
+        }
+
+        private void SurroundLotWithFence()
+        {
+            StartFencePath();
+            var half = session.Lot.Size * .5f;
+            fencePath.TryAdd(new Vector2(-half.x, -half.y));
+            fencePath.TryAdd(new Vector2(half.x, -half.y));
+            fencePath.TryAdd(new Vector2(half.x, half.y));
+            fencePath.TryAdd(new Vector2(-half.x, half.y));
+            FinishFencePath(true);
+            OpenAssetPopup("Fences", "Fences");
+        }
+
         private void StartFencePath()
         {
             CloseAssetPopup();
@@ -1893,9 +2151,30 @@ namespace CityForge.UI
             Refresh($"Placed {count} {(count == 1 ? "copy" : "copies")}.");
         }
 
+        private void CommitEntryMarker(Vector2 point)
+        {
+            var layout = session.Lot.zoningLayout;
+            layout.hasEntrance = true;
+            layout.entrance = point;
+            if (layout.FitProblem(session.Lot) is { } problem)
+            {
+                Refresh(problem);
+                return;
+            }
+
+            pickingLotEntrance = false;
+            session.Edit(lot => lot.zoningLayout = layout);
+            Refresh("Building entry marker set.");
+        }
+
         private void Click(Vector2 point, string hit, LotPathDefinition pathHit)
         {
             CloseChoices();
+            if (pickingLotEntrance)
+            {
+                CommitEntryMarker(point);
+                return;
+            }
             if (repeatSource != null)
             {
                 RepeatAsset(SnapPoint(point));
@@ -2074,6 +2353,7 @@ namespace CityForge.UI
 
         private void BeginMove(string hit, Vector2 point)
         {
+            if (pickingLotEntrance) return;
             if (terrainMode)
             {
                 if (overlayBrush == null || !IsOnLot(point)) return;
@@ -2339,6 +2619,7 @@ namespace CityForge.UI
 
         private void OpenLot(LotDefinition lot)
         {
+            pickingLotEntrance = false;
             session.Open(lot);
             selected = armed = dragged = null;
             selectedPath = null;
@@ -2634,7 +2915,8 @@ namespace CityForge.UI
             for (int i = 0; i < LotPathSurface.Widths.Length; i++) MarkActive(pathWidthButtons[i], LotPathSurface.Widths[i] == pathWidth);
             finishPath.interactable = drawingPath && groundPath.Points.Count >= 2;
             clearPath.interactable = groundPath.Points.Count > 0;
-            var hint = repeatSource != null ? "Click the end of the row · Esc to cancel"
+            var hint = pickingLotEntrance ? "Click inside the blue building slot to place the entry marker · Esc to cancel"
+                : repeatSource != null ? "Click the end of the row · Esc to cancel"
                 : terrainMode ? "Click to select · Delete clears overlay · Drag to paint with a texture"
                 : drawingPath ? "Click to add points · Enter or Esc to finish · Click start to close"
                 : drawingFence ? "Click to add markers · Click the first marker to close · Esc to keep open"
@@ -2649,13 +2931,14 @@ namespace CityForge.UI
             validation.text = issue == null ? "No validation issues" : "Check lot boundaries / assets";
             validation.color = issue == null ? new Color32(142, 211, 141, 255) : Gold;
             status.text = $"{lot.width} × {lot.length}  |  {lot.objects.Count} objects" +
-                (session.Dirty ? "  |  Unsaved" : "") + "  |  " + (message ?? (repeatSource != null || drawingPath || groundPath.Finished || drawingFence || fencePath.Finished ? hint : issue ?? hint));
+                (session.Dirty ? "  |  Unsaved" : "") + "  |  " + (message ?? (pickingLotEntrance || repeatSource != null || drawingPath || groundPath.Finished || drawingFence || fencePath.Finished ? hint : issue ?? hint));
             viewport.EnableFootprintEditing(!PlayerMode && !assetPopup && !terrainMode &&
                 repeatSource == null && !drawingPath && !drawingFence && ArmedPreviewAsset == null);
             viewport.SetCharacterFocus(category == "Characters");
             viewport.SetMoveState(dragged, moving);
             viewport.SetPlacementGhost(assetPopup ? null : ArmedPreviewAsset, PreviewPlacementPosition, placementYaw, placementScale);
             viewport.ShowGroundPath(drawingPath || groundPath.Finished ? groundPath : null, pathWidth, curvePath, GroundPathPoint);
+            viewport.PickingEntryMarker = pickingLotEntrance;
             if (rebuildPreview) viewport.Refresh(lot, catalog, selected, selectedGroup, selectedPath, grid,
                 terrainTile.HasValue ? TileBounds(terrainTile.Value) : (Rect?)null, showGrowablePreview: !PlayerMode);
         }
@@ -2837,6 +3120,24 @@ namespace CityForge.UI
             rect.offsetMax = high;
         }
     }
+    internal sealed class LotEntryPlanInput : MonoBehaviour, IPointerDownHandler, IDragHandler
+    {
+        internal Action<Vector2> PlaceEntry;
+
+        public void OnPointerDown(PointerEventData eventData) => OnDrag(eventData);
+
+        public void OnDrag(PointerEventData eventData)
+        {
+            if (eventData.button != PointerEventData.InputButton.Left) return;
+            var plan = (RectTransform)transform;
+            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(plan, eventData.position,
+                    eventData.pressEventCamera, out var point)) return;
+            var rect = plan.rect;
+            PlaceEntry?.Invoke(new Vector2(Mathf.InverseLerp(rect.xMin, rect.xMax, point.x),
+                Mathf.InverseLerp(rect.yMin, rect.yMax, point.y)));
+        }
+    }
+
     internal sealed class LotEdgeBlendSlider : Slider
     {
         internal bool PointerHeld { get; private set; }

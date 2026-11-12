@@ -268,6 +268,8 @@ namespace CityForge.UI
             previewTrees.Clear();
             previewPaths.Clear();
             selectionFootprints.Clear();
+            entryMarker = null;
+            draggingEntryMarker = false;
 
             content = new GameObject("Lot preview contents").transform;
             content.SetParent(stage, false);
@@ -326,7 +328,14 @@ namespace CityForge.UI
                     ? catalog.Find(zoning.previewBuildingId) : null;
                 if (building != null && building.CanPreviewGrowable(zoning.zone, zoning.wealth, lot.firstEraId))
                 {
-                    var preview = LotRuntimeLoader.InstantiateObject(zoning.BuildingPreview(), building, content);
+                    var placement = zoning.hasEntrance
+                        ? LotGrowableBuildings.PlaceInSlot(zoning, building) : zoning.BuildingPreview();
+                    if (placement != null) DrawBuildingPreview(placement, building);
+                }
+
+                void DrawBuildingPreview(LotObjectDefinition placement, LotAssetCatalogEntry building)
+                {
+                    var preview = LotRuntimeLoader.InstantiateObject(placement, building, content);
                     footprintPreview = preview.transform;
                     foreach (var child in preview.GetComponentsInChildren<Transform>(true))
                         child.gameObject.layer = PreviewLayer;
@@ -339,16 +348,17 @@ namespace CityForge.UI
                     }
                 }
                 if (zoning.hasEntrance)
-                    DrawAnchor("House entrance", zoning.entrance, new Color32(255, 211, 109, 255));
+                    entryMarker = DrawAnchor("House entrance", zoning.entrance, new Color32(255, 211, 109, 255));
                 if (zoning.hasDriveway)
                     DrawAnchor("Driveway entrance", zoning.driveway, new Color32(202, 158, 255, 255));
             }
 
-            void DrawAnchor(string name, Vector2 point, Color color)
+            Transform DrawAnchor(string name, Vector2 point, Color color)
             {
                 var marker = Box(name, new Vector3(point.x, .21f, point.y), new Vector3(.55f, .12f, .55f),
                     Material(color, unlit: true));
                 marker.transform.SetParent(content, false);
+                return marker.transform;
             }
 
             foreach (var item in lot.objects)
@@ -873,10 +883,21 @@ namespace CityForge.UI
             ApplyPose();
         }
 
+        internal bool PickingEntryMarker { get; set; }
+
         public void OnBeginDrag(PointerEventData eventData)
         {
-            if (eventData.button != PointerEventData.InputButton.Left ||
+            if (PickingEntryMarker || eventData.button != PointerEventData.InputButton.Left ||
                 !TryRay(eventData.pressPosition, eventData.pressEventCamera, out var ray)) return;
+            if (HitsEntryMarker(eventData.pressPosition, eventData.pressEventCamera))
+            {
+                draggingEntryMarker = true;
+                entryDragStart = previewLot.zoningLayout.entrance;
+                entryDragOffset = TryPoint(ray, out var pressed) ? entryDragStart - pressed : Vector2.zero;
+                eventData.eligibleForClick = false;
+                SetFootprintCursor(EntryMarkerCursor);
+                return;
+            }
             var hit = Pick(ray);
             if (TryBeginFootprintDrag(eventData, ray, hit)) return;
             footprintSelected = false;
@@ -889,6 +910,16 @@ namespace CityForge.UI
         public void OnEndDrag(PointerEventData eventData)
         {
             if (eventData.button != PointerEventData.InputButton.Left) return;
+            if (draggingEntryMarker)
+            {
+                draggingEntryMarker = false;
+                var point = entryMarker.localPosition;
+                var position = new Vector2(point.x, point.z);
+                if ((position - entryDragStart).sqrMagnitude > .000001f)
+                    CommitEntryMarker?.Invoke(position);
+                UpdateFootprintCursor();
+                return;
+            }
             if (footprintDragging)
             {
                 footprintDragging = false;
@@ -927,6 +958,18 @@ namespace CityForge.UI
         {
             if (eventData.button == PointerEventData.InputButton.Left)
             {
+                if (draggingEntryMarker)
+                {
+                    if (TryRay(eventData.position, eventData.pressEventCamera, out var entryRay) &&
+                        TryPoint(entryRay, out var entryPoint))
+                    {
+                        var slot = previewLot.zoningLayout.BuildingSlot;
+                        entryPoint += entryDragOffset;
+                        entryMarker.localPosition = new Vector3(Mathf.Clamp(entryPoint.x, slot.xMin, slot.xMax),
+                            entryMarker.localPosition.y, Mathf.Clamp(entryPoint.y, slot.yMin, slot.yMax));
+                    }
+                    return;
+                }
                 if (footprintDragging)
                 {
                     if (TryRay(eventData.position, eventData.pressEventCamera, out var footprintRay) &&
@@ -1095,6 +1138,12 @@ namespace CityForge.UI
                 TryRay(eventData.position, eventData.pressEventCamera, out var ray) &&
                 TryPlacementPoint(ray, character, out var point))
             {
+                if (PickingEntryMarker)
+                {
+                    click(point, null, null);
+                    return;
+                }
+                if (HitsEntryMarker(eventData.position, eventData.pressEventCamera)) return;
                 var objectHit = Pick(ray);
                 if (CanEditFootprint && TryHitFootprint(eventData.position, eventData.pressEventCamera, point, objectHit, out _))
                 {

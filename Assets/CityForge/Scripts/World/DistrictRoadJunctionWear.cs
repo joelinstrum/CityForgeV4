@@ -13,6 +13,7 @@ namespace CityForge.World
 
         private void RefreshDirtJunctionWear()
         {
+            pedestrianRoutesDirty = true;
             var visible = new List<(DistrictRoadRecord Road, IReadOnlyList<Vector2> Line, MeshRenderer Renderer)>();
             foreach (var pair in districtRoadMeshes)
                 visible.Add((pair.Key, RoadCenterline(pair.Key), pair.Value.GetComponent<MeshRenderer>()));

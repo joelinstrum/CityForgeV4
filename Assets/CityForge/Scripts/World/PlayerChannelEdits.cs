@@ -113,6 +113,13 @@ namespace CityForge.World
             var heights=terrainData.GetHeights(0,0,terrainData.heightmapResolution,terrainData.heightmapResolution);CaptureCoverageGround(heights);View.RecordPlayerChannel(body,joined?.id);
             heights=playerLakeBaseTerrain.GetHeights(0,0,terrainData.heightmapResolution,terrainData.heightmapResolution);ApplyPlayerLakeBasins(heights);ApplyPlayerChannels(heights);terrainData.SetHeights(0,0,heights);bodyShores.Clear();BuildShoreField();
             var removed=new List<Vector2>();var kept=new List<TreeInstance>();foreach(var tree in CanonicalTreeInstances){var p=Origin+new Vector2(tree.position.x,tree.position.z)*Side;if(View.InPlayerChannelClearing(p))removed.Add(p);else kept.Add(tree);}if(removed.Count>0){View.RemoveForestAdditions(removed,.6f);if(MixedForest)MixedForest.RemoveWithin(removed,.6f);fullTreeInstances=kept.ToArray();RefreshEditedForest();}
+            if (Geography)
+            {
+                Geography.RefreshWater();
+                var bounds = body.Bounds;
+                Geography.Invalidate(TerrainGeography.Pad(new Rect(
+                    (bounds.min - Vector2.one * .5f) * View.MapSide, bounds.size * View.MapSide), 55f));
+            }
             foreach(var old in GetComponentsInChildren<LakeWaterRenderer>())if(Array.Exists(View.Data.WaterBodies,b=>b.playerChannel&&b.id==old.BodyId)){old.gameObject.SetActive(false);Destroy(old.gameObject);}BuildPlayerChannels();if(groundCover)groundCover.InvalidateWaterEdits();DisplayTerrain.Flush();View.ReleaseLoadedMeadow();return null;
         }
         void ApplyPlayerChannels(float[,] heights){foreach(var b in View.Data.WaterBodies)if(b.playerChannel){CaptureCoverageGround(heights);PlayerChannelGeometry.Apply(b,heights,Origin,Side,terrainData.size.y,View.MapSide);}}

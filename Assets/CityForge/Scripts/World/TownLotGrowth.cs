@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Collections.Generic;
 using System.Linq;
 using CityForge.Lots;
 using UnityEngine;
@@ -11,35 +12,46 @@ namespace CityForge.World
         private const float LotGrowthDelay = 3f;
         private float nextLotGrowth = float.PositiveInfinity;
         private int growthDistrict = -1;
-        private bool loadedGrowthLayout;
-        private LotDefinition growthLayout;
-        private string growthLayoutProblem = "Save Old Farm 1 as a Founders-era R1 · $ growable lot.";
-
-        private LotDefinition FoundersGrowthLayout()
+        private bool fullGrowthCheckQueued;
+        private readonly HashSet<Vector2Int> localGrowthCells = new();
+        private (LotDefinition Layout, LotObjectDefinition[] Buildings)[] FoundersGrowthLayouts(out string problem)
         {
-            if (loadedGrowthLayout) return growthLayout;
-            loadedGrowthLayout = true;
+            var options = new System.Collections.Generic.List<(LotDefinition Layout, LotObjectDefinition[] Buildings)>();
+            problem = "Save a Founders-era R1 · $ lot in the Zoning Lots library.";
             try
             {
-                // Keep the authored surroundings separate from each household's selected building.
-                var layout = LotLibrary.Local.List(LotType.Zoning).Select(entry => entry.Lot)
-                    .FirstOrDefault(lot => lot.name == "Old Farm 1" && lot.firstEraId == "founders" &&
-                        lot.zoningLayout.zone == TownZone.Residential1 && lot.zoningLayout.wealth == LotWealth.Low &&
-                        !lot.IsWaterfront && lot.zoningLayout.Fits(lot));
-                if (layout == null) return null;
-
-                growthLayoutProblem = "Old Farm 1 needs room in its object list.";
-                if (layout.objects.Count >= 512) return null;
                 var catalog = LotAssetCatalog.Load();
-                growthLayoutProblem = LotAssetProblem(layout, catalog);
-                if (growthLayoutProblem == null) growthLayout = layout;
+                var layouts = LotLibrary.Local.List(LotType.Zoning).Select(entry => entry.Lot)
+                    .Where(lot => (string.IsNullOrEmpty(lot.firstEraId) || lot.firstEraId == "founders") && lot.zoningLayout.zone == TownZone.Residential1 &&
+                        lot.zoningLayout.wealth == LotWealth.Low && !lot.IsWaterfront)
+                    .OrderByDescending(lot => lot.width * lot.length)
+                    .ThenBy(lot => lot.name, StringComparer.Ordinal)
+                    .ThenBy(lot => lot.id, StringComparer.Ordinal);
+                foreach (var layout in layouts)
+                {
+                    var invalid = !layout.zoningLayout.Fits(layout) ? "Check its growable layout."
+                        : layout.objects.Count >= 512 ? "Leave room for a house in its object list."
+                        : LotAssetProblem(layout, catalog);
+                    if (invalid != null)
+                    {
+                        problem = $"{layout.name}: {invalid}";
+                        continue;
+                    }
+
+                    var buildings = LotGrowableBuildings.Candidates(layout, catalog)
+                        .Where(building => catalog.Find(building.assetId).eraId == "founders").ToArray();
+                    if (buildings.Length == 0)
+                        problem = $"{layout.name}: No matching house fits the building slot.";
+                    else
+                        options.Add((layout, buildings));
+                }
             }
             catch (Exception error) when (error is IOException || error is UnauthorizedAccessException)
             {
-                growthLayoutProblem = "Could not read the growable lot library.";
-                Debug.LogWarning($"{growthLayoutProblem} {error.Message}");
+                problem = "Could not read the growable lot library.";
+                Debug.LogWarning($"{problem} {error.Message}");
             }
-            return growthLayout;
+            return options.ToArray();
         }
 
         private static Vector2Int GrowthFrontageSize(LotDefinition layout) =>
@@ -53,20 +65,70 @@ namespace CityForge.World
 
         private string ResidentialPaintStatus(RectInt bounds, TownZoneFacing facing)
         {
-            var layout = FoundersGrowthLayout();
-            if (layout == null) return growthLayoutProblem;
+            var options = FoundersGrowthLayouts(out var problem);
+            if (options.Length == 0) return problem;
             bool alongX = facing is TownZoneFacing.East or TownZoneFacing.West;
             var painted = alongX ? new Vector2Int(bounds.height, bounds.width) : bounds.size;
-            var required = GrowthFrontageSize(layout);
-            return painted.x >= required.x && painted.y >= required.y
-                ? $"Checking this site for {layout.name}…"
-                : GrowthSpaceHint(layout);
+            foreach (var (layout, _) in options)
+            {
+                var required = GrowthFrontageSize(layout);
+                if (painted.x >= required.x && painted.y >= required.y)
+                    return $"Checking this site for {layout.name}…";
+            }
+            return GrowthSpaceHint(options[^1].Layout);
         }
 
         private static Vector2Int GrowthLotCells(LotDefinition layout, int rotation) =>
             Vector2Int.RoundToInt(layout.SizeForRotation(rotation) / DistrictGridCellMeters);
 
-        private void QueueLotGrowth() => nextLotGrowth = Time.unscaledTime + LotGrowthDelay;
+        private void QueueLotGrowth()
+        {
+            fullGrowthCheckQueued = true;
+            localGrowthCells.Clear();
+            nextLotGrowth = Time.unscaledTime + LotGrowthDelay;
+        }
+
+        private void QueueZoningGrowth(RectInt edited)
+        {
+            // A lot grows from its minimum corner. Include corners outside the edit
+            // whose footprints could extend into it, without scanning other zones.
+            int reach = LotDefinition.MaxTiles - 1;
+            int side = Mathf.RoundToInt(MapSide / DistrictGridCellMeters);
+            for (int z = Mathf.Max(0, edited.yMin - reach); z < Mathf.Min(side, edited.yMax); z++)
+            for (int x = Mathf.Max(0, edited.xMin - reach); x < Mathf.Min(side, edited.xMax); x++)
+            {
+                var cell = new Vector2Int(x, z);
+                if (townZones.TryGetValue(cell, out var zone) && zone == TownZone.Residential1)
+                    localGrowthCells.Add(cell);
+            }
+            nextLotGrowth = Time.unscaledTime + LotGrowthDelay;
+        }
+
+        private void QueueDemolitionGrowth(IEnumerable<DistrictLotRecord> removed)
+        {
+            foreach (var lot in removed)
+            {
+                var footprint = new DistrictLotFootprint(lot);
+                var half = lot.definition.Size * .5f;
+                var a = footprint.WorldPoint(half) - lot.center;
+                var b = footprint.WorldPoint(new Vector2(half.x, -half.y)) - lot.center;
+                var extent = Vector2.Max(new Vector2(Mathf.Abs(a.x), Mathf.Abs(a.y)),
+                    new Vector2(Mathf.Abs(b.x), Mathf.Abs(b.y)));
+                var origin = ZoneCorner(Vector2Int.zero);
+                var min = Vector2Int.FloorToInt((lot.center - extent - origin) / DistrictGridCellMeters);
+                var max = Vector2Int.CeilToInt((lot.center + extent - origin) / DistrictGridCellMeters);
+                for (int z = min.y; z < max.y; z++)
+                for (int x = min.x; x < max.x; x++)
+                {
+                    var cell = new Vector2Int(x, z);
+                    if (townZones.TryGetValue(cell, out var zone) && zone == TownZone.Residential1 &&
+                        footprint.Contains(ZoneCorner(cell) + Vector2.one * (DistrictGridCellMeters * .5f)))
+                        localGrowthCells.Add(cell);
+                }
+            }
+            if (localGrowthCells.Count > 0)
+                nextLotGrowth = Time.unscaledTime + LotGrowthDelay;
+        }
 
         private void UpdateLotGrowth()
         {
@@ -75,72 +137,75 @@ namespace CityForge.World
                 growthDistrict = SelectedDistrict;
                 QueueLotGrowth();
             }
-            if (!CanBuildTown || IsSaving || lotPlacementDraft != null || Time.unscaledTime < nextLotGrowth) return;
+            if (!CanBuildTown || IsSaving || lotPlacementDraft != null || detonateLastPoint.HasValue ||
+                Time.unscaledTime < nextLotGrowth) return;
             nextLotGrowth = float.PositiveInfinity;
-            if (FoundersGrowthLayout() is not { } layout)
+            IEnumerable<Vector2Int> pending = fullGrowthCheckQueued ? residentialFacing.Keys : localGrowthCells;
+            var cellsToCheck = pending.OrderBy(cell => cell.y).ThenBy(cell => cell.x).ToArray();
+            fullGrowthCheckQueued = false;
+            localGrowthCells.Clear();
+            if (cellsToCheck.Length == 0) return;
+            var options = FoundersGrowthLayouts(out var problem);
+            if (options.Length == 0)
             {
-                ShowGrowthStatus(growthLayoutProblem);
+                ShowGrowthStatus(problem);
                 return;
             }
 
-            var catalog = LotAssetCatalog.Load();
-            var buildings = LotGrowableBuildings.Candidates(layout, catalog);
-            if (buildings.Length == 0)
-            {
-                ShowGrowthStatus("No matching house fits this lot within the 10% footprint allowance.");
-                return;
-            }
             var water = DistrictLotWater();
-            bool grew = false;
+            var grownNames = new System.Collections.Generic.HashSet<string>();
             bool hasResidential = false;
             string blocked = null;
-            foreach (var pair in residentialFacing.OrderBy(pair => pair.Key.y).ThenBy(pair => pair.Key.x))
+            foreach (var cell in cellsToCheck)
             {
-                if (townZones[pair.Key] != TownZone.Residential1 || !InActiveDistrict(ZoneCorner(pair.Key) +
+                if (!residentialFacing.TryGetValue(cell, out var facing) ||
+                    !townZones.TryGetValue(cell, out var zone) || zone != TownZone.Residential1 ||
+                    !InActiveDistrict(ZoneCorner(cell) +
                     Vector2.one * (DistrictGridCellMeters * .5f))) continue;
                 hasResidential = true;
-                int rotation = (8 - (int)pair.Value - (int)layout.zoningLayout.frontage) % 4;
-                var size = GrowthLotCells(layout, rotation);
-                var cells = new RectInt(pair.Key, size);
-                if (!HasGrowthZoning(cells, pair.Value)) continue;
+                foreach (var (layout, buildings) in options)
+                {
+                    int rotation = (8 - (int)facing - (int)layout.zoningLayout.frontage) % 4;
+                    var size = GrowthLotCells(layout, rotation);
+                    var cells = new RectInt(cell, size);
+                    if (!HasGrowthZoning(cells, facing)) continue;
 
-                var center = (ZoneCorner(cells.min) + ZoneCorner(cells.max)) * .5f;
-                var record = new DistrictLotRecord
-                {
-                    center = center, rotation = rotation, definition = layout,
-                    district = DistrictAtWorld(new Vector3(center.x, 0f, center.y))
-                };
-                if (PlacedLots.Any(lot => lot.definition.id == layout.id && lot.center == center)) continue;
-                var siteProblem = InCampClearing(center, layout.Size.magnitude * .5f)
-                    ? "Keep the farm clear of camps." : LotSiteProblem(record, water);
-                if (siteProblem != null)
-                {
-                    blocked ??= siteProblem;
-                    continue;
-                }
-                bool facesAlongX = pair.Value is TownZoneFacing.East or TownZoneFacing.West;
-                int depth = facesAlongX ? size.x : size.y;
-                // The zoning arrow already chose the frontage axis. A side street at a corner
-                // must not disqualify a farm that still has a road along that axis.
-                if (ResidentialFrontageProblem(cells, depth, out _, frontageAlongX: facesAlongX) != null)
-                {
-                    blocked ??= "Keep the full farm footprint beside a road.";
-                    continue;
-                }
+                    var center = (ZoneCorner(cells.min) + ZoneCorner(cells.max)) * .5f;
+                    var record = new DistrictLotRecord
+                    {
+                        center = center, rotation = rotation, definition = layout,
+                        district = DistrictAtWorld(new Vector3(center.x, 0f, center.y))
+                    };
+                    if (PlacedLots.Any(lot => lot.definition.id == layout.id && lot.center == center)) continue;
+                    var siteProblem = InCampClearing(center, layout.Size.magnitude * .5f)
+                        ? "Keep the lot clear of camps." : LotSiteProblem(record, water);
+                    if (siteProblem != null)
+                    {
+                        blocked ??= siteProblem;
+                        continue;
+                    }
+                    // Road access is independent of the direction the player wants the house to face.
+                    if (ResidentialFrontageProblem(cells, ResidentialDepth(zone), out _) != null)
+                    {
+                        blocked ??= "Keep the full lot footprint beside a road.";
+                        continue;
+                    }
 
-                record.definition = LotGrowableBuildings.Materialize(layout,
-                    buildings[UnityEngine.Random.Range(0, buildings.Length)]);
-                record.id = Guid.NewGuid().ToString("N");
-                PlacedLots.Add(record);
-                grew = true;
+                    record.definition = LotGrowableBuildings.Materialize(layout,
+                        buildings[UnityEngine.Random.Range(0, buildings.Length)]);
+                    record.id = Guid.NewGuid().ToString("N");
+                    PlacedLots.Add(record);
+                    grownNames.Add(layout.name);
+                    break;
+                }
             }
-            if (grew)
+            if (grownNames.Count > 0)
             {
                 RebuildDistrictLots();
-                ShowGrowthStatus($"{layout.name} grew. Save the region to keep it.");
+                ShowGrowthStatus($"{string.Join(", ", grownNames.OrderBy(name => name, StringComparer.Ordinal))} grew. Save the region to keep it.");
             }
             else if (hasResidential)
-                ShowGrowthStatus(blocked ?? GrowthSpaceHint(layout));
+                ShowGrowthStatus(blocked ?? GrowthSpaceHint(options[^1].Layout));
         }
 
         private void ShowGrowthStatus(string message)

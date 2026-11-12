@@ -34,6 +34,7 @@ namespace CityForge.World
         public TownZoneCell[] townZones;
         public int townZoneGridVersion;
         public DistrictRoadRecord[] districtRoads;
+        public DistrictPlacedActor[] placedActors;
         public int[] deepHarborDistricts;
         public int meadowCacheDistrict=-1;
         public float terrainHeightRange;
@@ -101,6 +102,7 @@ namespace CityForge.World
             info.townZones = view.CaptureTownZones();
             info.townZoneGridVersion = PrototypeRegionView.TownZoneGridVersion;
             info.districtRoads = view.CaptureDistrictRoads();
+            info.placedActors = view.PlacedActors.ToArray();
             if (view.PlacedLots.Count != 0) info.lots = view.PlacedLots.ToArray();
             info.climate=view.Climate;info.creation=view.CreationSettings;info.districts=view.Districts;info.combinedDistricts=view.CombinedDistricts;info.nativeCamps=view.NativeCamps;info.towns=view.Towns;info.resources=view.RegionalResources.Capture();info.development=view.Development;info.forestRemovals=view.ForestRemovals;info.forestAdditions=view.ForestAdditions;
             var pilot=view.ApprovedDistrict;info.meadowCacheDistrict=pilot?pilot.DistrictIndex:view.LoadedMeadowDistrict;
@@ -196,6 +198,7 @@ namespace CityForge.World
             PrototypeRegionView.ValidateDeepHarbors(info.deepHarborDistricts, gridSide * gridSide);
             ValidateZones(info, gridSide);
             PrototypeRegionView.ValidateDistrictRoads(info.districtRoads, gridSide * gridSide, NativeCampPlanner.MapSide(info.size, gridSide));
+            DistrictPlacedActor.Validate(info.placedActors, gridSide * gridSide, NativeCampPlanner.MapSide(info.size, gridSide));
             return info;
         }
         private static void ValidateZones(SavedRegionInfo info, int gridSide) =>

@@ -37,8 +37,11 @@ LODFadeCrossFade(i.pos);
  half4 tex=SAMPLE_TEXTURE2D(_BaseMap,sampler_BaseMap,i.uv);clip(tex.a-_Cutoff);
  half3 n=normalize(i.normal)*IS_FRONT_VFACE(face,1,-1);half3 albedo=tex.rgb*i.color.rgb*_BaseColor.rgb*UNITY_ACCESS_INSTANCED_PROP(TreeProps,_InstanceTint).rgb;
  if(_Leaf>.5 && _PaletteMix>.001){
- // Local chroma adjustment in linear RGB; project remains Gamma.
- float3 source=SRGBToLinear(max(float3(albedo),0));
+ // The palette operates in linear RGB, regardless of the project's working space.
+ float3 source=max(float3(albedo),0);
+ #if defined(UNITY_COLORSPACE_GAMMA)
+ source=SRGBToLinear(source);
+ #endif
  float luminance=dot(source,float3(.2126,.7152,.0722));
  float4 palette=UNITY_ACCESS_INSTANCED_PROP(TreeProps,_PaletteTarget);
  float3 recolored=luminance*palette.rgb;
@@ -51,7 +54,10 @@ LODFadeCrossFade(i.pos);
  float3 neutralGreen=float3(.82,1.10,.70);neutralGreen/=dot(neutralGreen,float3(.2126,.7152,.0722));
  recolored=lerp(recolored,y*neutralGreen,.07*recess)*(1-.015*recess);
  }
- albedo=LinearToSRGB(max(lerp(source,recolored,_PaletteMix)*palette.a,0));
+ albedo=max(lerp(source,recolored,_PaletteMix)*palette.a,0);
+ #if defined(UNITY_COLORSPACE_GAMMA)
+ albedo=LinearToSRGB(albedo);
+ #endif
  }
  InputData d=(InputData)0;d.positionWS=i.world;d.normalWS=n;d.viewDirectionWS=GetWorldSpaceNormalizeViewDir(i.world);d.shadowCoord=TransformWorldToShadowCoord(i.world);d.bakedGI=SampleSH(n);d.normalizedScreenSpaceUV=GetNormalizedScreenSpaceUV(i.pos);d.shadowMask=half4(1,1,1,1);
  SurfaceData s=(SurfaceData)0;s.albedo=albedo;s.metallic=0;s.specular=lerp(half3(.04,.04,.04),half3(.0176,.0176,.0176),_Leaf);s.smoothness=_Smoothness;s.normalTS=half3(0,0,1);s.occlusion=lerp(1,i.color.a,_OcclusionStrength);s.alpha=1;

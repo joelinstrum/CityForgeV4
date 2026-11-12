@@ -3,12 +3,14 @@ namespace CityForge.World {
 public sealed partial class MeadowDistrictLandscape {
  void BuildCoastalWater(){
  bool calmHarbor=EntireDistrictHasHarborWater;
+ bool harborSwash=calmHarbor&&View.Climate==RegionClimate.Temperate&&QualitySettings.activeColorSpace==ColorSpace.Linear;
  var holder=new GameObject("Crest coastal ocean");holder.transform.SetParent(transform,false);holder.SetActive(false);
  var root=Instantiate(Baseline.waterTemplate,holder.transform);root.SetActive(false);root.transform.position=Vector3.up*View.SeaLevel;
  Water=root.GetComponent<WaterRenderer>();Water.Viewer=View.GetComponentInChildren<Camera>();Water.Viewpoint=Water.Viewer.transform;
- Water.AnimatedWavesLod.Enabled=true;Water.DynamicWavesLod.Enabled=false;Water.FoamLod.Enabled=!calmHarbor;Water.FlowLod.Enabled=false;
+ Water.AnimatedWavesLod.Enabled=true;Water.DynamicWavesLod.Enabled=false;Water.FoamLod.Enabled=!calmHarbor||harborSwash;Water.FlowLod.Enabled=false;
  var surf=Own(ScriptableObject.CreateInstance<FoamLodSettings>());surf.name="Coastal breaking surf";surf.ShorelineFoamMaximumDepth=1.8f;surf.ShorelineFoamStrength=.12f;surf.ShorelineFoamPriming=0;surf.FoamFadeRate=1.5f;// Include smaller offshore crests in the foam simulation. Shore surf uses its own inputs.
  surf.WaveFoamCoverage=.70f;surf.WaveFoamStrength=.85f;surf.FilterWaves=1;
+ if(harborSwash){surf.ShorelineFoamStrength=0;surf.WaveFoamStrength=.04f;}
  Water.FoamLod.Settings=surf;
  Water.DepthLod.Enabled=true;Water.DepthLod.Resolution=256;Water.ShadowLod.Enabled=false;Water.LevelLod.Enabled=false;Water.AlbedoLod.Enabled=false;Water.AbsorptionLod.Enabled=false;
  Water.LodResolution=256;Water.LodLevels=7;Water.GeometryDownSampleFactor=2;
@@ -55,17 +57,17 @@ public sealed partial class MeadowDistrictLandscape {
  Water.Reflections.Enabled=true;Water.Reflections.Resolution=256;Water.Reflections.DisableShadows=true;Water.Reflections.RenderOnlySingleCamera=true;Water.Reflections.Layers=~(1<<4);Water.Underwater.Enabled=false;
  Water.Surface.Material=CreateTypedWaterMaterial(WaterBodyKind.Ocean);
  if(groundFollowing||View.CreationSettings?.terrainShape==RegionTerrainShape.RiverAndBay||(hasDeepHarbor&&!calmHarbor)){
- var levels=new GameObject("Coastal river levels and foam limit");levels.transform.SetParent(holder.transform,false);levels.AddComponent<GroundFollowingWaterLevels>().Initialize(this,Water,View.SeaLevel,groundFollowing,!calmHarbor);
+ var levels=new GameObject("Coastal river levels and foam limit");levels.transform.SetParent(holder.transform,false);levels.AddComponent<GroundFollowingWaterLevels>().Initialize(this,Water,View.SeaLevel,groundFollowing,!calmHarbor||harborSwash);
  }
 
- var mat=Water.Surface.Material;mat.SetFloat("_Crest_FoamEnabled",calmHarbor?0:1);mat.SetTexture("_Crest_FoamTexture",Resources.Load<Texture2D>("Coasts/CoastalFoam"));mat.SetFloat("_Crest_FoamFeather",.65f);mat.SetFloat("_Crest_FoamScale",5);mat.SetFloat("_Crest_FoamIntensityAlbedo",1);mat.SetFloat("_Crest_PlanarReflectionsEnabled",1);mat.SetFloat("_Crest_PlanarReflectionsApplySmoothness",1);mat.SetFloat("_Crest_Smoothness",.8f);mat.SetFloat("_Crest_SmoothnessFar",.8f);mat.SetFloat("_Crest_PlanarReflectionsIntensity",.65f);
- if(Baseline.fftTemplate){var go=Instantiate(Baseline.fftTemplate,root.transform);go.transform.position=Vector3.up*View.SeaLevel;var fft=go.GetComponent<ShapeFFT>();fft.Weight=calmHarbor?.62f:.55f;fft.OverrideGlobalWindSpeed=true;fft.WindSpeed=calmHarbor?23:18;fft.OverrideGlobalWindDirection=true;fft.WaveDirectionHeadingAngle=0;fft.OverrideGlobalWindTurbulence=true;fft.WindTurbulence=.015f;fft.WindAlignment=.95f;}
+ var mat=Water.Surface.Material;mat.SetFloat("_Crest_FoamEnabled",calmHarbor&&!harborSwash?0:1);mat.SetTexture("_Crest_FoamTexture",Resources.Load<Texture2D>("Coasts/CoastalFoam"));mat.SetFloat("_Crest_FoamFeather",.65f);mat.SetFloat("_Crest_FoamScale",5);mat.SetFloat("_Crest_FoamIntensityAlbedo",1);mat.SetFloat("_Crest_PlanarReflectionsEnabled",1);mat.SetFloat("_Crest_PlanarReflectionsApplySmoothness",1);mat.SetFloat("_Crest_Smoothness",.8f);mat.SetFloat("_Crest_SmoothnessFar",.8f);mat.SetFloat("_Crest_PlanarReflectionsIntensity",.65f);
+ if(Baseline.fftTemplate){var go=Instantiate(Baseline.fftTemplate,root.transform);go.transform.position=Vector3.up*View.SeaLevel;var fft=go.GetComponent<ShapeFFT>();fft.Weight=harborSwash?.40f:calmHarbor?.62f:.55f;fft.OverrideGlobalWindSpeed=true;fft.WindSpeed=calmHarbor?23:18;fft.OverrideGlobalWindDirection=true;fft.WaveDirectionHeadingAngle=0;fft.OverrideGlobalWindTurbulence=true;fft.WindTurbulence=.015f;fft.WindAlignment=.95f;}
  var swellObject=new GameObject(calmHarbor?"Harbor wind chop":"Incoming coastal swell");
  swellObject.transform.SetParent(root.transform,false);
  var swell=WaveHarmonic.Crest._Extensions.AddComponent<ShapeGerstner>(swellObject,LodInputMode.Global);
- swell.Swell=!calmHarbor;
+ swell.Swell=!calmHarbor||harborSwash;
  swell.ReverseWaveWeight=0;
- swell.Weight=calmHarbor?.24f:.3f;
+ swell.Weight=harborSwash?.46f:calmHarbor?.24f:.3f;
  swell.OverrideGlobalWindSpeed=true;
  swell.WindSpeed=calmHarbor?26:30;
  swell.OverrideGlobalWindDirection=true;
@@ -76,7 +78,12 @@ public sealed partial class MeadowDistrictLandscape {
  if(CoastalShorelineSwash.Applies(View)){
  surf.ShorelineFoamStrength=0;surf.WaveFoamStrength=.25f;surf.FoamFadeRate=2.5f;
  var swash=new GameObject("Coastal swash trial");swash.transform.SetParent(holder.transform,false);swash.AddComponent<CoastalShorelineSwash>().Initialize(this);
- }else if(View.Coastline)BuildIncomingSurf(holder.transform);else if(!calmHarbor)BuildOceanOutlineSurf(holder.transform);
+ }else if(View.Coastline)BuildIncomingSurf(holder.transform);else if(!calmHarbor||harborSwash)
+ {
+     var shoreward=BuildOceanOutlineSurf(holder.transform,harborSwash?.68f:2.8f);
+     if(harborSwash&&shoreward.sqrMagnitude>1f)
+         swell.WaveDirectionHeadingAngle=Mathf.Atan2(shoreward.y,shoreward.x)*Mathf.Rad2Deg;
+ }
  CoastalWaterPresentation.ApplyClimate(mat,View.Climate);
  if(calmHarbor){
  mat.SetFloat("_Crest_NormalMapStrength",.055f);
@@ -87,7 +94,8 @@ public sealed partial class MeadowDistrictLandscape {
  root.AddComponent<CoastalWaterPresentation>().Initialize(Water.Viewer,mat,tropicalColors,harborColors,calmHarbor);
  root.SetActive(true);holder.SetActive(true);StartCoroutine(RefreshDepth(probe));
  }
- void BuildOceanOutlineSurf(Transform holder){
+ Vector2 BuildOceanOutlineSurf(Transform holder,float foamStrength){
+ var shoreward=Vector2.zero;
  foreach(var body in View.Data.WaterBodies){if(body.kind!=WaterBodyKind.Ocean||body.outline==null)continue;
  var vertices=new System.Collections.Generic.List<Vector3>();var uvs=new System.Collections.Generic.List<Vector2>();var triangles=new System.Collections.Generic.List<int>();float length=0;
  foreach(var points in body.Contours)for(int i=0;i<points.Length;i++){
@@ -96,15 +104,18 @@ public sealed partial class MeadowDistrictLandscape {
  var pa=(a-Vector2.one*.5f)*View.MapSide;var pb=(b-Vector2.one*.5f)*View.MapSide;
  if(!new Rect(Origin-Vector2.one*40,Vector2.one*(Side+80)).Overlaps(Rect.MinMaxRect(Mathf.Min(pa.x,pb.x)-1,Mathf.Min(pa.y,pb.y)-1,Mathf.Max(pa.x,pb.x)+1,Mathf.Max(pa.y,pb.y)+1)))continue;
  var direction=(pb-pa).normalized;var sea=new Vector2(-direction.y,direction.x);var midpoint=(a+b)*.5f;
- if(!body.Contains(midpoint+sea*.001f))sea=-sea;int start=vertices.Count;
+ if(!body.Contains(midpoint+sea*.001f))sea=-sea;
+ shoreward-=sea*Vector2.Distance(pa,pb);
+ int start=vertices.Count;
  for(int end=0;end<2;end++)foreach(float offset in new[]{34f,-8f}){var p=end==0?pa:pb;var q=p+sea*offset;vertices.Add(new Vector3(q.x,View.SeaLevel,q.y));uvs.Add(new Vector2(-offset,length+end*Vector2.Distance(pa,pb)));}length+=Vector2.Distance(pa,pb);
  triangles.AddRange(new[]{start,start+2,start+1,start+1,start+2,start+3});
  }
  if(vertices.Count==0)continue;var mesh=Own(new Mesh{name="Saved coastline surf"});mesh.SetVertices(vertices);mesh.SetUVs(0,uvs);mesh.SetTriangles(triangles,0);mesh.RecalculateBounds();
  var go=new GameObject("Animated saved coastline surf",typeof(MeshFilter),typeof(MeshRenderer));go.transform.SetParent(holder,false);go.GetComponent<MeshFilter>().sharedMesh=mesh;
- var material=Own(new Material(Resources.Load<Shader>("Coasts/SurfFoam")));material.SetFloat("_Crest_Strength",2.8f);var renderer=go.GetComponent<MeshRenderer>();renderer.sharedMaterial=material;renderer.forceRenderingOff=true;go.AddComponent<CoastalSurfMotion>().Initialize(material);
+ var material=Own(new Material(Resources.Load<Shader>("Coasts/SurfFoam")));material.SetFloat("_Crest_Strength",foamStrength);var renderer=go.GetComponent<MeshRenderer>();renderer.sharedMaterial=material;renderer.forceRenderingOff=true;go.AddComponent<CoastalSurfMotion>().Initialize(material);
  var input=WaveHarmonic.Crest._Extensions.AddComponent<FoamLodInput>(go,LodInputMode.Renderer);input.GetData<FoamRendererLodInputData>().Renderer=renderer;
  }
+ return shoreward;
  }
  void BuildIncomingSurf(Transform holder){
  const int segments=256;var vertices=new Vector3[(segments+1)*2];var uv=new Vector2[vertices.Length];var triangles=new int[segments*6];

@@ -16,7 +16,7 @@ namespace CityForge.UI
         private Transform footprintRoot, footprintPreview;
         private Material footprintMaterial;
 
-        private bool CanEditFootprint => footprintEditing && previewLot != null &&
+        private bool CanEditFootprint => !PickingEntryMarker && footprintEditing && previewLot != null &&
             previewLot.zoningLayout.Configured && commitFootprint != null;
 
         public void ConfigureFootprintEditing(Action<Rect> commit, Func<Vector2, Vector2> snap, Action select)
@@ -36,7 +36,24 @@ namespace CityForge.UI
             }
         }
 
-        private readonly Texture2D[] footprintCursors = new Texture2D[5];
+        internal Action<Vector2> CommitEntryMarker;
+        private Transform entryMarker;
+        private bool draggingEntryMarker;
+        private Vector2 entryDragStart, entryDragOffset;
+
+        private bool HitsEntryMarker(Vector2 screen, Camera eventCamera)
+        {
+            if (!CanEditFootprint || !entryMarker ||
+                !RectTransformUtility.ScreenPointToLocalPointInRectangle(image.rectTransform, screen, eventCamera, out var local))
+                return false;
+            var point = cameraView.WorldToViewportPoint(entryMarker.position);
+            var rect = image.rectTransform.rect;
+            var projected = rect.min + Vector2.Scale(rect.size, new Vector2(point.x, point.y));
+            return point.z > 0f && (projected - local).sqrMagnitude <= 12f * 12f;
+        }
+
+        private const int EntryMarkerCursor = 5;
+        private readonly Texture2D[] footprintCursors = new Texture2D[EntryMarkerCursor + 1];
         private int activeFootprintCursor = -1;
         private bool footprintPointerInside;
         private Vector2 footprintPointer;
@@ -44,6 +61,21 @@ namespace CityForge.UI
 
         private void UpdateFootprintCursor()
         {
+            if (PickingEntryMarker)
+            {
+                bool valid = footprintPointerInside && previewLot != null &&
+                    TryRay(footprintPointer, footprintEventCamera, out var entryRay) &&
+                    TryPlacementPoint(entryRay, false, out var entryPoint) &&
+                    previewLot.zoningLayout.BuildingSlot.Contains(entryPoint);
+                SetFootprintCursor(valid ? EntryMarkerCursor : -1);
+                return;
+            }
+            if (draggingEntryMarker || (footprintPointerInside &&
+                HitsEntryMarker(footprintPointer, footprintEventCamera)))
+            {
+                SetFootprintCursor(EntryMarkerCursor);
+                return;
+            }
             if (!CanEditFootprint || (!footprintPointerInside && !footprintDragging))
             {
                 SetFootprintCursor(-1);
@@ -88,7 +120,8 @@ namespace CityForge.UI
             if (activeFootprintCursor == index) return;
             if (index >= 0 && !footprintCursors[index]) footprintCursors[index] = CreateFootprintCursor(index);
             Cursor.SetCursor(index < 0 ? null : footprintCursors[index],
-                index < 0 ? Vector2.zero : new Vector2(15, 16), CursorMode.Auto);
+                index < 0 ? Vector2.zero : index == EntryMarkerCursor ? new Vector2(15, 27) : new Vector2(15, 16),
+                CursorMode.Auto);
             activeFootprintCursor = index;
         }
 
@@ -107,7 +140,8 @@ namespace CityForge.UI
             }
             var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
             {
-                name = index == 0 ? "Footprint move cursor" : "Footprint resize cursor",
+                name = index == EntryMarkerCursor ? "Entry marker pin"
+                    : index == 0 ? "Footprint move cursor" : "Footprint resize cursor",
                 wrapMode = TextureWrapMode.Clamp,
                 filterMode = FilterMode.Point
             };
@@ -118,6 +152,12 @@ namespace CityForge.UI
             bool Arrow(int x, int y)
             {
                 var point = new Vector2(x - 15, y - 15);
+                if (index == EntryMarkerCursor)
+                {
+                    float radius = new Vector2(point.x, y - 20).magnitude;
+                    return (radius <= 8f && radius >= 3f) ||
+                        (y >= 4 && y <= 16 && Mathf.Abs(point.x) <= (y - 4) * .48f);
+                }
                 if (index == 0) return Along(point, Vector2.right) || Along(point, Vector2.up);
                 return Along(point, direction);
             }

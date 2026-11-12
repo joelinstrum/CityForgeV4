@@ -161,16 +161,24 @@ namespace CityForge.World
             if(ReplacesNativeTrees){evergreenPalmNative.Clear();for(int i=0;i<palmMask.Length;i++)if(palmMask[i])evergreenPalmNative.Add(replacementOrder[i]);}
         }
         readonly List<TerrainLayer> ownedLayers=new List<TerrainLayer>();
+        float lastAmbientScale;
+        Color lastAmbientTint;
         void LateUpdate()
         {
             // The accepted authored family is a summer baseline. Native seasonal trees remain authoritative in fall/winter.
             if(PresentedTreeCount==0||!land||!viewerCamera||!assets||!land.TreesEnabled||land.View==null||land.View.Data==null||batches[0]==null||land.View.VisualSeason!=RegionSeason.Summer)return;
             var time = land.View.TimeOfDay;
-            if (probeTime != time)
+            bool detailedCanopy = !land.IsRegionOverview && time == RegionTimeOfDay.Afternoon &&
+                land.View.AfternoonShadows == AfternoonShadowMode.DetailedCanopy;
+            float ambientScale = land.DistrictAmbientScale;
+            Color ambientTint = land.DistrictAmbientTint;
+            if (probeTime != time || lastAmbientScale != ambientScale || lastAmbientTint != ambientTint)
             {
-                var probe = PrototypeRegionView.TintDistrictProbe(daylightProbe, time);
+                var probe = land.AddAfternoonSkyFill(PrototypeRegionView.TintDistrictProbe(daylightProbe, time, ambientScale, ambientTint));
                 for (int i = 0; i < probes.Length; i++) probes[i] = probe;
                 probeTime = time;
+                lastAmbientScale = ambientScale;
+                lastAmbientTint = ambientTint;
             }
             GeometryUtility.CalculateFrustumPlanes(viewerCamera,planes);foreach(var batch in batches)batch.Clear();
             for(int treeIndex=0;treeIndex<trees.Count;treeIndex++){if((presentationMask!=null&&!presentationMask[treeIndex])||(palmMask!=null&&palmMask[treeIndex]))continue;var t=trees[treeIndex];if(land.View.IsForestRemoved(new Vector2(t.matrix.m03,t.matrix.m23)))continue;if(!GeometryUtility.TestPlanesAABB(planes,new Bounds(t.center,Vector3.one*t.height*1.5f)))continue;
@@ -190,7 +198,7 @@ namespace CityForge.World
                         }
                         block.SetVectorArray("_InstanceTint",tints);
                         Graphics.DrawMeshInstanced(assets.meshes[variant*10+lod*2+part],0,material,matrices,count,block,ShadowCastingMode.Off,true,0,null,LightProbeUsage.CustomProvided);
-                        int shadowLod=Mathf.Min(4,lod<2?2:lod+1);
+                        int shadowLod = detailedCanopy && part == 1 && lod < 2 ? lod : Mathf.Min(4, lod < 2 ? 2 : lod + 1);
                         Graphics.DrawMeshInstanced(assets.meshes[variant*10+shadowLod*2+part],0,material,matrices,count,block,ShadowCastingMode.ShadowsOnly,false,0,null,LightProbeUsage.CustomProvided);
                     }
                 }

@@ -18,6 +18,10 @@ namespace CityForge.UI
         public Texture Get(LotAssetCatalogEntry asset) => Render(asset.id, asset.label, parent =>
             LotRuntimeLoader.InstantiateObject(new LotObjectDefinition { assetId = asset.id }, asset, parent));
 
+        public Texture GetPlan(LotAssetCatalogEntry asset, float halfSpan) =>
+            Render($"plan:{asset.id}:{halfSpan:R}", asset.label, parent => LotRuntimeLoader.InstantiateObject(
+                new LotObjectDefinition { assetId = asset.id, scale = 1f }, asset, parent), halfSpan);
+
         public Texture GetLot(LotDefinition lot, LotAssetCatalog catalog) => Render(lot.id, lot.name, parent =>
         {
             var instance = new GameObject(lot.name);
@@ -30,7 +34,7 @@ namespace CityForge.UI
             return instance;
         });
 
-        private Texture Render(string id, string label, Func<Transform, GameObject> instantiate)
+        private Texture Render(string id, string label, Func<Transform, GameObject> instantiate, float planHalfSpan = 0f)
         {
             if (cache.TryGetValue(id, out var cached)) return cached;
             if (!stage) CreateStage();
@@ -53,7 +57,16 @@ namespace CityForge.UI
                 camera.nearClipPlane = radius;
                 camera.farClipPlane = radius * 5;
 
-                target = new RenderTexture(96, 96, 24) { name = label + " thumbnail" };
+                if (planHalfSpan > 0f)
+                {
+                    camera.transform.SetPositionAndRotation(
+                        stage.transform.position + Vector3.up * (bounds.size.y + 10f), Quaternion.Euler(90, 0, 0));
+                    camera.orthographicSize = planHalfSpan;
+                    camera.nearClipPlane = .1f;
+                    camera.farClipPlane = bounds.size.y + 20f;
+                }
+                int resolution = planHalfSpan > 0f ? 640 : 96;
+                target = new RenderTexture(resolution, resolution, 24) { name = label + " thumbnail" };
                 var request = new UniversalRenderPipeline.SingleCameraRequest { destination = target };
                 if (!RenderPipeline.SupportsRenderRequest(camera, request)) return null;
                 light.enabled = true;

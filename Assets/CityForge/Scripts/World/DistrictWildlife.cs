@@ -44,12 +44,14 @@ namespace CityForge.World
             if(best==null)return;var state=camera.CaptureRegionState();state.focus=best.root.position;camera.RestoreRegionState(state);camera.SetZoomLevel(1);UpdateVisibility();
         }
         float R()=>(float)random.NextDouble();
-        public void Initialize(MeadowDistrictLandscape land)
+        public void Initialize(MeadowDistrictLandscape land, bool ambient = true)
         {
             Land=land;WaterAccess=new WildlifeWaterAccess(land);waterRevision=land.View.WoodlandRevision;random=new System.Random(unchecked(land.Seed^land.DistrictIndex*73856093^15485863));
             var library=Resources.Load<WildlifeLibrary>("Wildlife/TemperateWildlife");
             if(!library){Debug.LogWarning("Animal Pack Deluxe wildlife library is missing. Build local wildlife assets before enabling animals.");return;}
             IndexTrees();
+            if (ambient)
+            {
             int count=Mathf.Clamp(Mathf.RoundToInt(land.Side*land.Side/12000),12,96);
             for(int i=0;i<count;i++)Spawn(library,false,false);
             int fish=Mathf.Clamp(Mathf.RoundToInt(land.Side*land.Side/15000),24,80);
@@ -57,9 +59,38 @@ namespace CityForge.World
             for(int i=0;i<24;i++)Spawn(library,false,false,true);
             int birds=Mathf.Clamp(Mathf.RoundToInt(land.Side*land.Side/5000),24,220);
             for(int i=0;i<birds;i++)Spawn(library,false,true);
+            }
             camera=land.View.GetComponentInChildren<CityForge.CameraSystem.CityForgeCameraController>();
+            foreach (var actor in land.View.PlacedActors)
+            {
+                if (actor.pedestrian || !land.Contains(actor.position)) continue;
+                var species = Array.Find(library.species, entry => entry != null && entry.id == actor.assetId);
+                if (species != null && species.prefab) AddPlacedAnimal(species, actor.position);
+            }
             renderers=GetComponentsInChildren<Renderer>();shown=true;UpdateVisibility();
         }
+        internal void AddPlacedAnimal(WildlifeSpecies species, Vector2 point)
+        {
+            if (!Suitable(species, point, out float y)) return;
+            var body = Instantiate(species.prefab, new Vector3(point.x, y, point.y),
+                Quaternion.Euler(0, R() * 360f, 0), transform);
+            body.name = species.id;
+            var animator = body.GetComponentInChildren<Animator>();
+            if (animator)
+            {
+                animator.applyRootMotion = false;
+                animator.keepAnimatorStateOnDisable = true;
+                animator.cullingMode = AnimatorCullingMode.CullUpdateTransforms;
+                animator.Play("Idle", 0, R());
+            }
+            animals.Add(new Animal { species = species, root = body.transform, animator = animator, home = point,
+                target = point, wait = 2f + R() * 6f, thirst = 30f,
+                canDrink = species.id == "deer" && animator && animator.HasState(0, Animator.StringToHash("Base Layer.Drink")) });
+            renderers = GetComponentsInChildren<Renderer>();
+            shown = true;
+            UpdateVisibility();
+        }
+
         void IndexTrees(){
             trunks.Clear();
             foreach(var tree in Land.CanonicalTreeInstances){if(tree.prototypeIndex<3)continue;var p=Land.Origin+new Vector2(tree.position.x,tree.position.z)*Land.Side;
