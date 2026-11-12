@@ -54,7 +54,7 @@ namespace CityForge.World
         private RectInt? zoneDragBounds;
         private string zoneProblem;
         private TownZoneFacing zoneDragFrontage;
-        private bool flipResidentialFacing;
+        private int residentialFacingTurns;
         private WildlifeWaterAccess zoneWater;
 
         internal TownZoneCell[] CaptureTownZones() => townZones.OrderBy(pair => pair.Key.y).ThenBy(pair => pair.Key.x)
@@ -135,7 +135,7 @@ namespace CityForge.World
             CancelZoneDrag();
             SelectDistrictLot(null);
             activeZone = zone;
-            flipResidentialFacing = false;
+            residentialFacingTurns = 0;
             zoneToolArmed = true;
             for (int i = 0; i < zoneButtons.Length; i++) MarkTownButton(zoneButtons[i], i == (int)zone);
             zoneStatus.text = zone == TownZone.None ? "Drag over cells to erase their zoning." :
@@ -173,16 +173,16 @@ namespace CityForge.World
                 return true;
             }
 
-            bool flipped = ResidentialDepth(activeZone) > 0 && Input.GetKeyDown(KeyCode.Tab);
-            if (flipped)
+            bool rotated = ResidentialDepth(activeZone) > 0 && Input.GetKeyDown(KeyCode.Tab);
+            if (rotated)
             {
-                flipResidentialFacing = !flipResidentialFacing;
+                residentialFacingTurns = (residentialFacingTurns + 1) % 4;
                 if (!zoneDragStart.HasValue)
-                    zoneStatus.text = flipResidentialFacing ? "Facing away from the road · Tab to flip" : ResidentialDragHint(activeZone);
+                    zoneStatus.text = ResidentialDragHint(activeZone);
             }
 
             bool down = Input.GetMouseButtonDown(0), up = Input.GetMouseButtonUp(0);
-            if (!down && !zoneDragStart.HasValue) return flipped;
+            if (!down && !zoneDragStart.HasValue) return rotated;
             var events = EventSystem.current;
             bool overUi = events && events.IsPointerOverGameObject();
             if (events && (down || up))
@@ -191,13 +191,13 @@ namespace CityForge.World
                 events.RaycastAll(new PointerEventData(events) { position = Input.mousePosition }, zoneUiHits);
                 overUi = zoneUiHits.Count > 0;
             }
-            if (!overUi && TryZoneCell(out var cell)) ProcessZoneDrag(cell, down, up, flipped);
-            else if (flipped && zoneDragBounds is RectInt preview) RefreshZonePreview(preview);
+            if (!overUi && TryZoneCell(out var cell)) ProcessZoneDrag(cell, down, up, rotated);
+            else if (rotated && zoneDragBounds is RectInt preview) RefreshZonePreview(preview);
             if (up || (!down && !Input.GetMouseButton(0))) CancelZoneDrag();
             return down || up || zoneDragStart.HasValue;
         }
 
-        private void ProcessZoneDrag(Vector2Int cell, bool down, bool up, bool flipped)
+        private void ProcessZoneDrag(Vector2Int cell, bool down, bool up, bool rotated)
         {
             if (down)
             {
@@ -214,17 +214,17 @@ namespace CityForge.World
                 zoneProblem = ZoneSiteProblem(bounds, activeZone, zoneWater, out zoneDragFrontage);
                 RefreshZonePreview(bounds);
             }
-            else if (flipped) RefreshZonePreview(bounds);
+            else if (rotated) RefreshZonePreview(bounds);
             if (up && zoneProblem == null)
                 zoneStatus.text = ApplyTownZone(bounds, activeZone) ?? (activeZone == TownZone.Residential1
-                    ? ResidentialPaintStatus(bounds, zoneDragFrontage) : "Zoning updated. Save the region to keep it.");
+                    ? ResidentialPaintStatus(bounds, ResidentialFacing(zoneDragFrontage)) : "Zoning updated. Save the region to keep it.");
         }
 
         private void RefreshZonePreview(RectInt bounds)
         {
             bool residential = ResidentialDepth(activeZone) > 0;
             string action = activeZone == TownZone.None ? "Release to erase" :
-                residential ? "Tab to flip · Release to apply" : "Release to apply";
+                residential ? "Tab to rotate · Release to apply" : "Release to apply";
             zoneStatus.text = zoneProblem ?? $"{bounds.width} × {bounds.height} cells · {action}";
             zonePreviewRenderer.enabled = residential
                 ? zoneProblem == null || (long)bounds.width * bounds.height <= MaxZoneDragSide * MaxZoneDragSide
@@ -290,14 +290,16 @@ namespace CityForge.World
             var problem = ZoneSiteProblem(bounds, zone, DistrictLotWater(), out var frontage);
             if (problem != null) return problem;
             var facing = ResidentialFacing(frontage);
+            bool affectsGrowth = zone == TownZone.Residential1;
             foreach (var cell in bounds.allPositionsWithin)
             {
+                affectsGrowth |= townZones.TryGetValue(cell, out var previous) && previous == TownZone.Residential1;
                 if (zone == TownZone.None) townZones.Remove(cell);
                 else townZones[cell] = zone;
                 if (facing != TownZoneFacing.None) residentialFacing[cell] = facing;
                 else residentialFacing.Remove(cell);
             }
-            if (zone == TownZone.Residential1) QueueLotGrowth();
+            if (affectsGrowth) QueueZoningGrowth(bounds);
             if (zoneRenderer) RefreshZoneOverlay();
             return null;
         }

@@ -91,6 +91,13 @@ namespace CityForge.World
             bodyShores.Clear();BuildShoreField();
             var removed=new List<Vector2>();var kept=new List<TreeInstance>();foreach(var tree in CanonicalTreeInstances){var p=Origin+new Vector2(tree.position.x,tree.position.z)*Side;if(View.InPlayerLakeClearing(p))removed.Add(p);else kept.Add(tree);}
             if(removed.Count>0){View.RemoveForestAdditions(removed,.6f);if(MixedForest)MixedForest.RemoveWithin(removed,.6f);fullTreeInstances=kept.ToArray();RefreshEditedForest();}
+            if (Geography)
+            {
+                Geography.RefreshWater();
+                var bounds = body.Bounds;
+                Geography.Invalidate(TerrainGeography.Pad(new Rect(
+                    (bounds.min - Vector2.one * .5f) * View.MapSide, bounds.size * View.MapSide), 55f));
+            }
             BuildPlayerLake(body);DisplayTerrain.Flush();View.ReleaseLoadedMeadow();return null;
         }
         void ApplyPlayerLakeBasins(float[,] heights){foreach(var body in View.Data.WaterBodies)if(body.playerCreated){CaptureCoverageGround(heights);PlayerLakeGeometry.Apply(body,heights,Origin,Side,terrainData.size.y,View.MapSide);}}

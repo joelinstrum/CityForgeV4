@@ -91,7 +91,10 @@ namespace CityForge.World
                 additions.Add(record);native.Add(PlantedInstance(record));Index(p);
             }
             if(additions.Count==0)return 0;View.RecordForestAdditions(additions);var all=new List<TreeInstance>(CanonicalTreeInstances);all.AddRange(native);fullTreeInstances=all.ToArray();
-            if(MixedForest)MixedForest.AddTrees(native);RefreshEditedForest();return additions.Count;
+            if(MixedForest)MixedForest.AddTrees(native);RefreshEditedForest();
+            if (Geography) foreach (var center in valid)
+                Geography.Invalidate(TerrainGeography.Pad(new Rect(center,Vector2.zero),radius + 20f));
+            return additions.Count;
         }
     }
 }

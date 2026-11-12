@@ -14,11 +14,11 @@ namespace CityForge.World
         };
 
         private static string ResidentialDragHint(TownZone zone) =>
-            $"Drag beside a road, up to {ResidentialDepth(zone)} cells deep · Tab to flip frontage";
+            $"Drag beside a road, up to {ResidentialDepth(zone)} cells deep · Tab to rotate frontage";
 
         private TownZoneFacing ResidentialFacing(TownZoneFacing frontage) =>
-            flipResidentialFacing && frontage != TownZoneFacing.None
-                ? (TownZoneFacing)(1 + ((int)frontage + 1) % 4)
+            frontage != TownZoneFacing.None
+                ? (TownZoneFacing)(1 + ((int)frontage - 1 + 4 - residentialFacingTurns) % 4)
                 : frontage;
 
         private string ResidentialFrontageProblem(RectInt cells, int maxDepth, out TownZoneFacing frontage,

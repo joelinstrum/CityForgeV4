@@ -11,7 +11,7 @@ public sealed class CoastalWaterPresentation:MonoBehaviour {
  surface.SetColor("_Crest_Scattering",new Color(.035f,.24f,.30f,1));
  }
  WaveHarmonic.Crest.ScatteringTextureLodInputData depthColors,harborColors;
- bool calmHarbor;
+ bool calmHarbor, linearTemperate;
  Camera viewer;Material material;Light sunlight;bool applied,lastOrtho;float lastGlare=-1;
  readonly string[] properties={"_Crest_ApplyDisplacementNormals","_Crest_NormalMapStrength","_Crest_Smoothness","_Crest_SmoothnessFar","_Crest_PlanarReflectionsIntensity"};
  float[] perspective;float ambient,direct,normalScale;Color scattering;
@@ -34,7 +34,7 @@ public sealed class CoastalWaterPresentation:MonoBehaviour {
  antialiasingChanged=false;
  }
  public void Initialize(Camera camera,Material surface,WaveHarmonic.Crest.ScatteringTextureLodInputData depth=null,
- WaveHarmonic.Crest.ScatteringTextureLodInputData harbor=null,bool calm=false){depthColors=depth;harborColors=harbor;calmHarbor=calm;viewer=camera;material=surface;var land=GetComponentInParent<MeadowDistrictLandscape>();if(land)foreach(var light in land.GetComponentsInChildren<Light>())if(light.type==LightType.Directional&&(!sunlight||light.intensity>sunlight.intensity))sunlight=light;ambient=material.GetFloat("_Crest_AmbientTerm");direct=material.GetFloat("_Crest_DirectTerm");scattering=material.GetColor("_Crest_Scattering");normalScale=material.GetFloat("_Crest_NormalMapScale");perspective=new float[properties.Length];for(int i=0;i<properties.Length;i++)if(material.HasProperty(properties[i]))perspective[i]=material.GetFloat(properties[i]);Apply();}
+ WaveHarmonic.Crest.ScatteringTextureLodInputData harbor=null,bool calm=false){depthColors=depth;harborColors=harbor;calmHarbor=calm;viewer=camera;material=surface;var land=GetComponentInParent<MeadowDistrictLandscape>();linearTemperate=QualitySettings.activeColorSpace==ColorSpace.Linear&&land&&land.View.Climate==RegionClimate.Temperate;if(land)foreach(var light in land.GetComponentsInChildren<Light>())if(light.type==LightType.Directional&&(!sunlight||light.intensity>sunlight.intensity))sunlight=light;ambient=material.GetFloat("_Crest_AmbientTerm");direct=material.GetFloat("_Crest_DirectTerm");scattering=material.GetColor("_Crest_Scattering");normalScale=material.GetFloat("_Crest_NormalMapScale");perspective=new float[properties.Length];for(int i=0;i<properties.Length;i++)if(material.HasProperty(properties[i]))perspective[i]=material.GetFloat(properties[i]);Apply();}
  float Glare(){if(!viewer||!sunlight||!sunlight.enabled)return 0;float alignment=Vector3.Dot(Vector3.Reflect(sunlight.transform.forward,Vector3.up),-viewer.transform.forward);return Mathf.SmoothStep(0,1,Mathf.InverseLerp(.85f,.98f,alignment));}
  void LateUpdate()
  {
@@ -54,8 +54,40 @@ public sealed class CoastalWaterPresentation:MonoBehaviour {
      if (Mathf.Approximately(lastRippleBlend, blend)) return;
      lastRippleBlend = blend;
      material.SetFloat("_Crest_NormalMapScale", normalScale * Mathf.Lerp(1f, calmHarbor ? 1.45f : 2.1f, blend));
-     material.SetFloat("_Crest_NormalMapStrength", lastOrtho ? (calmHarbor ? Mathf.Lerp(.045f, .085f, blend) : Mathf.Lerp(.025f, .085f, blend)) : perspective[1]);
+     float closeStrength = linearTemperate ? .10f : calmHarbor ? .045f : .025f;
+     float farStrength = linearTemperate ? .15f : .085f;
+     material.SetFloat("_Crest_NormalMapStrength", lastOrtho ? Mathf.Lerp(closeStrength, farStrength, blend) : perspective[1]);
  }
- void Apply(){if(!viewer||!material)return;ApplyCoastalAntialiasing();lastOrtho=viewer.orthographic;lastGlare=Glare();float gloss=Mathf.Lerp(.62f,.20f,lastGlare);var iso=new[]{1f,.025f,gloss,gloss,.28f};for(int i=0;i<properties.Length;i++)if(material.HasProperty(properties[i]))material.SetFloat(properties[i],lastOrtho?iso[i]:perspective[i]);material.SetFloat("_Crest_AmbientTerm",lastOrtho?ambient*2.6f:ambient);material.SetFloat("_Crest_DirectTerm",lastOrtho?direct*1.4f:direct);material.SetColor("_Crest_Scattering",lastOrtho?new Color(scattering.r*1.3f,scattering.g*1.8f,scattering.b*2.1f,scattering.a):scattering);if(depthColors!=null)depthColors.Multiplier=lastOrtho?new Vector4(1.3f,1.8f,2.1f,1):Vector4.one;if(harborColors!=null)harborColors.Multiplier=lastOrtho?new Vector4(1.3f,1.48f,1.42f,1):Vector4.one;lastRippleBlend=-1f;ApplyRipples();applied=true;}
+ void Apply()
+ {
+     if (!viewer || !material) return;
+     ApplyCoastalAntialiasing();
+     lastOrtho = viewer.orthographic;
+     lastGlare = Glare();
+     bool calibrated = lastOrtho && linearTemperate;
+     bool steelHarbor = calibrated && calmHarbor;
+     float gloss = Mathf.Lerp(.62f, .20f, lastGlare);
+     var iso = new[] { 1f, .025f, gloss, gloss, calibrated ? .18f : .28f };
+     for (int i = 0; i < properties.Length; i++)
+         if (material.HasProperty(properties[i])) material.SetFloat(properties[i], lastOrtho ? iso[i] : perspective[i]);
+
+     // The Gamma-era isometric volume boosts wash out temperate water after the Linear migration.
+     material.SetFloat("_Crest_AmbientTerm", lastOrtho ? ambient * 2.6f * (steelHarbor ? .24f : calibrated ? .16f : 1f) : ambient);
+     material.SetFloat("_Crest_DirectTerm", lastOrtho ? direct * 1.4f * (steelHarbor ? .44f : calibrated ? .39f : 1f) : direct);
+     var ocean = lastOrtho ? new Color(scattering.r * 1.3f, scattering.g * 1.8f, scattering.b * 2.1f, scattering.a) : scattering;
+     if (calibrated && harborColors == null)
+         ocean = new Color(ocean.r * .83f, ocean.g, ocean.b * 1.25f, ocean.a);
+     material.SetColor("_Crest_Scattering", ocean);
+     if (depthColors != null) depthColors.Multiplier = lastOrtho ? new Vector4(1.3f, 1.8f, 2.1f, 1) : Vector4.one;
+     if (harborColors != null)
+     {
+         var harbor = lastOrtho ? new Vector4(1.3f, 1.48f, 1.42f, 1) : Vector4.one;
+         harborColors.Multiplier = calibrated ? Vector4.Scale(harbor, steelHarbor ? new Vector4(.98f, 1.02f, 1.12f, 1) : new Vector4(.82f, .98f, 1.24f, 1)) : harbor;
+     }
+     lastRippleBlend = -1f;
+     ApplyRipples();
+     applied = true;
+ }
+
 }
 }

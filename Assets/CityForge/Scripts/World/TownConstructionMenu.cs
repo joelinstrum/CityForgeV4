@@ -55,6 +55,7 @@ namespace CityForge.World
                 else
                     SkinTownButton(townCategories[i], new Rect(edges[i - 1], 236, edges[i] - edges[i - 1], 206), 82);
             }
+            BuildDetonateButton(font);
             RefreshTownConstruction();
 
             RectTransform BottomPanel(Transform parent, string title, float bottom, float width, float height)
@@ -150,6 +151,7 @@ namespace CityForge.World
 
         private void CloseTownSection()
         {
+            SetDetonate(false);
             CloseRoadContext();
             CloseTransportModal();
             CloseZoning();

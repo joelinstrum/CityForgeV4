@@ -16,6 +16,11 @@ namespace CityForge.Lots
         public string previewBuildingId;
         public float previewYawOffset;
         public float previewScale;
+        public bool restrictGrowthBuildings;
+        public string[] growthBuildingIds;
+
+        internal bool AllowsGrowthBuilding(string id) => !restrictGrowthBuildings ||
+            (growthBuildingIds != null && Array.IndexOf(growthBuildingIds, id) >= 0);
         public Vector2 buildingCenter;
         public Vector2 buildingSize;
         public LotFrontage frontage;
@@ -77,6 +82,12 @@ namespace CityForge.Lots
             var bounds = LotRuntimeLoader.Footprint(building, asset);
             if (!AcceptsBuildingSize(bounds.size))
                 return "This building exceeds the footprint's 10% allowance.";
+            if (hasEntrance)
+            {
+                var allowed = new Rect(buildingCenter - buildingSize * .55f, buildingSize * 1.10f);
+                if (!Contains(allowed, bounds.min) || !Contains(allowed, bounds.max))
+                    return "Aligning the entry puts this building outside the reserved area.";
+            }
             if (!Contains(lot.LandBounds, bounds.min) || !Contains(lot.LandBounds, bounds.max))
                 return "Keep the building inside the dry area of the lot.";
             foreach (var item in lot.objects)

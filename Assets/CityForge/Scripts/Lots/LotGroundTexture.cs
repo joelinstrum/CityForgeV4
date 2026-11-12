@@ -114,7 +114,8 @@ namespace CityForge.Lots
     {
         public static readonly LotGroundTexture[] Base =
         {
-            new LotGroundTexture("", "Olive Green", "", new Color32(112, 125, 64, 255)),
+            // An empty base leaves the district terrain visible. The color is for the editor preview.
+            new LotGroundTexture("", "None", "", new Color32(112, 125, 64, 255)),
             new LotGroundTexture("lush-grass", "Lush Grass", "Lots/GroundTextures/lush-grass", new Color32(93, 132, 55, 255)),
             new LotGroundTexture("patchy-grass", "Patchy Grass", "Lots/GroundTextures/patchy-grass", new Color32(135, 128, 79, 255)),
             new LotGroundTexture("low-wealth-4x4", "Low Wealth Grass · 4 × 4", "Lots/GroundTextures/low-wealth-4x4-tile",

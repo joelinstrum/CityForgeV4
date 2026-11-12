@@ -179,6 +179,10 @@ venv/
 !/Assets/CityForge/Resources/Region.meta
 !/Assets/CityForge/Resources/Region/RegionalRelief.shader
 !/Assets/CityForge/Resources/Region/RegionalRelief.shader.meta
+!/Assets/CityForge/Resources/Region/TerrainGeographyPalette.asset
+!/Assets/CityForge/Resources/Region/TerrainGeographyPalette.asset.meta
+!/Assets/CityForge/Resources/Region/TerrainGeographyPaletteDeep.asset
+!/Assets/CityForge/Resources/Region/TerrainGeographyPaletteDeep.asset.meta
 
 !/Assets/CityForge/Resources/Region/RegionalSlab.shader
 !/Assets/CityForge/Resources/Region/RegionalSlab.shader.meta

@@ -27,13 +27,26 @@ Shader "Hidden/CityForge/Meadow Grass Grade"
                 float4 source=tex2D(_MainTex,input.uv);
                 float3 softGrass=tex2Dlod(_MainTex,float4(input.uv,0,4.5)).rgb;
                 float3 averageGrass=tex2Dlod(_MainTex,float4(input.uv,0,9)).rgb;
+                // Preserve the authored grade in display space before writing the sRGB texture.
+                if (!IsGammaSpace())
+                {
+                    softGrass=LinearToGammaSpace(softGrass);
+                    averageGrass=LinearToGammaSpace(averageGrass);
+                }
                 source.rgb=lerp(averageGrass,softGrass,0.18);
+                if (!IsGammaSpace())
+                {
+                    float3 finerGrass=LinearToGammaSpace(tex2Dlod(_MainTex,float4(input.uv,0,2.5)).rgb);
+                    source.rgb=lerp(source.rgb,finerGrass,.22);
+                }
                 float3 color=source.rgb*_SourceTint.rgb;
                 float luminance=dot(color,float3(.2126,.7152,.0722));
                 color=max(0,lerp(luminance.xxx,color,_Saturation));
                 // Normalize the tint so its hue adjustment does not silently change exposure.
-                color*=_GrassTint.rgb/max(.001,dot(_GrassTint.rgb,float3(.2126,.7152,.0722)));
+                float3 tint = IsGammaSpace() ? _GrassTint.rgb : LinearToGammaSpace(_GrassTint.rgb);
+                color*=tint/max(.001,dot(tint,float3(.2126,.7152,.0722)));
                 color=GammaToLinearSpace(LinearToGammaSpace(color)*_Brightness);
+                if (!IsGammaSpace()) color=GammaToLinearSpace(color);
                 return float4(color,source.a);
             }
             ENDHLSL

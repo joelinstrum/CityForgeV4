@@ -162,6 +162,14 @@ namespace CityForge.World
         {
             var nature = GetComponent<NatureToolbar>();
             if (nature && nature.Selected != NatureTool.None) return false;
+            var picked = PickDistrictLot(ray);
+            bool handled = picked != null || selectedDistrictLot != null;
+            SelectDistrictLot(picked);
+            return handled;
+        }
+
+        private DistrictLotRecord PickDistrictLot(Ray ray)
+        {
             var ground = ApprovedDistrict && ApprovedDistrict.DisplayTerrain ? ApprovedDistrict.DisplayTerrain : terrain;
             var collider = ground ? ground.GetComponent<TerrainCollider>() : null;
             float nearest = collider && collider.Raycast(ray, out var hit, float.PositiveInfinity)
@@ -191,9 +199,7 @@ namespace CityForge.World
                 var point = LotPoint(ray.GetPoint(nearest - .01f));
                 picked = PlacedLots.Find(record => districtLotRoots.ContainsKey(record) && LotContains(record, point));
             }
-            bool handled = picked != null || selectedDistrictLot != null;
-            SelectDistrictLot(picked);
-            return handled;
+            return picked;
 
             static Vector2 LotPoint(Vector3 point) => new Vector2(point.x, point.z);
         }
@@ -519,6 +525,7 @@ namespace CityForge.World
 
         private void RebuildDistrictLots()
         {
+            pedestrianRoutesDirty = true;
             if (zoneRenderer && zoneRenderer.enabled) RefreshZoneOverlay();
             RefreshDirtRoadEndFades();
             districtLotRoots.Clear();
@@ -529,6 +536,7 @@ namespace CityForge.World
             if (ApprovedDistrict)
             {
                 ApprovedDistrict.RefreshHarborStones();
+                ApprovedDistrict.Geography?.RefreshSettlements();
                 if (SelectedDistrict >= 0 && PlacedLots.Any(lot => InActiveDistrict(lot.center) && lot.definition.AttractsVessels) &&
                     !ApprovedDistrict.GetComponent<HarborVesselVisits>())
                     ApprovedDistrict.gameObject.AddComponent<HarborVesselVisits>().Initialize(ApprovedDistrict);
@@ -559,6 +567,7 @@ namespace CityForge.World
                 root.SetParent(lotInstances, false);
                 districtLotRoots.Add(record, root);
                 var definition = record.definition;
+                LotGrowableBuildings.CorrectLegacyCabinFacing(definition);
                 if (catalog && record.customization != null)
                 {
                     try { definition = LotCustomizationService.Apply(definition, record.customization, catalog); }

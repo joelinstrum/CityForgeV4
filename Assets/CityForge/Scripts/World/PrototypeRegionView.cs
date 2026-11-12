@@ -314,6 +314,7 @@ namespace CityForge.World
                 if (snapshot?.info.lots != null) view.PlacedLots.AddRange(snapshot.info.lots);
                 view.RestoreTownZones(snapshot?.info.townZones, snapshot?.info.townZoneGridVersion ?? 0);
                 view.RestoreDistrictRoads(snapshot?.info.districtRoads);
+                if (snapshot?.info.placedActors != null) view.PlacedActors.AddRange(snapshot.info.placedActors);
                 if(snapshot!=null){view.DeepHarborDistricts=snapshot.info.deepHarborDistricts??System.Array.Empty<int>();view.TimeOfDay=snapshot.info.timeOfDay;view.RestoreSettlementData(snapshot.info);view.ForestAdditions=snapshot.info.forestAdditions??System.Array.Empty<ForestAdditionRecord>();view.ForestRemovals=snapshot.info.forestRemovals??System.Array.Empty<ForestRemovalStroke>();view.NativeCamps=snapshot.info.nativeCamps??System.Array.Empty<NativeCampRecord>();view.CombinedDistricts=snapshot.info.combinedDistricts??System.Array.Empty<CombinedDistrictGroup>();view.CreationSettings=snapshot.info.creation;view.legacyClimate=snapshot.info.climate;view.AnimalsEnabled=snapshot.info.animals;size=(RegionSize)snapshot.info.size;seed=snapshot.info.seed;regionName=snapshot.info.name;view.SavedRegionId=snapshot.info.id;view.Season=(RegionSeason)snapshot.info.season;view.TerrainHeightRange=snapshot.info.terrainHeightRange;view.LoadedMeadow=snapshot.meadow;view.LoadedMeadowDistrict=snapshot.info.meadowCacheDistrict;view.LoadedFromSnapshot=true;view.wantsMeadow=snapshot.info.meadow;view.Waterless=snapshot.info.waterless;view.Coastline=snapshot.info.coastline;view.CoastVersion=snapshot.info.coastVersion;view.MinimalRiverCrest=snapshot.info.minimalRiverCrest;view.StillWater=snapshot.info.stillWater;view.LakeWaterVersion=snapshot.info.lakeWaterVersion<0?-1:1;view.RiverBedVersion=snapshot.info.riverBedVersion;}
                 if(view.LoadedMeadow!=null&&view.LoadedMeadowDistrict>=0)view.sessionMeadows[view.LoadedMeadowDistrict]=view.LoadedMeadow;
                 view.Size = size;
@@ -744,6 +745,13 @@ namespace CityForge.World
         private void Update()
         {
             RefreshTownConstruction();
+            TickPlacedPedestrians();
+            if (armedDistrictActor != null && Input.GetKeyDown(KeyCode.Escape))
+            {
+                CancelDistrictActor();
+                ShowDistrictMessage("");
+                return;
+            }
             if(RemakeBlocksInput)
             {
                 if(remakeWarning&&Input.GetKeyDown(KeyCode.Escape))CloseRemakeWarning();
@@ -761,6 +769,7 @@ namespace CityForge.World
                 return;
             }
             UpdateLotGrowth();
+            if (UpdateDetonate()) return;
             if (SelectedDistrict >= 0 && !DistrictLoading && !IsSaving && Input.GetKeyDown(KeyCode.G) &&
                 !(EventSystem.current && EventSystem.current.currentSelectedGameObject &&
                   EventSystem.current.currentSelectedGameObject.TryGetComponent<InputField>(out var field) && field.isFocused))
@@ -810,6 +819,11 @@ namespace CityForge.World
                 return;
             }
             var pointer = Event.current;
+            if (detonateArmed)
+            {
+                HandleDetonatePointer(pointer);
+                return;
+            }
             DrawRoadPathHandles(pointer);
             if (pointer.button == 1)
             {
@@ -834,6 +848,7 @@ namespace CityForge.World
                 EventSystem.current.RaycastAll(new PointerEventData(EventSystem.current) { position = position }, hits);
                 if (hits.Count > 0) return;
             }
+            if (TryPlaceDistrictActor(position)) { pointer.Use(); return; }
             var ray = GetComponentInChildren<Camera>().ScreenPointToRay(position);
             if (SelectedDistrict >= 0)
             {
@@ -922,6 +937,7 @@ namespace CityForge.World
             RefreshDistrictGrid();
             RebuildDistrictRoads();
             RebuildDistrictLots();
+            RebuildPlacedPedestrians();
             if(NaturalLandscape&&IsCombinedDistrict){
                 var bounds=ActiveDistrictBounds;var rig=GetComponentInChildren<CityForgeCameraController>();
                 var heightRange=approvedDistrict.DistrictHeightRange;
@@ -954,7 +970,7 @@ namespace CityForge.World
             CloseRoadContext();
             GetComponent<RegionPreviewDiagnostics>().SetDiagnostic(false,1);
             float returnHeading=GetComponentInChildren<CityForgeCameraController>().CaptureRegionState().yaw;
-            SelectedDistrict=-1;RefreshDistrictGrid();RebuildDistrictRoads();RebuildDistrictLots();if(districtSelection)districtSelection.SetActive(true);
+            SelectedDistrict=-1;RefreshDistrictGrid();RebuildDistrictRoads();RebuildDistrictLots();RebuildPlacedPedestrians();if(districtSelection)districtSelection.SetActive(true);
             SetDistrictInfoVisible(true);
             navigationHint.text = OverviewNavigationHint;
             transform.Find("RegionLandCover").GetComponent<MeshFilter>().sharedMesh=wholeRegionMesh;

@@ -1,0 +1,63 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3e84abf2768a4734951e13c2845a8f6a, type: 3}
+  m_Name: TerrainGeographyPalette
+  m_EditorClassIdentifier:
+  surfaces:
+  - albedo: {fileID: 2800000, guid: 0d13e37cf0f24a26b90ec72a5d06b8cb, type: 3}
+    normal: {fileID: 0}
+    tileMeters: 25
+    smoothness: 0.035
+    normalStrength: 0
+    albedoScale: 0.678600
+    albedoBias: {x: 0.02035706, y: 0.02942108, z: 0.04285703}
+    distantAlbedoMean: {x: 0.08064, y: 0.20281, z: 0.02402}
+  - albedo: {fileID: 2800000, guid: d7b095c10b774b29ad210756fa3800e0, type: 3}
+    normal: {fileID: 2800000, guid: 24ab5f11513fc4186a3cfd40051a108f, type: 3}
+    tileMeters: 32
+    smoothness: 0.045
+    normalStrength: 0.15
+    albedoScale: 0.78
+    albedoBias: {x: 0.03107, y: 0.03160, z: 0.02486}
+    distantAlbedoMean: {x: 0.19559, y: 0.20959, z: 0.03125}
+  - albedo: {fileID: 2800000, guid: 8ab83c82b7fd414caaa5fcf05ee6dd21, type: 3}
+    normal: {fileID: 2800000, guid: a0b68a9445f264271a5b8f373f4c13bd, type: 3}
+    tileMeters: 20
+    smoothness: 0.05
+    normalStrength: 0.16
+    albedoScale: 0.82
+    albedoBias: {x: 0.02511, y: 0.02860, z: 0.01128}
+    distantAlbedoMean: {x: 0.07219, y: 0.08632, z: 0.01626}
+  - albedo: {fileID: 2800000, guid: e89ea19f14eb4b1e88674a44cd9261c4, type: 3}
+    normal: {fileID: 2800000, guid: 524df1959dcfa44e9a12fee153ae2162, type: 3}
+    tileMeters: 24
+    smoothness: 0.065
+    normalStrength: 0.13
+    albedoScale: 0.75
+    albedoBias: {x: 0.02171, y: 0.03476, z: 0.01759}
+    distantAlbedoMean: {x: 0.03907, y: 0.13065, z: 0.01019}
+  - albedo: {fileID: 2800000, guid: 4121cc879606495d82c970e7497984dd, type: 3}
+    normal: {fileID: 2800000, guid: fc5d4037a49cd418e9d4c6f77e669f97, type: 3}
+    tileMeters: 22
+    smoothness: 0.065
+    normalStrength: 0.22
+    albedoScale: 0.8
+    albedoBias: {x: 0.02866, y: 0.02672, z: 0.01232}
+    distantAlbedoMean: {x: 0.14879, y: 0.13496, z: 0.03208}
+  - albedo: {fileID: 2800000, guid: 4ac3d5bae5c54630811f54f1b9dea7fa, type: 3}
+    normal: {fileID: 2800000, guid: aa79fcf0c1f784fde97cc68de782980b, type: 3}
+    tileMeters: 30
+    smoothness: 0.14
+    normalStrength: 0.3
+    albedoScale: 0.85
+    albedoBias: {x: 0.01957, y: 0.01992, z: 0.01174}
+    distantAlbedoMean: {x: 0.13148, y: 0.13501, z: 0.05324}
