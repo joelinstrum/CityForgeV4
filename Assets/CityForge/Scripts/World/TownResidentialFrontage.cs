@@ -6,6 +6,21 @@ namespace CityForge.World
 {
     public sealed partial class PrototypeRegionView
     {
+        // Road edits replace their mesh, so cached arrays follow the mesh lifetime.
+        private readonly System.Runtime.CompilerServices.ConditionalWeakTable<Mesh, RoadGeometry> frontageGeometry = new();
+
+        private sealed class RoadGeometry
+        {
+            public readonly Vector3[] Vertices;
+            public readonly int[] Triangles;
+
+            public RoadGeometry(Mesh mesh)
+            {
+                Vertices = mesh.vertices;
+                Triangles = mesh.triangles;
+            }
+        }
+
         private static int ResidentialDepth(TownZone zone) => zone switch
         {
             TownZone.Residential1 => 6,
@@ -23,14 +38,18 @@ namespace CityForge.World
                 : frontage;
 
         private string ResidentialFrontageProblem(RectInt cells, int maxDepth, out TownZoneFacing frontage,
-            bool? frontageAlongX = null)
+            bool? frontageAlongX = null, bool allowEnclosedBlock = false)
         {
             frontage = TownZoneFacing.None;
             const float edgeTolerance = .15f;
             // Rounded grid-aligned corners can clip a small part of the outside cells.
             const float cornerInset = .85f;
             string depthProblem = $"This residential density allows up to {maxDepth} cells deep from the road.";
-            if (Mathf.Min(cells.width, cells.height) > maxDepth) return depthProblem;
+            bool enclosedBlock = allowEnclosedBlock && cells.width > 6 && cells.height > 6;
+            if (!enclosedBlock && Mathf.Min(cells.width, cells.height) > maxDepth) return depthProblem;
+            var coverage = enclosedBlock ? new List<(float start, float end)>[4] : null;
+            if (coverage != null)
+                for (int side = 0; side < coverage.Length; side++) coverage[side] = new();
 
             var min = ZoneCorner(cells.min);
             var max = ZoneCorner(cells.max);
@@ -45,8 +64,9 @@ namespace CityForge.World
                 var mesh = filter.sharedMesh;
                 var bounds = mesh.bounds;
                 if (!search.Overlaps(Rect.MinMaxRect(bounds.min.x, bounds.min.z, bounds.max.x, bounds.max.z))) continue;
-                var vertices = mesh.vertices;
-                var triangles = mesh.triangles;
+                var geometry = frontageGeometry.GetValue(mesh, source => new RoadGeometry(source));
+                var vertices = geometry.Vertices;
+                var triangles = geometry.Triangles;
                 for (int i = 0; i < triangles.Length; i += 3)
                 {
                     var a = vertices[triangles[i]];
@@ -56,6 +76,20 @@ namespace CityForge.World
                             out float innerWest, out float innerEast) &&
                         innerWest < max.x - cornerInset && innerEast > min.x + cornerInset)
                         return "Keep residential zoning clear of the road surface.";
+                    if (coverage != null)
+                    {
+                        Cover(0, true, max.x - edgeTolerance, max.x + reach);
+                        Cover(1, false, max.y - edgeTolerance, max.y + reach);
+                        Cover(2, true, min.x - reach, min.x + edgeTolerance);
+                        Cover(3, false, min.y - reach, min.y + edgeTolerance);
+                        continue;
+                    }
+
+                    void Cover(int side, bool alongZ, float low, float high)
+                    {
+                        if (RoadTriangleSpan(a, b, c, low, high, alongZ, out float start, out float end))
+                            coverage[side].Add((start, end));
+                    }
                     if (RoadTriangleSpan(a, b, c, min.y + edgeTolerance, max.y - edgeTolerance, false,
                             out float west, out float east))
                     {
@@ -69,6 +103,27 @@ namespace CityForge.World
                         Consider(min.y - north, cells.height, TownZoneFacing.South);
                     }
                 }
+            }
+
+            if (coverage != null)
+            {
+                for (int side = 0; side < coverage.Length; side++)
+                {
+                    bool eastOrWest = side % 2 == 0;
+                    float coveredTo = (eastOrWest ? min.y : min.x) + cornerInset;
+                    float target = (eastOrWest ? max.y : max.x) - cornerInset;
+                    var spans = coverage[side];
+                    spans.Sort((a, b) => a.start.CompareTo(b.start));
+                    foreach (var span in spans)
+                    {
+                        if (span.start > coveredTo + .01f) break;
+                        coveredTo = Mathf.Max(coveredTo, span.end);
+                        if (coveredTo >= target) break;
+                    }
+                    if (coveredTo < target)
+                        return "Surround a large residential block with roads on all four sides.";
+                }
+                return null;
             }
 
             frontage = bestFacing;
@@ -88,6 +143,15 @@ namespace CityForge.World
                 bestDepth = depth;
                 bestFacing = facing;
             }
+        }
+
+        private static TownZoneFacing EnclosedBlockFacing(RectInt bounds, Vector2Int cell)
+        {
+            // Keep each street's frontage in a rectangle so lots can share the same facing.
+            bool westHalf = cell.x < bounds.xMin + bounds.width / 2;
+            bool southHalf = cell.y < bounds.yMin + bounds.height / 2;
+            if (southHalf) return westHalf ? TownZoneFacing.West : TownZoneFacing.South;
+            return westHalf ? TownZoneFacing.North : TownZoneFacing.East;
         }
 
         private void AddResidentialEntryPath(DistrictLotRecord record, LotObjectDefinition building)
@@ -127,8 +191,9 @@ namespace CityForge.World
                 var bounds = mesh.bounds;
                 var near = new Vector3(edge.x, bounds.center.y, edge.y);
                 if (bounds.SqrDistance(near) > DistrictGridCellMeters * DistrictGridCellMeters) continue;
-                var vertices = mesh.vertices;
-                var triangles = mesh.triangles;
+                var geometry = frontageGeometry.GetValue(mesh, source => new RoadGeometry(source));
+                var vertices = geometry.Vertices;
+                var triangles = geometry.Triangles;
                 for (int i = 0; i < triangles.Length; i += 3)
                 {
                     if (!RoadTriangleSpan(vertices[triangles[i]], vertices[triangles[i + 1]],

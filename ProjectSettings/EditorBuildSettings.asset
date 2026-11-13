@@ -6,6 +6,9 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
+    path: Assets/CityForge/Scenes/Gameplay/Startup.unity
+    guid: 2dea57a57330474fabb450bf24e2ea5c
+  - enabled: 1
     path: Assets/CityForge/Scenes/Gameplay/MainMenu.unity
     guid: 65c9caac3f8334952860ccc8b0658e25
   - enabled: 1

@@ -15,6 +15,7 @@ namespace CityForge.Lots
         public LotWealth wealth;
         public string previewBuildingId;
         public bool faceAwayFromRoad;
+        public int buildingQuarterTurns;
         public bool autoPaths;
         public float buildingScale;
         internal float BuildingScale => buildingScale == 0f ? 1f : buildingScale;
@@ -59,29 +60,15 @@ namespace CityForge.Lots
         internal bool Valid => !Configured || (zone >= TownZone.Residential1 && zone <= TownZone.Industrial3 &&
             wealth >= LotWealth.Low && wealth <= LotWealth.High &&
             BuildingScale >= .25f && BuildingScale <= 3f &&
+            buildingQuarterTurns >= 0 && buildingQuarterTurns < 4 &&
             frontage >= LotFrontage.South && frontage <= LotFrontage.East &&
             (!hasEntrance || Finite(entrance)) && (!hasDriveway || Finite(driveway)) &&
             float.IsFinite(buildingCenter.x) && float.IsFinite(buildingCenter.y) &&
             buildingSize.x > 0 && buildingSize.x <= LotDefinition.MaxTiles * LotDefinition.TileMeters &&
             buildingSize.y > 0 && buildingSize.y <= LotDefinition.MaxTiles * LotDefinition.TileMeters);
 
-        internal bool AcceptsBuildingSize(Vector2 size) =>
-            size.x > 0 && size.y > 0 &&
-            size.x <= buildingSize.x * 1.10f + .001f &&
-            size.y <= buildingSize.y * 1.10f + .001f;
-
-        internal string BuildingFitProblem(LotDefinition lot, Rect bounds, LotAssetCatalog catalog, bool withinSlot = false)
+        internal string BuildingFitProblem(LotDefinition lot, Rect bounds, LotAssetCatalog catalog)
         {
-            if (withinSlot && (!Contains(BuildingSlot, bounds.min) || !Contains(BuildingSlot, bounds.max)))
-                return "Keep the building inside the reserved area.";
-            if (!AcceptsBuildingSize(bounds.size))
-                return "This building exceeds the footprint's 10% allowance.";
-            if (hasEntrance)
-            {
-                var allowed = new Rect(buildingCenter - buildingSize * .55f, buildingSize * 1.10f);
-                if (!Contains(allowed, bounds.min) || !Contains(allowed, bounds.max))
-                    return "Aligning the entry puts this building outside the reserved area.";
-            }
             if (!Contains(lot.LandBounds, bounds.min) || !Contains(lot.LandBounds, bounds.max))
                 return "Keep the building inside the dry area of the lot.";
             foreach (var item in lot.objects)

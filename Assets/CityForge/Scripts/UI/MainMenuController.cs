@@ -63,6 +63,8 @@ namespace CityForge.UI
             RefreshSettingsLabels();
         }
 
+        private void Start() => StartupLoadingScreen.NotifyMenuReady();
+
         public bool IsOpeningRegion {get;private set;}
         private void Update()
         {
@@ -73,7 +75,7 @@ namespace CityForge.UI
 
         public void Handle(MenuAction action)
         {
-            if (IsOpeningRegion || lotWorkspace) return;
+            if (StartupLoadingScreen.IsLoading || IsOpeningRegion || lotWorkspace) return;
             switch (action)
             {
                 case MenuAction.OpenRegion:

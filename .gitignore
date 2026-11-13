@@ -255,3 +255,17 @@ venv/
 # Local Lot Editor catalog references private model assets.
 /Assets/CityForge/Resources/Lots/
 /Assets/CityForge/Resources/Lots.meta
+
+!/Assets/CityForge/Resources/Config/ResidentialGround.json
+!/Assets/CityForge/Resources/Config/ResidentialGround.json.meta
+!/Assets/CityForge/Resources/Region/ResidentialGround.shader
+!/Assets/CityForge/Resources/Region/ResidentialGround.shader.meta
+!/Assets/CityForge/Resources/Region/RuntimeGrassTuft.shader
+!/Assets/CityForge/Resources/Region/RuntimeGrassTuft.shader.meta
+
+# Empty bootstrap scene is source. Harbor artwork remains local.
+!/Assets/CityForge/Scenes/
+/Assets/CityForge/Scenes/**
+!/Assets/CityForge/Scenes/Gameplay/
+!/Assets/CityForge/Scenes/Gameplay/Startup.unity
+!/Assets/CityForge/Scenes/Gameplay/Startup.unity.meta

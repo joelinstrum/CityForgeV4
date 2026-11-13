@@ -24,6 +24,7 @@ namespace CityForge.UI
         public event Action<bool> ProcessingChanged;
         RegionLoadingOverlay completionOverlay;bool acceptingCompletion;
         public Func<Vector2,Vector2> SnapPoint;
+        internal event Action<Vector2?> StartPointHovered;
         public Func<IReadOnlyList<Vector2>, bool, IReadOnlyList<Vector2>> ProjectGuide;
         public string DrawingHint;
         public Func<IReadOnlyList<Vector2>,string> CompletionRequested;
@@ -64,7 +65,11 @@ namespace CityForge.UI
         public bool PlaceMarker(Vector2 p,bool closeToStart=false)
         {
             if(!Armed||Finished||Processing||surface==null||!surface.CanEdit)return false;
-            if(SnapPoint!=null)p=SnapPoint(p);
+            return AddMarker(SnapPoint?.Invoke(p) ?? p, closeToStart);
+        }
+
+        private bool AddMarker(Vector2 p, bool closeToStart)
+        {
             if(!surface.Contains(p))return false;
             if(closeToStart)return (!OpenPath || LoopCompletionRequested != null) && Complete(closeLoop: true);
             if(!path.TryAdd(p))return false;
@@ -136,6 +141,7 @@ namespace CityForge.UI
             if(!acceptingCompletion&&completionOverlay){var running=completionOverlay;completionOverlay=null;Destroy(running.gameObject);}
             if(!acceptingCompletion&&Processing){Processing=false;ProcessingChanged?.Invoke(false);}
             if(Armed){Cursor.visible=savedCursor;if(terrainCollider)terrainCollider.enabled=colliderWasEnabled;}
+            StartPointHovered?.Invoke(null);
             Armed=false;terrainCollider=null;path.Clear();foreach(var marker in markers)if(marker)Destroy(marker.gameObject);markers.Clear();
             boundary.Clear();preview.Clear();if(overlay)overlay.Clear();if(cursor)cursor.gameObject.SetActive(false);if(hint)hint.gameObject.SetActive(false);
         }
@@ -160,10 +166,13 @@ namespace CityForge.UI
             if(valid)valid=terrainCollider&&terrainCollider.Raycast(cameraView.ScreenPointToRay(Input.mousePosition),out hit,100000)&&surface.Contains(new Vector2(hit.point.x,hit.point.z));
             cursor.gameObject.SetActive(valid);Cursor.visible=valid?false:savedCursor;
             if(waitRelease&&!Input.GetMouseButton(0))waitRelease=false;
-            UpdateWidths();preview.Clear();if(!valid)return;
+            UpdateWidths();preview.Clear();
+            if (!valid || Finished) StartPointHovered?.Invoke(null);
+            if (!valid) return;
             RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect,Input.mousePosition,null,out var local);cursor.rectTransform.anchoredPosition=local;if(Finished)return;
             bool snap=false;if((!OpenPath || LoopCompletionRequested != null)&&points.Count>=3){var first=cameraView.WorldToScreenPoint(Ground((ProjectGuide?.Invoke(points, false) ?? points)[0]));snap=first.z>0&&Vector2.Distance(new Vector2(first.x,first.y),Input.mousePosition)<=24;}
-            var p=snap?points[0]:new Vector2(hit.point.x,hit.point.z);if(SnapPoint!=null)p=SnapPoint(p);
+            var rawPoint = snap ? points[0] : new Vector2(hit.point.x, hit.point.z);
+            var p = SnapPoint?.Invoke(rawPoint) ?? rawPoint;
             if (ProjectGuide != null && points.Count > 0)
             {
                 var guide = new List<Vector2>(points);
@@ -171,7 +180,9 @@ namespace CityForge.UI
                 BuildGuide(preview, ProjectGuide(guide, snap), snap);
             }
             else if(points.Count>0){Segment(preview,points[points.Count-1],p);preview.Add(Ground(p));}
-            if(!waitRelease&&Input.GetMouseButtonDown(0))PlaceMarker(p,snap);
+            if (!waitRelease && Input.GetMouseButtonDown(0)) AddMarker(p, snap);
+            if (StartPointHovered != null)
+                StartPointHovered(points.Count == 0 && surface.Contains(p) ? p : (Vector2?)null);
         }
         void LateUpdate()
         {

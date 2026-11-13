@@ -27,6 +27,7 @@ namespace CityForge.Lots
         public bool harborHouseScaleUpdated;
         public LotType type;
         public LotZoningLayout zoningLayout;
+        public ResidentialGroundSettings residentialGround;
         public string id = Guid.NewGuid().ToString("N");
         public string name = "Colonial Homestead";
         public int cost;
@@ -194,6 +195,7 @@ namespace CityForge.Lots
                 (lot.baseTextureSpan != 1 && lot.baseTextureSpan != 2) ||
                 (lot.overlayTextureSpan != 1 && lot.overlayTextureSpan != 2))
                 throw new InvalidDataException("Invalid lot ground textures.");
+            if (!lot.residentialGround.Valid) throw new InvalidDataException("Invalid residential ground settings.");
             lot.overlays ??= new List<LotGroundOverlay>();
             if (lot.overlays.Count > LotGroundOverlay.MaxCount)
                 throw new InvalidDataException("Too many lot overlays.");

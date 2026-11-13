@@ -403,9 +403,10 @@ namespace CityForge.World
                 yield return BuildControlMapStages(value=>progress?.Invoke("Painting meadow and mountain surfaces",.44f+value*.25f),maps=>controlMaps=maps);
                 timings.Append("control map=").Append(paintTimer.ElapsedMilliseconds).Append(" ms; ");
             }
-            if(GeneratedRiverDistrict&&HasNaturalRiverBanks()){progress?.Invoke("Painting generated stream banks",.69f);if(UsedSavedTerrain)controlMaps=(float[,,])controlMaps.Clone();
+            bool sharesCachedPaint = cached != null && ReferenceEquals(controlMaps, cached.alphamaps);
+            if(GeneratedRiverDistrict&&HasNaturalRiverBanks()){progress?.Invoke("Painting generated stream banks",.69f);if(sharesCachedPaint){controlMaps=(float[,,])controlMaps.Clone();sharesCachedPaint=false;}
                 yield return PaintGeneratedRiverBanks(controlMaps);}
-            ApplySoftMeadowBlend(ref controlMaps);
+            ApplySoftMeadowBlend(ref controlMaps, sharesCachedPaint);
             progress?.Invoke("Painting coastal beaches",.695f);
             if(coastalOceans.Length>0)yield return PaintCoastalBeachStages(controlMaps,heights);
             else terrainData.SetAlphamaps(0,0,controlMaps);
@@ -1180,8 +1181,10 @@ namespace CityForge.World
             if(!DisplayTerrain||!Baseline||!navigationCamera)return;
             // Retreating an orthographic camera must not cull the approved forest.
             float padding=navigationCamera.OrthographicSetback;
-            DisplayTerrain.treeDistance=(IsRegionOverview?Mathf.Max(Baseline.treeDistance,View.MapSide*3):Baseline.treeDistance)+padding;
-            DisplayTerrain.treeBillboardDistance=Baseline.treeBillboardDistance+padding;
+            float treeDistance = (IsRegionOverview ? Mathf.Max(Baseline.treeDistance, View.MapSide * 3) : Baseline.treeDistance) + padding;
+            float billboardDistance = Baseline.treeBillboardDistance + padding;
+            if (DisplayTerrain.treeDistance != treeDistance) DisplayTerrain.treeDistance = treeDistance;
+            if (DisplayTerrain.treeBillboardDistance != billboardDistance) DisplayTerrain.treeBillboardDistance = billboardDistance;
         }
         void OnEnable(){if(Baseline)ApplyPresentation(true);}
         void OnDisable(){ApplyPresentation(false);}

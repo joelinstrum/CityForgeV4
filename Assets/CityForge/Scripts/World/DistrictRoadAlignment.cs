@@ -5,8 +5,6 @@ namespace CityForge.World
 {
     public sealed partial class PrototypeRegionView
     {
-        private bool alignNewRoads;
-
         private Vector2[] AlignRoadGuide(IReadOnlyList<Vector2> points, bool closed, int width, int movedPoint = -1, IReadOnlyList<Vector2> originalGuide = null)
         {
             int count = points.Count;

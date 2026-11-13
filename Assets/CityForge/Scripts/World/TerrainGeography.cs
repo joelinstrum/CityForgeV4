@@ -116,6 +116,8 @@ namespace CityForge.World
         {
             freshwater.Clear();
             float margin = MoistReach / land.View.MapSide;
+            var district = new Rect(land.Origin / land.View.MapSide + Vector2.one * .5f,
+                Vector2.one * (land.Side / land.View.MapSide));
             foreach (var body in land.View.Data.WaterBodies)
             {
                 if (body.kind != WaterBodyKind.River && body.kind != WaterBodyKind.Lake && body.kind != WaterBodyKind.Pond)
@@ -123,6 +125,7 @@ namespace CityForge.World
                 var bounds = body.Bounds;
                 bounds.min -= Vector2.one * margin;
                 bounds.max += Vector2.one * margin;
+                if (!bounds.Overlaps(district, true)) continue;
                 freshwater.Add((body, bounds, body.centerline is { Length: > 1 } ? null : new List<Vector2[]>(body.Contours)));
             }
         }
@@ -130,7 +133,6 @@ namespace CityForge.World
         internal void RefreshSettlements()
         {
             var current = new HashSet<Rect>();
-            settlements.Clear();
             foreach (var lot in land.View.PlacedLots)
             {
                 if (lot.definition == null || !land.View.InActiveDistrict(lot.center)) continue;
@@ -139,20 +141,33 @@ namespace CityForge.World
                 if (lot.rotation % 2 != 0) size = new Vector2(size.y, size.x);
                 var footprint = new Rect(lot.center - size * .5f, size);
                 if (!current.Add(footprint)) continue;
-                var padded = Pad(footprint, 9f);
-                for (int z = Mathf.FloorToInt(padded.yMin / 32); z <= Mathf.FloorToInt(padded.yMax / 32); z++)
-                for (int x = Mathf.FloorToInt(padded.xMin / 32); x <= Mathf.FloorToInt(padded.xMax / 32); x++)
+                if (!previousLots.Contains(footprint)) UpdateFootprint(footprint, true);
+            }
+            foreach (var old in previousLots)
+                if (!current.Contains(old)) UpdateFootprint(old, false);
+            previousLots.Clear();
+            previousLots.UnionWith(current);
+        }
+
+        private void UpdateFootprint(Rect footprint, bool add)
+        {
+            var padded = Pad(footprint, 9f);
+            for (int z = Mathf.FloorToInt(padded.yMin / 32); z <= Mathf.FloorToInt(padded.yMax / 32); z++)
+            for (int x = Mathf.FloorToInt(padded.xMin / 32); x <= Mathf.FloorToInt(padded.xMax / 32); x++)
+            {
+                var cell = new Vector2Int(x, z);
+                if (add)
                 {
-                    var cell = new Vector2Int(x,z);
                     if (!settlements.TryGetValue(cell, out var lots)) settlements[cell] = lots = new List<Rect>();
                     lots.Add(footprint);
                 }
-                if (!previousLots.Contains(footprint)) Invalidate(padded);
+                else if (settlements.TryGetValue(cell, out var lots))
+                {
+                    lots.Remove(footprint);
+                    if (lots.Count == 0) settlements.Remove(cell);
+                }
             }
-            foreach (var old in previousLots)
-                if (!current.Contains(old)) Invalidate(Pad(old, 9f));
-            previousLots.Clear();
-            previousLots.UnionWith(current);
+            Invalidate(padded);
         }
 
         internal static Rect Pad(Rect bounds, float padding) => Rect.MinMaxRect(
@@ -175,11 +190,20 @@ namespace CityForge.World
         void LateUpdate()
         {
             if (!ready || dirty.Count == 0) return;
-            using var iterator = dirty.GetEnumerator();
-            iterator.MoveNext();
-            var cell = iterator.Current;
-            dirty.Remove(cell);
-            WriteChunk(cell);
+            long start = System.Diagnostics.Stopwatch.GetTimestamp();
+            long budget = System.Diagnostics.Stopwatch.Frequency / 500;
+            do
+            {
+                Vector2Int cell;
+                using (var iterator = dirty.GetEnumerator())
+                {
+                    iterator.MoveNext();
+                    cell = iterator.Current;
+                }
+                dirty.Remove(cell);
+                WriteChunk(cell);
+            }
+            while (dirty.Count > 0 && System.Diagnostics.Stopwatch.GetTimestamp() - start < budget);
             Upload();
         }
 

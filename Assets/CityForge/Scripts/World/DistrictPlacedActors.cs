@@ -17,6 +17,7 @@ namespace CityForge.World
         public Vector2 position;
         public bool pedestrian;
         public bool tree;
+        public LotObjectDefinition streetscape;
 
         internal static void Validate(DistrictPlacedActor[] actors, int districts, float mapSide)
         {
@@ -24,6 +25,10 @@ namespace CityForge.World
             if (actors.Length > 512 || actors.Any(actor => actor == null ||
                 string.IsNullOrWhiteSpace(actor.assetId) || actor.assetId.Length > 160 ||
                 actor.district < 0 || actor.district >= districts ||
+                (actor.streetscape != null && (actor.tree || actor.pedestrian ||
+                    actor.streetscape.assetId != actor.assetId || !float.IsFinite(actor.streetscape.yaw) ||
+                    !float.IsFinite(actor.streetscape.fenceLength) || actor.streetscape.fenceLength < 0 ||
+                    actor.streetscape.fenceLength > 192f)) ||
                 !float.IsFinite(actor.position.x) || !float.IsFinite(actor.position.y) ||
                 Mathf.Abs(actor.position.x) > mapSide * .5f || Mathf.Abs(actor.position.y) > mapSide * .5f))
                 throw new InvalidDataException("Invalid placed district population.");
@@ -37,6 +42,7 @@ namespace CityForge.World
         private string armedDistrictActor;
         private bool armedPedestrian, armedTree;
         private Transform placedTreeRoot;
+        private readonly Dictionary<DistrictPlacedActor, GameObject> placedTreeViews = new();
         private int armedActorCount;
 
         private sealed class Pedestrian
@@ -158,6 +164,7 @@ namespace CityForge.World
         {
             CancelDistrictActor();
             RebuildPlacedTrees();
+            RebuildStreetscape();
             if (pedestrianRoot) { pedestrianRoot.gameObject.SetActive(false); Destroy(pedestrianRoot.gameObject); }
             pedestrianRoot = null;
             pedestrians.Clear();
@@ -177,6 +184,7 @@ namespace CityForge.World
 
         private void RebuildPlacedTrees()
         {
+            placedTreeViews.Clear();
             if (placedTreeRoot)
             {
                 placedTreeRoot.gameObject.SetActive(false);
@@ -190,7 +198,7 @@ namespace CityForge.World
             var active = new HashSet<int>(ActiveDistrictMembers);
             foreach (var record in PlacedActors)
                 if (record.tree && active.Contains(record.district) && catalog.Find(record.assetId) is { } asset &&
-                    asset.prefab && asset.IsSeasonalTree)
+                    asset.prefab && asset.category == "Trees")
                     PresentPlacedTree(record, asset);
         }
 
@@ -204,6 +212,7 @@ namespace CityForge.World
             var instance = LotRuntimeLoader.InstantiateObject(new LotObjectDefinition { assetId = asset.id, scale = 1f },
                 asset, placedTreeRoot, VisualSeason);
             instance.transform.position = new Vector3(record.position.x, LotHeight(record.position), record.position.y);
+            placedTreeViews.Add(record, instance);
         }
 
         private Pedestrian CreatePedestrian(DistrictPlacedActor record, LotAssetCatalogEntry asset)

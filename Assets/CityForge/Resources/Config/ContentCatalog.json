@@ -261,6 +261,10 @@
           "id": "parks",
           "name": "Parks",
           "legacyName": "Parks"
+        },
+        {
+          "id": "agriculture",
+          "name": "Agriculture"
         }
       ]
     },

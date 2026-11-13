@@ -60,6 +60,7 @@ namespace CityForge.World
             }
             offeredFounderPicker = true;
             CancelLotPlacement();
+            lastRepaveSurface = null;
             GetComponent<NatureToolbar>()?.Dismiss();
             founderCameraControl = GetComponentInChildren<CityForgeCameraController>();
             founderCameraWasEnabled = founderCameraControl.enabled;
@@ -213,6 +214,7 @@ namespace CityForge.World
         private void BeginLotPlacement(LotDefinition lot, DistrictLotRecord moving = null)
         {
             CancelLotPlacement();
+            lastRepaveSurface = null;
             GetComponent<NatureToolbar>()?.Dismiss();
             SelectDistrictLot(null);
             lotPlacementDraft = lot;
@@ -254,6 +256,8 @@ namespace CityForge.World
 
         private void CancelLotPlacement(bool restoreUi = true)
         {
+            CloseSavedLotPicker();
+            DestroySavedLotGhost();
             if (lotPlacementDraft == null) return;
             var moving = movingDistrictLot;
             if (moving != null)
@@ -347,6 +351,7 @@ namespace CityForge.World
         private void UpdateLotPointer(RegionTown capital, Ray ray, Vector2 mouse,
             bool pressed, bool held, bool released, bool overUi)
         {
+            if (lotGhost) lotGhost.SetActive(false);
             lotOutline.enabled = false;
             if (waterfrontGuide) waterfrontGuide.enabled = false;
             Vector2 cursor = default;
@@ -404,6 +409,7 @@ namespace CityForge.World
                 DrawLotOutline(record);
             }
 
+            UpdateSavedLotGhost(evaluatedLotPlacement);
             lotOutline.enabled = true;
             if (waterfrontGuide) waterfrontGuide.enabled = true;
             if (movingDistrictLot == null)
@@ -577,6 +583,7 @@ namespace CityForge.World
                 movingDistrictLot.district = record.district;
                 movingDistrictLot.RotationSteps = record.RotationSteps;
                 movingDistrictLot.waterfrontDeckHeight = record.waterfrontDeckHeight;
+                ClearLotVegetation(movingDistrictLot);
                 if (movingDistrictLot.definition.type == LotType.Zoning) QueueLotGrowth();
                 CancelLotPlacement();
                 RebuildDistrictLots();
@@ -585,13 +592,14 @@ namespace CityForge.World
             }
             record.id = Guid.NewGuid().ToString("N");
             PlacedLots.Add(record);
+            ClearLotVegetation(record);
             if (capital != null)
             {
                 capital.awaitingFoundersBuilding = false;
                 CancelLotPlacement();
             }
             else
-                lotPlacementEvaluated = false;
+                CancelLotPlacement();
             RebuildDistrictLots();
             lotFeedback.text = capital != null ? "Founder’s Building placed. Save the region to keep it." :
                 "Lot placed. Save the region to keep it.";

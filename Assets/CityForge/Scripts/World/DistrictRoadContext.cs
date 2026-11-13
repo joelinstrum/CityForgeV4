@@ -90,6 +90,7 @@ namespace CityForge.World
 
         private void OpenRoadContext(DistrictRoadRecord road, Vector2 screen)
         {
+            CancelRoadPlacement();
             CloseTownSection();
             SelectDistrictLot(null);
             var hud = (RectTransform)townToolbar.parent;
@@ -141,7 +142,16 @@ namespace CityForge.World
                 SetRoadPaths(!showRoadPaths);
                 if (showRoadPaths) SelectRoadPoint(road, -1);
             });
-            TownButton(panel, lotFont, "Repave", 12, -199, 260, null).interactable = false;
+            TownButton(panel, lotFont, "Repave", 12, -199, 260, () =>
+            {
+                CloseRoadContext();
+                if (lastRepaveSurface is int surface) RepaveRoad(road, surface);
+                else
+                {
+                    repaveTarget = road;
+                    OpenTransportModal("Roads");
+                }
+            });
 
             void Apply(Vector2[] points, bool curved, string success, bool? gridAligned = null)
             {
@@ -217,6 +227,34 @@ namespace CityForge.World
                 best = distance;
             }
             return nearest;
+        }
+
+        private void ChooseRoadSurface(int surface)
+        {
+            var target = repaveTarget;
+            if (target == null)
+            {
+                StartRoadPlacement(surface);
+                return;
+            }
+
+            CloseTransportModal();
+            RepaveRoad(target, surface);
+        }
+
+        private void RepaveRoad(DistrictRoadRecord road, int surface)
+        {
+            if (!CanEditRoad || !districtRoadMeshes.ContainsKey(road)) return;
+            CancelRoadPlacement();
+            lastRepaveSurface = surface;
+            var choice = RoadSurfaces[surface];
+            if (road.surfaceId != choice.Id)
+            {
+                road.surfaceId = choice.Id;
+                RebuildDistrictRoads();
+                RefreshDirtRoadEndFades();
+            }
+            ShowDistrictMessage($"Repaved as {choice.Label}.");
         }
 
         private string EditDistrictRoad(DistrictRoadRecord road, Vector2[] points, bool curved, bool gridAligned)

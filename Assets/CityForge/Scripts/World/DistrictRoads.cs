@@ -54,6 +54,8 @@ namespace CityForge.World
         private RectTransform roadControls;
         private Button finishRoadButton;
         private int roadSurfaceIndex;
+        private int? lastRepaveSurface;
+        private DistrictRoadRecord repaveTarget;
         private DistrictRoadRecord roadExtensionHint;
 
         private bool RoadPlacementArmed => roadWire && roadWire.Armed;
@@ -104,6 +106,8 @@ namespace CityForge.World
             return length > MaxRoadLength ? $"Place up to {MaxRoadLength:N0} meters per road." : null;
         }
 
+        private bool snapNewRoadsToTileCenters = true;
+
         private void StartRoadPlacement(int surfaceIndex)
         {
             if (!CanPlaceRoad) return;
@@ -124,7 +128,8 @@ namespace CityForge.World
                 roadWire.RestrictUiToHud = true;
                 roadWire.FinishOverUi = true;
                 roadWire.AllowClosedUndo = false;
-                roadWire.SnapPoint = SnapRoadExtensionStart;
+                roadWire.SnapPoint = SnapRoadPlacementPoint;
+                roadWire.StartPointHovered += HighlightRoadStartTile;
                 roadWire.CompletionRequested = points => PlaceDistrictRoad(points, false);
                 roadWire.LoopCompletionRequested = points => PlaceDistrictRoad(points, true);
                 roadWire.RepeatOnCompletion = true;
@@ -136,6 +141,7 @@ namespace CityForge.World
             }
 
             roadSurfaceIndex = surfaceIndex;
+            lastRepaveSurface = surfaceIndex;
             string label = RoadSurfaces[surfaceIndex].Label;
             roadWire.Label = label;
             roadWire.ProjectGuide = ProjectRoadPlacementGuide;
@@ -185,7 +191,6 @@ namespace CityForge.World
             if (points.Count > 0 && FindRoadExtensionEnd(points[0], .001f, out bool prepend) is { } road)
                 return ExtendDistrictRoad(road, prepend, points, closed);
             if (districtRoads.Count >= MaxDistrictRoads) return "This region has reached its road limit.";
-            if (alignNewRoads) points = AlignRoadGuide(points, closed, RoadWidth);
             var problem = RoadGuideProblem(points, closed, MapSide * .5f);
             if (problem != null) return problem;
 
@@ -195,7 +200,6 @@ namespace CityForge.World
                 surfaceId = RoadSurfaces[roadSurfaceIndex].Id,
                 points = new List<Vector2>(points).ToArray(),
                 closed = closed,
-                gridAligned = alignNewRoads,
                 width = RoadWidth
             };
             var mesh = BuildDistrictRoadMesh(record);
@@ -233,11 +237,24 @@ namespace CityForge.World
             finishRoadButton.GetComponentInChildren<Text>().text = road == null ? "Place Road" : "Extend Road";
         }
 
-        private Vector2 SnapRoadExtensionStart(Vector2 point)
+        private Vector2 SnapRoadPlacementPoint(Vector2 point)
         {
-            if (roadWire.Points.Count != 0) return point;
-            var road = FindRoadExtensionEnd(point, 1.25f, out bool prepend);
-            return road == null ? point : prepend ? road.points[0] : road.points[^1];
+            if (roadWire.Points.Count == 0)
+            {
+                var road = FindRoadExtensionEnd(point, 1.25f, out bool prepend);
+                if (road != null) return prepend ? road.points[0] : road.points[^1];
+            }
+            else if (FindRoadExtensionEnd(roadWire.Points[0], .001f, out _) != null)
+            {
+                return point;
+            }
+
+            if (!snapNewRoadsToTileCenters) return point;
+            float origin = -MapSide * .5f;
+            return new Vector2(TileCenter(point.x), TileCenter(point.y));
+
+            float TileCenter(float coordinate) => origin +
+                (Mathf.Floor((coordinate - origin) / DistrictGridCellMeters) + .5f) * DistrictGridCellMeters;
         }
 
         private DistrictRoadRecord FindRoadExtensionEnd(Vector2 point, float radius, out bool prepend)
@@ -263,8 +280,7 @@ namespace CityForge.World
         {
             if (points.Count < 2) return points;
             var road = FindRoadExtensionEnd(points[0], .001f, out bool prepend);
-            if (road == null) return alignNewRoads ? AlignRoadGuide(points, closed, RoadWidth) : points;
-            if (!road.gridAligned) return points;
+            if (road == null || !road.gridAligned) return points;
             var combined = BuildRoadExtensionGuide(road, prepend, points);
             var preview = new Vector2[points.Count];
             for (int i = 0; i < preview.Length; i++)
@@ -355,6 +371,19 @@ namespace CityForge.World
                         material.SetTexture("_RoadWearMap", wear);
                         material.SetTexture("_RoadShoulderMask", shoulder);
                         material.EnableKeyword("_ROAD_WEAR");
+                    }
+                }
+                if (record.surfaceId == "wagon" && material.HasProperty("_WagonMask"))
+                {
+                    var albedo = Resources.Load<Texture2D>("Lots/PathMaterials/WagonRoadAlbedo");
+                    var mask = Resources.Load<Texture2D>("Lots/PathMaterials/WagonRoadMask");
+                    if (albedo && mask)
+                    {
+                        material.SetTexture("_BaseMap", albedo);
+                        material.SetTexture("_WagonMask", mask);
+                        material.SetColor("_BaseColor", new Color(.83f, .78f, .72f, 1f));
+                        material.SetFloat("_Smoothness", .03f);
+                        material.EnableKeyword("_WAGON_SURFACE");
                     }
                 }
                 districtRoadMaterials.Add(record.surfaceId, material);

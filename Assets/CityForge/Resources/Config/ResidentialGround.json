@@ -1,0 +1,56 @@
+{
+  "libraries": [
+    {
+      "category": "residential-wear",
+      "era": "founders",
+      "wealth": 1,
+      "strength": 0.95,
+      "variations": [
+        {
+          "id": "worn-grass",
+          "label": "Worn Grass",
+          "albedo": "worn-grass",
+          "mask": "cloud-mask"
+        },
+        {
+          "id": "footpath",
+          "label": "Footpath Clearing",
+          "albedo": "footpath",
+          "mask": "cloud-mask"
+        },
+        {
+          "id": "mixed-earth",
+          "label": "Mixed Earth",
+          "albedo": "mixed-earth",
+          "mask": "cloud-mask"
+        },
+        {
+          "id": "wagon-ruts",
+          "label": "Wagon Ruts",
+          "albedo": "wagon-ruts",
+          "mask": "cloud-mask"
+        },
+        {
+          "id": "muddy-tracks",
+          "label": "Muddy Tracks",
+          "albedo": "muddy-tracks",
+          "mask": "cloud-mask"
+        }
+      ]
+    },
+    {
+      "category": "residential-wear",
+      "era": "founders",
+      "wealth": 2,
+      "strength": 0.72,
+      "variations": [
+        {
+          "id": "maintained-grass",
+          "label": "Maintained Grass",
+          "albedo": "maintained-grass",
+          "mask": "maintained-grass-mask"
+        }
+      ]
+    }
+  ]
+}

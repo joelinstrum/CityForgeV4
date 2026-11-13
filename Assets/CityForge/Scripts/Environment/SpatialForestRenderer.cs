@@ -99,9 +99,14 @@ namespace CityForge
         public int RemoveWithin(Vector2 center,float radius)=>RemoveWithin(new[]{center},radius);
         public int RemoveWithin(IReadOnlyList<Vector2> centers,float radius)
         {
-            int removed=0;float radius2=radius*radius;
+            float radius2=radius*radius;
+            return RemoveTrees(point => World.ForestRemovalValidation.InBrush(point, centers, radius2));
+        }
+        public int RemoveTrees(System.Predicate<Vector2> contains)
+        {
+            int removed=0;
             for(int i=trees.Count-1;i>=0;i--){var tree=trees[i];if(!tree.root)continue;var p=tree.root.position;
-                if(!World.ForestRemovalValidation.InBrush(new Vector2(p.x,p.z),centers,radius2))continue;
+                if(!contains(new Vector2(p.x,p.z)))continue;
                 tree.root.gameObject.SetActive(false);Destroy(tree.root.gameObject);trees.RemoveAt(i);removed++;
             }
             if(removed>0){selectionValid=false;active.Clear();SubmittedInstances=SubmittedBatches=VisibleTrees=0;}

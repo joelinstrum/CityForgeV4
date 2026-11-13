@@ -40,6 +40,10 @@ internal static class LotCatalogSetup
             FrontierLogCabin(),
             SmallColonialCabin(),
             FoundersHome("low-wealth-front-gable", "Front Gable House", "LowWealthFrontGable"),
+            FoundersHome("low-wealth-vertical-siding-front-gable", "Vertical Siding Front Gable House",
+                "LowWealthVerticalSidingFrontGable", span: 9.6f, normalExtension: ".jpg"),
+            FoundersHome("low-wealth-front-gable-cottage", "Front Gable Cottage",
+                "LowWealthFrontGableCottage", span: 7.5f, normalExtension: ".jpg"),
             FoundersHome("low-wealth-side-gable", "Side Gable House", "LowWealthSideGable"),
             V3Building("wooden-cottage", "Wooden Cottage", "WoodenCottage", "residential", "founders", 8f),
             V3Building("plymouth-store", "Plymouth Store", "PlymouthStore", "commercial", "founders", 9.26f, ".jpeg", ".jpeg"),
@@ -59,6 +63,10 @@ internal static class LotCatalogSetup
             StreetFurniture("ornate-bench", "Ornate park bench", "Seating", 1.8f),
             StreetFurniture("simple-street-lamppost", "Simple street lamppost", "Lighting", 3.6f, byHeight: true),
             StreetFurniture("three-lantern-lamppost", "Three-lantern lamppost", "Lighting", .9f),
+            // The district Streetscape picker also reads these shared catalog entries.
+            StreetFurniture("18th-century-lamppost", "18th-century lamppost", "Lighting", 3.6f, byHeight: true),
+            V3Fence("founders-fence-panel", "Founders fence panel", "FoundersFence",
+                "Model", "", 2.4f, repeatable: true, iron: false, extension: ".jpg", normalExtension: ".png"),
             Fence("wood-fence", "Wood fence", "01"),
             V3Fence("wood-fence-section", "Rustic Fence", "RusticFence",
                 "Model", "", 2.4f, repeatable: true, iron: false),
@@ -89,10 +97,34 @@ internal static class LotCatalogSetup
             $"low-wealth-home-{variant:00}", $"Founder's Home {variant:00}", $"LowWealthHome{variant:00}",
             span: variant == 6 ? 9.375f : 7.5f));
 
+        var mediumHomes = Enumerable.Range(1, 9).Select(variant =>
+        {
+            var home = V3Building($"medium-wealth-home-{variant:00}", $"Founders House · $$ {variant:00}",
+                $"MediumWealthHome{variant:00}", "residential", "founders", 9f, ".jpg", ".png");
+            home.growableZone = TownZone.Residential1;
+            home.growableWealth = LotWealth.Medium;
+            string maskPath = $"{DirectoryPath}/V3Buildings/MediumWealthHome{variant:00}/Windows.png";
+            if (AssetImporter.GetAtPath(maskPath) is TextureImporter maskImporter && maskImporter.sRGBTexture)
+            {
+                maskImporter.sRGBTexture = false;
+                maskImporter.SaveAndReimport();
+            }
+            if (home.materialOverride && AssetDatabase.LoadAssetAtPath<Texture2D>(maskPath) is { } mask &&
+                (home.materialOverride.GetTexture("_EmissionMap") != mask || !home.materialOverride.IsKeywordEnabled("_EMISSION")))
+            {
+                home.materialOverride.SetTexture("_EmissionMap", mask);
+                // Keep the Lit emission variant enabled when Unity validates the material.
+                home.materialOverride.SetColor("_EmissionColor", new Color(.001f, .001f, .001f, 1f));
+                home.materialOverride.EnableKeyword("_EMISSION");
+                EditorUtility.SetDirty(home.materialOverride);
+            }
+            return home;
+        });
+
         var catalog = AssetDatabase.LoadAssetAtPath<LotAssetCatalog>(CatalogPath);
         var entries = (catalog ? catalog.entries : System.Array.Empty<LotAssetCatalogEntry>()).ToList();
         bool changed = false;
-        foreach (var entry in candidates.Concat(PlaceableSeasonalTrees.CatalogEntries()).Concat(foundersHomes).Concat(meadowPoplars).Concat(Characters()).Concat(Landscaping()).Concat(Corn()).Concat(Wheat()).Where(item => item.prefab))
+        foreach (var entry in candidates.Concat(PlaceableSeasonalTrees.CatalogEntries()).Concat(foundersHomes).Concat(mediumHomes).Concat(meadowPoplars).Concat(Characters()).Concat(Landscaping()).Concat(Corn()).Concat(Wheat()).Where(item => item.prefab))
         {
             var existing = entries.Find(item => item != null && item.id == entry.id);
             if (existing == null)
@@ -108,6 +140,15 @@ internal static class LotCatalogSetup
                 existing.winterPrefab = entry.winterPrefab;
                 existing.label = entry.label;
                 existing.footprint = entry.footprint;
+                changed = true;
+            }
+            else if (((entry.category == "Landscaping" && entry.group == "Agriculture") ||
+                      entry.id is "v3-building-low-wealth-vertical-siding-front-gable" or
+                          "v3-building-low-wealth-front-gable-cottage") &&
+                (existing.prefab != entry.prefab || existing.footprint != entry.footprint ||
+                 existing.materialOverride != entry.materialOverride))
+            {
+                entries[entries.IndexOf(existing)] = entry;
                 changed = true;
             }
             else if (entry.id == "wood-fence-section" && existing.prefab != entry.prefab)
@@ -249,9 +290,10 @@ internal static class LotCatalogSetup
         return cabin;
     }
 
-    private static LotAssetCatalogEntry FoundersHome(string id, string label, string folder, float span = 7.5f)
+    private static LotAssetCatalogEntry FoundersHome(string id, string label, string folder, float span = 7.5f,
+        string normalExtension = ".png")
     {
-        var home = V3Building(id, label, folder, "residential", "founders", span, ".jpg", ".png");
+        var home = V3Building(id, label, folder, "residential", "founders", span, ".jpg", normalExtension);
         home.growableZone = TownZone.Residential1;
         home.growableWealth = LotWealth.Low;
         return home;
@@ -298,6 +340,8 @@ internal static class LotCatalogSetup
 
     private static LotAssetCatalogEntry[] Landscaping() => new[]
     {
+        GardenModel("wheat-garden", "Wheat Garden", "Agriculture", "WheatGarden", 3.5f),
+        GardenModel("corn-garden", "Corn Garden", "Agriculture", "CornGarden", 3.5f, "Color.jpg", "Normal.jpg"),
         GardenModel("boxwood-hedge", "Clipped boxwood hedge", "Hedges", "Boxwood", 3f, "Color.png"),
         Boxwood("boxwood-corner-02", "Boxwood corner", "Corner02", 3f),
         Boxwood("boxwood-curved-02", "Curved boxwood hedge", "Curved02", 3f),
@@ -431,7 +475,7 @@ internal static class LotCatalogSetup
     }
 
     private static LotAssetCatalogEntry GardenModel(string id, string label, string group, string folder,
-        float span, string colorFile, string normalFile = null, string modelFile = "Model.fbx")
+        float span, string colorFile = null, string normalFile = null, string modelFile = "Model.fbx")
     {
         string root = DirectoryPath + "/Landscaping/" + folder + "/";
         var model = AssetDatabase.LoadAssetAtPath<GameObject>(root + modelFile);
@@ -441,6 +485,7 @@ internal static class LotCatalogSetup
         var bounds = FenceBounds(model).size;
         float widest = Mathf.Max(bounds.x, bounds.z);
         if (widest > .001f) entry.footprint = new Vector2(bounds.x, bounds.z) * (span / widest);
+        if (colorFile == null) return entry;
         var color = AssetDatabase.LoadAssetAtPath<Texture2D>(root + colorFile);
         entry.materialOverride = GardenMaterial(root + "Garden.mat", color, normalFile == null ? null : root + normalFile,
             cutout: group == "Hedges");
@@ -680,7 +725,7 @@ internal static class LotCatalogSetup
 
     private static LotAssetCatalogEntry V3Fence(string id, string label, string folder, string model,
         string prefix, float size, bool repeatable = false, bool iron = true, bool byHeight = false,
-        string extension = ".png")
+        string extension = ".png", string normalExtension = null)
     {
         var path = DirectoryPath + "/V3Fences/" + folder + "/";
         var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path + model + ".fbx");
@@ -699,7 +744,7 @@ internal static class LotCatalogSetup
             entry.fenceDepth = Mathf.Min(bounds.size.x, bounds.size.z) * scale;
         }
 
-        var normalPath = path + prefix + "normal" + extension;
+        var normalPath = path + prefix + "normal" + (normalExtension ?? extension);
         if (AssetImporter.GetAtPath(normalPath) is TextureImporter importer &&
             (importer.textureType != TextureImporterType.NormalMap || importer.convertToNormalmap || importer.sRGBTexture))
         {
