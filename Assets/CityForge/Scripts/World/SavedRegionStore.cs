@@ -151,11 +151,14 @@ namespace CityForge.World
                     // maps' absent recipe so saving climate cannot change their grid or scale.
                     if(snapshot.info.creation==null)metadata=System.Text.RegularExpressions.Regex.Replace(metadata,"\"creation\"\\s*:\\s*\\{[^{}]*\\}","\"creation\":null");
                     var json=Encoding.UTF8.GetBytes(metadata);if(json.Length>16777216)throw new InvalidDataException("Region metadata exceeds the supported size.");writer.Write(json.Length);writer.Write(json);
-                    WriteFloats(writer,snapshot.data.Heights);WriteFloats(writer,snapshot.data.WaterDistance);
+                    // Stream the terrain arrays without allocating a second copy of the control map.
+                    var floatBuffer = new byte[128 * 1024];
+                    WriteFloats(writer, snapshot.data.Heights, floatBuffer);
+                    WriteFloats(writer, snapshot.data.WaterDistance, floatBuffer);
                     writer.Write(snapshot.meadow!=null);
                     if(snapshot.meadow!=null){var m=snapshot.meadow;writer.Write(m.version);writer.Write(m.road.Length);foreach(var p in m.road){writer.Write(p.x);writer.Write(p.y);}
                         writer.Write(m.trees.Length);foreach(var t in m.trees){writer.Write(t.position.x);writer.Write(t.position.y);writer.Write(t.position.z);writer.Write(t.widthScale);writer.Write(t.heightScale);writer.Write(t.rotation);writer.Write(t.prototypeIndex);WriteColor(writer,t.color);WriteColor(writer,t.lightmapColor);}
-                        writer.Write(m.alphamaps.GetLength(0));writer.Write(m.alphamaps.GetLength(2));WriteFloats(writer,m.alphamaps);
+                        writer.Write(m.alphamaps.GetLength(0));writer.Write(m.alphamaps.GetLength(2));WriteFloats(writer, m.alphamaps, floatBuffer);
                     }
                 }
                 if(File.Exists(path))File.Replace(temp,path,path+".bak");else File.Move(temp,path);
@@ -206,7 +209,16 @@ namespace CityForge.World
                 NativeCampPlanner.MapSide(info.size, gridSide), info.townZoneGridVersion);
 
         static int Count(BinaryReader reader,int min,int max){int count=reader.ReadInt32();if(count<min||count>max)throw new InvalidDataException("Invalid snapshot dimensions.");return count;}
-        static void WriteFloats(BinaryWriter writer,Array values){var buffer=new byte[Buffer.ByteLength(values)];Buffer.BlockCopy(values,0,buffer,0,buffer.Length);writer.Write(buffer);}
+        static void WriteFloats(BinaryWriter writer, Array values, byte[] buffer)
+        {
+            int length = Buffer.ByteLength(values);
+            for (int offset = 0; offset < length; offset += buffer.Length)
+            {
+                int count = Math.Min(buffer.Length, length - offset);
+                Buffer.BlockCopy(values, offset, buffer, 0, count);
+                writer.Write(buffer, 0, count);
+            }
+        }
         static void ReadFloats(BinaryReader reader,Array values){var bytes=reader.ReadBytes(Buffer.ByteLength(values));if(bytes.Length!=Buffer.ByteLength(values))throw new EndOfStreamException();Buffer.BlockCopy(bytes,0,values,0,bytes.Length);}
         static void WriteColor(BinaryWriter w,Color32 c){w.Write(c.r);w.Write(c.g);w.Write(c.b);w.Write(c.a);}
         static Color32 ReadColor(BinaryReader r)=>new Color32(r.ReadByte(),r.ReadByte(),r.ReadByte(),r.ReadByte());

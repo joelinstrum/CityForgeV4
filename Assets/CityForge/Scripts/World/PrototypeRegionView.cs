@@ -215,6 +215,9 @@ namespace CityForge.World
         public void ReleaseLoadedMeadow(){LoadedMeadow=null;}
         public bool LoadedFromSnapshot {get;private set;}
         public bool IsSaving {get;private set;}
+        internal bool BlocksCameraZoom => founderPicker || savedLotPicker || transportModal || playerLotWorkspace ||
+            (townPanel && townPanel.gameObject.activeInHierarchy) ||
+            (afternoonLightingPanel && afternoonLightingPanel.activeInHierarchy) || RemakeBlocksInput;
         public void SaveCurrentRegion()
         {
             if(IsSaving||DistrictLoading||returning||RemakeBlocksInput)return;
@@ -246,7 +249,14 @@ namespace CityForge.World
                 SavedRegionSnapshot snapshot=null;
                 System.Threading.Tasks.Task<string> write=null;
                 System.Exception failure=null;
-                try{snapshot=SavedRegionStore.Capture(this);write=SavedRegionStore.SaveAsync(snapshot);}
+                var saveTimer = System.Diagnostics.Stopwatch.StartNew();
+                long captureMilliseconds = 0;
+                try
+                {
+                    snapshot = SavedRegionStore.Capture(this);
+                    captureMilliseconds = saveTimer.ElapsedMilliseconds;
+                    write = SavedRegionStore.SaveAsync(snapshot);
+                }
                 catch(System.Exception error){failure=error;}
                 while(write!=null&&!write.IsCompleted){
                     if (!district)
@@ -266,6 +276,8 @@ namespace CityForge.World
                 }
                 else
                 {
+                    long totalMilliseconds = saveTimer.ElapsedMilliseconds;
+                    Debug.Log($"Region save profile: capture={captureMilliseconds} ms; write and frame wait={totalMilliseconds - captureMilliseconds} ms; total={totalMilliseconds} ms.");
                     SavedRegionId = snapshot.info.id;
                     if (district) ShowDistrictMessage("District saved.");
                     else caption.text = "REGION SAVED";
@@ -504,6 +516,7 @@ namespace CityForge.World
             BuildDistrictSelection(root.transform,font);
             BuildLotActions(root.transform, font);
             BuildDaylightPicker(root.transform, font);
+            BuildZoneWealthPicker(root.transform, font);
             gameObject.AddComponent<DistrictCombiner>().Initialize(this);
             townTools=gameObject.AddComponent<CityForge.UI.RegionTownTools>();
             townTools.Initialize(this,root.GetComponent<Canvas>(),font);
@@ -790,6 +803,12 @@ namespace CityForge.World
         private void Update()
         {
             RefreshTownConstruction();
+            UpdateRegionDistrictHover();
+            if (savedLotPicker)
+            {
+                if (Input.GetKeyDown(KeyCode.Escape)) CloseSavedLotPicker();
+                return;
+            }
             TickPlacedPedestrians();
             if (armedDistrictActor != null && Input.GetKeyDown(KeyCode.Escape))
             {
@@ -814,7 +833,7 @@ namespace CityForge.World
                 return;
             }
             UpdateLotGrowth();
-            if (UpdateDetonate()) return;
+            if (UpdateDetonate() || UpdateParkTreeBrush() || UpdateStreetscape()) return;
             if (SelectedDistrict >= 0 && !DistrictLoading && !IsSaving && Input.GetKeyDown(KeyCode.G) &&
                 !(EventSystem.current && EventSystem.current.currentSelectedGameObject &&
                   EventSystem.current.currentSelectedGameObject.TryGetComponent<InputField>(out var field) && field.isFocused))
@@ -859,7 +878,7 @@ namespace CityForge.World
         private bool orbitingSlab;
         private void OnGUI()
         {
-            if(RemakeBlocksInput||DistrictLoading||IsSaving||playerLotWorkspace||lotPlacementDraft!=null||founderPicker||zoneToolArmed||transportModal||RoadPlacementArmed){
+            if(RemakeBlocksInput||DistrictLoading||IsSaving||playerLotWorkspace||lotPlacementDraft!=null||founderPicker||savedLotPicker||transportModal||ParkTreeBrushArmed||streetscapeAsset != null){
                 orbitingSlab=false;
                 return;
             }
@@ -875,7 +894,7 @@ namespace CityForge.World
                 HandleRoadContextPointer(pointer);
                 return;
             }
-            if(pointer.button!=0 || HandleRoadPathPointer(pointer))return;
+            if (zoneToolArmed || RoadPlacementArmed || pointer.button!=0 || HandleRoadPathPointer(pointer)) return;
             if(orbitingSlab&&pointer.type==EventType.MouseDrag){
                 GetComponentInChildren<CityForgeCameraController>().OrbitRegion(pointer.delta);
                 pointer.Use();
@@ -1009,6 +1028,9 @@ namespace CityForge.World
             if(IsSaving)return;
             if(districtLoading)return;
             CloseFounderPicker();
+            lastRepaveSurface = null;
+            CancelParkTreeBrush();
+            CancelStreetscape();
             CancelLotPlacement();
             CancelRoadPlacement();
             SetRoadPaths(false);
@@ -1128,6 +1150,7 @@ namespace CityForge.World
         }
         private void OnDestroy()
         {
+            CancelParkTreeBrush();
             ClearDistrictRoadPresentation();
             ClosePlayerLot();
             CloseFounderPicker();

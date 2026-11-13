@@ -268,7 +268,7 @@ namespace CityForge.World
                         record.customization = customization;
                         RebuildDistrictLots();
                         lotFeedback.text = "Landscaping applied. Save the region to keep it.";
-                    });
+                    }, placedLotId: record.id);
                 playerLotWorkspace = back.GetComponentInParent<Canvas>().gameObject;
                 lotCamera = rig;
                 lotCamera.enabled = false;
@@ -304,34 +304,12 @@ namespace CityForge.World
                 lotFeedback.text = "Establish the capital on the region map first.";
                 return;
             }
-            try
+            if (savedLotPicker)
             {
-                var lot = LotLibrary.Local.List().Select(entry => entry.Lot).FirstOrDefault(entry => !IsFoundersLot(entry));
-                if (lot == null) throw new FileNotFoundException();
-                if (lot.IsWaterfront)
-                {
-                    var assetProblem = LotAssetProblem(lot, LotAssetCatalog.Load());
-                    if (assetProblem != null) throw new InvalidDataException(assetProblem);
-                    BeginLotPlacement(lot);
-                    return;
-                }
-                var focus = GetComponentInChildren<CityForgeCameraController>().CaptureRegionState().focus;
-                var record = new DistrictLotRecord
-                {
-                    id = Guid.NewGuid().ToString("N"), center = new Vector2(focus.x, focus.z),
-                    district = DistrictAtWorld(focus), definition = lot, RotationSteps = lotRotation
-                };
-                var problem = LotAssetProblem(lot, LotAssetCatalog.Load()) ?? LotSiteProblem(record, DistrictLotWater());
-                if (problem != null) throw new InvalidDataException(problem);
-                PlacedLots.Add(record);
-                RebuildDistrictLots();
-                lotFeedback.text = "Lot placed. Save the region to keep it.";
+                CloseSavedLotPicker();
+                return;
             }
-            catch (Exception error) when (error is IOException || error is InvalidDataException || error is ArgumentException || error is UnauthorizedAccessException)
-            {
-                lotFeedback.text = error is FileNotFoundException || error is DirectoryNotFoundException
-                    ? "Save a lot in the Lot Editor first." : error.Message;
-            }
+            OpenSavedLotPicker();
         }
 
         private static string LotAssetProblem(LotDefinition lot, LotAssetCatalog catalog)
@@ -354,6 +332,8 @@ namespace CityForge.World
             foreach (var other in PlacedLots)
                 if ((record.id == null || record.id != other.id) && footprint.Overlaps(new DistrictLotFootprint(other)))
                     return "That lot overlaps another lot.";
+
+            if (LotOverlapsDistrictRoad(record)) return "Keep lots clear of roads.";
 
             if (record.definition.IsWaterfront)
                 return WaterfrontSiteProblem(record, InActiveDistrict, LotHeight, (point, height) =>
@@ -563,6 +543,7 @@ namespace CityForge.World
             RefreshDirtRoadEndFades();
             districtLotRoots.Clear();
             roadBuildings.Clear();
+            lotTreePositions.Clear();
             dockWorkerHomes.Clear();
             if (selectedDistrictLot != null && (SelectedDistrict < 0 || !ActiveDistrictMembers.Contains(selectedDistrictLot.district)))
                 SelectDistrictLot(null);
@@ -586,14 +567,26 @@ namespace CityForge.World
                 placeLotLabel.text = PendingFounder != null ? "Founder’s Building…" : "Place saved lot";
             }
             if (SelectedDistrict < 0 || PlacedLots.Count == 0) return;
+            PresentDistrictLots(PlacedLots);
+            SelectDistrictLot(selectedDistrictLot);
+        }
+
+        private void PresentDistrictLots(IEnumerable<DistrictLotRecord> records)
+        {
+            pedestrianRoutesDirty = true;
             var catalog = LotAssetCatalog.Load();
-            lotInstances = new GameObject("Placed lots").transform;
-            lotInstances.SetParent(transform, false);
+            if (!lotInstances)
+            {
+                lotInstances = new GameObject("Placed lots").transform;
+                lotInstances.SetParent(transform, false);
+                lotInstances.gameObject.AddComponent<ResidentialGroundBatches>();
+            }
+            var residentialGround = lotInstances.GetComponent<ResidentialGroundBatches>();
             var active = new HashSet<int>(ActiveDistrictMembers);
             var camera = GetComponentInChildren<Camera>();
             bool meadowGrade = ApprovedDistrict && camera &&
                 camera.GetUniversalAdditionalCameraData().renderPostProcessing;
-            foreach (var record in PlacedLots)
+            foreach (var record in records)
             {
                 if (!active.Contains(record.district)) continue;
                 var root = new GameObject(record.definition.name).transform;
@@ -625,11 +618,14 @@ namespace CityForge.World
                     if (definition.IsWaterfront && LotRuntimeLoader.Footprint(item, asset).Overlaps(definition.WaterfrontBounds))
                         point.y = Mathf.Max(point.y, record.waterfrontDeckHeight);
                     instance.position = point;
+                    if (asset.category == "Trees") lotTreePositions.Add(new Vector2(point.x, point.z));
                     if (asset.category == "Buildings")
                     {
                         if (meadowGrade) DistrictLotSurfaces.MatchGradedBuilding(instance);
                         roadBuildings.Add(new RoadBuildingFootprint(instance, asset.footprint * item.scale));
                     }
+                    ResidentialWindowLights.Attach(instance.gameObject, asset, TimeOfDay);
+                    LamppostLight.Attach(instance.gameObject, asset, TimeOfDay);
                     if (item.assetId == LotCharacterDeck.HarborHouse)
                     {
                         harborPorch = instance;
@@ -648,9 +644,10 @@ namespace CityForge.World
                 }
                 if (definition.AttractsVessels && ApprovedDistrict && ApprovedDistrict.DisplayTerrain)
                     HarborLanding.Build(root, ApprovedDistrict, record, harborPorch);
+                residentialGround.Add(definition, record.id, ResidentialGround.LotEra(definition), root, LotHeight);
                 root.gameObject.AddComponent<DistrictLotSurfaces>().Build(definition, LotHeight, record.waterfrontDeckHeight, meadowGrade);
             }
-            SelectDistrictLot(selectedDistrictLot);
+            residentialGround.Build();
         }
 
         internal GameObject DockWorkerHome(DistrictLotRecord lot, string worker) =>

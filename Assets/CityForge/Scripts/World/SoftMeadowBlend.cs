@@ -4,7 +4,7 @@ namespace CityForge.World
 {
     public sealed partial class MeadowDistrictLandscape
     {
-        private void ApplySoftMeadowBlend(ref float[,,] controlMaps)
+        private void ApplySoftMeadowBlend(ref float[,,] controlMaps, bool sharesCachedPaint)
         {
             if (IsRegionOverview || View.Climate != RegionClimate.Temperate ||
                 View.VisualSeason != RegionSeason.Summer || View.MountainTest)
@@ -32,7 +32,7 @@ namespace CityForge.World
             terrainData.terrainLayers = layers;
 
             // The cached paint may be shared by the loaded region. Preserve every non-grass weight.
-            if (UsedSavedTerrain) controlMaps = (float[,,])controlMaps.Clone();
+            if (sharesCachedPaint) controlMaps = (float[,,])controlMaps.Clone();
             int height = controlMaps.GetLength(0);
             int width = controlMaps.GetLength(1);
             float stepX = terrainData.size.x / (width - 1);

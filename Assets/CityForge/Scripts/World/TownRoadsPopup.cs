@@ -77,7 +77,7 @@ namespace CityForge.World
             {
                 int index = i;
                 var button = TownButton(panel, lotFont, RoadSurfaces[i].Label, 322 + i % 3 * 240, -199 - i / 3 * 267, 219,
-                    () => StartRoadPlacement(index));
+                    () => ChooseRoadSurface(index));
                 surfaceButtons[i] = button;
                 if (i < HistoricalRoadSurfaceCount)
                     surfaceFaces[i] = RoadButtonArtwork(button, surfacesArt, SurfaceCrop(i, false), 247);
@@ -97,12 +97,12 @@ namespace CityForge.World
                 }
             }
 
-            var align = TownButton(panel, lotFont, "Align to Grid", 25, -802, 180, null);
-            MarkTownButton(align, alignNewRoads);
+            var align = TownButton(panel, lotFont, "Snap to Tile Centers", 25, -802, 226, null);
+            MarkTownButton(align, snapNewRoadsToTileCenters);
             align.onClick.AddListener(() =>
             {
-                alignNewRoads = !alignNewRoads;
-                MarkTownButton(align, alignNewRoads);
+                snapNewRoadsToTileCenters = !snapNewRoadsToTileCenters;
+                MarkTownButton(align, snapNewRoadsToTileCenters);
             });
             TownButton(panel, lotFont, showRoadPaths ? "Hide Road Paths" : "Show Road Paths",
                 1276, -802, 208, () =>

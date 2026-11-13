@@ -106,7 +106,9 @@ namespace CityForge.CameraSystem
 
             }
 
-            if (regionSide > 0f)
+            var region = GetComponentInParent<World.PrototypeRegionView>();
+            bool zoomBlocked = region && region.BlocksCameraZoom;
+            if (!zoomBlocked && regionSide > 0f)
             {
                 // The main keyboard + shares the = key; also support numeric keypads.
                 var zoomIn = Input.GetKeyDown(KeyCode.Equals) || Input.GetKeyDown(KeyCode.Plus)
@@ -117,10 +119,9 @@ namespace CityForge.CameraSystem
 
             bool infoPressed = Input.GetKeyDown(KeyCode.I);
             bool tiltHeld = Input.GetKey(KeyCode.C);
-            var region = infoPressed || tiltHeld ? GetComponentInParent<World.PrototypeRegionView>() : null;
             bool inDistrict = region && region.SelectedDistrict >= 0;
             bool adjustingTilt = inDistrict && tiltHeld;
-            var scroll = Input.mouseScrollDelta.y;
+            var scroll = zoomBlocked ? 0f : Input.mouseScrollDelta.y;
             if (!adjustingTilt && Mathf.Abs(scroll) > 0.01f)
             {
                 if (regionSide > 0f) StepZoom(scroll>0);

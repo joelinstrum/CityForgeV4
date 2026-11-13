@@ -15,7 +15,7 @@ namespace CityForge.World
         private RectTransform townModeSwitch, townToolbar, townPanel;
         private Button natureModeButton, townModeButton;
         private RectTransform transportModal;
-        private readonly Button[] townCategories = new Button[6];
+        private readonly Button[] townCategories = new Button[7];
         private TownSection townSection;
         private Texture2D darkTownButtons, goldTownButtons, transportButtonArtwork;
         private Material townButtonArtwork;
@@ -42,7 +42,7 @@ namespace CityForge.World
             SkinTownButton(natureModeButton, new Rect(740, 462, 347, 112), 44);
             SkinTownButton(townModeButton, new Rect(1087, 462, 349, 112), 44);
 
-            townToolbar = BottomPanel(hud, "Town construction toolbar", 63, 886, 82);
+            townToolbar = BottomPanel(hud, "Town construction toolbar", 63, 1034, 82);
             string[] labels = { "Transport", "Zones", "Civic Lots", "Utilities", "Parks", "Town Info" };
             int[] edges = { 409, 752, 1090, 1435, 1778, 2121 };
             for (int i = 0; i < labels.Length; i++)
@@ -55,6 +55,14 @@ namespace CityForge.World
                 else
                     SkinTownButton(townCategories[i], new Rect(edges[i - 1], 236, edges[i] - edges[i - 1], 206), 82);
             }
+            var streetscape = TownButton(townToolbar, font, "Streetscape", 888, 0, 146, OpenStreetscape);
+            townCategories[6] = streetscape;
+            ((RectTransform)streetscape.transform).sizeDelta = new Vector2(146, 82);
+            var caption = streetscape.GetComponentInChildren<Text>();
+            caption.rectTransform.offsetMax = new Vector2(0, -49);
+            caption.color = TownGold;
+            LotEditorPanel.AddGlyph(streetscape.transform, LotGlyph.StreetFurniture, 43, 7, 43);
+            LotEditorPanel.AddGlyph(streetscape.transform, LotGlyph.Fence, 76, 20, 30);
             BuildDetonateButton(font);
             RefreshTownConstruction();
 
@@ -143,6 +151,7 @@ namespace CityForge.World
             CancelLotPlacement();
             SelectDistrictLot(null);
             CloseTownSection();
+            lastRepaveSurface = null;
             TownConstructionVisible = town;
             if (!town) SetRoadPaths(false);
             GetComponent<NatureToolbar>()?.Dismiss();
@@ -151,6 +160,8 @@ namespace CityForge.World
 
         private void CloseTownSection()
         {
+            CancelParkTreeBrush();
+            CancelStreetscape();
             SetDetonate(false);
             CloseRoadContext();
             CloseTransportModal();
@@ -194,6 +205,7 @@ namespace CityForge.World
         {
             if (!TownConstructionVisible || !CanBuildTown || IsSaving) return;
             CancelRoadPlacement();
+            if (section != TownSection.Transport) lastRepaveSurface = null;
             if (section == TownSection.Zones && townSection == section && townPanel && !townPanel.gameObject.activeSelf)
             {
                 CancelZoneDrag();
@@ -212,13 +224,14 @@ namespace CityForge.World
             {
                 TownSection.Transport => 1120,
                 TownSection.Zones => 850,
+                TownSection.Parks => 820,
                 _ => 560
             };
-            townPanel = FounderRect(townToolbar, "Town tool panel", new Vector2(0, 92), new Vector2(width, 276));
+            townPanel = FounderRect(townToolbar, "Town tool panel", new Vector2(0, 92), new Vector2(width, section == TownSection.Parks ? 376 : 276));
             townPanel.anchorMin = townPanel.anchorMax = townPanel.pivot = new Vector2(.5f, 0);
             StyleTownPanel(townPanel, TownPanelColor);
             if (section != TownSection.Transport)
-                FounderText(townPanel, category.name, new Vector2(0, 113), new Vector2(440, 34), 25).color = TownGold;
+                FounderText(townPanel, category.name, new Vector2(0, section == TownSection.Parks ? 163 : 113), new Vector2(440, 34), 25).color = TownGold;
             TownButton(townPanel, lotFont, "×", (int)width - 47, -9, 36, CloseTownSection);
 
             switch (section)
@@ -299,6 +312,107 @@ namespace CityForge.World
             }
         }
 
+        private void OpenStreetscape()
+        {
+            if (!TownConstructionVisible || !CanBuildTown || IsSaving) return;
+            CancelRoadPlacement();
+            CancelLotPlacement();
+            CloseTownSection();
+            lastRepaveSurface = null;
+            MarkTownButton(townCategories[6], true);
+
+            transportModal = FounderRect(townToolbar.parent, "Streetscape modal", Vector2.zero, Vector2.zero);
+            transportModal.anchorMin = Vector2.zero;
+            transportModal.anchorMax = Vector2.one;
+            transportModal.offsetMin = transportModal.offsetMax = Vector2.zero;
+            transportModal.gameObject.AddComponent<Image>().color = new Color(0, 0, 0, .58f);
+            var panel = FounderRect(transportModal, "Streetscape", Vector2.zero, new Vector2(780, 450));
+            StyleTownPanel(panel, TownPanelColor);
+            FounderText(panel, "Streetscape", new Vector2(0, 190), new Vector2(520, 34), 27).color = TownGold;
+            TownButton(panel, lotFont, "×", 730, -12, 36, CloseTransportModal).Select();
+
+            var catalog = LotAssetCatalog.Load();
+            var assets = catalog ? catalog.entries.Where(asset => asset != null && asset.prefab).ToArray()
+                : Array.Empty<LotAssetCatalogEntry>();
+            var viewport = FounderRect(panel, "Streetscape assets", new Vector2(92, -40), new Vector2(550, 310));
+            viewport.gameObject.AddComponent<Image>().color = new Color(.05f, .07f, .09f);
+            viewport.gameObject.AddComponent<RectMask2D>();
+            var scroll = viewport.gameObject.AddComponent<ScrollRect>();
+            scroll.horizontal = false;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.viewport = viewport;
+            var list = FounderRect(viewport, "Assets", Vector2.zero, Vector2.zero);
+            list.anchorMin = new Vector2(0, 1);
+            list.anchorMax = Vector2.one;
+            list.pivot = new Vector2(.5f, 1);
+            scroll.content = list;
+
+            var lamps = assets.Where(asset => asset.category == LotAssetCatalog.StreetFurniture && asset.group == "Lighting");
+            var fences = assets.Where(asset => asset.category == "Fences");
+            bool IsWall(LotAssetCatalogEntry asset) => asset.category == "Walls" ||
+                asset.label?.IndexOf("wall", StringComparison.OrdinalIgnoreCase) >= 0;
+            var walls = assets.Where(asset => IsWall(asset) &&
+                (asset.category == "Walls" || asset.category == "Fences" || asset.category == LotAssetCatalog.StreetFurniture));
+            var outdoor = assets.Where(asset => asset.category == LotAssetCatalog.StreetFurniture &&
+                asset.group != "Lighting" && !IsWall(asset));
+            var categories = new[] { ("Street Lamps", lamps), ("Fences", fences.Where(asset => !IsWall(asset))),
+                ("Walls", walls), ("Outdoor Details", outdoor) };
+            var buttons = new Button[categories.Length];
+            int currentCategory = 0;
+            InputField search = null;
+            for (int index = 0; index < categories.Length; index++)
+            {
+                int category = index;
+                buttons[index] = TownButton(panel, lotFont, categories[index].Item1, 18, -70 - index * 48, 174,
+                    () => ShowCategory(category));
+            }
+            search = DefaultControls.CreateInputField(new DefaultControls.Resources()).GetComponent<InputField>();
+            search.transform.SetParent(panel, false);
+            Position((RectTransform)search.transform, new Vector2(207, -55), new Vector2(550, 34));
+            search.textComponent.font = lotFont;
+            if (search.placeholder is Text placeholder) { placeholder.font = lotFont; placeholder.text = "Search Streetscape"; }
+            search.onValueChanged.AddListener(_ => ShowCategory(currentCategory));
+            ShowCategory(0);
+
+            void ShowCategory(int category)
+            {
+                currentCategory = category;
+                for (int i = 0; i < buttons.Length; i++) MarkTownButton(buttons[i], i == category);
+                foreach (Transform child in list)
+                {
+                    child.gameObject.SetActive(false);
+                    Destroy(child.gameObject);
+                }
+                string query = search.text.Trim();
+                var entries = (query.Length == 0 ? categories[category].Item2 : categories.SelectMany(group => group.Item2).Distinct())
+                    .Where(asset => asset.label.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
+                    .OrderBy(asset => asset.label).ToArray();
+                var recent = StreetscapeHistory().Select(id => entries.FirstOrDefault(asset => asset.id == id))
+                    .Where(asset => asset != null).Take(4).ToArray();
+                int row = 0;
+                if (recent.Length > 0)
+                {
+                    Heading("Recently used");
+                    foreach (var asset in recent) AddAsset(asset);
+                    if (entries.Length > recent.Length) Heading("More assets");
+                }
+                foreach (var asset in entries.Except(recent)) AddAsset(asset);
+                if (entries.Length == 0) Heading("No matching assets.");
+                list.sizeDelta = new Vector2(0, Mathf.Max(310, row * 42 + 12));
+                list.anchoredPosition = Vector2.zero;
+
+                void AddAsset(LotAssetCatalogEntry asset) =>
+                    TownButton(list, lotFont, asset.label, 14, -8 - row++ * 42, 522, () => ArmStreetscape(asset));
+
+                void Heading(string title)
+                {
+                    var label = FounderText(list, title, Vector2.zero, new Vector2(522, 34), 17);
+                    Position(label.rectTransform, new Vector2(14, -8 - row++ * 42), new Vector2(522, 34));
+                    label.alignment = TextAnchor.MiddleLeft;
+                }
+            }
+        }
+
         private void OpenTransportModal(string category)
         {
             if (transportModal) return;
@@ -325,34 +439,75 @@ namespace CityForge.World
 
         private void CloseTransportModal()
         {
+            repaveTarget = null;
+            MarkTownButton(townCategories[6], false);
             if (!transportModal) return;
             transportModal.gameObject.SetActive(false);
             Destroy(transportModal.gameObject);
             transportModal = null;
         }
 
-        private void ShowTownLots(bool parks)
+        private void ShowTownLots(bool parks, bool agriculture = false)
         {
+            if (parks && !agriculture)
+            {
+                ParkTreeCard("Add Trees", "Scatter random trees", -266, () => ArmParkTreeBrush(false));
+                ParkTreeCard("Place a Tree", "Choose a tree to plant", 0, OpenParkTreePicker, single: true);
+                ParkTreeCard("Remove Trees", "Brush away individual trees", 266, () => ArmParkTreeBrush(true), remove: true);
+            }
+            if (parks)
+                TownButton(townPanel, lotFont, agriculture ? "‹ Parks" : "Agriculture", 18, -9, 146, () =>
+                {
+                    var current = townPanel;
+                    foreach (Transform child in current)
+                    {
+                        if (child.name == "Saved town lots" || child.GetSiblingIndex() >= 2)
+                        {
+                            child.gameObject.SetActive(false);
+                            Destroy(child.gameObject);
+                        }
+                    }
+                    ShowTownLots(true, !agriculture);
+                });
+            var catalog = LotAssetCatalog.Load();
             LotDefinition[] lots;
             try
             {
                 lots = LotLibrary.Local.List().Select(entry => entry.Lot).Where(lot =>
                     LotClassification.FindCategory(lot.category)?.id == "civics" &&
-                    !IsFoundersLot(lot) && parks == (lot.subcategory == "parks" || lot.subcategory == "Parks")).ToArray();
+                    !IsFoundersLot(lot) && (agriculture
+                        ? lot.subcategory == "agriculture"
+                        : lot.subcategory != "agriculture" && parks == (lot.subcategory == "parks" || lot.subcategory == "Parks"))).ToArray();
             }
             catch (Exception error) when (error is IOException || error is UnauthorizedAccessException)
             {
                 FounderText(townPanel, "Could not read the saved lot library.", Vector2.zero, new Vector2(480, 90), 17);
                 return;
             }
+            if (agriculture && catalog)
+                lots = new[] { "corn-garden", "wheat-garden" }.Select(catalog.Find)
+                    .Where(garden => garden != null && garden.prefab)
+                    .Select(BuildGardenLot).Concat(lots).ToArray();
+
+            static LotDefinition BuildGardenLot(LotAssetCatalogEntry garden)
+            {
+                var builtIn = new LotDefinition
+                {
+                    name = garden.label, category = "civics", subcategory = "agriculture",
+                    width = 1, length = 1
+                };
+                builtIn.objects.Add(new LotObjectDefinition { assetId = garden.id });
+                return builtIn;
+            }
             if (lots.Length == 0)
             {
-                FounderText(townPanel, parks ? "Save a Civics → Parks lot in the Lot Editor." :
+                FounderText(townPanel, agriculture ? "Save a Civics → Agriculture lot in the Lot Editor." :
+                    parks ? "Save a Civics → Parks lot in the Lot Editor." :
                     "Save a playable civic lot in the Lot Editor.", Vector2.zero, new Vector2(480, 90), 17);
                 return;
             }
 
-            var window = FounderRect(townPanel, "Saved town lots", new Vector2(0, -24), new Vector2(524, 205));
+            var window = FounderRect(townPanel, "Saved town lots", new Vector2(0, parks && !agriculture ? -74 : -24), new Vector2(524, 205));
             window.gameObject.AddComponent<Image>().color = new Color(.05f, .07f, .09f);
             window.gameObject.AddComponent<RectMask2D>();
             var scroll = window.gameObject.AddComponent<ScrollRect>();
@@ -365,7 +520,6 @@ namespace CityForge.World
             content.pivot = new Vector2(.5f, 1);
             scroll.content = content;
 
-            var catalog = LotAssetCatalog.Load();
             for (int i = 0; i < lots.Length; i++)
             {
                 var lot = lots[i];

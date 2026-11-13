@@ -188,6 +188,14 @@ namespace CityForge.World
                 throw new ArgumentOutOfRangeException(nameof(time));
             bool changed = TimeOfDay != time;
             TimeOfDay = time;
+            if (changed)
+            {
+                if (lotInstances)
+                    foreach (var windows in lotInstances.GetComponentsInChildren<ResidentialWindowLights>())
+                        windows.SetTime(time);
+                LamppostLight.ApplyTime(lotInstances, time);
+                LamppostLight.ApplyTime(streetscapeRoot, time);
+            }
             ApplyDistrictDaylight();
             // A daylight preset is a lighting cut. Drop history from the previous sun/exposure.
             if (changed && SelectedDistrict >= 0 && GetComponentInChildren<CityForge.CameraSystem.CityForgeCameraController>() is { } rig &&
@@ -201,6 +209,7 @@ namespace CityForge.World
         {
             if (!daylightPicker) return;
             daylightPicker.gameObject.SetActive(SelectedDistrict >= 0);
+            if (zoneWealthPicker) zoneWealthPicker.gameObject.SetActive(SelectedDistrict >= 0);
             daylightPicker.SetValueWithoutNotify(Array.IndexOf(DaylightChoices, TimeOfDay));
             bool showAfternoon = SelectedDistrict >= 0 && ApprovedDistrict && TimeOfDay == RegionTimeOfDay.Afternoon;
             afternoonShadowPicker.gameObject.SetActive(showAfternoon);
@@ -250,8 +259,8 @@ namespace CityForge.World
             {
                 RegionTimeOfDay.Morning => (Quaternion.Euler(23f, 270f, 0), .85f, new Color(1f, .84f, .66f)),
                 RegionTimeOfDay.Noon => (Quaternion.Euler(NoonElevation, 33f, 0f), .76f, NoonSunColor),
-                RegionTimeOfDay.Evening => (Quaternion.Euler(12f, 90f, 0), .44f, new Color(1f, .68f, .43f)),
-                RegionTimeOfDay.Night => (Quaternion.Euler(38f, 285f, 0), .17f, new Color(.66f, .78f, 1f)),
+                RegionTimeOfDay.Evening => (Quaternion.Euler(32f, 285f, 0), .58f, new Color(.80f, .88f, 1f)),
+                RegionTimeOfDay.Night => (Quaternion.Euler(38f, 285f, 0), .35f, new Color(.71f, .81f, 1f)),
                 _ => (Quaternion.Euler(afternoon.x, 65f, 0), 1f, afternoonColor)
             };
             light.transform.rotation = rotation;
@@ -296,8 +305,8 @@ namespace CityForge.World
         private static (float level, Color tint) AmbientPreset(RegionTimeOfDay time) => time switch
             {
                 RegionTimeOfDay.Morning => (1.05f, new Color(1f, .97f, .94f)),
-                RegionTimeOfDay.Evening => (.58f, new Color(1f, .90f, .84f)),
-                RegionTimeOfDay.Night => (.19f, new Color(.56f, .72f, 1f)),
+                RegionTimeOfDay.Evening => (.83f, new Color(.85f, .92f, 1f)),
+                RegionTimeOfDay.Night => (.54f, new Color(.73f, .83f, 1f)),
                 _ => (1f, Color.white)
             };
     }

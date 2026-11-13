@@ -14,7 +14,8 @@ namespace CityForge.UI
         private static readonly Color Ivory = new Color32(247, 234, 205, 255);
 
         public static Button Create(Font titleFont, UnityAction goBack,
-            LotDefinition playerLot = null, LotCustomization customization = null, Action<LotCustomization> savePlayer = null)
+            LotDefinition playerLot = null, LotCustomization customization = null, Action<LotCustomization> savePlayer = null,
+            string placedLotId = null)
         {
             var root = new GameObject("Lot Editor Workspace", typeof(RectTransform), typeof(Canvas),
                 typeof(CanvasScaler), typeof(GraphicRaycaster), typeof(Image));
@@ -59,7 +60,7 @@ namespace CityForge.UI
                 30, TextAnchor.MiddleLeft);
             SetHeaderPosition(title.rectTransform, 137f, 420f);
             var panel = root.AddComponent<LotEditorPanel>();
-            panel.Initialize(uiFont, titleFont, playerLot, customization, savePlayer, goBack);
+            panel.Initialize(uiFont, titleFont, playerLot, customization, savePlayer, goBack, placedLotId);
             LotEditorPanel.AddGlyph(back.transform, LotGlyph.Back, 10, 11, 22);
             LotEditorPanel.AddOutline(backImage, new Color32(65, 81, 93, 255));
             panel.Describe(back, playerLot == null ? "Return to the main menu" : "Return to the district");

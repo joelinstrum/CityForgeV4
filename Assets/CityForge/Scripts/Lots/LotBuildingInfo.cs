@@ -13,6 +13,7 @@ namespace CityForge.Lots
         public LotFrontage facing;
         public LotEntryType entryType;
         public float width;
+        public float measuredDoorHeight;
         public Vector3 dimensions;
         public bool dimensionsOnly;
 

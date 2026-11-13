@@ -21,6 +21,8 @@ namespace CityForge.UI
         private readonly List<(LotPathDefinition path, Vector3[] vertices)> pathTargets =
             new List<(LotPathDefinition, Vector3[])>();
         private Transform stage, content;
+        internal string PlacedLotId { get; set; }
+        internal bool ShowResidentialGroundFootprint { get; set; }
         private Camera cameraView;
         private Light previewLight;
         private MeadowRuntimeBaseline previewBaseline;
@@ -39,8 +41,6 @@ namespace CityForge.UI
         private readonly LotCharacterPreview characterPreview = new LotCharacterPreview();
         private string draggedObject, selectedObject;
         private bool movingSelection, characterFocus;
-        private readonly Dictionary<Renderer, Material[]> buildingMaterials = new();
-        private readonly Dictionary<Material, Material> fadedBuildingMaterials = new();
         private readonly Dictionary<Animator, float> pausedSpeeds = new Dictionary<Animator, float>();
         private RawImage image;
         private RenderTexture target;
@@ -245,6 +245,16 @@ namespace CityForge.UI
             previewLighting.CopySHCoefficientArraysFrom(previewProbe);
             renderer.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.CustomProvided;
             renderer.SetPropertyBlock(previewLighting);
+
+            // Window emission uses material-slot overrides, which take precedence over the renderer block.
+            if (renderer.HasPropertyBlock())
+                for (int slot = 0; slot < renderer.sharedMaterials.Length; slot++)
+                {
+                    renderer.GetPropertyBlock(previewLighting, slot);
+                    if (previewLighting.isEmpty) continue;
+                    previewLighting.CopySHCoefficientArraysFrom(previewProbe);
+                    renderer.SetPropertyBlock(previewLighting, slot);
+                }
         }
 
         private void ApplyLighting()
@@ -284,6 +294,10 @@ namespace CityForge.UI
             UpdateDraftingLighting();
             foreach (var renderer in previewLitSurfaces)
                 if (renderer) ApplyPreviewProbe(renderer, daylightProbe);
+            LamppostLight.ApplyTime(content, time);
+            if (content)
+                foreach (var windows in content.GetComponentsInChildren<ResidentialWindowLights>())
+                    windows.SetTime(time);
         }
 
         private void UpdateDraftingLighting()
@@ -314,8 +328,6 @@ namespace CityForge.UI
             }
             foreach (var material in materials) Destroy(material);
             materials.Clear();
-            buildingMaterials.Clear();
-            fadedBuildingMaterials.Clear();
             foreach (var mesh in pathMeshes) Destroy(mesh);
             pathMeshes.Clear();
             pathTargets.Clear();
@@ -331,6 +343,7 @@ namespace CityForge.UI
 
             content = new GameObject("Lot preview contents").transform;
             content.SetParent(stage, false);
+            content.gameObject.layer = PreviewLayer;
             var size = lot.Size;
             var ground = LotGroundTexture.Find(false, lot.baseTexture) ?? LotGroundTexture.Base[0];
             var groundTexture = ground.Texture;
@@ -357,6 +370,10 @@ namespace CityForge.UI
                 Box("Waterfront rows", new Vector3(water.center.x, .009f, water.center.y),
                     new Vector3(water.width, .01f, water.height), Material(new Color32(54, 112, 150, 255), unlit: true));
             }
+            var residentialGround = content.gameObject.AddComponent<ResidentialGroundBatches>();
+            residentialGround.Add(lot, PlacedLotId ?? lot.id, ResidentialGround.LotEra(lot), content,
+                _ => content.position.y, ShowResidentialGroundFootprint, lift: .008f);
+            residentialGround.Build();
             var wholeLot = new Rect(-size * .5f, size);
             DrawGroundOverlay(lot.overlayTexture, lot.overlayTextureSpan, wholeLot, 0, rotation: lot.overlayTextureRotation,
                 visibleArea: lot.IsWaterfront ? lot.LandBounds : null);
@@ -400,9 +417,10 @@ namespace CityForge.UI
                     foreach (var renderer in preview.GetComponentsInChildren<Renderer>())
                     {
                         renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-                        renderer.sharedMaterials = FadeBuildingMaterials(renderer.sharedMaterials);
                         RegisterLitSurface(renderer);
                     }
+                    ResidentialWindowLights.Attach(preview, building, PreviewTime);
+                    LamppostLight.Attach(preview, building, PreviewTime, 1 << PreviewLayer);
                 }
                 if (zoning.hasEntrance)
                     entryMarker = DrawAnchor("House entrance", zoning.entrance, new Color32(255, 211, 109, 255));
@@ -435,16 +453,12 @@ namespace CityForge.UI
                 }
                 foreach (var renderer in instance.GetComponentsInChildren<Renderer>())
                 {
-                    if (asset.category == "Buildings")
-                    {
-                        var original = renderer.sharedMaterials;
-                        buildingMaterials.Add(renderer, original);
-                        if (characterFocus) renderer.sharedMaterials = FadeBuildingMaterials(original);
-                    }
                     RegisterLitSurface(renderer);
                     if (renderer is MeshRenderer || renderer is SkinnedMeshRenderer || renderer is BillboardRenderer)
                         pickTargets.Add((item.id, renderer));
                 }
+                ResidentialWindowLights.Attach(instance, asset, PreviewTime);
+                LamppostLight.Attach(instance, asset, PreviewTime, 1 << PreviewLayer);
                 if (item.id != selected && !selectedGroup.Contains(item.id)) continue;
                 var footprint = LotRuntimeLoader.Footprint(item, asset);
                 var position = instance.transform.localPosition;
@@ -698,7 +712,7 @@ namespace CityForge.UI
                     {
                         transparent = new Material(original);
                         var color = transparent.GetColor("_BaseColor");
-                        color.a *= .48f;
+                        color.a *= asset.category == "Landscaping" ? .82f : .48f;
                         transparent.SetColor("_BaseColor", color);
                         transparent.DisableKeyword("_ALPHAPREMULTIPLY_ON");
                         LotGroundTexture.ConfigureTransparentLayer(transparent, LotGroundOverlay.MaxCount + 3);
@@ -938,6 +952,19 @@ namespace CityForge.UI
 
         internal bool PickingEntryMarker { get; set; }
 
+        internal Func<bool> CanMarquee;
+        internal Action<HashSet<string>> CommitMarquee;
+        private RectTransform marquee;
+        private Vector2 marqueeStart;
+
+        private void DrawMarquee(Vector2 end)
+        {
+            var min = Vector2.Min(marqueeStart, end);
+            var max = Vector2.Max(marqueeStart, end);
+            marquee.anchoredPosition = min - image.rectTransform.rect.min;
+            marquee.sizeDelta = max - min;
+        }
+
         public void OnBeginDrag(PointerEventData eventData)
         {
             if (PickingEntryMarker || eventData.button != PointerEventData.InputButton.Left ||
@@ -953,6 +980,22 @@ namespace CityForge.UI
             }
             var hit = Pick(ray);
             if (TryBeginFootprintDrag(eventData, ray, hit)) return;
+            if (hit == null && CanMarquee?.Invoke() == true &&
+                RectTransformUtility.ScreenPointToLocalPointInRectangle(image.rectTransform,
+                    eventData.pressPosition, eventData.pressEventCamera, out marqueeStart))
+            {
+                var box = new GameObject("Selection rectangle", typeof(RectTransform), typeof(Image), typeof(Outline));
+                marquee = (RectTransform)box.transform;
+                marquee.SetParent(image.rectTransform, false);
+                marquee.anchorMin = marquee.anchorMax = marquee.pivot = Vector2.zero;
+                var fill = box.GetComponent<Image>();
+                fill.raycastTarget = false;
+                fill.color = new Color(.34f, .65f, 1f, .24f);
+                box.GetComponent<Outline>().effectColor = new Color(.48f, .74f, 1f, .8f);
+                DrawMarquee(marqueeStart);
+                eventData.eligibleForClick = false;
+                return;
+            }
             footprintSelected = false;
             if (previewLot.zoningLayout.Configured) DrawBuildingFootprint(previewLot.zoningLayout.BuildingSlot);
             if (!TryPlacementPoint(ray, hit != null && previewCharacters.Contains(hit), out var point)) return;
@@ -963,6 +1006,22 @@ namespace CityForge.UI
         public void OnEndDrag(PointerEventData eventData)
         {
             if (eventData.button != PointerEventData.InputButton.Left) return;
+            if (marquee)
+            {
+                var bounds = new Rect(marquee.anchoredPosition + image.rectTransform.rect.min, marquee.sizeDelta);
+                Destroy(marquee.gameObject);
+                marquee = null;
+                var ids = new HashSet<string>();
+                var view = image.rectTransform.rect;
+                foreach (var pair in instances)
+                {
+                    var point = cameraView.WorldToViewportPoint(pair.Value.position);
+                    if (point.z > 0 && bounds.Contains(view.min + Vector2.Scale(view.size, new Vector2(point.x, point.y))))
+                        ids.Add(pair.Key);
+                }
+                CommitMarquee?.Invoke(ids);
+                return;
+            }
             if (draggingEntryMarker)
             {
                 draggingEntryMarker = false;
@@ -1011,6 +1070,12 @@ namespace CityForge.UI
         {
             if (eventData.button == PointerEventData.InputButton.Left)
             {
+                if (marquee)
+                {
+                    if (RectTransformUtility.ScreenPointToLocalPointInRectangle(image.rectTransform,
+                        eventData.position, eventData.pressEventCamera, out var end)) DrawMarquee(end);
+                    return;
+                }
                 if (draggingEntryMarker)
                 {
                     if (TryRay(eventData.position, eventData.pressEventCamera, out var entryRay) &&
@@ -1099,33 +1164,7 @@ namespace CityForge.UI
 
         public void SetCharacterFocus(bool enabled)
         {
-            if (characterFocus == enabled) return;
             characterFocus = enabled;
-            foreach (var (renderer, original) in buildingMaterials)
-                if (renderer) renderer.sharedMaterials = enabled ? FadeBuildingMaterials(original) : original;
-        }
-
-        private Material[] FadeBuildingMaterials(Material[] original)
-        {
-            var slots = (Material[])original.Clone();
-            for (int i = 0; i < slots.Length; i++)
-            {
-                var source = slots[i];
-                if (!source || !source.HasProperty("_BaseColor")) continue;
-                if (!fadedBuildingMaterials.TryGetValue(source, out var faded))
-                {
-                    faded = new Material(source);
-                    var color = source.GetColor("_BaseColor");
-                    color.a *= .70f;
-                    faded.SetColor("_BaseColor", color);
-                    faded.DisableKeyword("_ALPHAPREMULTIPLY_ON");
-                    LotGroundTexture.ConfigureTransparentLayer(faded, LotGroundOverlay.MaxCount + 3);
-                    fadedBuildingMaterials.Add(source, faded);
-                    materials.Add(faded);
-                }
-                slots[i] = faded;
-            }
-            return slots;
         }
 
         private string Pick(Ray ray)
@@ -1183,8 +1222,53 @@ namespace CityForge.UI
                 (b.x - a.x) * (p.z - a.z) - (b.z - a.z) * (p.x - a.x);
         }
 
+        private LineRenderer scaleFigure;
+
+        internal void ToggleScaleFigure()
+        {
+            if (scaleFigure)
+            {
+                scaleFigure.gameObject.SetActive(!scaleFigure.gameObject.activeSelf);
+                return;
+            }
+
+            scaleFigure = new GameObject("1.75 m scale figure").AddComponent<LineRenderer>();
+            scaleFigure.gameObject.layer = PreviewLayer;
+            scaleFigure.transform.SetParent(stage, false);
+            scaleFigure.useWorldSpace = false;
+            scaleFigure.loop = true;
+            scaleFigure.widthMultiplier = .028f;
+            scaleFigure.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            scaleFigure.sharedMaterial = new Material(Shader.Find("Universal Render Pipeline/Unlit"));
+            scaleFigure.sharedMaterial.SetColor("_BaseColor", new Color(1f, .79f, .32f));
+            var outline = new Vector3[]
+            {
+                new(0,1.75f), new(.09f,1.71f), new(.12f,1.60f), new(.08f,1.48f),
+                new(.22f,1.43f), new(.31f,1.03f), new(.23f,.99f), new(.15f,1.25f),
+                new(.13f,.88f), new(.19f,.02f), new(.05f,.02f), new(0,.72f),
+                new(-.05f,.02f), new(-.19f,.02f), new(-.13f,.88f), new(-.15f,1.25f),
+                new(-.23f,.99f), new(-.31f,1.03f), new(-.22f,1.43f), new(-.08f,1.48f),
+                new(-.12f,1.60f), new(-.09f,1.71f)
+            };
+            scaleFigure.positionCount = outline.Length;
+            scaleFigure.SetPositions(outline);
+            scaleFigure.transform.localPosition = new Vector3(0, .04f, -previewLot.Size.y * .4f);
+            scaleFigure.transform.rotation = Quaternion.Euler(0, cameraView.transform.eulerAngles.y, 0);
+        }
+
         public void OnPointerClick(PointerEventData eventData)
         {
+            if (scaleFigure && scaleFigure.gameObject.activeSelf && eventData.button == PointerEventData.InputButton.Left)
+            {
+                if (TryRay(eventData.position, eventData.pressEventCamera, out var figureRay) &&
+                    TryPoint(figureRay, out var figurePoint))
+                {
+                    scaleFigure.transform.localPosition = new Vector3(figurePoint.x, .04f, figurePoint.y);
+                    scaleFigure.transform.rotation = Quaternion.Euler(0, cameraView.transform.eulerAngles.y, 0);
+                }
+                return;
+            }
+
             bool character = ghostAsset?.IsCharacter == true ||
                 (movingSelection && selectedObject != null && previewCharacters.Contains(selectedObject));
             if (eventData.button == PointerEventData.InputButton.Left &&
@@ -1218,6 +1302,11 @@ namespace CityForge.UI
             Destroy(target);
         }
 
+        private void OnEnable()
+        {
+            if (stage) stage.gameObject.SetActive(true);
+        }
+
         private void OnDisable()
         {
             footprintPointerInside = false;
@@ -1232,6 +1321,7 @@ namespace CityForge.UI
                 if (cursor) Destroy(cursor);
             ReleaseTarget();
             ClearPlacementGhost();
+            if (scaleFigure) Destroy(scaleFigure.sharedMaterial);
             if (stage) Destroy(stage.gameObject);
             if (previewProfile) Destroy(previewProfile);
             Destroy(draftingTexture);

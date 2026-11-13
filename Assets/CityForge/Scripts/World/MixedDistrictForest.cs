@@ -72,8 +72,15 @@ namespace CityForge.World
         public int RemoveWithin(Vector2 center,float radius)=>RemoveWithin(new[]{center},radius);
         public int RemoveWithin(IReadOnlyList<Vector2> centers,float radius)
         {
-            if(!holder)return 0;var renderer=holder.GetComponent<SpatialForestRenderer>();int removed=renderer.RemoveWithin(centers,radius);if(removed==0)return 0;
-            float radius2=radius*radius;placements.RemoveAll(p=>!p.root||ForestRemovalValidation.InBrush(new Vector2(p.root.position.x,p.root.position.z),centers,radius2));
+            float radius2 = radius * radius;
+            return RemoveTrees(point => ForestRemovalValidation.InBrush(point, centers, radius2));
+        }
+        internal int RemoveTrees(System.Predicate<Vector2> contains)
+        {
+            if (!holder) return 0;
+            int removed = holder.GetComponent<SpatialForestRenderer>().RemoveTrees(contains);
+            if (removed == 0) return 0;
+            placements.RemoveAll(p => !p.root || contains(new Vector2(p.root.position.x, p.root.position.z)));
             RefreshSignature();return removed;
         }
         public void RefreshVisibility(){if(holder&&land)holder.SetActive(land.TreesEnabled&&land.View.VisualSeason==RegionSeason.Summer);}

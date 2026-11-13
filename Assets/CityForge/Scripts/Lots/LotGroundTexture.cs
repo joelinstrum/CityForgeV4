@@ -120,6 +120,12 @@ namespace CityForge.Lots
             new LotGroundTexture("patchy-grass", "Patchy Grass", "Lots/GroundTextures/patchy-grass", new Color32(135, 128, 79, 255)),
             new LotGroundTexture("low-wealth-4x4", "Low Wealth Grass · 4 × 4", "Lots/GroundTextures/low-wealth-4x4-tile",
                 new Color32(112, 125, 64, 255), 2),
+            new LotGroundTexture("residential-worn-grass", "Low Wealth · Worn Grass",
+                "Lots/GroundTextures/Residential/worn-grass-base", new Color32(112, 125, 64, 255), 2),
+            new LotGroundTexture("residential-mixed-earth", "Low Wealth · Mixed Earth",
+                "Lots/GroundTextures/Residential/mixed-earth-base", new Color32(125, 109, 69, 255), 2),
+            new LotGroundTexture("residential-maintained-grass", "Medium Wealth · Maintained Grass",
+                "Lots/GroundTextures/Residential/maintained-grass-base", new Color32(93, 132, 55, 255), 2),
             new LotGroundTexture("packed-earth", "Packed Earth", "Lots/PathMaterials/packed-earth", new Color32(130, 97, 67, 255))
         };
 

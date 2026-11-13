@@ -110,8 +110,10 @@ namespace CityForge.World
             // Nonadjacent reaches must leave enough space for their banks; reject loops/folds.
             for(int i=0;i<samples.Count;i++)for(int j=i+1;j<samples.Count;j++){if(j-i<3)continue;float along=0;for(int k=i+1;k<=j&&along<(half+bank)*3;k++)along+=Vector2.Distance(samples[k-1],samples[k]);if(along>(half+bank)*3&&Vector2.Distance(samples[i],samples[j])<(half+bank)*1.5f)return "Separate the bends so the banks do not fold over each other.";}
             var body=new RegionWaterBody{id=joined?.id??"player-channel-"+Guid.NewGuid().ToString("N"),kind=WaterBodyKind.River,isStream=stream,playerChannel=true,centerline=centerline.ToArray(),playerChannelLevels=levels.ToArray(),playerChannelGuides=raw.ToArray(),halfWidthNormalized=half/side,bankWidthNormalized=bank/side,playerChannelDepth=stream?.65f:2,appearanceProfile=stream?"player-stream-v1":"player-river-v1"};
-            var heights=terrainData.GetHeights(0,0,terrainData.heightmapResolution,terrainData.heightmapResolution);CaptureCoverageGround(heights);View.RecordPlayerChannel(body,joined?.id);
-            heights=playerLakeBaseTerrain.GetHeights(0,0,terrainData.heightmapResolution,terrainData.heightmapResolution);ApplyPlayerLakeBasins(heights);ApplyPlayerChannels(heights);terrainData.SetHeights(0,0,heights);bodyShores.Clear();BuildShoreField();
+            if (!playerLakeBaseTerrain)
+                CaptureCoverageGround(terrainData.GetHeights(0, 0, terrainData.heightmapResolution, terrainData.heightmapResolution));
+            View.RecordPlayerChannel(body,joined?.id);
+            var heights=playerLakeBaseTerrain.GetHeights(0,0,terrainData.heightmapResolution,terrainData.heightmapResolution);ApplyPlayerLakeBasins(heights);ApplyPlayerChannels(heights);terrainData.SetHeights(0,0,heights);bodyShores.Clear();BuildShoreField();
             var removed=new List<Vector2>();var kept=new List<TreeInstance>();foreach(var tree in CanonicalTreeInstances){var p=Origin+new Vector2(tree.position.x,tree.position.z)*Side;if(View.InPlayerChannelClearing(p))removed.Add(p);else kept.Add(tree);}if(removed.Count>0){View.RemoveForestAdditions(removed,.6f);if(MixedForest)MixedForest.RemoveWithin(removed,.6f);fullTreeInstances=kept.ToArray();RefreshEditedForest();}
             if (Geography)
             {

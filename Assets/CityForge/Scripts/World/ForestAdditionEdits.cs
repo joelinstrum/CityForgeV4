@@ -50,7 +50,7 @@ namespace CityForge.World
         {
             if(View.ForestAdditions.Length==0)return source;var result=new List<TreeInstance>(source.Length);
             foreach(var tree in source){var point=Origin+new Vector2(tree.position.x,tree.position.z)*Side;if(View.ForestAddition(point)==null)result.Add(tree);}
-            foreach(var tree in View.ForestAdditions)if(Contains(new Vector2(tree.x,tree.z))&&!View.InPlayerLakeClearing(new Vector2(tree.x,tree.z))&&!View.InPlayerChannelClearing(new Vector2(tree.x,tree.z)))result.Add(PlantedInstance(tree));return result.ToArray();
+            foreach(var tree in View.ForestAdditions)if(Contains(new Vector2(tree.x,tree.z))&&!View.InPlayerLakeClearing(new Vector2(tree.x,tree.z))&&!View.InPlayerChannelClearing(new Vector2(tree.x,tree.z))&&!View.LotClearsForest(new Vector2(tree.x,tree.z)))result.Add(PlantedInstance(tree));return result.ToArray();
         }
         void RefreshEditedForest()
         {

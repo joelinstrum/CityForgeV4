@@ -52,6 +52,7 @@ namespace CityForge.World
             }).ToArray())
             {
                 townZones.Remove(cell);
+                zoneWealth.Remove(cell);
                 residentialFacing.Remove(cell);
             }
 

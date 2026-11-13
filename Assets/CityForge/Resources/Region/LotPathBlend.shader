@@ -18,6 +18,7 @@ Shader "CityForge/Lot Path Blend"
         _EmissionMap("Emission", 2D) = "white" {}
         _EmissionColor("Emission Color", Color) = (0,0,0,0)
         _RoadShoulderMask("Road Shoulder Mask", 2D) = "gray" {}
+        _WagonMask("Wagon shoulder opacity", 2D) = "white" {}
         _RoadWearMap("Road Wear", 2D) = "white" {}
         [HideInInspector] _DirtEndFade("Standalone Dirt Ends", Vector) = (0,0,0,0)
         _EdgeBlend("Edge Blend in Meters", Float) = 0
@@ -38,6 +39,7 @@ Shader "CityForge/Lot Path Blend"
             #pragma vertex PathVertex
             #pragma fragment PathFragment
             #pragma multi_compile_local_fragment _ _ROAD_WEAR
+            #pragma multi_compile_local_fragment _ _WAGON_SURFACE
             #pragma multi_compile_local _ _NORMALMAP
             #pragma multi_compile_local_fragment _ _PARALLAXMAP
             #pragma multi_compile_local_fragment _ _METALLICSPECGLOSSMAP
@@ -61,6 +63,8 @@ Shader "CityForge/Lot Path Blend"
             float _EdgeBlend;
             float _Recessed;
             float _PathOpacity;
+            TEXTURE2D(_WagonMask);
+            SAMPLER(sampler_WagonMask);
             TEXTURE2D(_RoadWearMap);
             SAMPLER(sampler_RoadWearMap);
             TEXTURE2D(_RoadShoulderMask);
@@ -123,6 +127,15 @@ Shader "CityForge/Lot Path Blend"
             {
                 half3 view = GetWorldSpaceNormalizeViewDir(input.positionWS);
                 float2 uv = input.uv;
+                #if defined(_WAGON_SURFACE)
+                    float repeatLength = 4.5;
+                    if (input.ribbon.w < 0)
+                    {
+                        float loopLength = -input.ribbon.w;
+                        repeatLength = loopLength / (2 * max(1, round(loopLength / (2 * repeatLength))));
+                    }
+                    uv = float2(input.ribbon.z / repeatLength, saturate(input.ribbon.x / input.ribbon.y));
+                #endif
                 #if defined(_PARALLAXMAP)
                     ApplyPerPixelDisplacement(GetViewDirectionTangentSpace(input.tangentWS, input.normalWS, view), uv);
                 #endif
@@ -272,6 +285,9 @@ Shader "CityForge/Lot Path Blend"
                     float pockets = smoothstep(.55, .81, pocketNoise) * pocketBand;
                     float grassCoverage = max(intrusion, pockets) * patchCoverage;
                     opacity = shoulderCoverage * (1 - grassCoverage * lerp(.23, .98, closeDetail));
+                #endif
+                #if defined(_WAGON_SURFACE)
+                    opacity *= SAMPLE_TEXTURE2D(_WagonMask, sampler_WagonMask, uv).r;
                 #endif
                 if (input.ribbon.w > 0)
                 {

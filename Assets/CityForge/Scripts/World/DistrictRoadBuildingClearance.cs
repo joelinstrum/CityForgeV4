@@ -25,6 +25,12 @@ namespace CityForge.World
                 bounds = new Rect(center - extent, extent * 2f);
             }
 
+            public bool Contains(Vector2 point, float padding)
+            {
+                var local = Local(point);
+                return Mathf.Abs(local.x) <= half.x + padding && Mathf.Abs(local.y) <= half.y + padding;
+            }
+
             public bool Overlaps(Rect rect) => bounds.Overlaps(rect);
 
             public bool OverlapsTriangle(Vector2 a, Vector2 b, Vector2 c)
@@ -53,6 +59,50 @@ namespace CityForge.World
                 var offset = world - center;
                 return new Vector2(Vector2.Dot(offset, right), Vector2.Dot(offset, forward));
             }
+        }
+
+        private bool LotOverlapsDistrictRoad(DistrictLotRecord lot)
+        {
+            var lotFootprint = new DistrictLotFootprint(lot);
+            var bounds = lotFootprint.Bounds;
+            var half = lot.definition.Size * .5f;
+            var corners = new[] { lotFootprint.WorldPoint(-half), lotFootprint.WorldPoint(new Vector2(-half.x, half.y)),
+                lotFootprint.WorldPoint(half), lotFootprint.WorldPoint(new Vector2(half.x, -half.y)) };
+            foreach (var filter in districtRoadMeshes.Values)
+            {
+                var mesh = filter.sharedMesh;
+                var road = mesh.bounds;
+                if (!bounds.Overlaps(Rect.MinMaxRect(road.min.x, road.min.z, road.max.x, road.max.z))) continue;
+                var geometry = frontageGeometry.GetValue(mesh, source => new RoadGeometry(source));
+                for (int i = 0; i < geometry.Triangles.Length; i += 3)
+                {
+                    var a = Planar(geometry.Vertices[geometry.Triangles[i]]);
+                    var b = Planar(geometry.Vertices[geometry.Triangles[i + 1]]);
+                    var c = Planar(geometry.Vertices[geometry.Triangles[i + 2]]);
+                    if (Overlap(Vector2.Perpendicular(corners[1] - corners[0])) &&
+                        Overlap(Vector2.Perpendicular(corners[2] - corners[1])) &&
+                        Overlap(Vector2.Perpendicular(b - a)) && Overlap(Vector2.Perpendicular(c - b)) &&
+                        Overlap(Vector2.Perpendicular(a - c))) return true;
+
+                    bool Overlap(Vector2 axis)
+                    {
+                        if (axis.sqrMagnitude < .000001f) return true;
+                        axis.Normalize();
+                        float low = float.PositiveInfinity, high = float.NegativeInfinity;
+                        foreach (var corner in corners)
+                        {
+                            float value = Vector2.Dot(corner, axis);
+                            low = Mathf.Min(low, value);
+                            high = Mathf.Max(high, value);
+                        }
+                        float p = Vector2.Dot(a, axis), q = Vector2.Dot(b, axis), r = Vector2.Dot(c, axis);
+                        return Mathf.Min(p, q, r) < high - .001f && Mathf.Max(p, q, r) > low + .001f;
+                    }
+                }
+            }
+            return false;
+
+            static Vector2 Planar(Vector3 point) => new Vector2(point.x, point.z);
         }
 
         private bool RoadHitsBuilding(Mesh mesh, Vector3[] vertices)
