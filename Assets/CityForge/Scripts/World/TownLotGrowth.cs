@@ -295,9 +295,14 @@ namespace CityForge.World
 
         private bool HasGrowthZoning(RectInt cells, TownZoneFacing facing, LotWealth wealth, Vector2Int lotSize)
         {
+            bool anchored = zoneLotAnchors.ContainsKey(cells.min);
             foreach (var cell in cells.allPositionsWithin)
+            {
+                if (zoneLotAnchors.TryGetValue(cell, out var anchor) != anchored ||
+                    (anchored && anchor != cells.min)) return false;
                 if (!townZones.TryGetValue(cell, out var zone) || zone != TownZone.Residential1 ||
                     WealthAt(cell) != wealth || ZonedLotSize(cell) != lotSize || !residentialFacing.TryGetValue(cell, out var cellFacing) || cellFacing != facing) return false;
+            }
             return true;
         }
     }

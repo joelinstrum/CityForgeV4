@@ -19,8 +19,13 @@ namespace CityForge.World
         {
             if (!CanOpenDistrictContext || district < 0 || district >= DistrictCount || Waterless || Coastline || !wantsMeadow)
                 return false;
-            var area = new Rect(DistrictOrigin(district) / MapSide + Vector2.one * .5f, Vector2.one / GridSide);
-            return Array.Exists(Data.WaterBodies, body => body.kind == WaterBodyKind.Ocean && body.HasShorelineInside(area));
+            foreach (int member in DistrictMembers(district))
+            {
+                var area = new Rect(DistrictOrigin(member) / MapSide + Vector2.one * .5f, Vector2.one / GridSide);
+                if (Array.Exists(Data.WaterBodies, body => body.kind == WaterBodyKind.Ocean && body.HasShorelineInside(area)))
+                    return true;
+            }
+            return false;
         }
 
         internal static void ValidateDeepHarbors(int[] districts, int districtCount)
@@ -35,10 +40,29 @@ namespace CityForge.World
         internal string SetCoastlineDesign(int district, bool deep)
         {
             if (!CanDesignCoastline(district)) return "Choose a coastal district on the region map.";
-            if (HasDeepHarbor(district) == deep) return null;
-            DeepHarborDistricts = deep ? DeepHarborDistricts.Append(district).OrderBy(cell => cell).ToArray() :
-                DeepHarborDistricts.Where(cell => cell != district).ToArray();
+            ApplyCoastlineDesign(DistrictMembers(district), deep);
             return null;
+        }
+
+        private void RestoreDistrictCoastlines(int[] savedHarbors)
+        {
+            DeepHarborDistricts = savedHarbors ?? Array.Empty<int>();
+            foreach (var group in CombinedDistricts)
+                InheritCombinedDistrictHarbor(group.cells);
+        }
+
+        private void InheritCombinedDistrictHarbor(int[] members)
+        {
+            if (members.Any(HasDeepHarbor))
+                ApplyCoastlineDesign(members, true);
+        }
+
+        private void ApplyCoastlineDesign(int[] members, bool deep)
+        {
+            if (members.All(cell => HasDeepHarbor(cell) == deep)) return;
+            DeepHarborDistricts = deep
+                ? DeepHarborDistricts.Union(members).OrderBy(cell => cell).ToArray()
+                : DeepHarborDistricts.Except(members).ToArray();
         }
     }
 

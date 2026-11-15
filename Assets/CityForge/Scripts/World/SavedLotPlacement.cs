@@ -16,7 +16,8 @@ namespace CityForge.World
         private DistrictLotRecord ghostPlacement;
         private readonly Dictionary<(Material, bool), Material> lotGhostMaterials = new();
         private LineRenderer districtHover;
-        private int hoveredDistrict = -1;
+        private int[] hoveredDistrictMembers;
+        private CombinedDistrictGroup[] hoveredDistrictGroups;
 
         private void OpenSavedLotPicker()
         {
@@ -182,8 +183,18 @@ namespace CityForge.World
             if (SelectedDistrict < 0 && !DistrictLoading && Application.isFocused && relief &&
                 relief.gameObject.activeSelf && !(EventSystem.current && EventSystem.current.IsPointerOverGameObject()))
                 relief.TryPick(GetComponentInChildren<Camera>().ScreenPointToRay(Input.mousePosition), out district);
-            if (district == hoveredDistrict) return;
-            hoveredDistrict = district;
+            SetRegionDistrictHover(district);
+        }
+
+        private void SetRegionDistrictHover(int district)
+        {
+            if (hoveredDistrictGroups == CombinedDistricts &&
+                (district < 0 ? hoveredDistrictMembers == null :
+                    hoveredDistrictMembers != null && Array.IndexOf(hoveredDistrictMembers, district) >= 0))
+                return;
+
+            hoveredDistrictGroups = CombinedDistricts;
+            hoveredDistrictMembers = district < 0 ? null : DistrictMembers(district);
             if (district < 0)
             {
                 if (districtHover) districtHover.enabled = false;
@@ -198,17 +209,40 @@ namespace CityForge.World
                 districtHover.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 districtHover.widthMultiplier = DistrictSide * .008f;
                 districtHover.loop = true;
-                districtHover.positionCount = 128;
             }
-            var corner = DistrictOrigin(district);
-            var corners = new[] { corner, corner + Vector2.right * DistrictSide,
-                corner + Vector2.one * DistrictSide, corner + Vector2.up * DistrictSide };
-            for (int edge = 0; edge < 4; edge++)
-            for (int step = 0; step < 32; step++)
+            var edges = new HashSet<(Vector2Int from, Vector2Int to)>();
+            foreach (int member in hoveredDistrictMembers)
             {
-                var point = Vector2.Lerp(corners[edge], corners[(edge + 1) % 4], step / 32f);
-                var surface = relief.SurfacePoint(point / MapSide + Vector2.one * .5f);
-                districtHover.SetPosition(edge * 32 + step, surface + Vector3.up * (DistrictSide * .004f));
+                var lowerLeft = new Vector2Int(member % GridSide, member / GridSide);
+                var lowerRight = lowerLeft + Vector2Int.right;
+                var upperRight = lowerRight + Vector2Int.up;
+                var upperLeft = lowerLeft + Vector2Int.up;
+                AddEdge(lowerLeft, lowerRight);
+                AddEdge(lowerRight, upperRight);
+                AddEdge(upperRight, upperLeft);
+                AddEdge(upperLeft, lowerLeft);
+            }
+
+            const int samplesPerEdge = 32;
+            var nextCorner = edges.ToDictionary(edge => edge.from, edge => edge.to);
+            districtHover.positionCount = edges.Count * samplesPerEdge;
+            var corner = edges.First().from;
+            for (int edge = 0; edge < edges.Count; edge++)
+            {
+                var next = nextCorner[corner];
+                for (int step = 0; step < samplesPerEdge; step++)
+                {
+                    var point = Vector2.Lerp(corner, next, step / (float)samplesPerEdge) / GridSide;
+                    var surface = relief.SurfacePoint(point);
+                    districtHover.SetPosition(edge * samplesPerEdge + step, surface + Vector3.up * (DistrictSide * .004f));
+                }
+                corner = next;
+            }
+
+            void AddEdge(Vector2Int from, Vector2Int to)
+            {
+                // Opposing edges are shared by two members and lie inside the group.
+                if (!edges.Remove((to, from))) edges.Add((from, to));
             }
             districtHover.enabled = true;
         }

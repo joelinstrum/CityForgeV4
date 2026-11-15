@@ -157,10 +157,13 @@ namespace CityForge.UI
             coastlineAction.gameObject.SetActive(coastal);
             beachChoice.gameObject.SetActive(coastal && coastlineChoices);
             harborChoice.gameObject.SetActive(coastal && coastlineChoices);
-            bool deep = view.HasDeepHarbor(contextDistrict);
-            beachChoice.interactable = deep;
-            harborChoice.interactable = !deep;
-            contextStatus.text = coastal ? (deep ? "Current coastline: Deep Harbor" : "Current coastline: Beach") :
+            var members = view.DistrictMembers(contextDistrict);
+            bool anyHarbor = members.Any(view.HasDeepHarbor);
+            bool allHarbor = members.All(view.HasDeepHarbor);
+            beachChoice.interactable = anyHarbor;
+            harborChoice.interactable = !allHarbor;
+            contextStatus.text = coastal ? (allHarbor ? "Current coastline: Deep Harbor" :
+                anyHarbor ? "Mixed coastline. Choose a design for the combined district." : "Current coastline: Beach") :
                 !hasTown ? "No town or editable ocean coastline in this district." : "";
         }
 

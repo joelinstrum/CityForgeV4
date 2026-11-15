@@ -10,7 +10,7 @@ namespace CityForge.World
 
         internal static void Attach(GameObject instance, CityForge.Lots.LotAssetCatalogEntry asset, RegionTimeOfDay time)
         {
-            if (asset.growableWealth != CityForge.Lots.LotWealth.Medium || !asset.materialOverride ||
+            if (asset.growableZone != TownZone.Residential1 || !asset.materialOverride ||
                 !asset.materialOverride.IsKeywordEnabled("_EMISSION")) return;
             instance.AddComponent<ResidentialWindowLights>().SetTime(time);
         }

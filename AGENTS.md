@@ -18,6 +18,18 @@ Documentation/03_Technical/Approved_Mixed_Forest.md before changing this integra
 
 The Git repository is public and source-only. Do not add licensed artwork, imported asset packs, Crest package source, builds, or saved maps.
 
+## Building imports
+
+- Create and register a reduced mesh for each building import. Use the original at Zoom 0–2 and the same reduced mesh at Zoom 3–5. For local lot models, stage the alternate as `Distant.fbx` in the building's private asset folder. Match the original origin, scale, orientation, footprint, materials, and emission UVs. Check the silhouette and frontage at Zoom 3 and verify the switch in both directions.
+- Author a warm emission mask for selected front window panes and every exterior lamp on the model. Preserve visible sash and glazing detail. Connect emission to the district evening and night cycle on both mesh tiers. Give modeled exterior fixtures a local light pool where appropriate and check fixture alignment and dusk/night behavior in Unity.
+- Keep imported art, reduced meshes, emission masks, and the generated local catalog in the private asset workflow.
+
+## Lot prop imports
+
+- For each detailed static Lot Editor prop import, provide a reduced LOD for district Zoom 3–5. This applies to fences, landscaping, street furniture, and other placeable props. Reuse an authored prefab LOD when it meets the same requirements. Keep the original for Zoom 0–2 and preserve existing lightweight cards and meshes when further reduction would remove visible structure.
+- Stage a new alternate FBX at `Assets/CityForge/Resources/Lots/PropLOD/<catalog-id>.fbx` so catalog setup can register it. Keep imported art and the generated catalog private.
+- Match the original origin, scale, orientation, footprint, UVs, material slots, and shadow behavior. Verify the switch both ways at Zoom 2 and 3. Check stretched fence alignment, seasonal variants, and fixture lighting where applicable.
+
 ## PointWire and player lakes
 
 Use PointWirePath/PointWireSurface/PointWireTool and PointWireGeometry for reusable
