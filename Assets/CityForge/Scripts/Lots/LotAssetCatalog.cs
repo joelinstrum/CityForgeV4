@@ -1,4 +1,5 @@
 using System;
+using CityForge.CameraSystem;
 using CityForge.World;
 using UnityEngine;
 
@@ -24,6 +25,7 @@ namespace CityForge.Lots
         public bool IsCharacter => category == "Characters";
         internal float DefaultPlacementScale => id == LotCharacterDeck.HarborHouse ? 1.5f : 1f;
         public GameObject prefab;
+        public GameObject distantPrefab;
         public GameObject autumnPrefab, winterPrefab;
         internal bool IsSeasonalTree => category == "Trees" && autumnPrefab && winterPrefab;
 
@@ -69,7 +71,8 @@ namespace CityForge.Lots
         private static Material gardenSoilMaterial;
         private static readonly int LeafColor = Shader.PropertyToID("_BaseColor");
 
-        public static GameObject InstantiateObject(LotObjectDefinition item, LotAssetCatalogEntry asset, Transform parent, RegionSeason season = RegionSeason.Summer)
+        public static GameObject InstantiateObject(LotObjectDefinition item, LotAssetCatalogEntry asset,
+            Transform parent, RegionSeason season = RegionSeason.Summer, CityForgeCameraController districtCamera = null)
         {
             if (asset == null || !asset.prefab) throw new InvalidOperationException("Missing lot asset: " + item.assetId);
             var wrapper = new GameObject(asset.label);
@@ -154,6 +157,8 @@ namespace CityForge.Lots
             wrapper.transform.localPosition = new Vector3(item.position.x, 0f, item.position.y);
             wrapper.transform.localRotation = Quaternion.Euler(0f, item.yaw, 0f);
             wrapper.transform.localScale = Vector3.one * (item.scale * PlaceableTreeScale(asset));
+            if (districtCamera && !asset.IsCharacter)
+                DistrictBuildingDetail.Attach(wrapper.transform, model.transform, asset, districtCamera, season);
             if (asset.category == "Trees")
                 TintPlaceableTree(wrapper, asset.id, season);
             return wrapper;

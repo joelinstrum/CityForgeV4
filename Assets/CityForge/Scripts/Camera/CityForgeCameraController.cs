@@ -242,7 +242,12 @@ namespace CityForge.CameraSystem
             if(tilt>0&&regionSide>0&&!perspectiveRelief&&posePitch>=10f){
                 float screenDepth=orthographicSize/Mathf.Tan(posePitch*Mathf.Deg2Rad);
                 float topDepth=(shadowTerrainHeight+80f-focus.y)/Mathf.Sin(posePitch*Mathf.Deg2Rad);
-                poseDistance=Mathf.Max(poseDistance,screenDepth+topDepth+30f);
+                float clearanceDistance = screenDepth + topDepth + 30f;
+                // A district-wide setback at close zoom puts visible ground in URP's
+                // distance fade even when it is well inside the orthographic viewport.
+                poseDistance = district && FitShadowDepth && !lowerView && ZoomLevel <= 3
+                    ? Mathf.Max(30f, clearanceDistance)
+                    : Mathf.Max(poseDistance, clearanceDistance);
             }
             poseDistance=Mathf.Lerp(lowDistance,poseDistance,tilt);
             OrthographicSetback=tilt==0?0:Mathf.Max(0,poseDistance-distance);

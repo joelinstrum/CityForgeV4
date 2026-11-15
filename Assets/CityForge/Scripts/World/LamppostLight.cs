@@ -25,6 +25,77 @@ namespace CityForge.World
                 AddWallLantern(instance, new Vector3(.36f, .32f, .37f) * span, cullingMask, time);
                 return;
             }
+            if (asset.id == "v3-building-high-wealth-mediterranean-villa")
+            {
+                float span = Mathf.Max(asset.footprint.x, asset.footprint.y);
+                AddWallLantern(instance, new Vector3(.258f, .243f, .370f) * span, cullingMask, time);
+                AddWallLantern(instance, new Vector3(.002f, .243f, .370f) * span, cullingMask, time);
+                AddWallLantern(instance, new Vector3(-.263f, .243f, .370f) * span, cullingMask, time);
+                return;
+            }
+            if (asset.id == "v3-building-high-wealth-southern-mansion-slate")
+            {
+                float span = Mathf.Max(asset.footprint.x, asset.footprint.y);
+                AddWallLantern(instance, new Vector3(0f, .588f, .273f) * span, cullingMask, time);
+                AddWallLantern(instance, new Vector3(0f, .326f, .282f) * span, cullingMask, time);
+                return;
+            }
+            if (asset.id == "v3-building-high-wealth-regency-southern-mansion")
+            {
+                float span = Mathf.Max(asset.footprint.x, asset.footprint.y);
+                AddWallLantern(instance, new Vector3(.152f, .273f, .299f) * span, cullingMask, time);
+                AddWallLantern(instance, new Vector3(.102f, .273f, .143f) * span, cullingMask, time);
+                return;
+            }
+            if (asset.id == "v3-building-high-wealth-grand-stucco-manor")
+            {
+                float span = Mathf.Max(asset.footprint.x, asset.footprint.y);
+                AddWallLantern(instance, new Vector3(.120f, .295f, .308f) * span, cullingMask, time);
+                AddWallLantern(instance, new Vector3(-.117f, .295f, .308f) * span, cullingMask, time);
+                return;
+            }
+            if (asset.id == "v3-building-high-wealth-georgian-stone-green-trim")
+            {
+                float span = Mathf.Max(asset.footprint.x, asset.footprint.y);
+                AddWallLantern(instance, new Vector3(.1f, .226f, .278f) * span, cullingMask, time);
+                AddWallLantern(instance, new Vector3(-.1f, .226f, .278f) * span, cullingMask, time);
+                return;
+            }
+            if (asset.id == "v3-building-high-wealth-georgian-stone")
+            {
+                float span = Mathf.Max(asset.footprint.x, asset.footprint.y);
+                AddWallLantern(instance, new Vector3(.09f, .232f, .247f) * span, cullingMask, time);
+                AddWallLantern(instance, new Vector3(-.091f, .232f, .247f) * span, cullingMask, time);
+                return;
+            }
+            if (asset.id == "v3-building-high-wealth-vernon")
+            {
+                float span = Mathf.Max(asset.footprint.x, asset.footprint.y);
+                AddWallLantern(instance, new Vector3(.051f, .158f, .15f) * span, cullingMask, time);
+                AddWallLantern(instance, new Vector3(-.048f, .158f, .165f) * span, cullingMask, time);
+                return;
+            }
+            if (asset.id == "v3-building-high-wealth-red-brick-georgian")
+            {
+                float span = Mathf.Max(asset.footprint.x, asset.footprint.y);
+                AddWallLantern(instance, new Vector3(.062f, .262f, .237f) * span, cullingMask, time);
+                AddWallLantern(instance, new Vector3(-.158f, .262f, .237f) * span, cullingMask, time);
+                return;
+            }
+            if (asset.id == "v3-building-high-wealth-federal-mansion")
+            {
+                float span = Mathf.Max(asset.footprint.x, asset.footprint.y);
+                AddWallLantern(instance, new Vector3(-.172f, .31f, .176f) * span, cullingMask, time);
+                AddWallLantern(instance, new Vector3(.172f, .31f, .176f) * span, cullingMask, time);
+                return;
+            }
+            if (asset.id == "v3-building-high-wealth-grand-colonial")
+            {
+                float span = Mathf.Max(asset.footprint.x, asset.footprint.y);
+                AddWallLantern(instance, new Vector3(-.14f, .255f, .26f) * span, cullingMask, time);
+                AddWallLantern(instance, new Vector3(.14f, .255f, .26f) * span, cullingMask, time);
+                return;
+            }
             if (asset.id == "v3-building-medium-wealth-red-house")
             {
                 float span = Mathf.Max(asset.footprint.x, asset.footprint.y);

@@ -37,6 +37,7 @@ namespace CityForge.World
             if(CombinedDistricts.Any(g=>g.cells.Length==cells.Length&&g.cells.All(cells.Contains)))return;
             var selection=new HashSet<int>(cells);foreach(var group in CombinedDistricts)if(group.cells.Any(selection.Contains)&&!group.cells.All(selection.Contains))throw new ArgumentException("Select an entire existing combined district.");
             CombinedDistricts=CombinedDistricts.Where(g=>!g.cells.Any(selection.Contains)).Concat(new[]{new CombinedDistrictGroup{cells=cells.OrderBy(i=>i).ToArray()}}).ToArray();
+            InheritCombinedDistrictHarbor(cells);
             memberAnchor=-2;
             foreach(int cell in cells)sessionMeadows.Remove(cell);if(cells.Contains(LoadedMeadowDistrict)){LoadedMeadow=null;LoadedMeadowDistrict=-1;}
             GetComponent<DistrictCombiner>()?.RefreshBorders();

@@ -584,6 +584,7 @@ namespace CityForge.World
             var residentialGround = lotInstances.GetComponent<ResidentialGroundBatches>();
             var active = new HashSet<int>(ActiveDistrictMembers);
             var camera = GetComponentInChildren<Camera>();
+            var cameraRig = camera ? camera.GetComponent<CityForgeCameraController>() : null;
             bool meadowGrade = ApprovedDistrict && camera &&
                 camera.GetUniversalAdditionalCameraData().renderPostProcessing;
             foreach (var record in records)
@@ -612,7 +613,7 @@ namespace CityForge.World
                         item.characterScript.scriptedBehavior == LotScriptedBehavior.DockWorker;
                     if (dockWorker && !item.characterScript.dockStayVisible) continue;
                     hasSeasonalLotTrees |= asset.IsSeasonalTree;
-                    var instance = LotRuntimeLoader.InstantiateObject(item, asset, root, VisualSeason).transform;
+                    var instance = LotRuntimeLoader.InstantiateObject(item, asset, root, VisualSeason, cameraRig).transform;
                     var point = instance.position;
                     point.y = LotHeight(new Vector2(point.x, point.z));
                     if (definition.IsWaterfront && LotRuntimeLoader.Footprint(item, asset).Overlaps(definition.WaterfrontBounds))

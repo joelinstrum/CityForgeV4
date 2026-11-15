@@ -1,3 +1,4 @@
+using CityForge.CameraSystem;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -120,7 +121,9 @@ namespace CityForge.World
                 streetscapeRoot = new GameObject("District Streetscape").transform;
                 streetscapeRoot.SetParent(transform, false);
             }
-            var instance = LotRuntimeLoader.InstantiateObject(record.streetscape, asset, streetscapeRoot);
+            var cameraRig = GetComponentInChildren<CityForgeCameraController>();
+            var instance = LotRuntimeLoader.InstantiateObject(record.streetscape, asset, streetscapeRoot,
+                districtCamera: cameraRig);
             instance.transform.position = new Vector3(record.position.x, LotHeight(record.position), record.position.y);
             LamppostLight.Attach(instance, asset, TimeOfDay);
         }

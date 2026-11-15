@@ -25,6 +25,8 @@ internal static class LotCatalogSetup
 
         var farmhouse = Entry("farmhouse", "Farmhouse", "Buildings", house, new Vector2(12, 12), false, true);
         SetBuildingEra(farmhouse, "residential", "founders");
+        farmhouse.distantPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(
+            DirectoryPath + "/V3Buildings/Farmhouse/Distant.fbx");
         farmhouse.materialOverride = AssetDatabase.LoadAssetAtPath<Material>(meadow +
             "Integration/Materials/Farmhouse tripo_mat_6e4dde22 LandscapeLit.mat");
         var palms = AssetDatabase.LoadAssetAtPath<Material>(resources + "TropicalCoconut/Palms.mat");
@@ -48,6 +50,32 @@ internal static class LotCatalogSetup
             MediumWealthHome("medium-wealth-brick-colonial", "Brick Colonial House", "MediumWealthBrickColonial", 10.3f),
             MediumWealthHome("medium-wealth-red-house", "Red House", "MediumWealthRedHouse", 9.5f),
             MediumWealthHome("medium-wealth-gray-colonial", "Gray Colonial House", "MediumWealthGrayColonial", 10.3f),
+            FoundersResidentialHome("high-wealth-grand-colonial", "Grand Colonial Entryway",
+                "HighWealthGrandColonial", 12f, LotWealth.High),
+            FoundersResidentialHome("high-wealth-federal-mansion", "Federal Style Mansion",
+                "HighWealthFederalMansion", 13f, LotWealth.High),
+            FoundersResidentialHome("high-wealth-grand-georgian", "Grand Georgian Mansion",
+                "HighWealthGrandGeorgian", 14f, LotWealth.High),
+            FoundersResidentialHome("high-wealth-red-brick-georgian", "Red Brick Georgian Mansion",
+                "HighWealthRedBrickGeorgian", 14f, LotWealth.High),
+            FoundersResidentialHome("high-wealth-vernon", "Georgian Greek Revival Vernon",
+                "HighWealthVernon", 16.5f, LotWealth.High),
+            FoundersResidentialHome("high-wealth-georgian-stone", "Georgian Stone Mansion Entrance",
+                "HighWealthGeorgianStone", 13.5f, LotWealth.High),
+            FoundersResidentialHome("high-wealth-georgian-stone-green-trim", "Georgian Stone Mansion Green Trim",
+                "HighWealthGeorgianStoneGreenTrim", 13.5f, LotWealth.High),
+            FoundersResidentialHome("high-wealth-grand-stucco-manor", "Grand Stucco Manor",
+                "HighWealthGrandStuccoManor", 12.5f, LotWealth.High),
+            FoundersResidentialHome("high-wealth-regency-southern-mansion", "Regency Southern Mansion",
+                "HighWealthRegencySouthernMansion", 13f, LotWealth.High),
+            FoundersResidentialHome("high-wealth-southern-mansion-slate", "Southern Mansion with Slate Accents",
+                "HighWealthSouthernMansionSlate", 13f, LotWealth.High),
+            FoundersResidentialHome("high-wealth-grand-southern-greek-revival", "Grand Southern Greek Revival Mansion",
+                "HighWealthGrandSouthernGreekRevival", 15f, LotWealth.High),
+            FoundersResidentialHome("high-wealth-mediterranean-villa", "Mediterranean Villa with Burnt Orange Shutters",
+                "HighWealthMediterraneanVilla", 14f, LotWealth.High),
+            FoundersResidentialHome("high-wealth-georgian-three-dormers", "Georgian Colonial Three Dormers",
+                "HighWealthGeorgianThreeDormers", 12f, LotWealth.High),
             FrontierLogCabin(),
             SmallColonialCabin(),
             FoundersHome("low-wealth-front-gable", "Front Gable House", "LowWealthFrontGable"),
@@ -65,6 +93,12 @@ internal static class LotCatalogSetup
                 "CF_Prop_PicketFence_Straight_v01", "", 2.4f, repeatable: true, iron: false),
             V3Fence("v3-wrought-iron", "Wrought iron fence", "WroughtIronFenceV01",
                 "CF_WroughtIronFence_Straight_LOD0_v01", "", 6.4f, repeatable: true),
+            V3Fence("stone-column-wrought-iron-section", "Wrought iron fence with stone columns",
+                "StoneColumnWroughtIronSection", "Model", "", 1.5f, byHeight: true, extension: ".jpg"),
+            V3Fence("beige-stone-wrought-iron-section", "Beige stone wrought iron fence section",
+                "BeigeStoneWroughtIronSection", "Model", "", 1.5f, byHeight: true, extension: ".jpg"),
+            V3Fence("beige-stone-wrought-iron-partial", "Beige stone column with wrought iron partial",
+                "BeigeStoneWroughtIronPartial", "Model", "", 1.5f, byHeight: true, extension: ".jpg"),
             V3Fence("v3-wrought-iron-corner", "Wrought iron corner", "WroughtIronFenceV01",
                 "CF_WroughtIronFence_Corner_LShape_LOD0_v02", "corner-", 2.55f),
             V3Fence("v3-decorative-iron", "Decorative iron garden fence", "WroughtIronVariationsV01",
@@ -133,13 +167,22 @@ internal static class LotCatalogSetup
         bool changed = false;
         foreach (var entry in candidates.Concat(PlaceableSeasonalTrees.CatalogEntries()).Concat(foundersHomes).Concat(mediumHomes).Concat(meadowPoplars).Concat(Characters()).Concat(Landscaping()).Concat(Corn()).Concat(Wheat()).Where(item => item.prefab))
         {
+            if (entry.category != "Buildings" && !entry.IsCharacter)
+                entry.distantPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(
+                    $"{DirectoryPath}/PropLOD/{entry.id}.fbx");
             var existing = entries.Find(item => item != null && item.id == entry.id);
             if (existing == null)
             {
                 entries.Add(entry);
                 changed = true;
+                continue;
             }
-            else if (entry.autumnPrefab && entry.winterPrefab && (existing.prefab != entry.prefab ||
+            if (existing.distantPrefab != entry.distantPrefab)
+            {
+                existing.distantPrefab = entry.distantPrefab;
+                changed = true;
+            }
+            if (entry.autumnPrefab && entry.winterPrefab && (existing.prefab != entry.prefab ||
                 existing.autumnPrefab != entry.autumnPrefab || existing.winterPrefab != entry.winterPrefab))
             {
                 existing.prefab = entry.prefab;
@@ -228,6 +271,7 @@ internal static class LotCatalogSetup
         var model = AssetDatabase.LoadAssetAtPath<GameObject>(modelPath);
         var entry = Entry(id, label, "Buildings", model, Vector2.one * span, false, true);
         SetBuildingEra(entry, "civics", "founders");
+        entry.distantPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(root + "Distant.fbx");
         entry.subcategory = "founders-buildings";
         if (!model) return entry;
 
@@ -355,11 +399,15 @@ internal static class LotCatalogSetup
         MediumWealthHome("medium-wealth-stone-house", "Stone House", "MediumWealthStoneHouse", 9f);
 
     private static LotAssetCatalogEntry MediumWealthHome(string id, string label, string folder,
-        float span, string normalExtension = ".jpg")
+        float span, string normalExtension = ".jpg") =>
+        FoundersResidentialHome(id, label, folder, span, LotWealth.Medium, normalExtension);
+
+    private static LotAssetCatalogEntry FoundersResidentialHome(string id, string label, string folder,
+        float span, LotWealth wealth, string normalExtension = ".jpg")
     {
         var home = V3Building(id, label, folder, "residential", "founders", span, ".jpg", normalExtension);
         home.growableZone = TownZone.Residential1;
-        home.growableWealth = LotWealth.Medium;
+        home.growableWealth = wealth;
         string maskPath = $"{DirectoryPath}/V3Buildings/{folder}/Windows.png";
         if (AssetImporter.GetAtPath(maskPath) is TextureImporter maskImporter && maskImporter.sRGBTexture)
         {
@@ -386,6 +434,8 @@ internal static class LotCatalogSetup
         var model = AssetDatabase.LoadAssetAtPath<GameObject>(root + "Model.fbx");
         var entry = Entry("v3-building-" + id, label, modelCategory, model, Vector2.one * span, false, true);
         SetBuildingEra(entry, category, era);
+        if (modelCategory == "Buildings")
+            entry.distantPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(root + "Distant.fbx");
         if (!model) return entry;
 
         var bounds = FenceBounds(model).size;

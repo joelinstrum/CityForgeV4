@@ -24,6 +24,8 @@ namespace CityForge.World
         public TownZoneFacing facing;
         public LotWealth wealth;
         public int lotWidth, lotDepth;
+        public bool hasLotAnchor;
+        public int lotAnchorX, lotAnchorZ;
     }
 
     public enum TownZoneFacing { None, East, North, West, South }
@@ -47,6 +49,7 @@ namespace CityForge.World
         private Dropdown zoneWealthPicker;
         private Vector2Int selectedZoneLotSize;
         private readonly Dictionary<Vector2Int, Vector2Int> zoneLotSizes = new();
+        private readonly Dictionary<Vector2Int, Vector2Int> zoneLotAnchors = new();
 
         private Vector2Int ZonedLotSize(Vector2Int cell) => zoneLotSizes.GetValueOrDefault(cell);
 
@@ -91,10 +94,17 @@ namespace CityForge.World
         private readonly Dictionary<Vector2Int, bool> zoneDragDryCells = new();
 
         internal TownZoneCell[] CaptureTownZones() => townZones.OrderBy(pair => pair.Key.y).ThenBy(pair => pair.Key.x)
-            .Select(pair => new TownZoneCell
+            .Select(pair =>
             {
-                x = pair.Key.x, z = pair.Key.y, zone = pair.Value, wealth = zoneWealth.GetValueOrDefault(pair.Key), facing = residentialFacing.GetValueOrDefault(pair.Key),
-                lotWidth = ZonedLotSize(pair.Key).x, lotDepth = ZonedLotSize(pair.Key).y
+                var cell = pair.Key;
+                var size = ZonedLotSize(cell);
+                bool hasAnchor = zoneLotAnchors.TryGetValue(cell, out var anchor);
+                return new TownZoneCell
+                {
+                    x = cell.x, z = cell.y, zone = pair.Value, wealth = zoneWealth.GetValueOrDefault(cell),
+                    facing = residentialFacing.GetValueOrDefault(cell), lotWidth = size.x, lotDepth = size.y,
+                    hasLotAnchor = hasAnchor, lotAnchorX = anchor.x, lotAnchorZ = anchor.y
+                };
             }).ToArray();
 
         private void RestoreTownZones(TownZoneCell[] cells, int gridVersion)
@@ -110,6 +120,8 @@ namespace CityForge.World
                         if (cell.wealth != LotWealth.None) zoneWealth.Add(key, cell.wealth);
                         if (cell.lotWidth > 0 && cell.lotDepth > 0)
                             zoneLotSizes.Add(key, new Vector2Int(cell.lotWidth, cell.lotDepth));
+                        if (cell.hasLotAnchor)
+                            zoneLotAnchors.Add(key, new Vector2Int(cell.lotAnchorX, cell.lotAnchorZ));
                         if (cell.facing != TownZoneFacing.None) residentialFacing.Add(key, cell.facing);
                     }
         }
@@ -133,6 +145,12 @@ namespace CityForge.World
                     (cell.lotWidth != 0 || cell.lotDepth != 0) &&
                         (cell.zone != TownZone.Residential1 || cell.lotWidth < 1 || cell.lotWidth > LotDefinition.MaxTiles ||
                          cell.lotDepth < 1 || cell.lotDepth > ResidentialDepth(cell.zone)) ||
+                    cell.hasLotAnchor &&
+                        (legacy || cell.lotWidth == 0 || cell.lotDepth == 0 ||
+                         cell.lotAnchorX < 0 || cell.lotAnchorZ < 0 || cell.lotAnchorX > cell.x ||
+                         cell.lotAnchorZ > cell.z ||
+                         cell.x - cell.lotAnchorX >= Mathf.Max(cell.lotWidth, cell.lotDepth) ||
+                         cell.z - cell.lotAnchorZ >= Mathf.Max(cell.lotWidth, cell.lotDepth)) ||
                     !seen.Add(new Vector2Int(cell.x, cell.z)))
                     throw new InvalidDataException("Invalid town zone cell.");
         }
@@ -401,16 +419,33 @@ namespace CityForge.World
                     townZones[cell] = zone;
                     zoneWealth[cell] = selectedZoneWealth;
                 }
-                if (zone == TownZone.Residential1 && selectedZoneLotSize != Vector2Int.zero)
-                    zoneLotSizes[cell] = selectedZoneLotSize;
-                else zoneLotSizes.Remove(cell);
-                if (enclosed) residentialFacing[cell] = EnclosedBlockFacing(bounds, cell);
-                else if (facing != TownZoneFacing.None) residentialFacing[cell] = facing;
+                var cellFacing = enclosed ? EnclosedBlockFacing(bounds, cell) : facing;
+                SetZonedLotSize(cell, bounds.min, cellFacing,
+                    zone == TownZone.Residential1 ? selectedZoneLotSize : Vector2Int.zero);
+                if (cellFacing != TownZoneFacing.None) residentialFacing[cell] = cellFacing;
                 else residentialFacing.Remove(cell);
             }
             if (affectsGrowth) QueueZoningGrowth(bounds);
             RefreshZoneOverlay();
             return null;
+        }
+
+        private void SetZonedLotSize(Vector2Int cell, Vector2Int paintOrigin, TownZoneFacing facing,
+            Vector2Int size)
+        {
+            if (size == Vector2Int.zero)
+            {
+                zoneLotSizes.Remove(cell);
+                zoneLotAnchors.Remove(cell);
+                return;
+            }
+
+            zoneLotSizes[cell] = size;
+            // An exact-size paint assigns cells to fixed parcels, measured along and across the frontage.
+            var worldSize = facing is TownZoneFacing.East or TownZoneFacing.West
+                ? new Vector2Int(size.y, size.x) : size;
+            var offset = cell - paintOrigin;
+            zoneLotAnchors[cell] = cell - new Vector2Int(offset.x % worldSize.x, offset.y % worldSize.y);
         }
 
         private Vector2 ZoneCorner(Vector2Int cell) =>

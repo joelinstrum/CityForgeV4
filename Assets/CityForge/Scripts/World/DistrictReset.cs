@@ -54,6 +54,8 @@ namespace CityForge.World
                 townZones.Remove(cell);
                 zoneWealth.Remove(cell);
                 residentialFacing.Remove(cell);
+                zoneLotSizes.Remove(cell);
+                zoneLotAnchors.Remove(cell);
             }
 
             ForestAdditions = ForestAdditions.Where(tree => !members.Contains(tree.district)).ToArray();
