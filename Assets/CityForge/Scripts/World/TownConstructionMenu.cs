@@ -35,14 +35,14 @@ namespace CityForge.World
             var artworkShader = Resources.Load<Shader>("UI/TownButtonArtwork");
             if (artworkShader && ((darkTownButtons && goldTownButtons) || transportButtonArtwork))
                 townButtonArtwork = Own(new Material(artworkShader));
-            townModeSwitch = BottomPanel(hud, "District tool modes", 10, 310, 44);
+            townModeSwitch = BottomPanel(hud, "District tool modes", 64, 310, 44);
             natureModeButton = TownButton(townModeSwitch, font, "Nature", 0, 0, 154, () => SetTownConstruction(false));
             townModeButton = TownButton(townModeSwitch, font, "Town", 156, 0, 154, () => SetTownConstruction(true));
             townModeButton.GetComponentInChildren<Text>(includeInactive: true).text = "City";
             SkinTownButton(natureModeButton, new Rect(740, 462, 347, 112), 44);
             SkinTownButton(townModeButton, new Rect(1087, 462, 349, 112), 44);
 
-            townToolbar = BottomPanel(hud, "Town construction toolbar", 63, 1034, 82);
+            townToolbar = BottomPanel(hud, "Town construction toolbar", 117, 1034, 82);
             string[] labels = { "Transport", "Zones", "Civic Lots", "Utilities", "Parks", "Town Info" };
             int[] edges = { 409, 752, 1090, 1435, 1778, 2121 };
             for (int i = 0; i < labels.Length; i++)

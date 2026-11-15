@@ -45,10 +45,12 @@ namespace CityForge.UI
         private RawImage image;
         private RenderTexture target;
         private Vector3 focus;
-        private float yaw = 315f, pitch = CityForgeCameraController.IsometricPitch, zoom = 1f, span;
+        private const float DefaultYaw = 315f;
+        private float yaw = DefaultYaw, pitch = CityForgeCameraController.IsometricPitch, zoom = 1f, span;
         private Texture2D draftingTexture;
         private readonly Dictionary<string, Transform> instances = new Dictionary<string, Transform>();
         private readonly List<(string id, Renderer renderer)> pickTargets = new List<(string, Renderer)>();
+        private readonly List<(string id, Transform trunk)> treePickTargets = new();
         private readonly Dictionary<string, Transform> selectionFootprints = new();
         private Action<Vector2, string, LotPathDefinition> click;
         private Action<string, Vector2> beginMove;
@@ -336,6 +338,7 @@ namespace CityForge.UI
             pathSelectionGuide.gameObject.SetActive(false);
             instances.Clear();
             pickTargets.Clear();
+            treePickTargets.Clear();
             previewLitSurfaces.Clear();
             selectionFootprints.Clear();
             entryMarker = null;
@@ -451,16 +454,18 @@ namespace CityForge.UI
                     previewCharacters.Add(item.id);
                     characterPreview.Bind(item, asset, instance.transform, animationsPaused);
                 }
+                bool tree = asset.category == "Trees";
+                if (tree) treePickTargets.Add((item.id, instance.transform));
                 foreach (var renderer in instance.GetComponentsInChildren<Renderer>())
                 {
                     RegisterLitSurface(renderer);
-                    if (renderer is MeshRenderer || renderer is SkinnedMeshRenderer || renderer is BillboardRenderer)
+                    if (!tree && (renderer is MeshRenderer || renderer is SkinnedMeshRenderer || renderer is BillboardRenderer))
                         pickTargets.Add((item.id, renderer));
                 }
                 ResidentialWindowLights.Attach(instance, asset, PreviewTime);
                 LamppostLight.Attach(instance, asset, PreviewTime, 1 << PreviewLayer);
                 if (item.id != selected && !selectedGroup.Contains(item.id)) continue;
-                var footprint = LotRuntimeLoader.Footprint(item, asset);
+                var footprint = tree ? new Rect(Vector2.zero, Vector2.one * TreePickWidth(instance.transform)) : LotRuntimeLoader.Footprint(item, asset);
                 var position = instance.transform.localPosition;
                 selectionFootprints[item.id] = Box("Selected footprint", new Vector3(position.x, position.y + .075f, position.z),
                     new Vector3(footprint.width, .025f, footprint.height), border).transform;
@@ -695,7 +700,7 @@ namespace CityForge.UI
             ClearPlacementGhost();
             if (asset == null) return;
             ghostAsset = asset;
-            placementGhost = LotRuntimeLoader.InstantiateObject(new LotObjectDefinition { assetId = asset.id, yaw = yaw, scale = scale }, asset, stage);
+            placementGhost = LotRuntimeLoader.InstantiateObject(new LotObjectDefinition { assetId = asset.id, yaw = yaw, scale = scale, fenceLength = asset.fenceSpan, fenceEndPost = asset.fenceSpan > 0 }, asset, stage);
             placementGhost.name = asset.label + " placement preview";
             foreach (var child in placementGhost.GetComponentsInChildren<Transform>(true))
                 child.gameObject.layer = PreviewLayer;
@@ -710,6 +715,12 @@ namespace CityForge.UI
                     if (!original) continue;
                     if (!ghostMaterials.TryGetValue(original, out var transparent))
                     {
+                        if (!original.HasColor("_BaseColor") || !original.HasProperty("_Surface"))
+                        {
+                            // Native meadow shaders own their cutout and render state.
+                            // Keep those slots intact in the preview.
+                            continue;
+                        }
                         transparent = new Material(original);
                         var color = transparent.GetColor("_BaseColor");
                         color.a *= asset.category == "Landscaping" ? .82f : .48f;
@@ -792,6 +803,13 @@ namespace CityForge.UI
             return rect.min + Vector2.Scale(rect.size, new Vector2(projected.x, projected.y));
         }
 
+        public bool TryGetGuidePoint(out Vector2 point)
+        {
+            point = default;
+            return guidePointer.HasValue &&
+                TryRay(guidePointer.Value, guideEventCamera, out var ray) && TryPoint(ray, out point);
+        }
+
         private void DrawGuide(PointWirePath path, PointWireGraphic guide, float width, bool ground,
             Func<Vector2, Vector2> snapEnd = null)
         {
@@ -800,8 +818,7 @@ namespace CityForge.UI
             var points = path.Points;
             Vector2? end = null;
             bool loop = path.Closed;
-            if (!path.Finished && guidePointer.HasValue &&
-                TryRay(guidePointer.Value, guideEventCamera, out var ray) && TryPoint(ray, out var hover))
+            if (!path.Finished && TryGetGuidePoint(out var hover))
             {
                 end = ground ? snapGroundPoint(hover) : snapEnd?.Invoke(hover) ?? hover;
                 if (points.Count == 0)
@@ -941,6 +958,27 @@ namespace CityForge.UI
             cameraView.nearClipPlane = distance - depth;
             cameraView.farClipPlane = distance + depth;
             cameraView.transform.SetPositionAndRotation(Origin + focus - rotation * Vector3.forward * distance, rotation);
+        }
+
+        public bool OrbitWithArrows()
+        {
+            int horizontal = (Input.GetKey(KeyCode.RightArrow) ? 1 : 0) -
+                (Input.GetKey(KeyCode.LeftArrow) ? 1 : 0);
+            int vertical = (Input.GetKey(KeyCode.UpArrow) ? 1 : 0) -
+                (Input.GetKey(KeyCode.DownArrow) ? 1 : 0);
+            if (horizontal == 0 && vertical == 0) return false;
+            yaw = Mathf.Repeat(yaw + horizontal * 90f * Time.unscaledDeltaTime, 360f);
+            pitch = Mathf.Clamp(pitch + vertical * 60f * Time.unscaledDeltaTime, 18f, 90f);
+            ApplyPose();
+            return true;
+        }
+
+        public void ResetOrbit()
+        {
+            yaw = DefaultYaw;
+            pitch = CityForgeCameraController.IsometricPitch;
+            focus = Vector3.zero;
+            ApplyPose();
         }
 
         public void TopDown()
@@ -1167,6 +1205,9 @@ namespace CityForge.UI
             characterFocus = enabled;
         }
 
+        // Center a small hit volume on the tree's planting point and lower trunk.
+        private static float TreePickWidth(Transform tree) => Mathf.Clamp(.65f * tree.lossyScale.x, .45f, 1f);
+
         private string Pick(Ray ray)
         {
             string id = null;
@@ -1187,6 +1228,18 @@ namespace CityForge.UI
                 nearest = distance / scale;
                 id = target.id;
                 pickedCharacter = character;
+            }
+            if (!pickedCharacter)
+            {
+                foreach (var (treeId, trunk) in treePickTargets)
+                {
+                    if (!trunk) continue;
+                    float width = TreePickWidth(trunk);
+                    var bounds = new Bounds(trunk.position + Vector3.up * .55f, new Vector3(width, 1.1f, width));
+                    if (!bounds.IntersectRay(ray, out var distance) || distance >= nearest) continue;
+                    nearest = distance;
+                    id = treeId;
+                }
             }
             return id;
         }
@@ -1275,7 +1328,7 @@ namespace CityForge.UI
                 TryRay(eventData.position, eventData.pressEventCamera, out var ray) &&
                 TryPlacementPoint(ray, character, out var point))
             {
-                if (PickingEntryMarker)
+                if (PickingEntryMarker || ghostAsset != null || fencePath is { Finished: false } || groundPath is { Finished: false })
                 {
                     click(point, null, null);
                     return;

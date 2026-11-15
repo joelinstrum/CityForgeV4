@@ -134,7 +134,7 @@ namespace CityForge.World
                 roadWire.LoopCompletionRequested = points => PlaceDistrictRoad(points, true);
                 roadWire.RepeatOnCompletion = true;
 
-                roadControls = FounderRect(hud, "Road placement controls", new Vector2(0, 161), new Vector2(242, 40));
+                roadControls = FounderRect(hud, "Road placement controls", new Vector2(0, 215), new Vector2(242, 40));
                 roadControls.anchorMin = roadControls.anchorMax = roadControls.pivot = new Vector2(.5f, 0);
                 finishRoadButton = TownButton(roadControls, lotFont, "Place Road", 0, 0, 130, FinishRoad);
                 TownButton(roadControls, lotFont, "Cancel", 138, 0, 104, CancelRoadPlacement);
@@ -168,8 +168,8 @@ namespace CityForge.World
             finishRoadButton.interactable = roadWire.Points.Count >= 2;
             if (Input.GetKeyDown(KeyCode.Escape))
             {
-                if (roadWire.Points.Count >= 2) FinishRoad();
-                else CancelRoadPlacement();
+                CancelRoadPlacement();
+                ShowDistrictMessage("");
             }
             return true;
         }
@@ -230,9 +230,9 @@ namespace CityForge.World
             roadWire.RibbonWidth = road?.width ?? RoadWidth;
             roadWire.DrawingHint = road == null
                 ? roadWire.Label + " · Click an existing endpoint to continue that road, or click open ground to start a road\n" +
-                    "Click the first marker to close a loop · Enter or Esc to place · Backspace to undo"
+                    "Click the first marker to close a loop · Enter to place · Esc to cancel · Backspace to undo"
                 : "Continue " + RoadSurfaces[FindRoadSurface(road.surfaceId)].Label +
-                    " · Click to add markers · Enter or Esc to finish · Backspace to undo";
+                    " · Click to add markers · Enter to finish · Esc to cancel · Backspace to undo";
             roadWire.SetMessage(roadWire.DrawingHint);
             finishRoadButton.GetComponentInChildren<Text>().text = road == null ? "Place Road" : "Extend Road";
         }

@@ -17,6 +17,21 @@ namespace CityForge.World
                 AddWallLantern(instance, new Vector3(.90f, 1.89f, 2.55f) * 1.28f, cullingMask, time);
                 return;
             }
+            if (asset.id is "v3-building-medium-wealth-brick-colonial" or "v3-building-medium-wealth-gray-colonial")
+            {
+                // Authored in the fitted model's local axes, just outside the front lantern glass.
+                float span = Mathf.Max(asset.footprint.x, asset.footprint.y);
+                AddWallLantern(instance, new Vector3(.11f, .32f, .37f) * span, cullingMask, time);
+                AddWallLantern(instance, new Vector3(.36f, .32f, .37f) * span, cullingMask, time);
+                return;
+            }
+            if (asset.id == "v3-building-medium-wealth-red-house")
+            {
+                float span = Mathf.Max(asset.footprint.x, asset.footprint.y);
+                AddWallLantern(instance, new Vector3(.12f, .29f, .46f) * span, cullingMask, time);
+                AddWallLantern(instance, new Vector3(.33f, .29f, .46f) * span, cullingMask, time);
+                return;
+            }
             if (asset.category != LotAssetCatalog.StreetFurniture || asset.group != "Lighting") return;
 
             var renderers = instance.GetComponentsInChildren<Renderer>();

@@ -19,6 +19,14 @@ namespace CityForge.World
             RegionTimeOfDay.Evening, RegionTimeOfDay.Night
         };
 
+        private const float DaylightPhaseSeconds = 180f;
+        private const float DaylightMenuAnchor = .10f;
+        private float daylightPhaseElapsed;
+        private bool clockPaused;
+        private Toggle clockPauseToggle;
+        private RectTransform clockFace, clockHand;
+        private static readonly float[] ClockHours = { 6f, 12f, 15f, 18f, 20f };
+        private Transform clockRegionSun;
         private Dropdown daylightPicker;
         private Dropdown afternoonShadowPicker;
         public AfternoonShadowMode AfternoonShadows { get; private set; } = AfternoonShadowMode.Refined;
@@ -31,6 +39,7 @@ namespace CityForge.World
         internal static readonly float[] LinearAfternoonDefaults = { 31f, 2.7379f, 1.096f, .62f, .68f };
         internal static readonly float[] AfternoonDefaults = { 36f, 1.23f, .98f, .62f, .05f };
         private bool afternoonCalibration = true;
+        internal bool AfternoonCalibrationEnabled => afternoonCalibration;
         internal bool UseAfternoonCalibration => TimeOfDay == RegionTimeOfDay.Afternoon && afternoonCalibration;
         internal float AfternoonElevation => afternoonLighting[0];
         internal float AfternoonSunlight => afternoonLighting[1];
@@ -46,7 +55,8 @@ namespace CityForge.World
             picker.name = "Time of Day";
             var rect = (RectTransform)picker.transform;
             rect.SetParent(hud, false);
-            rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(1, 0);
+            rect.anchorMin = rect.anchorMax = new Vector2(1, DaylightMenuAnchor);
+            rect.pivot = new Vector2(1, 0);
             rect.anchoredPosition = new Vector2(-25, 72);
             rect.sizeDelta = new Vector2(205, 36);
             daylightPicker = picker.GetComponent<Dropdown>();
@@ -63,12 +73,48 @@ namespace CityForge.World
             label.rectTransform.sizeDelta = new Vector2(205, 24);
             label.alignment = TextAnchor.MiddleCenter;
             label.text = "TIME OF DAY";
+            var pause = DefaultControls.CreateToggle(new DefaultControls.Resources());
+            pause.name = "Pause clock";
+            var pauseRect = (RectTransform)pause.transform;
+            pauseRect.SetParent(hud, false);
+            pauseRect.anchorMin = pauseRect.anchorMax = rect.anchorMin;
+            pauseRect.pivot = rect.pivot;
+            pauseRect.anchoredPosition = new Vector2(-25, 143);
+            pauseRect.sizeDelta = new Vector2(205, 28);
+            var pauseLabel = pause.GetComponentInChildren<Text>();
+            pauseLabel.font = font;
+            pauseLabel.text = "Pause clock";
+            pauseLabel.color = Color.white;
+            clockPauseToggle = pause.GetComponent<Toggle>();
+            clockPauseToggle.targetGraphic.color = new Color(.16f, .20f, .24f);
+            clockPauseToggle.graphic.color = new Color(.93f, .80f, .55f);
+            clockPauseToggle.SetIsOnWithoutNotify(clockPaused);
+            clockPauseToggle.onValueChanged.AddListener(value => clockPaused = value);
+            clockFace = new GameObject("District clock", typeof(RectTransform), typeof(CanvasRenderer),
+                typeof(DistrictClockFace)).GetComponent<RectTransform>();
+            clockFace.SetParent(hud, false);
+            clockFace.anchorMin = clockFace.anchorMax = rect.anchorMin;
+            clockFace.pivot = new Vector2(.5f, .5f);
+            clockFace.anchoredPosition = new Vector2(-268, 157);
+            clockFace.sizeDelta = new Vector2(52, 52);
+            clockFace.GetComponent<DistrictClockFace>().raycastTarget = false;
+            var hand = new GameObject("Hour hand", typeof(RectTransform), typeof(Image));
+            clockHand = (RectTransform)hand.transform;
+            clockHand.SetParent(clockFace, false);
+            clockHand.anchorMin = clockHand.anchorMax = new Vector2(.5f, .5f);
+            clockHand.pivot = new Vector2(.5f, .13f);
+            clockHand.anchoredPosition = Vector2.zero;
+            clockHand.sizeDelta = new Vector2(3, 18);
+            var handImage = hand.GetComponent<Image>();
+            handImage.color = new Color(.93f, .80f, .55f);
+            handImage.raycastTarget = false;
             var shadowPicker = DefaultControls.CreateDropdown(new DefaultControls.Resources());
             shadowPicker.name = "Afternoon Shadows";
             var shadowRect = (RectTransform)shadowPicker.transform;
             shadowRect.SetParent(hud, false);
-            shadowRect.anchorMin = shadowRect.anchorMax = shadowRect.pivot = new Vector2(1, 0);
-            shadowRect.anchoredPosition = new Vector2(-25, 139);
+            shadowRect.anchorMin = shadowRect.anchorMax = rect.anchorMin;
+            shadowRect.pivot = rect.pivot;
+            shadowRect.anchoredPosition = new Vector2(-25, 177);
             shadowRect.sizeDelta = rect.sizeDelta;
             afternoonShadowPicker = shadowPicker.GetComponent<Dropdown>();
             afternoonShadowPicker.captionText.font = afternoonShadowPicker.itemText.font = font;
@@ -87,7 +133,8 @@ namespace CityForge.World
                 button.name = caption;
                 var rect = (RectTransform)button.transform;
                 rect.SetParent(parent, false);
-                rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(1, 0);
+                rect.anchorMin = rect.anchorMax = new Vector2(1, parent == hud ? DaylightMenuAnchor : 0);
+                rect.pivot = new Vector2(1, 0);
                 rect.anchoredPosition = position;
                 rect.sizeDelta = size;
                 var label = button.GetComponentInChildren<Text>();
@@ -98,13 +145,14 @@ namespace CityForge.World
 
             var defaults = LinearLighting ? LinearAfternoonDefaults : AfternoonDefaults;
             Array.Copy(defaults, afternoonLighting, defaults.Length);
-            var open = AddButton(hud, "Afternoon lighting", new Vector2(-25, 181), new Vector2(205, 32));
+            var open = AddButton(hud, "Afternoon lighting", new Vector2(-25, 219), new Vector2(205, 32));
             afternoonLightingButton = open.gameObject;
             afternoonLightingPanel = new GameObject("Afternoon lighting controls", typeof(RectTransform), typeof(Image));
             var panel = (RectTransform)afternoonLightingPanel.transform;
             panel.SetParent(hud, false);
-            panel.anchorMin = panel.anchorMax = panel.pivot = new Vector2(1, 0);
-            panel.anchoredPosition = new Vector2(-25, 219);
+            panel.anchorMin = panel.anchorMax = new Vector2(1, DaylightMenuAnchor);
+            panel.pivot = new Vector2(1, 0);
+            panel.anchoredPosition = new Vector2(-25, 257);
             panel.sizeDelta = new Vector2(300, 268);
             panel.GetComponent<Image>().color = new Color(.08f, .12f, .16f, .97f);
             panel.gameObject.SetActive(false);
@@ -184,6 +232,60 @@ namespace CityForge.World
 
         public void SetTimeOfDay(RegionTimeOfDay time)
         {
+            daylightPhaseElapsed = 0f;
+            ApplyTimeOfDay(time, resetHistory: true);
+        }
+
+        private void TickDistrictClock()
+        {
+            if (clockPaused || SelectedDistrict < 0 || DistrictLoading || IsSaving) return;
+            int phase = Array.IndexOf(DaylightChoices, TimeOfDay);
+            if (phase < 0) return;
+            float phaseSpeed = ClockPhaseSpeed(TimeOfDay);
+            float elapsed = daylightPhaseElapsed + Time.unscaledDeltaTime * phaseSpeed;
+            if (elapsed >= DaylightPhaseSeconds)
+            {
+                // Carry real time into the next phase at its own speed.
+                float nextPhaseSpeed = ClockPhaseSpeed(DaylightChoices[(phase + 1) % DaylightChoices.Length]);
+                elapsed = (elapsed - DaylightPhaseSeconds) / phaseSpeed * nextPhaseSpeed;
+                daylightPhaseElapsed = elapsed;
+                phase = (phase + 1) % DaylightChoices.Length;
+                ApplyTimeOfDay(DaylightChoices[phase], resetHistory: false);
+            }
+
+            daylightPhaseElapsed = elapsed;
+            var next = DaylightChoices[(phase + 1) % DaylightChoices.Length];
+            float phaseProgress = daylightPhaseElapsed / DaylightPhaseSeconds;
+            UpdateClockHand(phase, phaseProgress);
+            if (ApprovedDistrict)
+                ApprovedDistrict.InterpolateDistrictSun(TimeOfDay, next, phaseProgress);
+            else
+            {
+                if (!clockRegionSun) clockRegionSun = transform.Find("RegionSun");
+                if (clockRegionSun)
+                    clockRegionSun.rotation = BlendSunRotation(TimeOfDay, SunRotation(TimeOfDay, 32f), SunRotation(next, 32f), phaseProgress);
+            }
+        }
+
+        private static float ClockPhaseSpeed(RegionTimeOfDay phase) => phase switch
+        {
+            RegionTimeOfDay.Morning or RegionTimeOfDay.Evening => 2f,
+            RegionTimeOfDay.Night => 4f,
+            _ => 1f
+        };
+
+        internal static float MorningLightingProgress(float progress) => 1f - Mathf.Pow(1f - progress, 3f);
+
+        private void UpdateClockHand(int phase, float blend)
+        {
+            if (!clockHand || phase < 0) return;
+            float nextHour = phase + 1 < ClockHours.Length ? ClockHours[phase + 1] : ClockHours[0] + 24f;
+            float hour = Mathf.Lerp(ClockHours[phase], nextHour, blend);
+            clockHand.localRotation = Quaternion.Euler(0f, 0f, -hour * 30f);
+        }
+
+        private void ApplyTimeOfDay(RegionTimeOfDay time, bool resetHistory)
+        {
             if (!Enum.IsDefined(typeof(RegionTimeOfDay), time))
                 throw new ArgumentOutOfRangeException(nameof(time));
             bool changed = TimeOfDay != time;
@@ -198,7 +300,7 @@ namespace CityForge.World
             }
             ApplyDistrictDaylight();
             // A daylight preset is a lighting cut. Drop history from the previous sun/exposure.
-            if (changed && SelectedDistrict >= 0 && GetComponentInChildren<CityForge.CameraSystem.CityForgeCameraController>() is { } rig &&
+            if (resetHistory && changed && SelectedDistrict >= 0 && GetComponentInChildren<CityForge.CameraSystem.CityForgeCameraController>() is { } rig &&
                 rig.TryGetComponent<UniversalAdditionalCameraData>(out var cameraData) &&
                 cameraData.antialiasing == AntialiasingMode.TemporalAntiAliasing)
                 cameraData.resetHistory = true;
@@ -209,6 +311,10 @@ namespace CityForge.World
         {
             if (!daylightPicker) return;
             daylightPicker.gameObject.SetActive(SelectedDistrict >= 0);
+            clockPauseToggle.gameObject.SetActive(SelectedDistrict >= 0);
+            clockFace.gameObject.SetActive(SelectedDistrict >= 0);
+            UpdateClockHand(Array.IndexOf(DaylightChoices, TimeOfDay),
+                daylightPhaseElapsed / DaylightPhaseSeconds);
             if (zoneWealthPicker) zoneWealthPicker.gameObject.SetActive(SelectedDistrict >= 0);
             daylightPicker.SetValueWithoutNotify(Array.IndexOf(DaylightChoices, TimeOfDay));
             bool showAfternoon = SelectedDistrict >= 0 && ApprovedDistrict && TimeOfDay == RegionTimeOfDay.Afternoon;
@@ -252,28 +358,48 @@ namespace CityForge.World
         internal static void ApplySun(Light light, RegionTimeOfDay time, Quaternion afternoonRotation,
             float afternoonIntensity, Color afternoonColor)
         {
-            var afternoon = afternoonRotation.eulerAngles;
-            // A directional light points toward the ground, away from the sun.
-            // Map east is +X, west is -X, and south is -Z.
-            var (rotation, intensity, color) = time switch
+            var (intensity, color) = time switch
             {
-                RegionTimeOfDay.Morning => (Quaternion.Euler(23f, 270f, 0), .85f, new Color(1f, .84f, .66f)),
-                RegionTimeOfDay.Noon => (Quaternion.Euler(NoonElevation, 33f, 0f), .76f, NoonSunColor),
-                RegionTimeOfDay.Evening => (Quaternion.Euler(32f, 285f, 0), .58f, new Color(.80f, .88f, 1f)),
-                RegionTimeOfDay.Night => (Quaternion.Euler(38f, 285f, 0), .35f, new Color(.71f, .81f, 1f)),
-                _ => (Quaternion.Euler(afternoon.x, 65f, 0), 1f, afternoonColor)
+                RegionTimeOfDay.Morning => (.85f, new Color(1f, .84f, .66f)),
+                RegionTimeOfDay.Noon => (.76f, NoonSunColor),
+                RegionTimeOfDay.Evening => (.58f, new Color(.80f, .88f, 1f)),
+                RegionTimeOfDay.Night => (.35f, new Color(.71f, .81f, 1f)),
+                _ => (1f, afternoonColor)
             };
-            light.transform.rotation = rotation;
+            light.transform.rotation = SunRotation(time, afternoonRotation.eulerAngles.x);
             light.intensity = afternoonIntensity * intensity;
             light.color = color;
         }
+
+        internal static Quaternion BlendSunRotation(RegionTimeOfDay phase, Quaternion from, Quaternion to, float progress)
+        {
+            if (phase != RegionTimeOfDay.Morning)
+                return Quaternion.Slerp(from, to, Mathf.SmoothStep(0f, 1f, progress));
+
+            // Climb rapidly after sunrise while the heading follows the clock.
+            var start = from.eulerAngles;
+            var end = to.eulerAngles;
+            float rise = MorningLightingProgress(progress);
+            return Quaternion.Euler(Mathf.LerpAngle(start.x, end.x, rise),
+                Mathf.LerpAngle(start.y, end.y, progress), 0f);
+        }
+
+        internal static Quaternion SunRotation(RegionTimeOfDay time, float afternoonElevation, float afternoonHeading = 65f) =>
+            time switch
+            {
+                RegionTimeOfDay.Morning => Quaternion.Euler(12f, 270f, 0f),
+                RegionTimeOfDay.Noon => Quaternion.Euler(NoonElevation, 33f, 0f),
+                RegionTimeOfDay.Evening => Quaternion.Euler(16f, 90f, 0f),
+                RegionTimeOfDay.Night => Quaternion.Euler(38f, 90f, 0f),
+                _ => Quaternion.Euler(afternoonElevation, afternoonHeading, 0f)
+            };
 
         internal static void ApplyCalibratedSun(Light light, RegionTimeOfDay time, float baseIntensity,
             float elevation, float sunlight, bool linear)
         {
             bool noon = time == RegionTimeOfDay.Noon;
             light.transform.rotation = noon ? Quaternion.Euler(NoonElevation, 33f, 0f)
-                : Quaternion.Euler(elevation, linear ? 25f : 65f, 0f);
+                : SunRotation(time, elevation, linear ? 25f : 65f);
             // The higher noon sun puts more light onto roofs and terrain.
             light.intensity = baseIntensity * sunlight * (noon ? (linear ? .70f : .76f) : 1f);
             light.color = noon ? NoonSunColor : linear ? new Color(1f, .927f, .8058f) : new Color(1f, .97f, .90f);
@@ -309,6 +435,36 @@ namespace CityForge.World
                 RegionTimeOfDay.Night => (.54f, new Color(.73f, .83f, 1f)),
                 _ => (1f, Color.white)
             };
+    }
+
+    internal sealed class DistrictClockFace : MaskableGraphic
+    {
+        protected override void OnPopulateMesh(VertexHelper mesh)
+        {
+            mesh.Clear();
+            const int segments = 48;
+            float radius = Mathf.Min(rectTransform.rect.width, rectTransform.rect.height) * .5f;
+            var rim = new Color32(165, 149, 107, 255);
+            var fill = new Color32(26, 35, 43, 245);
+            mesh.AddVert(Vector3.zero, fill, Vector2.zero);
+            for (int i = 0; i < segments; i++)
+            {
+                float angle = i * 2f * Mathf.PI / segments;
+                var direction = new Vector3(Mathf.Cos(angle), Mathf.Sin(angle), 0f);
+                mesh.AddVert(direction * (radius - 2f), fill, Vector2.zero);
+                mesh.AddVert(direction * (radius - 2f), rim, Vector2.zero);
+                mesh.AddVert(direction * radius, rim, Vector2.zero);
+            }
+
+            for (int i = 0; i < segments; i++)
+            {
+                int a = 1 + i * 3;
+                int b = 1 + ((i + 1) % segments) * 3;
+                mesh.AddTriangle(0, b, a);
+                mesh.AddTriangle(a + 1, b + 1, a + 2);
+                mesh.AddTriangle(a + 2, b + 1, b + 2);
+            }
+        }
     }
 
     public sealed partial class MeadowDistrictLandscape
@@ -353,6 +509,7 @@ namespace CityForge.World
         private void ApplyAfternoonExposure()
         {
             if (!afternoonCalibrationVolume) return;
+            afternoonCalibrationVolume.weight = 1f;
             afternoonCalibrationVolume.enabled = CalibratedAfternoon || UseBalancedNoon(View.TimeOfDay);
             PrototypeRegionView.ApplyCalibratedGrade(afternoonColor, View.TimeOfDay, View.AfternoonExposure, LinearAfternoon);
         }
@@ -361,6 +518,54 @@ namespace CityForge.World
 
         private bool UseBalancedNoon(RegionTimeOfDay time) =>
             time == RegionTimeOfDay.Noon && !IsRegionOverview;
+
+        internal void InterpolateDistrictSun(RegionTimeOfDay current, RegionTimeOfDay next, float progress)
+        {
+            bool morning = current == RegionTimeOfDay.Morning && next == RegionTimeOfDay.Noon;
+            float morningBlend = morning ? PrototypeRegionView.MorningLightingProgress(progress) : 0f;
+            bool linear = QualitySettings.activeColorSpace == ColorSpace.Linear;
+            if (morning && afternoonCalibrationVolume)
+            {
+                afternoonCalibrationVolume.enabled = true;
+                afternoonCalibrationVolume.weight = morningBlend;
+                PrototypeRegionView.ApplyCalibratedGrade(afternoonColor, next, View.AfternoonExposure, linear);
+            }
+            foreach (var sun in districtSuns)
+            {
+                var from = Rotation(current, sun.rotation.eulerAngles.x);
+                var to = Rotation(next, sun.rotation.eulerAngles.x);
+                sun.light.transform.rotation = PrototypeRegionView.BlendSunRotation(current, from, to, progress);
+                if (morning)
+                {
+                    float noonIntensity = View.AfternoonSunlight * (linear ? .70f : .76f);
+                    sun.light.intensity = sun.intensity * Mathf.Lerp(.85f, noonIntensity, morningBlend);
+                    sun.light.color = Color.Lerp(new Color(1f, .84f, .66f),
+                        new Color(1f, .99f, .965f), morningBlend);
+                }
+                else if (current is RegionTimeOfDay.Afternoon or RegionTimeOfDay.Evening)
+                {
+                    bool afternoon = current == RegionTimeOfDay.Afternoon;
+                    float fromIntensity = afternoon ? (View.AfternoonCalibrationEnabled ? View.AfternoonSunlight : 1f) : .58f;
+                    var fromColor = afternoon
+                        ? (View.AfternoonCalibrationEnabled
+                            ? (linear ? new Color(1f, .927f, .8058f) : new Color(1f, .97f, .90f))
+                            : View.UseRefinedAfternoon ? new Color(sun.color.r, sun.color.g * .985f, sun.color.b * .955f) : sun.color)
+                        : new Color(.80f, .88f, 1f);
+                    float blend = Mathf.SmoothStep(0f, 1f, progress);
+                    sun.light.intensity = sun.intensity * Mathf.Lerp(fromIntensity, afternoon ? .58f : .35f, blend);
+                    sun.light.color = Color.Lerp(fromColor,
+                        afternoon ? new Color(.80f, .88f, 1f) : new Color(.71f, .81f, 1f), blend);
+                }
+            }
+
+            Quaternion Rotation(RegionTimeOfDay phase, float baselineElevation)
+            {
+                bool calibrated = phase == RegionTimeOfDay.Afternoon && View.AfternoonCalibrationEnabled;
+                return PrototypeRegionView.SunRotation(phase,
+                    calibrated ? View.AfternoonElevation : baselineElevation,
+                    calibrated && QualitySettings.activeColorSpace == ColorSpace.Linear ? 25f : 65f);
+            }
+        }
 
         internal void ApplyDistrictSun()
         {

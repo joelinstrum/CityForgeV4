@@ -74,8 +74,8 @@ namespace CityForge.Lots
             foreach (var item in lot.objects)
             {
                 var other = catalog ? catalog.Find(item.assetId) : null;
-                if (other != null && bounds.Overlaps(LotRuntimeLoader.Footprint(item, other)))
-                    return "Keep the building clear of other lot assets.";
+                if (other?.category == "Buildings" && bounds.Overlaps(LotRuntimeLoader.Footprint(item, other)))
+                    return "Keep the building clear of other buildings.";
             }
             return null;
         }

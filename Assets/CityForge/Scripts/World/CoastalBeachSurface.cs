@@ -31,6 +31,7 @@ namespace CityForge.World
         // the coastline. On the landward side fade the river paint into the beach.
         float RiverSedimentWeight(Vector2 uv)
         {
+            if(RoundedEstuaryDistance(uv)<0)return 0;
             if(coastalOceans.Length==0)return 1;
             foreach(var ocean in coastalOceans)if(ocean.Contains(uv))return 0;
             if(coastalLayout==null)return 1;
@@ -149,7 +150,7 @@ namespace CityForge.World
             return RiverBayLayout.RoundedMouthDistance(coast,river);
         }
 
-        float ShapeEstuaryHeight(Vector2 uv,float height,float originalHeight)
+        float ShapeEstuaryHeight(Vector2 uv,float height)
         {
             if(!TryEstuaryDistances(uv,out var distances,out float shoreDistance))return height;
             float coast=distances.x,river=distances.y;
@@ -165,13 +166,12 @@ namespace CityForge.World
                     Mathf.Min(uv.y-estuaryBounds.yMin,estuaryBounds.yMax-uv.y));
                 float blend=Mathf.SmoothStep(0,1,Mathf.InverseLerp(0,.016f,patchEdge))*
                     (1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(.027f,RiverBayLayout.MouthRadius,Mathf.Abs(coast))));
-                float shelfDepth=Mathf.SmoothStep(0,10,Mathf.InverseLerp(0,.019f,shoreDistance));
-                // Keep the new shelf flush with the waterline, then taper back
-                // to the natural floor beyond the area where sand is visible.
+                // Use the rounded waterline for the entire mouth, including
+                // both old riverbank shoulders on the landward side of the coast.
+                float depthDistance=Mathf.Max(shoreDistance,-edge);
+                float shelfDepth=Mathf.SmoothStep(0,10,Mathf.InverseLerp(0,.008f,depthDistance));
                 float bed=datum-shelfDepth/PrototypeRegionData.Height;
-                float offshore=Mathf.SmoothStep(0,1,Mathf.InverseLerp(0,.005f,-coast));
-                float floor=Mathf.Lerp(height,originalHeight,offshore);
-                height=Mathf.Lerp(height,Mathf.Min(floor,bed),blend);
+                height=Mathf.Lerp(height,Mathf.Min(height,bed),blend);
             }
             float cut=Mathf.Min(coast,river)-edge;
             if(cut<=0)return height;

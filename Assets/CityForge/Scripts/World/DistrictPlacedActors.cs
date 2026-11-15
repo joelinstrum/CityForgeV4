@@ -54,7 +54,7 @@ namespace CityForge.World
             public float Speed;
             public Vector2[] Route;
             public int Next, Direction = 1;
-            public bool Closed;
+            public bool Closed, Ambient;
         }
 
         private readonly List<Pedestrian> pedestrians = new();
@@ -122,7 +122,13 @@ namespace CityForge.World
                 var record = NewActor(point);
                 PlacedActors.Add(record);
                 var walker = CreatePedestrian(record, asset);
-                if (pedestrianRoutesDirty) RebuildPedestrianRoutes();
+                if (pedestrianRoutesDirty)
+                {
+                    RebuildPedestrianRoutes();
+                    foreach (var existing in pedestrians)
+                        if (!existing.Ambient && existing != walker) SetPedestrianRoute(existing);
+                    RebuildResidentialWalkers(LotAssetCatalog.Load());
+                }
                 SetPedestrianRoute(walker);
                 ShowDistrictMessage(walker.Route.Length > 1 ? "Pedestrian placed." : "Character placed. Build a sidewalk or road nearby to start walking.");
             }
@@ -173,13 +179,13 @@ namespace CityForge.World
             if (SelectedDistrict < 0) return;
             var catalog = LotAssetCatalog.Load();
             if (!catalog) return;
-            if (!PlacedActors.Any(actor => actor.pedestrian)) return;
             RebuildPedestrianRoutes();
             var active = new HashSet<int>(ActiveDistrictMembers);
             foreach (var record in PlacedActors)
                 if (record.pedestrian && active.Contains(record.district) && catalog.Find(record.assetId) is { } asset &&
                     asset.prefab && asset.IsCharacter)
                     SetPedestrianRoute(CreatePedestrian(record, asset));
+            RebuildResidentialWalkers(catalog);
         }
 
         private void RebuildPlacedTrees()
@@ -249,6 +255,180 @@ namespace CityForge.World
             };
             pedestrians.Add(walker);
             return walker;
+        }
+
+        private void RebuildResidentialWalkers(LotAssetCatalog catalog)
+        {
+            for (int i = pedestrians.Count - 1; i >= 0; i--)
+            {
+                if (!pedestrians[i].Ambient) continue;
+                pedestrians[i].Body.gameObject.SetActive(false);
+                Destroy(pedestrians[i].Body.gameObject);
+                pedestrians.RemoveAt(i);
+            }
+
+            var homes = districtLotRoots.Keys.Where(lot => lot.definition.zoningLayout.zone == TownZone.Residential1)
+                .OrderBy(lot => lot.center.y).ThenBy(lot => lot.center.x).ToArray();
+            if (!catalog || homes.Length < 3) return;
+            var routes = ResidentialBlockRoutes();
+            if (routes.Count == 0) return;
+            var pools = new Dictionary<LotWealth, LotAssetCatalogEntry[]>
+            {
+                [LotWealth.Low] = Pool("v3-hooligan", "v3-farmer", "v3-axeman"),
+                [LotWealth.Medium] = Pool("v3-farmer", "v3-dock-worker"),
+                [LotWealth.High] = Pool("v3-victorian-gentleman")
+            };
+            var random = new System.Random(SelectedDistrict);
+            for (int i = 0; i + 2 < homes.Length; i += 3)
+            {
+                var home = homes[i + random.Next(3)];
+                var pool = pools.GetValueOrDefault(home.definition.zoningLayout.wealth) ?? pools[LotWealth.Medium];
+                if (pool.Length == 0) pool = pools.Values.SelectMany(entries => entries).ToArray();
+                if (pool.Length == 0) break;
+
+                Vector2[] loop = null;
+                Vector2 start = home.center;
+                int next = 0;
+                float nearest = float.PositiveInfinity;
+                foreach (var route in routes)
+                for (int j = 0; j < route.Length; j++)
+                {
+                    int end = (j + 1) % route.Length;
+                    var edge = route[end] - route[j];
+                    if (edge.sqrMagnitude < .01f) continue;
+                    var point = route[j] + edge * Mathf.Clamp01(Vector2.Dot(home.center - route[j], edge) / edge.sqrMagnitude);
+                    float distance = (point - home.center).sqrMagnitude;
+                    if (distance >= nearest) continue;
+                    nearest = distance;
+                    start = point;
+                    next = end;
+                    loop = route;
+                }
+                if (loop == null) continue;
+                var asset = pool[random.Next(pool.Length)];
+                var walker = CreatePedestrian(new DistrictPlacedActor { position = start }, asset);
+                walker.Ambient = true;
+                walker.Route = loop;
+                walker.Next = next;
+                walker.Closed = true;
+                walker.Body.gameObject.SetActive(TimeOfDay != RegionTimeOfDay.Night);
+            }
+
+            LotAssetCatalogEntry[] Pool(params string[] ids) => ids.Select(catalog.Find).Where(asset =>
+                asset != null && asset.prefab && asset.prefab.GetComponentInChildren<Animator>() is { } animator &&
+                animator.runtimeAnimatorController && animator.runtimeAnimatorController.animationClips.Any(clip =>
+                    clip.name.Contains("walk", StringComparison.OrdinalIgnoreCase))).ToArray();
+        }
+
+        private List<Vector2[]> ResidentialBlockRoutes()
+        {
+            // Split road edges at crossings, including a road ending on another edge.
+            var segments = new List<(Vector2 A, Vector2 B, float Width, List<float> Cuts)>();
+            foreach (var road in districtRoadMeshes.Keys)
+            for (int i = 0; i < road.points.Length - (road.closed ? 0 : 1); i++)
+            {
+                var a = road.points[i];
+                var b = road.points[(i + 1) % road.points.Length];
+                if ((b - a).sqrMagnitude > .01f)
+                    segments.Add((a, b, road.width, new List<float> { 0f, 1f }));
+            }
+
+            for (int i = 0; i < segments.Count; i++)
+            for (int j = i + 1; j < segments.Count; j++)
+            {
+                var a = segments[i];
+                var b = segments[j];
+                var ab = a.B - a.A;
+                var cd = b.B - b.A;
+                float cross = Cross(ab, cd);
+                if (Mathf.Abs(cross) < .0001f) continue;
+                float t = Cross(b.A - a.A, cd) / cross;
+                float u = Cross(b.A - a.A, ab) / cross;
+                if (t < 0f || t > 1f || u < 0f || u > 1f) continue;
+                a.Cuts.Add(t);
+                b.Cuts.Add(u);
+            }
+
+            var graph = new Dictionary<Vector2, Dictionary<Vector2, float>>();
+            foreach (var segment in segments)
+            {
+                segment.Cuts.Sort();
+                for (int i = 1; i < segment.Cuts.Count; i++)
+                {
+                    var a = Quantize(Vector2.Lerp(segment.A, segment.B, segment.Cuts[i - 1]));
+                    var b = Quantize(Vector2.Lerp(segment.A, segment.B, segment.Cuts[i]));
+                    if (a == b) continue;
+                    Connect(a, b, segment.Width);
+                    Connect(b, a, segment.Width);
+                }
+            }
+
+            // Dead ends cannot belong to a block. Remove them before choosing turns.
+            var deadEnds = new Queue<Vector2>(graph.Where(node => node.Value.Count < 2).Select(node => node.Key));
+            while (deadEnds.Count > 0)
+            {
+                var end = deadEnds.Dequeue();
+                if (!graph.Remove(end, out var neighbors)) continue;
+                foreach (var neighbor in neighbors.Keys)
+                {
+                    graph[neighbor].Remove(end);
+                    if (graph[neighbor].Count < 2) deadEnds.Enqueue(neighbor);
+                }
+            }
+
+            var routes = new List<Vector2[]>();
+            var visited = new HashSet<(Vector2 from, Vector2 to)>();
+            foreach (var (start, neighbors) in graph)
+            foreach (var first in neighbors.Keys)
+            {
+                var edge = (from: start, to: first);
+                var ring = new List<Vector2>();
+                while (visited.Add(edge))
+                {
+                    ring.Add(edge.from);
+                    var incoming = edge.to - edge.from;
+                    var next = edge.from;
+                    float turn = 181f;
+                    foreach (var candidate in graph[edge.to].Keys)
+                    {
+                        if (candidate == edge.from) continue;
+                        float angle = Vector2.SignedAngle(incoming, candidate - edge.to);
+                        if (angle >= turn) continue;
+                        turn = angle;
+                        next = candidate;
+                    }
+                    edge = (edge.to, next);
+                }
+                if (edge != (start, first) || ring.Count < 3) continue;
+                float area = 0f;
+                for (int i = 0; i < ring.Count; i++)
+                    area += Cross(ring[i] - start, ring[(i + 1) % ring.Count] - start);
+                if (area >= -1f) continue;
+
+                var shoulder = new Vector2[ring.Count];
+                for (int i = 0; i < ring.Count; i++)
+                {
+                    var at = ring[i];
+                    var previous = ring[(i + ring.Count - 1) % ring.Count];
+                    var next = ring[(i + 1) % ring.Count];
+                    var incoming = Right((at - previous).normalized);
+                    var outgoing = Right((next - at).normalized);
+                    var corner = (incoming + outgoing).normalized;
+                    float setback = Mathf.Max(graph[at][previous], graph[at][next]) * .5f + .45f;
+                    shoulder[i] = at + corner * (setback / Mathf.Max(.5f, Vector2.Dot(corner, outgoing)));
+                }
+                routes.Add(shoulder);
+            }
+            return routes;
+
+            void Connect(Vector2 a, Vector2 b, float width)
+            {
+                if (!graph.TryGetValue(a, out var neighbors)) graph[a] = neighbors = new Dictionary<Vector2, float>();
+                neighbors[b] = Mathf.Max(width, neighbors.GetValueOrDefault(b));
+            }
+            static float Cross(Vector2 a, Vector2 b) => a.x * b.y - a.y * b.x;
+            static Vector2 Right(Vector2 direction) => new Vector2(direction.y, -direction.x);
+            static Vector2 Quantize(Vector2 point) => (Vector2)Vector2Int.RoundToInt(point * 100f) * .01f;
         }
 
         private Vector3 PedestrianGround(Vector2 point) => new Vector3(point.x, LotHeight(point) + .04f, point.y);
@@ -365,21 +545,27 @@ namespace CityForge.World
 
         private void TickPlacedPedestrians()
         {
-            if (!pedestrianRoot || SelectedDistrict < 0 || DistrictLoading || IsSaving) return;
-            bool visible = pedestrianCamera && pedestrianCamera.ZoomLevel <= 2;
-            if (pedestrianRoot.gameObject.activeSelf != visible) pedestrianRoot.gameObject.SetActive(visible);
-            if (!visible) return;
+            if (SelectedDistrict < 0 || DistrictLoading || IsSaving) return;
             if (pedestrianRoutesDirty)
             {
                 RebuildPedestrianRoutes();
-                foreach (var walker in pedestrians) SetPedestrianRoute(walker);
+                foreach (var walker in pedestrians)
+                    if (!walker.Ambient) SetPedestrianRoute(walker);
+                RebuildResidentialWalkers(LotAssetCatalog.Load());
             }
+            if (!pedestrianRoot) return;
+            bool visible = pedestrianCamera && pedestrianCamera.ZoomLevel <= 2;
+            if (pedestrianRoot.gameObject.activeSelf != visible) pedestrianRoot.gameObject.SetActive(visible);
+            if (!visible) return;
             pedestrianTick += Mathf.Min(Time.deltaTime, .1f);
             if (pedestrianTick < (pedestrianCamera.ZoomLevel < 2 ? 1f / 30f : .1f)) return;
             float elapsed = pedestrianTick;
             pedestrianTick = 0f;
             foreach (var walker in pedestrians)
             {
+                bool active = !walker.Ambient || TimeOfDay != RegionTimeOfDay.Night;
+                if (walker.Body.gameObject.activeSelf != active) walker.Body.gameObject.SetActive(active);
+                if (!active) continue;
                 // On reload or after visibility changes the Animator can still be in its default state.
                 // Confirm locomotion before translating so an idle character cannot slide.
                 if (walker.Route.Length < 2 || !SetPedestrianAnimation(walker, true)) continue;

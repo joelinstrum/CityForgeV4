@@ -98,7 +98,7 @@ namespace CityForge.World
             roadPathCamera = GetComponentInChildren<CityForgeCameraController>().GetComponent<Camera>();
             if (!roadPathControls)
             {
-                roadPathControls = FounderRect(townToolbar.parent, "Road path toolbar", new Vector2(0, 164), new Vector2(660, 72));
+                roadPathControls = FounderRect(townToolbar.parent, "Road path toolbar", new Vector2(0, 218), new Vector2(660, 72));
                 roadPathControls.anchorMin = roadPathControls.anchorMax = roadPathControls.pivot = new Vector2(.5f, 0);
                 var help = FounderText(roadPathControls, "Click an endpoint to continue · Shift-click to select · Drag to move · Double-click to insert",
                     new Vector2(0, 22), new Vector2(660, 30), 17);
@@ -127,8 +127,8 @@ namespace CityForge.World
             if (!CanEditRoad || !Application.isFocused) { draggingRoadPoint = false; roadPointPreview = null; return true; }
             if (Input.GetKeyDown(KeyCode.Escape))
             {
-                if (draggingRoadPoint) SelectRoadPoint(selectedRoadPath, selectedRoadPoint);
-                else SetRoadPaths(false);
+                SetRoadPaths(false);
+                ShowDistrictMessage("");
                 return true;
             }
             var selected = EventSystem.current ? EventSystem.current.currentSelectedGameObject : null;

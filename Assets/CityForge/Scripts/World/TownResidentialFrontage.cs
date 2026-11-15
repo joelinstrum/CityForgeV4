@@ -38,7 +38,8 @@ namespace CityForge.World
                 : frontage;
 
         private string ResidentialFrontageProblem(RectInt cells, int maxDepth, out TownZoneFacing frontage,
-            bool? frontageAlongX = null, bool allowEnclosedBlock = false)
+            bool? frontageAlongX = null, bool allowEnclosedBlock = false,
+            TownZoneFacing requiredFacing = TownZoneFacing.None)
         {
             frontage = TownZoneFacing.None;
             const float edgeTolerance = .15f;
@@ -47,6 +48,7 @@ namespace CityForge.World
             string depthProblem = $"This residential density allows up to {maxDepth} cells deep from the road.";
             bool enclosedBlock = allowEnclosedBlock && cells.width > 6 && cells.height > 6;
             if (!enclosedBlock && Mathf.Min(cells.width, cells.height) > maxDepth) return depthProblem;
+            var streetSpans = requiredFacing == TownZoneFacing.None ? null : new List<(float start, float end)>();
             var coverage = enclosedBlock ? new List<(float start, float end)>[4] : null;
             if (coverage != null)
                 for (int side = 0; side < coverage.Length; side++) coverage[side] = new();
@@ -76,6 +78,17 @@ namespace CityForge.World
                             out float innerWest, out float innerEast) &&
                         innerWest < max.x - cornerInset && innerEast > min.x + cornerInset)
                         return "Keep residential zoning clear of the road surface.";
+                    if (streetSpans != null)
+                    {
+                        bool sideStreet = requiredFacing is TownZoneFacing.East or TownZoneFacing.West;
+                        bool positive = requiredFacing is TownZoneFacing.East or TownZoneFacing.North;
+                        float edge = sideStreet ? (positive ? max.x : min.x) : (positive ? max.y : min.y);
+                        float low = edge - (positive ? edgeTolerance : reach);
+                        float high = edge + (positive ? reach : edgeTolerance);
+                        if (RoadTriangleSpan(a, b, c, low, high, sideStreet, out float start, out float end))
+                            streetSpans.Add((start, end));
+                        continue;
+                    }
                     if (coverage != null)
                     {
                         Cover(0, true, max.x - edgeTolerance, max.x + reach);
@@ -124,6 +137,25 @@ namespace CityForge.World
                         return "Surround a large residential block with roads on all four sides.";
                 }
                 return null;
+            }
+
+            if (streetSpans != null)
+            {
+                bool sideStreet = requiredFacing is TownZoneFacing.East or TownZoneFacing.West;
+                float covered = (sideStreet ? min.y : min.x) + cornerInset;
+                float end = (sideStreet ? max.y : max.x) - cornerInset;
+                streetSpans.Sort((a, b) => a.start.CompareTo(b.start));
+                foreach (var span in streetSpans)
+                {
+                    if (span.start > covered + .01f) break;
+                    covered = Mathf.Max(covered, span.end);
+                    if (covered >= end)
+                    {
+                        frontage = requiredFacing;
+                        return (sideStreet ? cells.width : cells.height) > maxDepth ? depthProblem : null;
+                    }
+                }
+                return "Keep the lot frontage beside the road.";
             }
 
             frontage = bestFacing;
