@@ -802,8 +802,13 @@ namespace CityForge.World
 
         private void Update()
         {
+            TickDistrictClock();
             RefreshTownConstruction();
             UpdateRegionDistrictHover();
+            if (SelectedDistrict >= 0 && !DistrictLoading && !IsSaving && Input.GetKeyDown(KeyCode.G) &&
+                !(EventSystem.current && EventSystem.current.currentSelectedGameObject &&
+                  EventSystem.current.currentSelectedGameObject.TryGetComponent<InputField>(out var field) && field.isFocused))
+                ToggleDistrictGrid();
             if (savedLotPicker)
             {
                 if (Input.GetKeyDown(KeyCode.Escape)) CloseSavedLotPicker();
@@ -829,15 +834,18 @@ namespace CityForge.World
             }
             if (transportModal)
             {
-                if (Input.GetKeyDown(KeyCode.Escape)) CloseTransportModal();
+                if (Input.GetKeyDown(KeyCode.Escape))
+                {
+                    CloseTransportModal();
+                    CancelRoadPlacement();
+                    SetRoadPaths(false);
+                    CloseRoadContext();
+                    ShowDistrictMessage("");
+                }
                 return;
             }
             UpdateLotGrowth();
             if (UpdateDetonate() || UpdateParkTreeBrush() || UpdateStreetscape()) return;
-            if (SelectedDistrict >= 0 && !DistrictLoading && !IsSaving && Input.GetKeyDown(KeyCode.G) &&
-                !(EventSystem.current && EventSystem.current.currentSelectedGameObject &&
-                  EventSystem.current.currentSelectedGameObject.TryGetComponent<InputField>(out var field) && field.isFocused))
-                ToggleDistrictGrid();
             if (UpdateRoadPlacement() || UpdateRoadContext() || UpdateRoadPaths()) return;
             if (townTools && townTools.HandleDistrictContext()) return;
             if (UpdateLotPlacement()) return;

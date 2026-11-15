@@ -34,6 +34,7 @@ namespace CityForge.Lots
         public int monthlyCost;
         public string category = "";
         public string subcategory = "";
+        public LotWealth wealth;
         public string firstEraId = "";
         public int firstEraYear;
         public List<LotRequiredResource> requiredResources = new List<LotRequiredResource>();
@@ -149,6 +150,7 @@ namespace CityForge.Lots
 
             lot.category ??= "";
             lot.subcategory ??= "";
+            if (!Enum.IsDefined(typeof(LotWealth), lot.wealth)) lot.wealth = LotWealth.None;
             lot.firstEraId ??= "";
             if (!LotClassification.IsValid(lot.category, lot.subcategory, lot.firstEraId, lot.firstEraYear))
                 throw new InvalidDataException("Invalid lot classification.");
@@ -174,13 +176,13 @@ namespace CityForge.Lots
             foreach (var path in lot.paths)
             {
                 if (path?.points == null || path.points.Length < (path.closed ? 3 : 2) || path.points.Length > 256 ||
-                    path.textureRotation < 0 || path.textureRotation > 3 || path.edgeBlend < 0 || path.edgeBlend > LotPathDefinition.MaxEdgeBlend ||
+                    !Enum.IsDefined(typeof(LotPathUse), path.use) || path.textureRotation < 0 || path.textureRotation > 3 || path.edgeBlend < 0 || path.edgeBlend > LotPathDefinition.MaxEdgeBlend ||
                     Array.IndexOf(LotPathSurface.Widths, path.width) < 0 || LotPathMaterial.Find(path.materialId) == null)
                     throw new InvalidDataException("Invalid lot path.");
                 var markers = new HashSet<Vector2>();
                 foreach (var point in path.points)
                     if (!float.IsFinite(point.x) || !float.IsFinite(point.y) ||
-                        Mathf.Abs(point.x) > MaxTiles * TileMeters / 2 || Mathf.Abs(point.y) > MaxTiles * TileMeters / 2 ||
+                        Mathf.Abs(point.x) > MaxTiles * TileMeters * .7f || Mathf.Abs(point.y) > MaxTiles * TileMeters * .7f ||
                         !markers.Add(point))
                         throw new InvalidDataException("Invalid lot path marker.");
             }

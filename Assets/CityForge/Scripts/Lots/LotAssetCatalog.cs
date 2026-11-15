@@ -48,6 +48,7 @@ namespace CityForge.Lots
 
     public sealed class LotAssetCatalog : ScriptableObject
     {
+        public const string Transport = "Transport";
         public const string StreetFurniture = "Street Furniture";
 
         public LotAssetCatalogEntry[] entries = Array.Empty<LotAssetCatalogEntry>();
@@ -228,7 +229,9 @@ namespace CityForge.Lots
             float span = Mathf.Max(dimensions.x, dimensions.z);
             float height = asset.fitModel && span > .001f
                 ? dimensions.y * Mathf.Max(asset.footprint.x, asset.footprint.y) / span : dimensions.y;
-            return height > 12f ? .75f : 1f;
+            float scale = height > 12f ? .75f : 1f;
+            if (asset.id is "balsam-fir" or "london-plane-c") scale *= .75f;
+            return scale;
         }
 
         private static void TintPlaceableTree(GameObject tree, string assetId, RegionSeason season)
@@ -257,25 +260,34 @@ namespace CityForge.Lots
                         name.Contains("trunk", StringComparison.OrdinalIgnoreCase) ||
                         name.Contains("branch", StringComparison.OrdinalIgnoreCase);
                     Color tint = leaf ? foliage : wood ? bark : Color.white;
-                    if (tint == Color.white) continue;
+                    bool oliveMaple = leaf && assetId == "silver-maple-b" && season == RegionSeason.Summer;
+                    if (tint == Color.white && !oliveMaple) continue;
 
                     renderer.GetPropertyBlock(properties, slot);
                     if (properties.isEmpty) renderer.GetPropertyBlock(properties);
                     var color = properties.HasColor(LeafColor)
                         ? properties.GetColor(LeafColor) : material.GetColor(LeafColor);
-                    properties.SetColor(LeafColor, color * tint);
+                    // Replace the dark teal multiplier with a lighter olive while retaining the leaf texture.
+                    properties.SetColor(LeafColor, oliveMaple ? new Color(.80f, .85f, .53f, color.a) : color * tint);
                     renderer.SetPropertyBlock(properties, slot);
                 }
             }
         }
 
-        public static bool Fits(LotDefinition lot, LotObjectDefinition item, LotAssetCatalogEntry asset)
+        // Allow each side to extend by 5% of the lot dimension on that axis.
+        internal static Vector2 PlacementHalfExtents(LotDefinition lot) => lot.Size * .55f;
+
+        internal static bool FitsPlacementBounds(LotDefinition lot, Rect bounds)
         {
-            var bounds = Footprint(item, asset);
-            var half = lot.Size * .5f;
+            var half = PlacementHalfExtents(lot);
             const float tolerance = .001f;
             return bounds.xMin >= -half.x - tolerance && bounds.xMax <= half.x + tolerance &&
                 bounds.yMin >= -half.y - tolerance && bounds.yMax <= half.y + tolerance;
+        }
+
+        public static bool Fits(LotDefinition lot, LotObjectDefinition item, LotAssetCatalogEntry asset)
+        {
+            return FitsPlacementBounds(lot, Footprint(item, asset));
         }
 
         public static Rect Footprint(LotObjectDefinition item, LotAssetCatalogEntry asset, Vector2? footprintOverride = null)

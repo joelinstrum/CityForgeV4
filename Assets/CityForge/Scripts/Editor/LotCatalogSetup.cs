@@ -32,11 +32,22 @@ internal static class LotCatalogSetup
         var candidates = new[]
         {
             farmhouse,
+            LotVehicle("ford-model-t", "Ford Model T", "ModelT", "machine", 3.4f, ".png"),
+            LotVehicle("rolls-royce-1926", "1926 Rolls-Royce", "RollsRoyce", "modern", 4.7f, ".jpeg"),
+            HorseDrawnVehicle("horse-and-buggy", "Horse and buggy", "Buggy", 2.644676f, 2.05f),
+            HorseDrawnVehicle("lumber-wagon", "Horse-drawn lumber wagon", "LumberWagon", 2.4001557f, 2.12f),
             FoundersBuilding("timber-council-hall", "Timber Council Hall", "TimberCouncilHall", 12f),
             FoundersBuilding("stone-courthouse", "Stone Courthouse", "StoneCourthouse", 12f),
             FoundersBuilding("brick-state-house", "Brick State House", "BrickStateHouse", 12f),
             FoundersBuilding("harbor-council-house", "Harbor Council House", "HarborCouncilHouse", 12f),
             FoundersBuilding("agrarian-assembly-hall", "Agrarian Assembly Hall", "AgrarianAssemblyHall", 12f),
+            MediumWealthStoneHouse(),
+            MediumWealthHome("medium-wealth-old-yeller", "Old Yeller", "MediumWealthOldYeller", 10.6f),
+            MediumWealthHome("medium-wealth-deep-blue", "Deep Blue House", "MediumWealthDeepBlue", 10.3f),
+            MediumWealthHome("medium-wealth-colonial", "Colonial House", "MediumWealthColonial", 10.3f),
+            MediumWealthHome("medium-wealth-brick-colonial", "Brick Colonial House", "MediumWealthBrickColonial", 10.3f),
+            MediumWealthHome("medium-wealth-red-house", "Red House", "MediumWealthRedHouse", 9.5f),
+            MediumWealthHome("medium-wealth-gray-colonial", "Gray Colonial House", "MediumWealthGrayColonial", 10.3f),
             FrontierLogCabin(),
             SmallColonialCabin(),
             FoundersHome("low-wealth-front-gable", "Front Gable House", "LowWealthFrontGable"),
@@ -67,6 +78,14 @@ internal static class LotCatalogSetup
             StreetFurniture("18th-century-lamppost", "18th-century lamppost", "Lighting", 3.6f, byHeight: true),
             V3Fence("founders-fence-panel", "Founders fence panel", "FoundersFence",
                 "Model", "", 2.4f, repeatable: true, iron: false, extension: ".jpg", normalExtension: ".png"),
+            V3Fence("weathered-picket-section", "Weathered picket fence section", "WeatheredPicketSection",
+                "Model", "", 2.4f, repeatable: true, iron: false, extension: ".jpg"),
+            V3Fence("weathered-picket-partial", "Weathered picket fence partial", "WeatheredPicketPartial",
+                "Model", "", 2.4f, iron: false, extension: ".jpg"),
+            V3Fence("flowered-picket-section", "Picket fence section with flowers", "FloweredPicketSection",
+                "Model", "", 2.4f, repeatable: true, iron: false, extension: ".jpg"),
+            V3Fence("flowered-picket-partial", "Partial picket fence with flowers", "FloweredPicketPartial",
+                "Model", "", 2.4f, iron: false, extension: ".jpg"),
             Fence("wood-fence", "Wood fence", "01"),
             V3Fence("wood-fence-section", "Rustic Fence", "RusticFence",
                 "Model", "", 2.4f, repeatable: true, iron: false),
@@ -97,28 +116,16 @@ internal static class LotCatalogSetup
             $"low-wealth-home-{variant:00}", $"Founder's Home {variant:00}", $"LowWealthHome{variant:00}",
             span: variant == 6 ? 9.375f : 7.5f));
 
-        var mediumHomes = Enumerable.Range(1, 9).Select(variant =>
+        // Approximate door leaf heights from equal-scale orthographic renders, excluding trim and steps.
+        // House 04 supplies the original 9 m reference before per-house adjustments.
+        var mediumHomeDoorHeights = new[] { 71f, 71f, 51f, 83f, 105f, 87f, 59f, 65f, 59f };
+        var mediumHomeScaleAdjustments = new[] { 1.15f, 1.20f, 1f, 1.10f, 1.10f, 1.10f, 1f, .85f, 1f };
+        var mediumHomes = Enumerable.Range(1, mediumHomeDoorHeights.Length).Select(variant =>
         {
-            var home = V3Building($"medium-wealth-home-{variant:00}", $"Founders House · $$ {variant:00}",
-                $"MediumWealthHome{variant:00}", "residential", "founders", 9f, ".jpg", ".png");
-            home.growableZone = TownZone.Residential1;
-            home.growableWealth = LotWealth.Medium;
-            string maskPath = $"{DirectoryPath}/V3Buildings/MediumWealthHome{variant:00}/Windows.png";
-            if (AssetImporter.GetAtPath(maskPath) is TextureImporter maskImporter && maskImporter.sRGBTexture)
-            {
-                maskImporter.sRGBTexture = false;
-                maskImporter.SaveAndReimport();
-            }
-            if (home.materialOverride && AssetDatabase.LoadAssetAtPath<Texture2D>(maskPath) is { } mask &&
-                (home.materialOverride.GetTexture("_EmissionMap") != mask || !home.materialOverride.IsKeywordEnabled("_EMISSION")))
-            {
-                home.materialOverride.SetTexture("_EmissionMap", mask);
-                // Keep the Lit emission variant enabled when Unity validates the material.
-                home.materialOverride.SetColor("_EmissionColor", new Color(.001f, .001f, .001f, 1f));
-                home.materialOverride.EnableKeyword("_EMISSION");
-                EditorUtility.SetDirty(home.materialOverride);
-            }
-            return home;
+            int index = variant - 1;
+            float span = 9f * mediumHomeDoorHeights[3] / mediumHomeDoorHeights[index] * mediumHomeScaleAdjustments[index];
+            return MediumWealthHome($"medium-wealth-home-{variant:00}", $"Founders House · $$ {variant:00}",
+                $"MediumWealthHome{variant:00}", span, ".png");
         });
 
         var catalog = AssetDatabase.LoadAssetAtPath<LotAssetCatalog>(CatalogPath);
@@ -143,6 +150,7 @@ internal static class LotCatalogSetup
                 changed = true;
             }
             else if (((entry.category == "Landscaping" && entry.group == "Agriculture") ||
+                      entry.id.StartsWith("v3-building-medium-wealth-home-", System.StringComparison.Ordinal) ||
                       entry.id is "v3-building-low-wealth-vertical-siding-front-gable" or
                           "v3-building-low-wealth-front-gable-cottage") &&
                 (existing.prefab != entry.prefab || existing.footprint != entry.footprint ||
@@ -299,12 +307,84 @@ internal static class LotCatalogSetup
         return home;
     }
 
-    private static LotAssetCatalogEntry V3Building(string id, string label, string folder, string category,
-        string era, float span, string colorExtension = ".jpg", string normalExtension = ".jpg")
+    private static LotAssetCatalogEntry LotVehicle(string id, string label, string folder, string era,
+        float length, string colorExtension = ".jpg")
     {
-        string root = DirectoryPath + "/V3Buildings/" + folder + "/";
+        var entry = V3Building(id, label, folder, "", era, length, colorExtension, modelCategory: LotAssetCatalog.Transport);
+        entry.id = "v3-vehicle-" + id;
+        entry.playerPlaceable = true;
+        return entry;
+    }
+
+    private static LotAssetCatalogEntry HorseDrawnVehicle(string id, string label, string folder, float height, float hitch)
+    {
+        var wagon = LotVehicle(id, label, folder, "founders", 1f);
+        var horse = LotVehicle("horse", "Horse", "Horse", "founders", 1f);
+        if (!wagon.prefab || !horse.prefab) return Entry(wagon.id, label, LotAssetCatalog.Transport, null, Vector2.zero, true, false);
+        string path = $"{DirectoryPath}/V3Vehicles/{folder}/Team.prefab";
+        var team = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+        if (!team)
+        {
+            var root = new GameObject(label);
+            try
+            {
+                AddModel(wagon, height, -hitch);
+                AddModel(horse, 1.75f, 0f);
+                team = PrefabUtility.SaveAsPrefabAsset(root, path);
+            }
+            finally { UnityEngine.Object.DestroyImmediate(root); }
+
+            void AddModel(LotAssetCatalogEntry entry, float targetHeight, float z)
+            {
+                var model = UnityEngine.Object.Instantiate(entry.prefab, root.transform, false);
+                var bounds = FenceBounds(model);
+                if (bounds.size.y > .001f) model.transform.localScale *= targetHeight / bounds.size.y;
+                model.transform.localPosition = new Vector3(0f, -FenceBounds(model).min.y, z);
+                foreach (var renderer in model.GetComponentsInChildren<Renderer>())
+                    renderer.sharedMaterials = renderer.sharedMaterials.Select(_ => entry.materialOverride).ToArray();
+            }
+        }
+        if (!team) return Entry(wagon.id, label, LotAssetCatalog.Transport, null, Vector2.zero, true, false);
+        var size = FenceBounds(team).size;
+        var result = Entry(wagon.id, label, LotAssetCatalog.Transport, team, new Vector2(size.x, size.z), true, true);
+        SetEra(result, "founders");
+        return result;
+    }
+
+    private static LotAssetCatalogEntry MediumWealthStoneHouse() =>
+        MediumWealthHome("medium-wealth-stone-house", "Stone House", "MediumWealthStoneHouse", 9f);
+
+    private static LotAssetCatalogEntry MediumWealthHome(string id, string label, string folder,
+        float span, string normalExtension = ".jpg")
+    {
+        var home = V3Building(id, label, folder, "residential", "founders", span, ".jpg", normalExtension);
+        home.growableZone = TownZone.Residential1;
+        home.growableWealth = LotWealth.Medium;
+        string maskPath = $"{DirectoryPath}/V3Buildings/{folder}/Windows.png";
+        if (AssetImporter.GetAtPath(maskPath) is TextureImporter maskImporter && maskImporter.sRGBTexture)
+        {
+            maskImporter.sRGBTexture = false;
+            maskImporter.SaveAndReimport();
+        }
+        if (home.materialOverride && AssetDatabase.LoadAssetAtPath<Texture2D>(maskPath) is { } mask &&
+            (home.materialOverride.GetTexture("_EmissionMap") != mask || !home.materialOverride.IsKeywordEnabled("_EMISSION")))
+        {
+            home.materialOverride.SetTexture("_EmissionMap", mask);
+            // Keep the Lit emission variant enabled when Unity validates the material.
+            home.materialOverride.SetColor("_EmissionColor", new Color(.001f, .001f, .001f, 1f));
+            home.materialOverride.EnableKeyword("_EMISSION");
+            EditorUtility.SetDirty(home.materialOverride);
+        }
+        return home;
+    }
+
+    private static LotAssetCatalogEntry V3Building(string id, string label, string folder, string category,
+        string era, float span, string colorExtension = ".jpg", string normalExtension = ".jpg",
+        string modelCategory = "Buildings")
+    {
+        string root = DirectoryPath + (modelCategory == LotAssetCatalog.Transport ? "/V3Vehicles/" : "/V3Buildings/") + folder + "/";
         var model = AssetDatabase.LoadAssetAtPath<GameObject>(root + "Model.fbx");
-        var entry = Entry("v3-building-" + id, label, "Buildings", model, Vector2.one * span, false, true);
+        var entry = Entry("v3-building-" + id, label, modelCategory, model, Vector2.one * span, false, true);
         SetBuildingEra(entry, category, era);
         if (!model) return entry;
 
@@ -570,6 +650,8 @@ internal static class LotCatalogSetup
             Native("native-warrior", "Indigenous Warrior", native ? native.warrior : null),
             Native("native-resident", "Indigenous Resident", native ? native.resident : null),
             V3("farmer", "Farmer", "Farmer", "founders"),
+            V3("axeman", "Axeman (Lumberjack)", "Axeman", "founders"),
+            V3("musketman", "Revolutionary-era Musketman", "Musketman", "founders"),
             V3("dock-worker", "Dock Worker", "DockWorker", "industrial"),
             V3("historic-policeman", "Historic Policeman", "Policeman", "victorian"),
             V3("victorian-gentleman", "Victorian Gentleman", "Gentleman", "victorian"),

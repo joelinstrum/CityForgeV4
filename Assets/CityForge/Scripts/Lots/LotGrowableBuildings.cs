@@ -10,6 +10,7 @@ namespace CityForge.Lots
         {
             // The vertical-siding model's gabled entrance is on its +X wall.
             "v3-building-low-wealth-vertical-siding-front-gable" or "v3-building-low-wealth-front-gable-cottage" => 90f,
+            "v3-building-medium-wealth-old-yeller" or "v3-building-medium-wealth-stone-house" => 90f,
             "v3-building-frontier-log-cabin" or "v3-building-small-colonial-cabin" => 180f,
             string id when id.StartsWith("v3-building-low-wealth-", System.StringComparison.Ordinal) ||
                 id.StartsWith("v3-building-medium-wealth-", System.StringComparison.Ordinal) => 180f,

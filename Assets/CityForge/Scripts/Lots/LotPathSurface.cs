@@ -4,6 +4,8 @@ using UnityEngine;
 
 namespace CityForge.Lots
 {
+    public enum LotPathUse { Pedestrian, Vehicle }
+
     [Serializable]
     public sealed class LotPathDefinition
     {
@@ -15,6 +17,15 @@ namespace CityForge.Lots
         public int textureRotation;
         public int edgeBlend;
         public bool recessed;
+        public LotPathUse use;
+
+        internal static Vector2 MarkerLimits(LotDefinition lot) => lot.Size * .7f;
+
+        internal static bool ContainsMarker(LotDefinition lot, Vector2 point)
+        {
+            var limit = MarkerLimits(lot);
+            return Mathf.Abs(point.x) <= limit.x && Mathf.Abs(point.y) <= limit.y;
+        }
 
         internal const int MaxEdgeBlend = 100;
         internal float BlendMeters(int value) => width * .45f * value / MaxEdgeBlend;

@@ -302,10 +302,9 @@ namespace CityForge.World
                         smooth?data.SmoothHeight(u,v):Mathf.Lerp(
                         Mathf.Lerp(data.Heights[iz,ix],data.Heights[iz,ix+1],fx),
                         Mathf.Lerp(data.Heights[iz+1,ix],data.Heights[iz+1,ix+1],fx),fz);
-                    float originalHeight=h;
                     if(channelRows!=null&&x>=channelRows[z].x&&x<=channelRows[z].y)
                         h=RegionalRiverNetwork.ContinuousHeight(data,u,v,h);
-                    if(estuaryRiver!=null)h=ShapeEstuaryHeight(new Vector2(u,v),h,originalHeight);
+                    if(estuaryRiver!=null)h=ShapeEstuaryHeight(new Vector2(u,v),h);
                     if(rockHeights!=null)rockHeights[z,x]=rockBankBlend.Height(new Vector2((u-.5f)*view.MapSide,(v-.5f)*view.MapSide),h);
                     if(streamBankBlend!=null)h=streamBankBlend.Height(new Vector2((u-.5f)*view.MapSide,(v-.5f)*view.MapSide),h);
                     heights[z,x]=h;

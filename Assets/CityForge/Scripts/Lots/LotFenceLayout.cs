@@ -22,7 +22,7 @@ namespace CityForge.Lots
         public static Vector2 ClampPiece(LotDefinition lot, LotObjectDefinition item, LotAssetCatalogEntry asset,
             Vector2 point)
         {
-            return ClampToLot(point, (lot.Size - LotRuntimeLoader.Footprint(item, asset).size) * .5f);
+            return ClampToLot(point, LotRuntimeLoader.PlacementHalfExtents(lot) - LotRuntimeLoader.Footprint(item, asset).size * .5f);
         }
 
         public static bool TryBuild(LotDefinition lot, IReadOnlyList<Vector2> points, bool closed,
