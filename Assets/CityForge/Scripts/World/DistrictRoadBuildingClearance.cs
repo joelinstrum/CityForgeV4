@@ -61,11 +61,11 @@ namespace CityForge.World
             }
         }
 
-        private bool LotOverlapsDistrictRoad(DistrictLotRecord lot)
+        private bool LotOverlapsDistrictRoad(DistrictLotRecord lot, float inset = 0f)
         {
             var lotFootprint = new DistrictLotFootprint(lot);
             var bounds = lotFootprint.Bounds;
-            var half = lot.definition.Size * .5f;
+            var half = lot.definition.Size * .5f - Vector2.one * inset;
             var corners = new[] { lotFootprint.WorldPoint(-half), lotFootprint.WorldPoint(new Vector2(-half.x, half.y)),
                 lotFootprint.WorldPoint(half), lotFootprint.WorldPoint(new Vector2(half.x, -half.y)) };
             foreach (var filter in districtRoadMeshes.Values)

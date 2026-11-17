@@ -38,16 +38,57 @@ namespace CityForge.CameraSystem
         [field: SerializeField] public int ZoomLevel { get; private set; } = 5;
         public event System.Action<int> ZoomChanged;
 
+        private Vector3 flyInStart, flyInTarget;
+        private float flyInSize, flyInElapsed;
+        private bool flyingIntoDistrict;
+        private const float DistrictFlyInDuration = 2.4f;
+
+        private float DistrictZoomSize(int level)
+        {
+            float size = farthestSize / Mathf.Pow(2f, 5 - level) /
+                (level <= 1 ? 1.25f : 1f) * (level <= 2 ? .5f : 1f);
+            var region = GetComponentInParent<World.PrototypeRegionView>();
+            if (level >= 3 && (meadowFraming || (region && region.SelectedDistrict >= 0))) size *= .5f;
+            return size;
+        }
+
         public void SetZoomLevel(int level)
         {
+            flyingIntoDistrict = false;
             ZoomLevel = Mathf.Clamp(level, 0, 5);
-            if (regionSide > 0f) {
-                orthographicSize = farthestSize / Mathf.Pow(2f, 5-ZoomLevel) / (ZoomLevel <= 1 ? 1.25f : 1f) * (ZoomLevel <= 2 ? .5f : 1f);
-                // District navigation has even 2x steps beyond level 2; keep relief-map framing unchanged.
-                var region = GetComponentInParent<World.PrototypeRegionView>();
-                if (ZoomLevel >= 3 && (meadowFraming || (region && region.SelectedDistrict >= 0))) orthographicSize *= .5f;
+            if (regionSide > 0f) orthographicSize = DistrictZoomSize(ZoomLevel);
+            ApplyPose();
+            ZoomChanged?.Invoke(ZoomLevel);
+        }
+
+        internal void StartDistrictFlyIn(Vector3 target)
+        {
+            SetZoomLevel(5);
+            flyInStart = focus;
+            flyInTarget = target;
+            flyInSize = orthographicSize;
+            flyInElapsed = 0f;
+            flyingIntoDistrict = true;
+        }
+
+        private void AdvanceDistrictFlyIn(float delta)
+        {
+            flyInElapsed += delta;
+            float progress = Mathf.Clamp01(flyInElapsed / DistrictFlyInDuration);
+            float ease = Mathf.SmoothStep(0f, 1f, progress);
+            focus = Vector3.Lerp(flyInStart, flyInTarget, ease);
+            if (progress >= 1f)
+            {
+                SetZoomLevel(1);
+                return;
             }
-            ApplyPose(); ZoomChanged?.Invoke(ZoomLevel);
+            float endSize = DistrictZoomSize(1);
+            orthographicSize = flyInSize * Mathf.Pow(endSize / flyInSize, ease);
+            int presentationLevel = Mathf.Clamp(5 - Mathf.FloorToInt(ease * 5f), 1, 5);
+            ApplyPose();
+            if (ZoomLevel == presentationLevel) return;
+            ZoomLevel = presentationLevel;
+            ZoomChanged?.Invoke(ZoomLevel);
         }
 
         private void Awake()
@@ -71,15 +112,49 @@ namespace CityForge.CameraSystem
         private void LateUpdate()
         {
             var dt = Time.unscaledDeltaTime;
+            var region = GetComponentInParent<World.PrototypeRegionView>();
+            if (region && region.DistrictScriptDialogOpen) return;
+            if (region && region.EagleCameraTarget is Transform target && target)
+            {
+                focus = target.position;
+                if (ZoomLevel != 0 || flyingIntoDistrict) SetZoomLevel(0);
+                ApplyPose();
+                return;
+            }
+            if (flyingIntoDistrict)
+            {
+                if (!region || region.SelectedDistrict < 0) flyingIntoDistrict = false;
+                else if (Input.GetKeyDown(KeyCode.Escape) || Input.GetMouseButtonDown(2) ||
+                    Mathf.Abs(Input.mouseScrollDelta.y) > .01f)
+                {
+                    SetZoomLevel(ZoomLevel);
+                    return;
+                }
+                else
+                {
+                    AdvanceDistrictFlyIn(dt);
+                    return;
+                }
+            }
+            bool zoomBlocked = region && region.BlocksCameraZoom;
+            bool shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+            bool rotate = shift && !zoomBlocked;
+            bool left = Input.GetKey(KeyCode.LeftArrow);
+            bool right = Input.GetKey(KeyCode.RightArrow);
+            bool down = Input.GetKey(KeyCode.DownArrow);
+            bool up = Input.GetKey(KeyCode.UpArrow);
             var movement = Vector2.zero;
-            if ((Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow))) movement.x -= 1f;
-            if ((Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow))) movement.x += 1f;
-            if ((Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow))) movement.y -= 1f;
-            if ((Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow))) movement.y += 1f;
+            if (Input.GetKey(KeyCode.A) || (!shift && left)) movement.x -= 1f;
+            if (Input.GetKey(KeyCode.D) || (!shift && right)) movement.x += 1f;
+            if (Input.GetKey(KeyCode.S) || down) movement.y -= 1f;
+            if (Input.GetKey(KeyCode.W) || up) movement.y += 1f;
+
+            if (rotate && left != right)
+                yaw = Mathf.Repeat(yaw + (right ? 1f : -1f) * rotationSpeed * dt, 360f);
 
             var rotation = Quaternion.Euler(0f, yaw, 0f);
             var viewScale = Mathf.Clamp(orthographicSize / 32f, 0.25f, 100f);
-            var speed = moveSpeed * viewScale * PanSpeedMultiplier * (Input.GetKey(KeyCode.LeftShift) ? 2f : 1f);
+            var speed = moveSpeed * viewScale * PanSpeedMultiplier * (shift ? 2f : 1f);
             focus += rotation * new Vector3(movement.x, 0f, movement.y).normalized * speed * dt;
 
             if (Input.GetMouseButton(2))
@@ -106,8 +181,6 @@ namespace CityForge.CameraSystem
 
             }
 
-            var region = GetComponentInParent<World.PrototypeRegionView>();
-            bool zoomBlocked = region && region.BlocksCameraZoom;
             if (!zoomBlocked && regionSide > 0f)
             {
                 // The main keyboard + shares the = key; also support numeric keypads.
@@ -177,6 +250,7 @@ namespace CityForge.CameraSystem
         public World.RegionCameraState CaptureRegionState()=>new World.RegionCameraState{focus=focus,pitch=pitch,yaw=yaw,distance=distance,size=orthographicSize,zoom=ZoomLevel,lowerView=lowerView,hasViewTilt=true,viewTilt=ViewTilt};
         public void RestoreRegionState(World.RegionCameraState state)
         {
+            flyingIntoDistrict = false;
             if(state==null)return;
             if(state.hasViewTilt&&!float.IsFinite(state.viewTilt))throw new System.IO.InvalidDataException("Invalid saved camera tilt.");
             if(!float.IsFinite(state.focus.x)||!float.IsFinite(state.focus.y)||!float.IsFinite(state.focus.z)||!float.IsFinite(state.pitch)||!float.IsFinite(state.yaw)||!float.IsFinite(state.distance)||!float.IsFinite(state.size)||state.size<3||state.distance<5)throw new System.IO.InvalidDataException("Invalid saved camera.");
@@ -231,7 +305,8 @@ namespace CityForge.CameraSystem
             // Fit detailed districts to their actual bounds so ordinary camera paths retain
             // the same shadow precision as close studies, with the existing canopy clearance.
             float shadowTerrainHeight=regionHeight;
-            var district=GetComponentInParent<World.PrototypeRegionView>()?.ApprovedDistrict;
+            var regionView = GetComponentInParent<World.PrototypeRegionView>();
+            var district = regionView ? regionView.ApprovedDistrict : null;
             if(district&&district.DisplayTerrain){
                 var terrain=district.DisplayTerrain;
                 shadowTerrainHeight=terrain.transform.position.y+terrain.terrainData.bounds.max.y;
@@ -245,11 +320,18 @@ namespace CityForge.CameraSystem
                 float clearanceDistance = screenDepth + topDepth + 30f;
                 // A district-wide setback at close zoom puts visible ground in URP's
                 // distance fade even when it is well inside the orthographic viewport.
-                poseDistance = district && FitShadowDepth && !lowerView && ZoomLevel <= 3
+                poseDistance = district && FitShadowDepth && ZoomLevel <= 3
                     ? Mathf.Max(30f, clearanceDistance)
                     : Mathf.Max(poseDistance, clearanceDistance);
             }
             poseDistance=Mathf.Lerp(lowDistance,poseDistance,tilt);
+            if (district && district.DisplayTerrain)
+            {
+                var ground = district.DisplayTerrain;
+                float detailDistance = Mathf.Max(regionView && regionView.MountainTest ? 10000f : 2000f,
+                    ZoomLevel <= 2 ? poseDistance + orthographicSize * 3f : 0f);
+                if (!Mathf.Approximately(ground.basemapDistance, detailDistance)) ground.basemapDistance = detailDistance;
+            }
             OrthographicSetback=tilt==0?0:Mathf.Max(0,poseDistance-distance);
             var orientation=Quaternion.Euler(posePitch,yaw,0f);
             var position=focus-orientation*Vector3.forward*poseDistance;

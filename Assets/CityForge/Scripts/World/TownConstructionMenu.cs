@@ -355,8 +355,14 @@ namespace CityForge.World
                 (asset.category == "Walls" || asset.category == "Fences" || asset.category == LotAssetCatalog.StreetFurniture));
             var outdoor = assets.Where(asset => asset.category == LotAssetCatalog.StreetFurniture &&
                 asset.group != "Lighting" && !IsWall(asset));
+            int districtYear = TownYear(SelectedDistrict);
+            string districtEra = CityForgeTimeline.Eras.FirstOrDefault(era =>
+                districtYear >= era.FirstYear && districtYear <= era.LastYear)?.id;
             var categories = new[] { ("Street Lamps", lamps), ("Fences", fences.Where(asset => !IsWall(asset))),
-                ("Walls", walls), ("Outdoor Details", outdoor) };
+                ("Walls", walls), ("Outdoor Details", outdoor), ("Horses & Wagons",
+                    assets.Where(asset => asset.category == LotAssetCatalog.Transport &&
+                        VehicleProfile.Find(asset.id) is { } profile && !string.IsNullOrEmpty(profile.motionFolder) &&
+                        profile.AvailableIn(districtEra))) };
             var buttons = new Button[categories.Length];
             int currentCategory = 0;
             InputField search = null;

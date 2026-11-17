@@ -14,6 +14,15 @@ namespace CityForge.World
         private LotAssetCatalogEntry streetscapeAsset;
         private PointWireTool streetscapeWire;
         private Transform streetscapeRoot;
+        private readonly Dictionary<DistrictPlacedActor, GameObject> streetscapeViews = new();
+        private readonly Dictionary<Material, Material> streetscapeGhostMaterials = new();
+        private DistrictPlacedActor movingStreetscape;
+        private GameObject streetscapeGhost;
+        private LotObjectDefinition streetscapeMoveDraft;
+        private LineRenderer streetscapeOutline;
+        private RectTransform streetscapePanel;
+        private Vector2? streetscapeDragStart;
+        private bool streetscapeDragging;
 
         private static string[] StreetscapeHistory() =>
             PlayerPrefs.GetString(StreetscapeHistoryKey).Split(new[] { '|' }, StringSplitOptions.RemoveEmptyEntries);
@@ -52,6 +61,18 @@ namespace CityForge.World
         private void CancelStreetscape()
         {
             if (streetscapeAsset == null) return;
+            if (movingStreetscape != null && streetscapeViews.TryGetValue(movingStreetscape, out var original) && original)
+                original.SetActive(true);
+            movingStreetscape = null;
+            streetscapeMoveDraft = null;
+            streetscapeDragStart = null;
+            streetscapeDragging = false;
+            CloseStreetscapePanel();
+            if (streetscapeOutline) streetscapeOutline.enabled = false;
+            if (streetscapeGhost) { streetscapeGhost.SetActive(false); Destroy(streetscapeGhost); }
+            streetscapeGhost = null;
+            foreach (var material in streetscapeGhostMaterials.Values) Destroy(material);
+            streetscapeGhostMaterials.Clear();
             streetscapeAsset = null;
             if (streetscapeWire) streetscapeWire.Cancel();
             if (districtMessage) ShowDistrictMessage("");
@@ -59,19 +80,221 @@ namespace CityForge.World
 
         private bool UpdateStreetscape()
         {
-            if (streetscapeAsset == null) return false;
+            var screen = (Vector2)Input.mousePosition;
+            bool click = Application.isFocused && Input.GetMouseButtonDown(0);
+            if (streetscapeAsset == null)
+            {
+                if (!click || !CanBuildTown || !TownConstructionVisible || IsSaving || RoadContextOverUi(screen) ||
+                    lotPlacementDraft != null || armedDistrictActor != null || zoneToolArmed ||
+                    RoadPlacementArmed) return false;
+                var nature = GetComponent<NatureToolbar>();
+                if (nature && nature.Selected != NatureTool.None) return false;
+                var camera = GetComponentInChildren<Camera>();
+                if (!camera) return false;
+                var ray = camera.ScreenPointToRay(screen);
+                float nearest = float.PositiveInfinity;
+                foreach (var (record, instance) in streetscapeViews)
+                {
+                    if (!instance || !instance.activeInHierarchy) continue;
+                    foreach (var renderer in instance.GetComponentsInChildren<Renderer>())
+                    {
+                        if (!renderer.enabled || !renderer.bounds.IntersectRay(ray, out float distance) || distance >= nearest) continue;
+                        nearest = distance;
+                        movingStreetscape = record;
+                    }
+                }
+                if (movingStreetscape == null) return false;
+                streetscapeAsset = LotAssetCatalog.Load()?.Find(movingStreetscape.assetId);
+                if (streetscapeAsset == null) { movingStreetscape = null; return false; }
+                SelectDistrictLot(null);
+                DrawStreetscapeOutline();
+                OpenStreetscapePanel();
+                streetscapeDragStart = screen;
+                ShowDistrictMessage($"{streetscapeAsset.label} selected · Drag to move");
+                click = false;
+            }
             if (!CanBuildTown || !TownConstructionVisible || IsSaving || Input.GetKeyDown(KeyCode.Escape))
                 CancelStreetscape();
-            else if (!DrawsFenceRun(streetscapeAsset) && Application.isFocused && Input.GetMouseButtonDown(0))
+            else if (movingStreetscape != null && streetscapeMoveDraft == null)
             {
-                var screen = (Vector2)Input.mousePosition;
-                if (!RoadContextOverUi(screen) && TryRoadGround(screen, out var point))
+                if (Input.GetKeyDown(KeyCode.Delete) || Input.GetKeyDown(KeyCode.Backspace))
+                    DeleteSelectedStreetscape();
+                else if (Input.GetKeyDown(KeyCode.M)) BeginStreetscapeMove(dragging: false);
+                else if (Input.GetKeyDown(KeyCode.R)) RotateSelectedStreetscape();
+                else if (streetscapeDragStart is Vector2 start && Input.GetMouseButton(0) &&
+                    (screen - start).sqrMagnitude >= 36f)
+                    BeginStreetscapeMove(dragging: true);
+                else if (click && !RoadContextOverUi(screen))
                 {
-                    var item = new LotObjectDefinition { assetId = streetscapeAsset.id, position = point };
+                    CancelStreetscape();
+                    return UpdateStreetscape();
+                }
+                if (Input.GetMouseButtonUp(0)) streetscapeDragStart = null;
+            }
+            else if (movingStreetscape != null || !DrawsFenceRun(streetscapeAsset))
+            {
+                if (RoadContextOverUi(screen) || !TryRoadGround(screen, out var point))
+                {
+                    if (streetscapeGhost) streetscapeGhost.SetActive(false);
+                    if (streetscapeDragging && Input.GetMouseButtonUp(0)) streetscapeDragging = false;
+                    return true;
+                }
+                var item = streetscapeMoveDraft ?? new LotObjectDefinition { assetId = streetscapeAsset.id };
+                if (streetscapeMoveDraft != null && Input.GetKeyDown(KeyCode.R))
+                    item.yaw = Mathf.Repeat(item.yaw + 45f, 360f);
+                PreviewStreetscape(item, point);
+                if (streetscapeDragging ? !Input.GetMouseButtonUp(0) : !click) return true;
+                streetscapeDragging = false;
+                if (movingStreetscape == null)
+                {
+                    item.position = point;
                     ShowDistrictMessage(PlaceStreetscape(new[] { item }) ?? $"{streetscapeAsset.label} placed · Esc to stop");
+                }
+                else
+                {
+                    var problem = StreetscapePlacementProblem(item, point, DistrictLotWater());
+                    if (problem != null) { ShowDistrictMessage(problem); return true; }
+                    var record = movingStreetscape;
+                    record.position = record.streetscape.position = point;
+                    record.streetscape.yaw = item.yaw;
+                    record.district = DistrictAtWorld(new Vector3(point.x, 0, point.y));
+                    streetscapeViews[record].transform.SetPositionAndRotation(
+                        new Vector3(point.x, LotHeight(point), point.y), Quaternion.Euler(0, item.yaw, 0));
+                    streetscapeMoveDraft = null;
+                    streetscapeViews[record].SetActive(true);
+                    if (streetscapeGhost) streetscapeGhost.SetActive(false);
+                    DrawStreetscapeOutline();
+                    OpenStreetscapePanel();
+                    ShowDistrictMessage("Prop moved.");
                 }
             }
             return true;
+        }
+
+        private void OpenStreetscapePanel()
+        {
+            if (streetscapePanel || !townToolbar || movingStreetscape == null) return;
+            streetscapePanel = FounderRect(townToolbar.parent, "Selected prop actions",
+                Vector2.zero, new Vector2(276, 174));
+            streetscapePanel.anchorMin = streetscapePanel.anchorMax = new Vector2(1f, .5f);
+            streetscapePanel.anchoredPosition = new Vector2(-154, 0);
+            StyleTownPanel(streetscapePanel, TownPanelColor);
+            FounderText(streetscapePanel, streetscapeAsset.label, new Vector2(0, 66), new Vector2(256, 30), 20).color = TownGold;
+            TownButton(streetscapePanel, lotFont, "Move", 12, -41, 252, () => BeginStreetscapeMove(dragging: false));
+            TownButton(streetscapePanel, lotFont, "Rotate 45°", 12, -80, 252, RotateSelectedStreetscape);
+            TownButton(streetscapePanel, lotFont, "Delete", 12, -119, 252, DeleteSelectedStreetscape);
+        }
+
+        private void CloseStreetscapePanel()
+        {
+            if (!streetscapePanel) return;
+            streetscapePanel.gameObject.SetActive(false);
+            Destroy(streetscapePanel.gameObject);
+            streetscapePanel = null;
+        }
+
+        private void BeginStreetscapeMove(bool dragging)
+        {
+            if (movingStreetscape == null || streetscapeMoveDraft != null) return;
+            streetscapeMoveDraft = JsonUtility.FromJson<LotObjectDefinition>(JsonUtility.ToJson(movingStreetscape.streetscape));
+            streetscapeDragging = dragging;
+            streetscapeViews[movingStreetscape].SetActive(false);
+            if (streetscapeOutline) streetscapeOutline.enabled = false;
+            CloseStreetscapePanel();
+            ShowDistrictMessage(dragging ? "Release to move · Esc to cancel" : "Click to place · Esc to cancel");
+        }
+
+        private void RotateSelectedStreetscape()
+        {
+            if (movingStreetscape == null || streetscapeMoveDraft != null || IsSaving) return;
+            var item = movingStreetscape.streetscape;
+            float originalYaw = item.yaw;
+            item.yaw = Mathf.Repeat(originalYaw + 45f, 360f);
+            var problem = StreetscapePlacementProblem(item, item.position, DistrictLotWater());
+            if (problem != null)
+            {
+                item.yaw = originalYaw;
+                ShowDistrictMessage(problem);
+                return;
+            }
+            streetscapeViews[movingStreetscape].transform.localRotation = Quaternion.Euler(0, item.yaw, 0);
+            DrawStreetscapeOutline();
+        }
+
+        private void DeleteSelectedStreetscape()
+        {
+            if (movingStreetscape == null || IsSaving) return;
+            var record = movingStreetscape;
+            CancelStreetscape();
+            PlacedActors.Remove(record);
+            if (streetscapeViews.Remove(record, out var view) && view)
+            {
+                view.SetActive(false);
+                Destroy(view);
+            }
+            ShowDistrictMessage("Prop deleted.");
+        }
+
+        private void DrawStreetscapeOutline()
+        {
+            if (!streetscapeOutline)
+            {
+                streetscapeOutline = new GameObject("Selected prop gold outline").AddComponent<LineRenderer>();
+                streetscapeOutline.transform.SetParent(transform, false);
+                streetscapeOutline.loop = true;
+                streetscapeOutline.positionCount = 4;
+                streetscapeOutline.widthMultiplier = .075f;
+                streetscapeOutline.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                streetscapeOutline.receiveShadows = false;
+                streetscapeOutline.sharedMaterial = Own(new Material(Shader.Find("Universal Render Pipeline/Unlit"))
+                    { color = new Color(1f, .72f, .22f) });
+            }
+            var item = movingStreetscape.streetscape;
+            var bounds = LotRuntimeLoader.Footprint(item, streetscapeAsset);
+            var half = streetscapeAsset.footprint * (item.scale * .5f) + Vector2.one * .15f;
+            if (item.fenceLength > 0f) half.x = item.fenceLength * .5f + .15f;
+            var turn = Quaternion.Euler(0, item.yaw, 0);
+            for (int i = 0; i < 4; i++)
+            {
+                var local = turn * new Vector3(i is 0 or 3 ? -half.x : half.x, 0, i < 2 ? -half.y : half.y);
+                var point = bounds.center + new Vector2(local.x, local.z);
+                streetscapeOutline.SetPosition(i, new Vector3(point.x, LotHeight(point) + .14f, point.y));
+            }
+            streetscapeOutline.enabled = true;
+        }
+
+        private void PreviewStreetscape(LotObjectDefinition item, Vector2 point)
+        {
+            if (!streetscapeGhost)
+            {
+                streetscapeGhost = LotRuntimeLoader.InstantiateObject(item, streetscapeAsset, transform);
+                foreach (var collider in streetscapeGhost.GetComponentsInChildren<Collider>()) collider.enabled = false;
+                foreach (var renderer in streetscapeGhost.GetComponentsInChildren<Renderer>())
+                {
+                    renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                    var slots = renderer.sharedMaterials;
+                    for (int i = 0; i < slots.Length; i++)
+                    {
+                        var original = slots[i];
+                        if (!original || !original.HasProperty("_Surface") || !original.HasColor("_BaseColor")) continue;
+                        if (!streetscapeGhostMaterials.TryGetValue(original, out var material))
+                        {
+                            material = new Material(original);
+                            var color = material.GetColor("_BaseColor");
+                            color.a *= .48f;
+                            material.SetColor("_BaseColor", color);
+                            material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+                            LotGroundTexture.ConfigureTransparentLayer(material, LotGroundOverlay.MaxCount + 3);
+                            streetscapeGhostMaterials.Add(original, material);
+                        }
+                        slots[i] = material;
+                    }
+                    renderer.sharedMaterials = slots;
+                }
+            }
+            streetscapeGhost.transform.localRotation = Quaternion.Euler(0, item.yaw, 0);
+            streetscapeGhost.transform.position = new Vector3(point.x, LotHeight(point), point.y);
+            streetscapeGhost.SetActive(true);
         }
 
         private string PlaceFenceRun(IReadOnlyList<Vector2> points, bool closed)
@@ -88,16 +311,8 @@ namespace CityForge.World
             var water = DistrictLotWater();
             foreach (var piece in pieces)
             {
-                var center = piece.position;
-                var direction = new Vector2(Mathf.Cos(piece.yaw * Mathf.Deg2Rad), -Mathf.Sin(piece.yaw * Mathf.Deg2Rad));
-                int steps = Mathf.Max(1, Mathf.CeilToInt(piece.fenceLength));
-                for (int i = 0; i <= steps; i++)
-                {
-                    var point = center + direction * (piece.fenceLength * ((float)i / steps - .5f));
-                    if (!InActiveDistrict(point) || TryLotWater(point, LotHeight(point), water, out _) ||
-                        PickDistrictRoad(point) != null || roadBuildings.Any(building => building.Contains(point, .1f)))
-                        return "Keep the placement on dry ground, clear of roads and buildings.";
-                }
+                var problem = StreetscapePlacementProblem(piece, piece.position, water);
+                if (problem != null) return problem;
             }
             foreach (var piece in pieces)
             {
@@ -114,6 +329,20 @@ namespace CityForge.World
             return null;
         }
 
+        private string StreetscapePlacementProblem(LotObjectDefinition piece, Vector2 center, WildlifeWaterAccess water)
+        {
+            var direction = new Vector2(Mathf.Cos(piece.yaw * Mathf.Deg2Rad), -Mathf.Sin(piece.yaw * Mathf.Deg2Rad));
+            int steps = Mathf.Max(1, Mathf.CeilToInt(piece.fenceLength));
+            for (int i = 0; i <= steps; i++)
+            {
+                var point = center + direction * (piece.fenceLength * ((float)i / steps - .5f));
+                if (!InActiveDistrict(point) || TryLotWater(point, LotHeight(point), water, out _) ||
+                    PickDistrictRoad(point) != null || roadBuildings.Any(building => building.Contains(point, .1f)))
+                    return "Keep the placement on dry ground, clear of roads and buildings.";
+            }
+            return null;
+        }
+
         private void PresentStreetscape(DistrictPlacedActor record, LotAssetCatalogEntry asset)
         {
             if (!streetscapeRoot)
@@ -126,10 +355,14 @@ namespace CityForge.World
                 districtCamera: cameraRig);
             instance.transform.position = new Vector3(record.position.x, LotHeight(record.position), record.position.y);
             LamppostLight.Attach(instance, asset, TimeOfDay);
+            SetVehicleMotion(instance.transform, asset.id, false);
+            streetscapeViews[record] = instance;
         }
 
         private void RebuildStreetscape()
         {
+            CancelStreetscape();
+            streetscapeViews.Clear();
             if (streetscapeRoot)
             {
                 streetscapeRoot.gameObject.SetActive(false);

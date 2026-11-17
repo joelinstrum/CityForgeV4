@@ -51,6 +51,35 @@
           "mask": "maintained-grass-mask"
         }
       ]
+    },
+    {
+      "category": "residential-wear",
+      "era": "founders",
+      "wealth": 3,
+      "strength": 0.72,
+      "variations": [
+        {
+          "id": "high-wealth-texture",
+          "label": "High Wealth Ground",
+          "albedo": "high-wealth-texture",
+          "mask": "maintained-grass-mask"
+        }
+      ]
+    },
+    {
+      "category": "commercial-wear",
+      "era": "founders",
+      "zone": 4,
+      "wealth": 1,
+      "strength": 0.95,
+      "variations": [
+        {
+          "id": "dry-dirt-sparse-grass",
+          "label": "Dry Dirt and Sparse Grass",
+          "albedo": "dry-dirt-sparse-grass",
+          "mask": "maintained-grass-mask"
+        }
+      ]
     }
   ]
 }

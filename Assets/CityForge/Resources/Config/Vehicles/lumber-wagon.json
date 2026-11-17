@@ -1,0 +1,15 @@
+{
+  "assetId": "v3-vehicle-lumber-wagon",
+  "eras": [
+    "founders"
+  ],
+  "motionFolder": "Horse",
+  "idleState": "Idle",
+  "travelState": "Walk",
+  "team": true,
+  "rollWheels": true,
+  "trafficGroup": "wagon",
+  "spawnEvery": 4,
+  "speed": 2.25,
+  "speedVariation": 0.17
+}

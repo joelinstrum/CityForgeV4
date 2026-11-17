@@ -5,6 +5,8 @@ using UnityEngine;
 namespace CityForge.Lots
 {
     public enum LotPathUse { Pedestrian, Vehicle }
+    public enum LotPathDepth { Flat, HalfFoot, OneFoot }
+    public enum LotPathBorder { None, Curb, Brick }
 
     [Serializable]
     public sealed class LotPathDefinition
@@ -17,6 +19,17 @@ namespace CityForge.Lots
         public int textureRotation;
         public int edgeBlend;
         public bool recessed;
+        public bool generatedResidentialEntry;
+        public LotPathDepth depth;
+        public LotPathBorder border;
+
+        internal bool HasRecess => recessed || depth != LotPathDepth.Flat;
+        internal float DepthMeters => depth switch
+        {
+            LotPathDepth.HalfFoot => .1524f,
+            LotPathDepth.OneFoot => .3048f,
+            _ => 0f
+        };
         public LotPathUse use;
 
         internal static Vector2 MarkerLimits(LotDefinition lot) => lot.Size * .7f;
@@ -34,6 +47,8 @@ namespace CityForge.Lots
 
     internal sealed class LotPathMaterial
     {
+        internal const string Plankboard = "weathered-plankboard";
+        internal const string Bluestone = "weathered-bluestone";
         internal const string ResidentialFootpath = "residential-footpath";
 
         public static readonly LotPathMaterial[] All =
@@ -48,6 +63,24 @@ namespace CityForge.Lots
                 new Color32(139, 83, 65, 255), 4f, requiresPbr: true),
             new LotPathMaterial("timber-deck", "Timber Deck", "Paving", new Color32(111, 79, 50, 255), 4f),
             new LotPathMaterial("concrete", "Concrete", "Paving", new Color32(168, 167, 159, 255), 3f),
+            new LotPathMaterial("weathered-red-brick-herringbone", "Weathered Red Brick Herringbone", "Paving",
+                new Color32(127, 116, 104, 255), 4f, requiresTexture: true),
+            new LotPathMaterial("english-garden-flagstones", "English Garden Flagstones", "Paving",
+                new Color32(127, 116, 104, 255), 4f, requiresTexture: true),
+            new LotPathMaterial("english-garden-brick-medallion", "English Garden Brick Medallion", "Paving",
+                new Color32(127, 116, 104, 255), 8f, requiresTexture: true),
+            new LotPathMaterial("gray-diamond-stonework", "Gray Diamond Stonework", "Paving",
+                new Color32(127, 116, 104, 255), 4f, requiresTexture: true),
+            new LotPathMaterial("interlocking-brick-and-stone", "Interlocking Brick and Stone", "Paving",
+                new Color32(127, 116, 104, 255), 4f, requiresTexture: true),
+            new LotPathMaterial("weathered-brick-and-stone-mosaic", "Weathered Brick and Stone Mosaic", "Paving",
+                new Color32(127, 116, 104, 255), 4f, requiresTexture: true),
+            new LotPathMaterial(Plankboard, "Weathered Plankboard", "Paving",
+                new Color32(122, 112, 101, 255), 4f, requiresTexture: true),
+            new LotPathMaterial(Bluestone, "Weathered Bluestone", "Paving",
+                new Color32(111, 120, 126, 255), 2f, requiresTexture: true),
+            new LotPathMaterial("compacted-gravel-pebble", "Compacted Gravel Pebble", "Natural",
+                new Color32(131, 121, 104, 255), 2f, requiresTexture: true),
             new LotPathMaterial("gravel", "Gravel", "Natural", new Color32(135, 124, 105, 255), 3f, 1f),
             new LotPathMaterial("packed-earth", "Packed Earth", "Natural", new Color32(130, 97, 67, 255), 3f),
             new LotPathMaterial(ResidentialFootpath, "Soft Dirt Footpath", "Natural", new Color32(130, 110, 82, 255), 3f),
@@ -147,6 +180,19 @@ namespace CityForge.Lots
             material.SetFloat("_EdgeBlend", path.BlendMeters(value));
             material.SetFloat("_PathOpacity", path.materialId == ResidentialFootpath ? .58f : 1f);
             material.SetFloat("_Recessed", path.recessed ? 1f : 0f);
+            material.SetFloat("_RecessDepth", path.DepthMeters);
+            material.SetFloat("_RecessBorder", (int)path.border);
+            if (path.depth != LotPathDepth.Flat)
+            {
+                var dirt = Resources.Load<Texture2D>("Lots/PathMaterials/DirtRoadEarth");
+                if (!dirt) dirt = Find("packed-earth").Texture;
+                if (dirt) material.SetTexture("_RecessDirt", dirt);
+            }
+            if (path.depth != LotPathDepth.Flat && path.border == LotPathBorder.Brick)
+            {
+                var brick = Find("brick").Texture;
+                if (brick) material.SetTexture("_RecessBrick", brick);
+            }
         }
 
         public static LotPathMaterial Find(string id) => Array.Find(All, style => style.Id == id);
@@ -154,6 +200,7 @@ namespace CityForge.Lots
 
     internal static class LotPathSurface
     {
+        internal const int ResidentialSidewalkWidth = 1;
         public static readonly int[] Widths = { 1, 3, 6, 9, 12 };
 
         // Shared by the editor guide and the paved mesh. The optional last point is the live mouse preview.
@@ -209,7 +256,8 @@ namespace CityForge.Lots
             Vector2 PointAt(int i) => i < points.Count ? points[i] : end.GetValueOrDefault();
         }
 
-        public static Mesh BuildMesh(LotPathDefinition path, Vector2 tileSize, float height, Func<Vector2, float> ground = null)
+        public static Mesh BuildMesh(LotPathDefinition path, Vector2 tileSize, float height, Func<Vector2, float> ground = null,
+            int shoulderSide = 0, float shoulderWidth = 0f)
         {
             IReadOnlyList<Vector2> points = path.points;
             if (path.curved)
@@ -229,8 +277,18 @@ namespace CityForge.Lots
             {
                 var point = points[i];
                 var side = RibbonSide(points, null, path.closed, i, path.width);
-                AddVertex(i * 2, point - side);
-                AddVertex(i * 2 + 1, point + side);
+                if (shoulderSide == 0)
+                {
+                    AddVertex(i * 2, point - side);
+                    AddVertex(i * 2 + 1, point + side);
+                }
+                else
+                {
+                    var inner = side * shoulderSide;
+                    var outer = inner * (1f + 2f * shoulderWidth / path.width);
+                    AddVertex(i * 2, point + (shoulderSide < 0 ? outer : inner));
+                    AddVertex(i * 2 + 1, point + (shoulderSide < 0 ? inner : outer));
+                }
             }
             for (int i = 0; i < segments; i++)
             {

@@ -48,9 +48,9 @@ namespace CityForge.World
             }
         }
 
-        private string CommitRoadEdit(DistrictRoadRecord road, Vector2[] points, bool curved, bool aligned, int movedPoint = -1)
+        private string CommitRoadEdit(DistrictRoadRecord road, Vector2[] points, bool curved, bool aligned, int movedPoint = -1, bool preserveGuide = false)
         {
-            if (aligned) points = AlignRoadGuide(points, road.closed, road.width, movedPoint, movedPoint >= 0 ? road.points : null);
+            if (aligned && !preserveGuide) points = AlignRoadGuide(points, road.closed, road.width, movedPoint, movedPoint >= 0 ? road.points : null);
             if (curved == road.curved && aligned == road.gridAligned && points.SequenceEqual(road.points)) return null;
             var before = new RoadEditState(road.points, road.curved, road.gridAligned);
             var problem = EditDistrictRoad(road, points, curved, aligned);

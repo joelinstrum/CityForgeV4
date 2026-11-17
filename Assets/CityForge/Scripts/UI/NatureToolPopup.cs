@@ -169,6 +169,7 @@ namespace CityForge.UI
 
         private static LotAssetCatalogEntry[] CharactersFor(LotAssetCatalog catalog, CityForgeTimeline.Era era) =>
             catalog ? catalog.entries.Where(asset => asset != null && asset.prefab && asset.IsCharacter &&
+                asset.id != PrototypeRegionView.FarmerAssetId &&
                 (string.IsNullOrEmpty(asset.eraId) ? asset.fromYear <= era.LastYear && asset.toYear >= era.FirstYear
                     : asset.eraId == era.id)).OrderBy(asset => asset.label).ToArray() : Array.Empty<LotAssetCatalogEntry>();
 

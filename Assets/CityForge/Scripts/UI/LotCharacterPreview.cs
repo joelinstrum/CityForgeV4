@@ -17,6 +17,7 @@ namespace CityForge.UI
             public string requestedAnimation;
             public string assetId, idle;
             public Actor partner;
+            public LotShopkeeper shopkeeper;
             public bool talking, onDeck;
             public readonly Queue<Vector2> route = new Queue<Vector2>();
 
@@ -44,15 +45,19 @@ namespace CityForge.UI
             new List<(IReadOnlyList<Vector2>, bool)>();
         private Vector2 halfSize;
         private LotDefinition lot;
+        private LotAssetCatalog catalog;
+        private LotObjectDefinition growablePreview;
         private float previewTime;
         private const float WalkSpeed = 1.15f;
         private const float PartnerSearchInterval = 10f;
         private const int PartnerCandidateLimit = 4;
 
-        public void BeginRefresh(LotDefinition lot, LotAssetCatalog catalog)
+        public void BeginRefresh(LotDefinition lot, LotAssetCatalog catalog, LotObjectDefinition growablePreview)
         {
             bound.Clear();
             this.lot = lot;
+            this.catalog = catalog;
+            this.growablePreview = growablePreview;
             halfSize = lot.Size * .5f;
             obstacles.Clear();
             paths.Clear();
@@ -107,6 +112,10 @@ namespace CityForge.UI
             else view.localPosition = new Vector3(position.x, 0, position.z);
             actor.animator = view.GetComponentInChildren<Animator>();
             actor.requestedAnimation = null;
+            actor.shopkeeper = null;
+            if (actor.settings.scriptedBehavior == LotScriptedBehavior.Shopkeeper &&
+                LotShopkeeper.TryEntrance(lot, catalog, item.position, growablePreview, out var door, out var forward))
+                actor.shopkeeper = new LotShopkeeper(view, asset, door, forward, _ => 0f, preview: true);
             if (!ClearRoute(actor))
             {
                 actor.route.Clear();
@@ -143,6 +152,17 @@ namespace CityForge.UI
             }
         }
 
+        public void ShowShopkeepersForEditing()
+        {
+            foreach (var actor in actors.Values)
+            {
+                if (actor.shopkeeper == null) continue;
+                actor.shopkeeper.ShowForEditing();
+                actor.view.localPosition = new Vector3(actor.home.x, 0f, actor.home.y);
+                actor.view.localRotation = Quaternion.Euler(0f, actor.yaw, 0f);
+            }
+        }
+
         public void Restart(string id)
         {
             if (!actors.TryGetValue(id, out var actor)) return;
@@ -159,6 +179,12 @@ namespace CityForge.UI
             {
                 var actor = pair.Value;
                 if (!actor.settings.configured) continue;
+                if (actor.shopkeeper != null)
+                {
+                    if (dragged?.Contains(pair.Key) == true) actor.shopkeeper.ShowForEditing();
+                    else actor.shopkeeper.Tick(delta);
+                    continue;
+                }
                 if (dragged?.Contains(pair.Key) == true || actor.onDeck || actor.settings.idlePercent == 100 ||
                     actor.settings.scriptedBehavior != LotScriptedBehavior.None)
                 {

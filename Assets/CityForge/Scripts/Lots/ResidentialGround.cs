@@ -1,4 +1,5 @@
 using System;
+using CityForge.World;
 using UnityEngine;
 
 namespace CityForge.Lots
@@ -33,6 +34,7 @@ namespace CityForge.Lots
         internal sealed class Library
         {
             public string category, era;
+            public TownZone zone;
             public LotWealth wealth;
             public float strength;
             public Variation[] variations;
@@ -67,8 +69,7 @@ namespace CityForge.Lots
         internal static Library FindLibrary(LotDefinition lot, string era)
         {
             var zoning = lot.zoningLayout;
-            if (zoning.zone < World.TownZone.Residential1 || zoning.zone > World.TownZone.Residential3)
-                return null;
+            bool residential = zoning.zone is >= TownZone.Residential1 and <= TownZone.Residential3;
 
             if (libraries == null)
             {
@@ -76,7 +77,8 @@ namespace CityForge.Lots
                 libraries = config ? JsonUtility.FromJson<Catalog>(config.text)?.libraries : null;
                 libraries ??= Array.Empty<Library>();
             }
-            return Array.Find(libraries, item => item.wealth == zoning.wealth && item.era == era &&
+            return Array.Find(libraries, item => (item.zone == TownZone.None ? residential : item.zone == zoning.zone) &&
+                item.wealth == zoning.wealth && item.era == era &&
                 (string.IsNullOrEmpty(lot.residentialGround.category) || item.category == lot.residentialGround.category));
         }
 

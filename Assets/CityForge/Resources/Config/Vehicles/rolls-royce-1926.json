@@ -1,0 +1,11 @@
+{
+  "assetId": "v3-vehicle-rolls-royce-1926",
+  "eras": [
+    "modern"
+  ],
+  "label": "1926 Rolls-Royce",
+  "modelFolder": "RollsRoyce",
+  "length": 4.7,
+  "colorExtension": ".jpeg",
+  "speed": 10
+}

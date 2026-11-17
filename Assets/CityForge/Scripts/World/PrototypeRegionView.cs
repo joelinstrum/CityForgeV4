@@ -215,7 +215,7 @@ namespace CityForge.World
         public void ReleaseLoadedMeadow(){LoadedMeadow=null;}
         public bool LoadedFromSnapshot {get;private set;}
         public bool IsSaving {get;private set;}
-        internal bool BlocksCameraZoom => founderPicker || savedLotPicker || transportModal || playerLotWorkspace ||
+        internal bool BlocksCameraZoom => DistrictScriptDialogOpen || founderPicker || savedLotPicker || transportModal || playerLotWorkspace ||
             (townPanel && townPanel.gameObject.activeInHierarchy) ||
             (afternoonLightingPanel && afternoonLightingPanel.activeInHierarchy) || RemakeBlocksInput;
         public void SaveCurrentRegion()
@@ -816,6 +816,8 @@ namespace CityForge.World
                 return;
             }
             TickPlacedPedestrians();
+            TickDistrictEagle();
+            if (UpdateDistrictScripts()) return;
             if (armedDistrictActor != null && Input.GetKeyDown(KeyCode.Escape))
             {
                 CancelDistrictActor();
@@ -887,7 +889,7 @@ namespace CityForge.World
         private bool orbitingSlab;
         private void OnGUI()
         {
-            if(RemakeBlocksInput||DistrictLoading||IsSaving||playerLotWorkspace||lotPlacementDraft!=null||founderPicker||savedLotPicker||transportModal||ParkTreeBrushArmed||streetscapeAsset != null){
+            if(DistrictScriptDialogOpen||RemakeBlocksInput||DistrictLoading||IsSaving||playerLotWorkspace||lotPlacementDraft!=null||founderPicker||savedLotPicker||transportModal||ParkTreeBrushArmed||streetscapeAsset != null){
                 orbitingSlab=false;
                 return;
             }
@@ -903,6 +905,7 @@ namespace CityForge.World
                 HandleRoadContextPointer(pointer);
                 return;
             }
+            if (RoadPlacementArmed) CompleteRoadGesture(pointer);
             if (zoneToolArmed || RoadPlacementArmed || pointer.button!=0 || HandleRoadPathPointer(pointer)) return;
             if(orbitingSlab&&pointer.type==EventType.MouseDrag){
                 GetComponentInChildren<CityForgeCameraController>().OrbitRegion(pointer.delta);
@@ -925,6 +928,12 @@ namespace CityForge.World
             var ray = GetComponentInChildren<Camera>().ScreenPointToRay(position);
             if (SelectedDistrict >= 0)
             {
+                var nature = GetComponent<CityForge.UI.NatureToolbar>();
+                if ((!nature || nature.Selected == CityForge.UI.NatureTool.None) && TryStartRoadFromClick(position))
+                {
+                    pointer.Use();
+                    return;
+                }
                 if (TrySelectDistrictLot(ray)) pointer.Use();
                 return;
             }
@@ -962,12 +971,36 @@ namespace CityForge.World
             var overlay=CityForge.UI.RegionLoadingOverlay.Show(RegionName+" / "+name,null,true);
             overlay.BeginDistrict(EnterDistrictStages(index,overlay.Report),()=>{
                 if(!this)return;districtLoading=false;enabled=true;camera.enabled=previousControl;
+                if (camera.enabled && TryDistrictFlyInFocus(out var destination))
+                    camera.StartDistrictFlyIn(destination);
             },error=>{
                 if(!this)return;
                 if(approvedDistrict){approvedDistrict.ApplyPresentation(false);approvedDistrict.gameObject.SetActive(false);Destroy(approvedDistrict.gameObject);approvedDistrict=null;}
                 ShowOverview();regionNote.text="Could not open district. Please try again.";Debug.LogException(error);
             });
         }
+        private bool TryDistrictFlyInFocus(out Vector3 destination)
+        {
+            destination = default;
+            var town = Towns.Where(candidate => InActiveDistrict((candidate.position - Vector2.one * .5f) * MapSide))
+                .OrderBy(candidate => candidate.awaitingFoundersBuilding).ThenByDescending(candidate => candidate.capital)
+                .FirstOrDefault(candidate => !candidate.awaitingFoundersBuilding);
+            Vector2 point;
+            if (town != null)
+                point = (town.position - Vector2.one * .5f) * MapSide;
+            else
+            {
+                var commercial = districtLotRoots.Keys.Where(lot => lot.definition.zoningLayout.zone is
+                        TownZone.Commercial1 or TownZone.Commercial2 or TownZone.Commercial3 ||
+                        CityForge.Lots.LotClassification.FindCategory(lot.definition.category)?.id == "commercial")
+                    .OrderBy(lot => (lot.center - ActiveDistrictBounds.center).sqrMagnitude).FirstOrDefault();
+                if (commercial == null) return false;
+                point = commercial.center;
+            }
+            destination = new Vector3(point.x, LotHeight(point) + 1.5f, point.y);
+            return true;
+        }
+
         // Immediate entry remains available to existing editor checks and asset tools.
         public void EnterDistrict(int index)=>RegionBuildSteps.Complete(EnterDistrictStages(index));
         public IEnumerator EnterDistrictStages(int index,System.Action<string,float> progress=null)
@@ -980,6 +1013,7 @@ namespace CityForge.World
                 progress?.Invoke("Selecting district",.08f);yield return null;
             GetComponent<RegionPreviewDiagnostics>().SetDiagnostic(false,1);
             SelectedDistrict=index;if(districtSelection)districtSelection.SetActive(false);
+            SetTimeOfDay(RegionTimeOfDay.Noon);
             SetDistrictInfoVisible(false);
             navigationHint.text = DistrictNavigationHint;
             if (districtMeshes[index]==null)

@@ -48,7 +48,11 @@ namespace CityForge.World
                     medium.Variation.id == "maintained-grass" && medium.Variation.mask == "maintained-grass-mask",
                     "Medium wealth uses its own maintained-grass mask");
                 restored.definition.zoningLayout.wealth = LotWealth.High;
-                Require(!ResidentialGround.TrySelect(restored.definition, record.id, era, out _), "No high-wealth fallback");
+                Require(ResidentialGround.TrySelect(restored.definition, record.id, era, out var high) &&
+                    high.Variation.id == "high-wealth-texture" && high.Variation.albedo == "high-wealth-texture",
+                    "High wealth uses its dedicated ground texture");
+                CheckImporter(high.Variation.albedo, true);
+                CheckImporter(high.Variation.mask, false);
                 Require(!ResidentialGround.TrySelect(lot, record.id, "unsupported-era", out _), "No era fallback");
                 lot.residentialGround.mode = ResidentialGroundMode.Disabled;
                 Require(!ResidentialGround.TrySelect(lot, record.id, era, out _), "Disabled overlay");

@@ -46,10 +46,14 @@ namespace CityForge.World
 
         private readonly Dictionary<Vector2Int, LotWealth> zoneWealth = new();
         private LotWealth selectedZoneWealth = LotWealth.Low;
-        private Dropdown zoneWealthPicker;
+        private Dropdown zoneWealthPicker, zoneLotSizePicker;
+        private int selectedResidentialDepth = ResidentialDefaultDepth;
         private Vector2Int selectedZoneLotSize;
         private readonly Dictionary<Vector2Int, Vector2Int> zoneLotSizes = new();
         private readonly Dictionary<Vector2Int, Vector2Int> zoneLotAnchors = new();
+
+        private static bool SupportsLotGrowth(TownZone zone) =>
+            zone is TownZone.Residential1 or TownZone.Commercial1;
 
         private Vector2Int ZonedLotSize(Vector2Int cell) => zoneLotSizes.GetValueOrDefault(cell);
 
@@ -70,7 +74,13 @@ namespace CityForge.World
             zoneWealthPicker.captionText.font = zoneWealthPicker.itemText.font = font;
             zoneWealthPicker.ClearOptions();
             zoneWealthPicker.AddOptions(new List<string> { "Low Wealth", "Medium Wealth", "High Wealth" });
-            zoneWealthPicker.onValueChanged.AddListener(index => selectedZoneWealth = (LotWealth)(index + 1));
+            zoneWealthPicker.onValueChanged.AddListener(index =>
+            {
+                selectedZoneWealth = (LotWealth)(index + 1);
+                RefreshZoneLotSizes();
+                if (zoneToolArmed && activeZone == TownZone.Residential1 && zoneStatus)
+                    zoneStatus.text = ResidentialDragHint(activeZone);
+            });
             picker.SetActive(false);
 #endif
         }
@@ -144,7 +154,7 @@ namespace CityForge.World
                     (cell.facing != TownZoneFacing.None && ResidentialDepth(cell.zone) == 0) ||
                     (cell.lotWidth != 0 || cell.lotDepth != 0) &&
                         (cell.zone != TownZone.Residential1 || cell.lotWidth < 1 || cell.lotWidth > LotDefinition.MaxTiles ||
-                         cell.lotDepth < 1 || cell.lotDepth > ResidentialDepth(cell.zone)) ||
+                         cell.lotDepth < 1 || cell.lotDepth > LotDefinition.MaxTiles) ||
                     cell.hasLotAnchor &&
                         (legacy || cell.lotWidth == 0 || cell.lotDepth == 0 ||
                          cell.lotAnchorX < 0 || cell.lotAnchorZ < 0 || cell.lotAnchorX > cell.x ||
@@ -180,19 +190,13 @@ namespace CityForge.World
                 }
             }
 
-            var sizePicker = DefaultControls.CreateDropdown(new DefaultControls.Resources()).GetComponent<Dropdown>();
+            var sizePicker = zoneLotSizePicker = DefaultControls.CreateDropdown(new DefaultControls.Resources()).GetComponent<Dropdown>();
             var sizeRect = (RectTransform)sizePicker.transform;
             sizeRect.SetParent(townPanel, false);
             Position(sizeRect, new Vector2(17, -157), new Vector2(174, 30));
             sizePicker.captionText.font = sizePicker.itemText.font = lotFont;
-            var sizes = new[] { Vector2Int.zero }.Concat(Enumerable.Range(2, ResidentialDepth(TownZone.Residential1) - 1)
-                .SelectMany(width => Enumerable.Range(2, ResidentialDepth(TownZone.Residential1) - 1)
-                    .Select(depth => new Vector2Int(width, depth)))).ToArray();
-            sizePicker.ClearOptions();
-            sizePicker.AddOptions(sizes.Select(size => size == Vector2Int.zero ? "R1 lot size: Auto" :
-                $"R1: {size.x} × {size.y} exact").ToList());
-            sizePicker.SetValueWithoutNotify(Array.IndexOf(sizes, selectedZoneLotSize));
-            sizePicker.onValueChanged.AddListener(index => selectedZoneLotSize = sizes[index]);
+            sizePicker.onValueChanged.AddListener(index => selectedZoneLotSize = zoneLotSizesForWealth[index]);
+            RefreshZoneLotSizes();
 
             zoneButtons[0] = TownButton(townPanel, lotFont, "Erase zoning", 18, -113, 108, () => ArmZone(TownZone.None));
             zoneStatus = FounderText(townPanel, "Choose a zone and density, then drag on the map.",
@@ -200,6 +204,44 @@ namespace CityForge.World
             zoneStatus.color = TownGold;
             EnsureZoneSurfaces();
             RefreshZoneOverlay();
+        }
+
+        private const int ResidentialDefaultDepth = 6;
+        private Vector2Int[] zoneLotSizesForWealth = { Vector2Int.zero };
+
+        private int ZonePaintDepth(TownZone zone) =>
+            zone == TownZone.Residential1 ? selectedResidentialDepth : ResidentialDepth(zone);
+
+        private void RefreshZoneLotSizes()
+        {
+            Vector2Int[] authoredSizes;
+            try
+            {
+                authoredSizes = LotLibrary.Local.List(LotType.Zoning).Select(entry => entry.Lot)
+                    .Where(lot => lot.zoningLayout.zone == TownZone.Residential1 &&
+                        lot.zoningLayout.wealth == selectedZoneWealth && lot.zoningLayout.Fits(lot) &&
+                        !lot.IsWaterfront && (string.IsNullOrEmpty(lot.firstEraId) || lot.firstEraId == "founders"))
+                    .Select(GrowthFrontageSize).Distinct().OrderBy(size => size.x).ThenBy(size => size.y).ToArray();
+            }
+            catch (Exception error) when (error is IOException || error is UnauthorizedAccessException)
+            {
+                Debug.LogWarning($"Could not read zoning lot sizes: {error.Message}");
+                authoredSizes = Array.Empty<Vector2Int>();
+            }
+
+            selectedResidentialDepth = authoredSizes.Length == 0 ? ResidentialDefaultDepth : authoredSizes.Max(size => size.y);
+            zoneLotSizesForWealth = new[] { Vector2Int.zero }.Concat(authoredSizes).ToArray();
+            int index = Array.IndexOf(zoneLotSizesForWealth, selectedZoneLotSize);
+            if (index < 0)
+            {
+                index = 0;
+                selectedZoneLotSize = Vector2Int.zero;
+            }
+            if (!zoneLotSizePicker) return;
+            zoneLotSizePicker.ClearOptions();
+            zoneLotSizePicker.AddOptions(zoneLotSizesForWealth.Select(size => size == Vector2Int.zero ? "R1 lot size: Auto" :
+                $"R1: {size.x} × {size.y} exact").ToList());
+            zoneLotSizePicker.SetValueWithoutNotify(index);
         }
 
         private void ArmZone(TownZone zone)
@@ -225,6 +267,7 @@ namespace CityForge.World
 
         private void CancelZoneDrag()
         {
+            if (zoneDragStart.HasValue) ShowDistrictMessage("");
             if (restoreZonePanelAfterDrag && townPanel) townPanel.gameObject.SetActive(true);
             restoreZonePanelAfterDrag = false;
             zoneDragStart = null;
@@ -252,7 +295,7 @@ namespace CityForge.World
             bool rotated = ResidentialDepth(activeZone) > 0 && Input.GetKeyDown(KeyCode.Tab);
             if (rotated)
             {
-                residentialFacingTurns = (residentialFacingTurns + 1) % 4;
+                residentialFacingTurns = (residentialFacingTurns + 1) % 12;
                 if (!zoneDragStart.HasValue)
                     zoneStatus.text = ResidentialDragHint(activeZone);
             }
@@ -297,13 +340,14 @@ namespace CityForge.World
             var min = Vector2Int.Min(start, cell);
             var max = Vector2Int.Max(start, cell) + Vector2Int.one;
             var bounds = new RectInt(min, max - min);
-            if (zoneDragBounds != bounds)
+            if (zoneDragBounds != bounds || (rotated && activeZone == TownZone.Commercial1))
             {
                 zoneDragBounds = bounds;
                 zoneProblem = ZoneSiteProblem(bounds, activeZone, zoneWater, out zoneDragFrontage, zoneDragDryCells);
                 RefreshZonePreview(bounds);
             }
             else if (rotated) RefreshZonePreview(bounds);
+            ShowDistrictMessage($"{bounds.width} × {bounds.height} tiles");
             if (!up) return;
             var problem = zoneProblem ?? ApplyTownZone(bounds, activeZone);
             if (problem == null)
@@ -330,7 +374,7 @@ namespace CityForge.World
                 : bounds.width <= MaxZoneDragSide && bounds.height <= MaxZoneDragSide;
             if (zonePreviewRenderer.enabled)
                 FillZoneMesh(zonePreviewMesh, PreviewZoneCells(bounds, zoneProblem == null ? activeZone : TownZone.None),
-                    .27f, zoneProblem == null ? ResidentialFacing(zoneDragFrontage) : TownZoneFacing.None,
+                    .27f, zoneProblem == null ? (activeZone == TownZone.Commercial1 ? zoneDragFrontage : ResidentialFacing(zoneDragFrontage)) : TownZoneFacing.None,
                     enclosed ? bounds : (RectInt?)null);
         }
 
@@ -351,11 +395,12 @@ namespace CityForge.World
         {
             frontage = TownZoneFacing.None;
             if (bounds.width < 1 || bounds.height < 1) return "Select at least one cell.";
-            int maxDepth = ResidentialDepth(zone);
+            int maxDepth = ZonePaintDepth(zone);
             if (maxDepth > 0)
             {
                 if ((long)bounds.width * bounds.height > MaxZonedCells) return "This region has reached its zoning limit.";
-                var problem = ResidentialFrontageProblem(bounds, maxDepth, out frontage, allowEnclosedBlock: true);
+                var problem = ResidentialFrontageProblem(bounds, maxDepth, out frontage, allowEnclosedBlock: true,
+                    commercial: zone == TownZone.Commercial1);
                 if (problem != null) return problem;
             }
             else if (bounds.width > MaxZoneDragSide || bounds.height > MaxZoneDragSide)
@@ -403,12 +448,19 @@ namespace CityForge.World
             if (!CanBuildTown || IsSaving) return "Establish the town center before zoning.";
             var problem = ZoneSiteProblem(bounds, zone, DistrictLotWater(), out var frontage);
             if (problem != null) return problem;
-            var facing = ResidentialFacing(frontage);
+            var facing = zone == TownZone.Commercial1 ? frontage : ResidentialFacing(frontage);
             bool enclosed = ResidentialDepth(zone) > 0 && frontage == TownZoneFacing.None;
-            bool affectsGrowth = zone == TownZone.Residential1;
+            bool affectsGrowth = SupportsLotGrowth(zone);
+            var requestedSize = zone == TownZone.Residential1 ? selectedZoneLotSize : Vector2Int.zero;
+            if (zone == TownZone.Residential1 && requestedSize == Vector2Int.zero && !enclosed)
+            {
+                var frontageSize = facing is TownZoneFacing.East or TownZoneFacing.West
+                    ? new Vector2Int(bounds.height, bounds.width) : bounds.size;
+                if (zoneLotSizesForWealth.Contains(frontageSize)) requestedSize = frontageSize;
+            }
             foreach (var cell in bounds.allPositionsWithin)
             {
-                affectsGrowth |= townZones.TryGetValue(cell, out var previous) && previous == TownZone.Residential1;
+                affectsGrowth |= townZones.TryGetValue(cell, out var previous) && SupportsLotGrowth(previous);
                 if (zone == TownZone.None)
                 {
                     townZones.Remove(cell);
@@ -417,11 +469,10 @@ namespace CityForge.World
                 else
                 {
                     townZones[cell] = zone;
-                    zoneWealth[cell] = selectedZoneWealth;
+                    zoneWealth[cell] = zone == TownZone.Commercial1 ? LotWealth.Low : selectedZoneWealth;
                 }
                 var cellFacing = enclosed ? EnclosedBlockFacing(bounds, cell) : facing;
-                SetZonedLotSize(cell, bounds.min, cellFacing,
-                    zone == TownZone.Residential1 ? selectedZoneLotSize : Vector2Int.zero);
+                SetZonedLotSize(cell, bounds.min, cellFacing, requestedSize);
                 if (cellFacing != TownZoneFacing.None) residentialFacing[cell] = cellFacing;
                 else residentialFacing.Remove(cell);
             }

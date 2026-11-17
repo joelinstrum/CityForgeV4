@@ -22,7 +22,7 @@ namespace CityForge.World
             {
                 var catalog = LotAssetCatalog.Load();
                 var layouts = LotLibrary.Local.List(LotType.Zoning).Select(entry => entry.Lot)
-                    .Where(lot => (string.IsNullOrEmpty(lot.firstEraId) || lot.firstEraId == "founders") && lot.zoningLayout.zone == TownZone.Residential1 &&
+                    .Where(lot => (string.IsNullOrEmpty(lot.firstEraId) || lot.firstEraId == "founders") && SupportsLotGrowth(lot.zoningLayout.zone) &&
                         !lot.IsWaterfront)
                     .OrderByDescending(lot => lot.width * lot.length)
                     .ThenBy(lot => lot.name, StringComparer.Ordinal)
@@ -42,9 +42,29 @@ namespace CityForge.World
                         .Where(building => catalog.Find(building.assetId).eraId == "founders").ToArray();
                     bool propFiller = layout.width == 1 && layout.length == 1 && layout.objects.Count > 0;
                     if (buildings.Length == 0 && !propFiller)
-                        problem = $"{layout.name}: No matching house fits the building slot.";
+                        problem = $"{layout.name}: No matching building fits the building slot.";
                     else
                         options.Add((layout, buildings));
+                }
+                if (!options.Any(option => option.Layout.zoningLayout.zone == TownZone.Commercial1 &&
+                    option.Layout.zoningLayout.wealth == LotWealth.Low) &&
+                    catalog && catalog.Find("v3-building-plymouth-store") is { } shop && shop.prefab)
+                {
+                    int tiles = Mathf.Max(1, Mathf.CeilToInt((Mathf.Max(shop.footprint.x, shop.footprint.y) + 1f) /
+                        DistrictGridCellMeters));
+                    var layout = new LotDefinition
+                    {
+                        id = "7f1780084b9548d7a34037c6094f20bc",
+                        name = "Founders Shops", type = LotType.Zoning, firstEraId = "founders",
+                        category = "commercial", wealth = LotWealth.Low, width = tiles, length = tiles,
+                        zoningLayout = new LotZoningLayout
+                        {
+                            zone = TownZone.Commercial1, wealth = LotWealth.Low, buildingSize = Vector2.one *
+                                Mathf.Max(shop.footprint.x, shop.footprint.y)
+                        }
+                    };
+                    var shops = LotGrowableBuildings.Candidates(layout, catalog);
+                    if (shops.Length > 0) options.Add((layout, shops));
                 }
             }
             catch (Exception error) when (error is IOException || error is UnauthorizedAccessException)
@@ -84,7 +104,7 @@ namespace CityForge.World
             for (int x = Mathf.Max(0, edited.xMin - reach); x < Mathf.Min(side, edited.xMax); x++)
             {
                 var cell = new Vector2Int(x, z);
-                if (townZones.TryGetValue(cell, out var zone) && zone == TownZone.Residential1)
+                if (townZones.TryGetValue(cell, out var zone) && SupportsLotGrowth(zone))
                     localGrowthCells.Add(cell);
             }
             nextLotGrowth = Time.unscaledTime + LotGrowthDelay;
@@ -107,7 +127,7 @@ namespace CityForge.World
                 for (int x = min.x; x < max.x; x++)
                 {
                     var cell = new Vector2Int(x, z);
-                    if (townZones.TryGetValue(cell, out var zone) && zone == TownZone.Residential1 &&
+                    if (townZones.TryGetValue(cell, out var zone) && SupportsLotGrowth(zone) &&
                         footprint.Contains(ZoneCorner(cell) + Vector2.one * (DistrictGridCellMeters * .5f)))
                         localGrowthCells.Add(cell);
                 }
@@ -126,7 +146,7 @@ namespace CityForge.World
             if (!CanBuildTown || IsSaving || movingDistrictLot != null || detonateLastPoint.HasValue ||
                 Time.unscaledTime < nextLotGrowth) return;
             nextLotGrowth = float.PositiveInfinity;
-            IEnumerable<Vector2Int> pending = fullGrowthCheckQueued ? residentialFacing.Keys : localGrowthCells;
+            IEnumerable<Vector2Int> pending = fullGrowthCheckQueued ? townZones.Where(pair => SupportsLotGrowth(pair.Value)).Select(pair => pair.Key) : localGrowthCells;
             var cellsToCheck = pending.OrderBy(cell => cell.y).ThenBy(cell => cell.x).ToArray();
             fullGrowthCheckQueued = false;
             localGrowthCells.Clear();
@@ -140,47 +160,54 @@ namespace CityForge.World
 
             // Try deeper homes before fillers so a one-cell lot cannot take a house site.
             var layoutsByWealth = options.Where(option => option.Layout.width * option.Layout.length > 1)
-                .GroupBy(option => option.Layout.zoningLayout.wealth)
+                .GroupBy(option => (option.Layout.zoningLayout.zone, option.Layout.zoningLayout.wealth))
                 .ToDictionary(group => group.Key, group => group.GroupBy(option => GrowthFrontageSize(option.Layout))
                     .OrderByDescending(size => size.Key.y).ThenByDescending(size => size.Key.x)
                     .Select(size => size.ToArray()).ToArray());
             var fillersByWealth = options.Where(option => option.Layout.width == 1 && option.Layout.length == 1)
-                .GroupBy(option => option.Layout.zoningLayout.wealth)
+                .GroupBy(option => (option.Layout.zoningLayout.zone, option.Layout.zoningLayout.wealth))
                 .ToDictionary(group => group.Key, group => new[] { group.ToArray() });
             var passes = fillersByWealth.Count == 0 ? new[] { layoutsByWealth } :
                 new[] { layoutsByWealth, fillersByWealth };
-            var frontageChecks = new Dictionary<(RectInt cells, TownZoneFacing facing), bool>();
+            var frontageChecks = new Dictionary<(RectInt cells, TownZoneFacing facing, TownZone zone, int maxDepth), bool>();
             var water = DistrictLotWater();
             var grownLots = new List<DistrictLotRecord>();
             var grownNames = new System.Collections.Generic.HashSet<string>();
-            bool hasResidential = false;
+            bool hasGrowableZoning = false;
             string blocked = null;
             foreach (var pass in passes)
             foreach (var cell in cellsToCheck)
             {
-                if (!residentialFacing.TryGetValue(cell, out var facing) ||
-                    !townZones.TryGetValue(cell, out var zone) || zone != TownZone.Residential1 ||
+                if (!townZones.TryGetValue(cell, out var zone) || !SupportsLotGrowth(zone) ||
                     !InActiveDistrict(ZoneCorner(cell) +
                     Vector2.one * (DistrictGridCellMeters * .5f))) continue;
-                hasResidential = true;
-                var wealth = WealthAt(cell);
-                if (!pass.TryGetValue(wealth, out var sizeGroups))
+                hasGrowableZoning = true;
+                var facing = residentialFacing.GetValueOrDefault(cell);
+                if (facing == TownZoneFacing.None && zone == TownZone.Residential1) continue;
+                var wealth = zone == TownZone.Commercial1 ? LotWealth.Low : WealthAt(cell);
+                var key = (zone, wealth);
+                if (!pass.TryGetValue(key, out var sizeGroups))
                 {
-                    if (!layoutsByWealth.ContainsKey(wealth) && !fillersByWealth.ContainsKey(wealth))
-                        blocked ??= $"Save a Founders-era R1 · {new string('$', (int)wealth)} lot in the Zoning Lots library.";
+                    if (!layoutsByWealth.ContainsKey(key) && !fillersByWealth.ContainsKey(key))
+                        blocked ??= zone == TownZone.Commercial1 ? "Add a Founders-era C1 shop and zoning layout." :
+                            $"Save a Founders-era R1 · {new string('$', (int)wealth)} lot in the Zoning Lots library.";
                     continue;
                 }
                 bool placed = false;
+                var optionsForCell = GrowthOptions(sizeGroups).ToArray();
+                for (int cornersFirst = 1; cornersFirst >= 0 && !placed; cornersFirst--)
                 for (int facingOffset = 0; facingOffset < 4 && !placed; facingOffset++)
-                foreach (var (layout, buildings) in GrowthOptions(sizeGroups))
+                foreach (var (layout, buildings) in optionsForCell)
                 {
-                    var roadFacing = (TownZoneFacing)(1 + ((int)facing - 1 + facingOffset) % 4);
+                    if ((layout.SideStreetTurn != 0) != (cornersFirst == 1)) continue;
+                    var roadFacing = (TownZoneFacing)(1 + ((int)(facing == TownZoneFacing.None ? TownZoneFacing.South : facing) - 1 + facingOffset) % 4);
                     var requestedSize = ZonedLotSize(cell);
                     if (requestedSize != Vector2Int.zero && requestedSize != GrowthFrontageSize(layout)) continue;
                     int rotation = (8 - (int)roadFacing - (int)layout.zoningLayout.frontage) % 4;
                     var size = GrowthLotCells(layout, rotation);
                     var cells = new RectInt(cell, size);
-                    if (!HasGrowthZoning(cells, facing, wealth, requestedSize)) continue;
+                    if (!HasGrowthZoning(cells, zone, facing, wealth, requestedSize)) continue;
+                    int maxDepth = GrowthFrontageSize(layout).y;
 
                     var center = (ZoneCorner(cells.min) + ZoneCorner(cells.max)) * .5f;
                     var record = new DistrictLotRecord
@@ -188,32 +215,51 @@ namespace CityForge.World
                         center = center, rotation = rotation, definition = layout,
                         district = DistrictAtWorld(new Vector3(center.x, 0f, center.y))
                     };
-                    if (PlacedLots.Any(lot => lot.definition.id == layout.id && lot.center == center)) continue;
+                    if (PlacedLots.Any(lot => lot.center == center)) continue;
                     var siteProblem = InCampClearing(center, layout.Size.magnitude * .5f)
-                        ? "Keep the lot clear of camps." : LotSiteProblem(record, water);
+                        ? "Keep the lot clear of camps." : LotSiteProblem(record, water, growing: true);
                     if (siteProblem != null)
                     {
                         blocked ??= siteProblem;
                         continue;
                     }
-                    var frontageKey = (cells, roadFacing);
+                    var frontageKey = (cells, roadFacing, zone, maxDepth);
                     if (!frontageChecks.TryGetValue(frontageKey, out bool hasFrontage))
                     {
-                        hasFrontage = ResidentialFrontageProblem(cells, ResidentialDepth(zone), out _,
-                            requiredFacing: roadFacing) == null;
+                        hasFrontage = ResidentialFrontageProblem(cells, maxDepth, out _,
+                            requiredFacing: roadFacing, commercial: zone == TownZone.Commercial1) == null;
                         frontageChecks.Add(frontageKey, hasFrontage);
                     }
                     if (!hasFrontage)
                     {
-                        blocked ??= "Keep the full lot footprint beside a road.";
+                        blocked ??= zone == TownZone.Commercial1 ? "Keep the full shop frontage beside a street." :
+                            "Keep the full lot footprint beside a road.";
                         continue;
+                    }
+
+                    if (layout.SideStreetTurn != 0)
+                    {
+                        var sideFacing = (TownZoneFacing)(1 + ((int)roadFacing - 1 - layout.SideStreetTurn + 4) % 4);
+                        var sideKey = (cells, sideFacing, zone, LotDefinition.MaxTiles);
+                        if (!frontageChecks.TryGetValue(sideKey, out bool hasSideStreet))
+                        {
+                            hasSideStreet = ResidentialFrontageProblem(cells, LotDefinition.MaxTiles, out _,
+                                requiredFacing: sideFacing, commercial: zone == TownZone.Commercial1) == null;
+                            frontageChecks.Add(sideKey, hasSideStreet);
+                        }
+                        if (!hasSideStreet)
+                        {
+                            blocked ??= "This corner lot needs a street along its side frontage.";
+                            continue;
+                        }
                     }
 
                     if (buildings.Length > 0)
                     {
                         var building = ChooseGrowthBuilding(record, roadFacing, buildings);
                         record.definition = LotGrowableBuildings.Materialize(layout, building);
-                        AddResidentialEntryPath(record, building);
+                        record.growthBuildingId = record.definition.objects.Last().id;
+                        if (zone == TownZone.Residential1) AddResidentialEntryPath(record, building);
                     }
                     else
                         record.definition = LotDefinition.Parse(JsonUtility.ToJson(layout));
@@ -237,7 +283,7 @@ namespace CityForge.World
                 }
                 ShowGrowthStatus($"{string.Join(", ", grownNames.OrderBy(name => name, StringComparer.Ordinal))} grew. Save the region to keep it.");
             }
-            else if (hasResidential)
+            else if (hasGrowableZoning)
                 ShowGrowthStatus(blocked ?? GrowthSpaceHint(options[^1].Layout));
         }
 
@@ -252,7 +298,7 @@ namespace CityForge.World
             foreach (var neighbor in PlacedLots)
             {
                 var layout = neighbor.definition.zoningLayout;
-                if (layout.zone != TownZone.Residential1 || neighbor.diagonalRotation ||
+                if (layout.zone != site.definition.zoningLayout.zone || neighbor.diagonalRotation ||
                     ((int)layout.frontage + neighbor.rotation + (int)facing) % 4 != 0) continue;
                 var otherHalf = neighbor.definition.SizeForRotation(neighbor.rotation) * .5f;
                 var delta = neighbor.center - site.center;
@@ -289,19 +335,20 @@ namespace CityForge.World
 
         private void ShowGrowthStatus(string message)
         {
-            if (zoneStatus && activeZone == TownZone.Residential1 && !zoneDragStart.HasValue)
+            if (zoneStatus && SupportsLotGrowth(activeZone) && !zoneDragStart.HasValue)
                 zoneStatus.text = message;
         }
 
-        private bool HasGrowthZoning(RectInt cells, TownZoneFacing facing, LotWealth wealth, Vector2Int lotSize)
+        private bool HasGrowthZoning(RectInt cells, TownZone targetZone, TownZoneFacing facing, LotWealth wealth, Vector2Int lotSize)
         {
             bool anchored = zoneLotAnchors.ContainsKey(cells.min);
             foreach (var cell in cells.allPositionsWithin)
             {
                 if (zoneLotAnchors.TryGetValue(cell, out var anchor) != anchored ||
                     (anchored && anchor != cells.min)) return false;
-                if (!townZones.TryGetValue(cell, out var zone) || zone != TownZone.Residential1 ||
-                    WealthAt(cell) != wealth || ZonedLotSize(cell) != lotSize || !residentialFacing.TryGetValue(cell, out var cellFacing) || cellFacing != facing) return false;
+                if (!townZones.TryGetValue(cell, out var zone) || zone != targetZone ||
+                    (zone == TownZone.Residential1 && WealthAt(cell) != wealth) || ZonedLotSize(cell) != lotSize ||
+                    residentialFacing.GetValueOrDefault(cell) != facing) return false;
             }
             return true;
         }

@@ -201,6 +201,11 @@ namespace CityForge.World
             PrototypeRegionView.ValidateDeepHarbors(info.deepHarborDistricts, gridSide * gridSide);
             ValidateZones(info, gridSide);
             PrototypeRegionView.ValidateDistrictRoads(info.districtRoads, gridSide * gridSide, NativeCampPlanner.MapSide(info.size, gridSide));
+            // JsonUtility writes the absent inline streetscape field as an empty object.
+            if (info.placedActors != null)
+                foreach (var actor in info.placedActors)
+                    if (actor?.streetscape != null && string.IsNullOrEmpty(actor.streetscape.assetId))
+                        actor.streetscape = null;
             DistrictPlacedActor.Validate(info.placedActors, gridSide * gridSide, NativeCampPlanner.MapSide(info.size, gridSide));
             return info;
         }

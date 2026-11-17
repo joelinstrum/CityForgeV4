@@ -68,7 +68,7 @@ namespace CityForge.World
             if (!TryRoadGround(pointer, out var point)) return false;
             var road = PickDistrictRoad(point);
             if (road == null) return false;
-            OpenRoadContext(road, pointer);
+            OpenRoadContext(road, pointer, point);
             return true;
         }
 
@@ -88,7 +88,7 @@ namespace CityForge.World
             return picked;
         }
 
-        private void OpenRoadContext(DistrictRoadRecord road, Vector2 screen)
+        private void OpenRoadContext(DistrictRoadRecord road, Vector2 screen, Vector2 groundPoint)
         {
             CancelRoadPlacement();
             CloseTownSection();
@@ -106,7 +106,7 @@ namespace CityForge.World
             dismiss.navigation = new Navigation { mode = Navigation.Mode.None };
             dismiss.onClick.AddListener(CloseRoadContext);
 
-            var panel = FounderRect(roadContext, "Road actions", Vector2.zero, new Vector2(284, 304));
+            var panel = FounderRect(roadContext, "Road actions", Vector2.zero, new Vector2(284, 346));
             StyleTownPanel(panel, TownPanelColor);
             if (RectTransformUtility.ScreenPointToLocalPointInRectangle(roadContext, screen, null, out var point))
             {
@@ -118,15 +118,30 @@ namespace CityForge.World
             }
 
             FounderText(panel, RoadSurfaces[FindRoadSurface(road.surfaceId)].Label,
-                new Vector2(0, 129), new Vector2(258, 30), 21).color = TownGold;
-            var feedback = FounderText(panel, "", new Vector2(0, -126), new Vector2(258, 46), 15);
+                new Vector2(0, 150), new Vector2(258, 30), 21).color = TownGold;
+            var feedback = FounderText(panel, "", new Vector2(0, -148), new Vector2(258, 46), 15);
+
+            TownButton(panel, lotFont, "Continue road", 12, -43, 260, () =>
+            {
+                bool prepend = (groundPoint - road.points[0]).sqrMagnitude <=
+                    (groundPoint - road.points[^1]).sqrMagnitude;
+                CloseRoadContext();
+                StartRoadPlacement(FindRoadSurface(road.surfaceId));
+                if (!RoadPlacementArmed) return;
+                preferredRoadExtension = road;
+                preferredRoadPrepend = prepend;
+                if (roadWire.PlaceMarker(prepend ? road.points[0] : road.points[^1]))
+                    RefreshRoadPlacementHint(force: true);
+                else
+                    preferredRoadExtension = null;
+            }).interactable = !road.closed;
 
             TownButton(panel, lotFont, road.gridAligned ? "Align to Grid: On" : "Align to Grid: Off",
-                12, -43, 260, () => Apply(road.points, road.curved, "Road alignment updated.", !road.gridAligned));
-            TownButton(panel, lotFont, road.curved ? "Straighten angles" : "Curve angles", 12, -82, 260,
+                12, -82, 260, () => Apply(road.points, road.curved, "Road alignment updated.", !road.gridAligned));
+            TownButton(panel, lotFont, road.curved ? "Straighten angles" : "Curve angles", 12, -121, 260,
                 () => Apply(road.points, !road.curved, road.curved ? "Road angles straightened." : "Road angles curved."))
                 .interactable = road.points.Length > 2;
-            TownButton(panel, lotFont, "Clean up endpoints", 12, -121, 260, () =>
+            TownButton(panel, lotFont, "Clean up endpoints", 12, -160, 260, () =>
             {
                 var points = SnapRoadEndpoints(road);
                 if (points == null)
@@ -136,13 +151,13 @@ namespace CityForge.World
                 }
                 Apply(points, road.curved, "Road endpoints connected.");
             }).interactable = !road.closed;
-            TownButton(panel, lotFont, showRoadPaths ? "Hide Road Paths" : "Show Road Paths", 12, -160, 260, () =>
+            TownButton(panel, lotFont, showRoadPaths ? "Hide Road Paths" : "Show Road Paths", 12, -199, 260, () =>
             {
                 CloseRoadContext();
                 SetRoadPaths(!showRoadPaths);
                 if (showRoadPaths) SelectRoadPoint(road, -1);
             });
-            TownButton(panel, lotFont, "Repave", 12, -199, 260, () =>
+            TownButton(panel, lotFont, "Repave", 12, -238, 260, () =>
             {
                 CloseRoadContext();
                 if (lastRepaveSurface is int surface) RepaveRoad(road, surface);
@@ -248,10 +263,29 @@ namespace CityForge.World
             CancelRoadPlacement();
             lastRepaveSurface = surface;
             var choice = RoadSurfaces[surface];
-            if (road.surfaceId != choice.Id)
+            int width = HasSidewalks(choice.Id) ? OneTileRoadWidth : road.width;
+            if (road.surfaceId != choice.Id || road.width != width)
             {
+                if (width > road.width)
+                {
+                    var candidate = new DistrictRoadRecord
+                    {
+                        district = road.district, surfaceId = choice.Id, points = road.points,
+                        closed = road.closed, curved = road.curved, width = width
+                    };
+                    var mesh = BuildDistrictRoadMesh(candidate);
+                    var problem = RoadSiteProblem(mesh);
+                    Destroy(mesh);
+                    if (problem != null)
+                    {
+                        ShowDistrictMessage(problem);
+                        return;
+                    }
+                }
                 road.surfaceId = choice.Id;
+                road.width = width;
                 RebuildDistrictRoads();
+                QueueLotGrowth();
                 RefreshDirtRoadEndFades();
             }
             ShowDistrictMessage($"Repaved as {choice.Label}.");

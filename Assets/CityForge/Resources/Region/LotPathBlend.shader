@@ -20,9 +20,13 @@ Shader "CityForge/Lot Path Blend"
         _RoadShoulderMask("Road Shoulder Mask", 2D) = "gray" {}
         _WagonMask("Wagon shoulder opacity", 2D) = "white" {}
         _RoadWearMap("Road Wear", 2D) = "white" {}
-        [HideInInspector] _DirtEndFade("Standalone Dirt Ends", Vector) = (0,0,0,0)
+        [HideInInspector] _DirtEndFade("Standalone Road Ends", Vector) = (1,1,0,0)
         _EdgeBlend("Edge Blend in Meters", Float) = 0
         _Recessed("Recessed Edge Shadow", Float) = 0
+        [HideInInspector] _RecessDepth("Visual Depth in Meters", Float) = 0
+        [HideInInspector] _RecessBorder("Recess Border", Float) = 0
+        [HideInInspector] _RecessDirt("Dirt Lining", 2D) = "white" {}
+        [HideInInspector] _RecessBrick("Brick Lining", 2D) = "white" {}
         _PathOpacity("Path Opacity", Range(0,1)) = 1
     }
     SubShader
@@ -63,6 +67,12 @@ Shader "CityForge/Lot Path Blend"
             float _EdgeBlend;
             float _Recessed;
             float _PathOpacity;
+            float _RecessDepth;
+            float _RecessBorder;
+            TEXTURE2D(_RecessDirt);
+            SAMPLER(sampler_RecessDirt);
+            TEXTURE2D(_RecessBrick);
+            SAMPLER(sampler_RecessBrick);
             TEXTURE2D(_WagonMask);
             SAMPLER(sampler_WagonMask);
             TEXTURE2D(_RoadWearMap);
@@ -123,10 +133,41 @@ Shader "CityForge/Lot Path Blend"
                 return output;
             }
 
+            float RecessWallHit(float position, float span, float offset)
+            {
+                if (offset < -.00001) return position / -offset;
+                if (offset > .00001) return (span - position) / offset;
+                return 2;
+            }
+
             half4 PathFragment(Varyings input) : SV_Target
             {
                 half3 view = GetWorldSpaceNormalizeViewDir(input.positionWS);
                 float2 uv = input.uv;
+                float wall = 0;
+                float2 wallUV = 0;
+                if (_RecessDepth > 0)
+                {
+                    // Trace the view ray from the opening toward a virtual path bed.
+                    // Convert its ground-plane offset to the local ribbon and texture coordinates.
+                    float2 ray = -view.xz * (_RecessDepth / max(.12, view.y));
+                    float2 dx = ddx(input.positionWS.xz);
+                    float2 dy = ddy(input.positionWS.xz);
+                    float determinant = dx.x * dy.y - dx.y * dy.x;
+                    if (abs(determinant) > 1e-10)
+                    {
+                        float2 pixels = float2(ray.x * dy.y - ray.y * dy.x, dx.x * ray.y - dx.y * ray.x) / determinant;
+                        float2 ribbon = input.ribbon.xz;
+                        float2 offset = ddx(ribbon) * pixels.x + ddy(ribbon) * pixels.y;
+                        float sideHit = RecessWallHit(ribbon.x, input.ribbon.y, offset.x);
+                        float endHit = input.ribbon.w > 0 ? RecessWallHit(ribbon.y, input.ribbon.w, offset.y) : 2;
+                        float hit = saturate(min(sideHit, endHit));
+                        uv += (ddx(uv) * pixels.x + ddy(uv) * pixels.y) * hit;
+                        float2 wallPosition = ribbon + offset * hit;
+                        wallUV = float2(sideHit < endHit ? wallPosition.y : wallPosition.x, hit * _RecessDepth);
+                        wall = 1 - smoothstep(.96, 1, hit);
+                    }
+                }
                 #if defined(_WAGON_SURFACE)
                     float repeatLength = 4.5;
                     if (input.ribbon.w < 0)
@@ -141,6 +182,17 @@ Shader "CityForge/Lot Path Blend"
                 #endif
                 SurfaceData surface;
                 InitializeStandardLitSurfaceData(uv, surface);
+                if (_RecessDepth > 0)
+                {
+                    half3 lining = SAMPLE_TEXTURE2D(_RecessDirt, sampler_RecessDirt, wallUV * 2).rgb;
+                    if (_RecessBorder > 1.5)
+                        lining = SAMPLE_TEXTURE2D(_RecessBrick, sampler_RecessBrick, wallUV * 2).rgb;
+                    else if (_RecessBorder > .5)
+                        lining = half3(.39, .38, .35);
+                    surface.albedo = lerp(surface.albedo * .91, lining * .72, wall);
+                    surface.normalTS = lerp(surface.normalTS, half3(0, 0, 1), wall);
+                    surface.smoothness *= 1 - wall;
+                }
                 float sideDistance = min(input.ribbon.x, input.ribbon.y - input.ribbon.x);
                 #if defined(_ROAD_WEAR)
                     // Road-local UVs keep the ruts aligned to the ribbon through turns.
@@ -303,9 +355,22 @@ Shader "CityForge/Lot Path Blend"
                             opacity *= smoothstep(0, startFade, input.ribbon.z)
                                 * smoothstep(0, finishFade, input.ribbon.w - input.ribbon.z);
                         #else
-                            opacity *= smoothstep(0, fade, endDistance);
+                            opacity *= lerp(1, smoothstep(0, fade, input.ribbon.z), _DirtEndFade.x)
+                                * lerp(1, smoothstep(0, fade, input.ribbon.w - input.ribbon.z), _DirtEndFade.y);
                         #endif
                     }
+                }
+                if (_RecessDepth > 0)
+                {
+                    // A thin rim also reads in the top-down Lot Editor view.
+                    if (_RecessBorder > .5)
+                    {
+                        half3 rim = _RecessBorder > 1.5
+                            ? SAMPLE_TEXTURE2D(_RecessBrick, sampler_RecessBrick, input.uv * 4).rgb
+                            : half3(.39, .38, .35);
+                        surface.albedo = lerp(surface.albedo, rim, 1 - smoothstep(.05, .09, edgeDistance));
+                    }
+                    opacity = 1;
                 }
                 half4 color = UniversalFragmentPBR(lighting, surface);
                 if (_Recessed > 0)
