@@ -136,11 +136,11 @@ namespace CityForge.World
 
                 bool laterEra = industrialIndex >= 0 && eraIndex > industrialIndex;
                 bool roads = index == 0;
-                bool streets = index == 1 && laterEra;
+                bool streets = index == 1;
                 int roadCount = HistoricalRoadSurfaceCount + (laterEra ? 1 : 0);
                 categoryTitle.text = categoryNames[index];
                 summary.text = roads ? "Overland connections for trade, industry, and regional travel."
-                    : streets ? "Paved streets for built-up districts."
+                    : streets ? "Local streets for built-up districts."
                     : "No construction options are available for this category in this era.";
 
                 int columns = roads && laterEra ? 4 : 3;
@@ -148,10 +148,10 @@ namespace CityForge.World
                 float height = columns == 4 ? 194 : 247;
                 for (int i = 0; i < surfaceButtons.Length; i++)
                 {
-                    bool visible = (roads && i < roadCount) || (streets && i == PavedStreetIndex);
+                    bool visible = (roads && i < roadCount) || (streets && (i == FoundersStreetIndex || (laterEra && i == PavedStreetIndex)));
                     surfaceButtons[i].gameObject.SetActive(visible);
                     if (!visible) continue;
-                    int slot = streets ? 0 : i;
+                    int slot = streets ? (i == FoundersStreetIndex ? 0 : 1) : i;
                     var rect = (RectTransform)surfaceButtons[i].transform;
                     rect.anchoredPosition = new Vector2(322 + slot % columns * (720 / columns),
                         -199 - slot / columns * (height + 20));

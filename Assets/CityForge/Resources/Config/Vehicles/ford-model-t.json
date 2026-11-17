@@ -1,0 +1,11 @@
+{
+  "assetId": "v3-vehicle-ford-model-t",
+  "eras": [
+    "machine"
+  ],
+  "label": "Ford Model T",
+  "modelFolder": "ModelT",
+  "length": 3.4,
+  "colorExtension": ".png",
+  "speed": 8
+}

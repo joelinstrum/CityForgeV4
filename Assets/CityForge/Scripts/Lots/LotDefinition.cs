@@ -14,6 +14,8 @@ namespace CityForge.Lots
 
     public enum HarborVesselTraffic { Default, Enabled, Disabled }
 
+    public enum LotStreetFrontage { FrontOnly, LeftCorner, RightCorner }
+
     public enum LotWaterfrontSide { North, East, South, West }
 
     [Serializable]
@@ -27,6 +29,9 @@ namespace CityForge.Lots
         public bool harborHouseScaleUpdated;
         public LotType type;
         public LotZoningLayout zoningLayout;
+        public LotStreetFrontage streetFrontage;
+        internal int SideStreetTurn => streetFrontage == LotStreetFrontage.LeftCorner ? 1 :
+            streetFrontage == LotStreetFrontage.RightCorner ? -1 : 0;
         public ResidentialGroundSettings residentialGround;
         public string id = Guid.NewGuid().ToString("N");
         public string name = "Colonial Homestead";
@@ -145,9 +150,11 @@ namespace CityForge.Lots
                 !Enum.IsDefined(typeof(HarborVesselTraffic), lot.harborVesselTraffic) ||
                 lot.waterfrontRows < 0 || lot.waterfrontRows >= lot.WaterfrontDepth ||
                 !Enum.IsDefined(typeof(LotType), lot.type) || !lot.zoningLayout.Valid ||
+                !Enum.IsDefined(typeof(LotStreetFrontage), lot.streetFrontage) ||
                 (lot.type == LotType.Zoning && !lot.zoningLayout.Configured) || lot.cost < 0 || lot.monthlyCost < 0 || lot.objects == null || lot.objects.Count > 512)
                 throw new InvalidDataException("Invalid or unsupported lot definition.");
 
+            if (!Enum.IsDefined(typeof(LotFrontage), lot.zoningLayout.frontage)) lot.zoningLayout.frontage = LotFrontage.South;
             lot.category ??= "";
             lot.subcategory ??= "";
             if (!Enum.IsDefined(typeof(LotWealth), lot.wealth)) lot.wealth = LotWealth.None;
@@ -177,6 +184,7 @@ namespace CityForge.Lots
             {
                 if (path?.points == null || path.points.Length < (path.closed ? 3 : 2) || path.points.Length > 256 ||
                     !Enum.IsDefined(typeof(LotPathUse), path.use) || path.textureRotation < 0 || path.textureRotation > 3 || path.edgeBlend < 0 || path.edgeBlend > LotPathDefinition.MaxEdgeBlend ||
+                    !Enum.IsDefined(typeof(LotPathDepth), path.depth) || !Enum.IsDefined(typeof(LotPathBorder), path.border) ||
                     Array.IndexOf(LotPathSurface.Widths, path.width) < 0 || LotPathMaterial.Find(path.materialId) == null)
                     throw new InvalidDataException("Invalid lot path.");
                 var markers = new HashSet<Vector2>();
@@ -254,7 +262,7 @@ namespace CityForge.Lots
         }
     }
 
-    public enum LotScriptedBehavior { None, DockWorker }
+    public enum LotScriptedBehavior { None, DockWorker, Shopkeeper }
 
     [Serializable]
     public struct LotCharacterScript
@@ -292,6 +300,7 @@ namespace CityForge.Lots
         public float scale = 1f;
         public float fenceLength;
         public bool fenceEndPost;
+        public bool varyTreeOnPlacement;
         public LotCharacterScript characterScript;
     }
 

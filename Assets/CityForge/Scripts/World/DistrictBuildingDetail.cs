@@ -8,7 +8,7 @@ namespace CityForge.World
 {
     internal sealed class DistrictBuildingDetail : MonoBehaviour
     {
-        private const int DistantZoom = 3;
+        private const int DistantZoom = 2;
 
         private CityForgeCameraController cameraRig;
         private Renderer[] closeRenderers;

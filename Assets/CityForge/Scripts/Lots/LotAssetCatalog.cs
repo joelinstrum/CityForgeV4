@@ -100,6 +100,8 @@ namespace CityForge.Lots
                         var offset = wrapper.transform.InverseTransformPoint(
                             new Vector3(bounds.center.x, bounds.min.y, bounds.center.z));
                         model.transform.localPosition -= offset * fit;
+                        if (asset.id == "v3-three-lantern-lamppost")
+                            model.transform.localPosition -= Vector3.up * .035f;
                         if (asset.id == "corn-garden" && bounds.size.y > .001f)
                         {
                             // The upper canopy reaches about 1.29 m, with a few tassels above it.
@@ -111,6 +113,17 @@ namespace CityForge.Lots
                             crop.localScale = new Vector3(1, stretch, 1);
                         }
                     }
+                }
+            }
+            if (asset.id == "silver-maple" && model.TryGetComponent<LODGroup>(out var mapleLods))
+            {
+                var tiers = mapleLods.GetLODs();
+                if (tiers.Length > 0 && tiers[0].renderers.Length > 0)
+                {
+                    float baseY = float.PositiveInfinity;
+                    foreach (var renderer in tiers[0].renderers)
+                        if (renderer) baseY = Mathf.Min(baseY, renderer.bounds.min.y);
+                    if (float.IsFinite(baseY)) model.transform.localPosition -= Vector3.up * (baseY - wrapper.transform.position.y);
                 }
             }
             if (item.fenceLength > 0 && asset.fenceSpan > 0)
@@ -260,20 +273,32 @@ namespace CityForge.Lots
                     if (!material || !material.HasProperty(LeafColor)) continue;
                     string name = material.name;
                     bool leaf = name.Contains("leaf", StringComparison.OrdinalIgnoreCase) ||
-                        name.Contains("leaves", StringComparison.OrdinalIgnoreCase);
+                        name.Contains("leaves", StringComparison.OrdinalIgnoreCase) ||
+                        name.Contains("needle", StringComparison.OrdinalIgnoreCase) ||
+                        name.Contains("foliage", StringComparison.OrdinalIgnoreCase);
                     bool wood = name.Contains("bark", StringComparison.OrdinalIgnoreCase) ||
                         name.Contains("trunk", StringComparison.OrdinalIgnoreCase) ||
                         name.Contains("branch", StringComparison.OrdinalIgnoreCase);
                     Color tint = leaf ? foliage : wood ? bark : Color.white;
                     bool oliveMaple = leaf && assetId == "silver-maple-b" && season == RegionSeason.Summer;
-                    if (tint == Color.white && !oliveMaple) continue;
+                    bool brighten = leaf && (assetId == "balsam-fir" ||
+                        (assetId == "silver-maple" && season == RegionSeason.Summer));
+                    if (tint == Color.white && !oliveMaple && !brighten) continue;
 
                     renderer.GetPropertyBlock(properties, slot);
                     if (properties.isEmpty) renderer.GetPropertyBlock(properties);
                     var color = properties.HasColor(LeafColor)
                         ? properties.GetColor(LeafColor) : material.GetColor(LeafColor);
                     // Replace the dark teal multiplier with a lighter olive while retaining the leaf texture.
-                    properties.SetColor(LeafColor, oliveMaple ? new Color(.80f, .85f, .53f, color.a) : color * tint);
+                    if (oliveMaple) color = new Color(.80f, .85f, .53f, color.a);
+                    else if (brighten)
+                    {
+                        color.r = Mathf.Max(color.r * 1.2f, .68f);
+                        color.g = Mathf.Max(color.g * 1.2f, .77f);
+                        color.b = Mathf.Max(color.b * 1.2f, .57f);
+                    }
+                    else color *= tint;
+                    properties.SetColor(LeafColor, color);
                     renderer.SetPropertyBlock(properties, slot);
                 }
             }

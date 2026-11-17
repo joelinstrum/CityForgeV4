@@ -42,7 +42,7 @@ namespace CityForge.World
                 var material = style.CreateMaterial();
                 if (meadowGrade && material.HasProperty(BaseColor))
                     material.SetColor(BaseColor, material.GetColor(BaseColor) * GradedPath);
-                if (path.edgeBlend > 0 || path.recessed) LotPathMaterial.ApplyEdgeTreatment(material, path, path.edgeBlend, i);
+                if (path.edgeBlend > 0 || path.HasRecess) LotPathMaterial.ApplyEdgeTreatment(material, path, path.edgeBlend, i);
                 AddSurface(style.Label + " path", LotPathSurface.BuildMesh(path, style.TileSize, .10f + i * .0005f, PathHeight), material);
             }
 

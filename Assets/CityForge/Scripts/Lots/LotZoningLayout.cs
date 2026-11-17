@@ -19,6 +19,7 @@ namespace CityForge.Lots
         public bool autoPaths;
         public float buildingScale;
         internal float BuildingScale => buildingScale == 0f ? 1f : buildingScale;
+        public bool overrideBuildingFit;
         public bool restrictGrowthBuildings;
         public string[] growthBuildingIds;
 

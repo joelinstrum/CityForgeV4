@@ -29,6 +29,7 @@ namespace CityForge.World
         public float waterfrontDeckHeight;
         public LotDefinition definition;
         public LotCustomization customization;
+        public string growthBuildingId;
     }
 
     public sealed partial class PrototypeRegionView
@@ -38,7 +39,7 @@ namespace CityForge.World
         private GameObject lotActions;
         private Text lotFeedback;
         private Text placeLotLabel, lotFacingLabel, selectedLotTitle, selectedLotDetails, selectedLotFeedback;
-        private Button lotFacingButton;
+        private Button lotFacingButton, changeBuildingButton;
         private GameObject selectedLotPanel;
         private DistrictLotRecord selectedDistrictLot;
         private LineRenderer selectedLotOutline;
@@ -105,7 +106,7 @@ namespace CityForge.World
             var rect = (RectTransform)selectedLotPanel.transform;
             rect.anchorMin = rect.anchorMax = rect.pivot = Vector2.one;
             rect.anchoredPosition = new Vector2(-18, -108);
-            rect.sizeDelta = new Vector2(300, 234);
+            rect.sizeDelta = new Vector2(300, 278);
 
             selectedLotTitle = HudText(rect, "Lot name", font, 20);
             selectedLotTitle.supportRichText = false;
@@ -120,14 +121,16 @@ namespace CityForge.World
                 if (selectedDistrictLot != null && !DistrictLoading && !IsSaving)
                     BeginLotPlacement(selectedDistrictLot.definition, selectedDistrictLot);
             });
-            selectedLotFeedback = HudText(rect, "Lot rotation feedback", font, 14);
-            Position(selectedLotFeedback.rectTransform, new Vector2(14, -182), new Vector2(270, 46));
+            changeBuildingButton = AddPanelButton("Change building", 14, -184, 272, ChangeSelectedLotBuilding);
+            selectedLotFeedback = HudText(rect, "Lot action feedback", font, 14);
+            Position(selectedLotFeedback.rectTransform, new Vector2(14, -226), new Vector2(270, 46));
             selectedLotPanel.SetActive(false);
 
-            void AddPanelButton(string label, int x, int y, int width, UnityEngine.Events.UnityAction action)
+            Button AddPanelButton(string label, int x, int y, int width, UnityEngine.Events.UnityAction action)
             {
                 var text = AddLotButton(rect, font, label, x, width, action);
                 ((RectTransform)text.transform.parent).anchoredPosition = new Vector2(x, y);
+                return text.GetComponentInParent<Button>(includeInactive: true);
             }
         }
 
@@ -155,6 +158,11 @@ namespace CityForge.World
             selectedLotDetails.text = record.definition.IsWaterfront
                 ? $"Facing {record.FacingDegrees}°  ·  Water to the {WorldWaterfrontSide(record).ToLowerInvariant()}"
                 : $"Facing {record.FacingDegrees}°";
+            bool growable = GrowthBuildingIndex(record, LotAssetCatalog.Load()) >= 0;
+            changeBuildingButton.gameObject.SetActive(growable);
+            var panel = (RectTransform)selectedLotPanel.transform;
+            panel.sizeDelta = new Vector2(300, growable ? 278 : 234);
+            Position(selectedLotFeedback.rectTransform, new Vector2(14, growable ? -226 : -182), new Vector2(270, 46));
             selectedLotFeedback.text = "";
         }
 
@@ -224,6 +232,55 @@ namespace CityForge.World
             record.waterfrontDeckHeight = candidate.waterfrontDeckHeight;
             RebuildDistrictLots();
             selectedLotFeedback.text = "Lot rotated. Save the region to keep it.";
+        }
+
+        private static int GrowthBuildingIndex(DistrictLotRecord record, LotAssetCatalog catalog)
+        {
+            var lot = record.definition;
+            if (lot.type != LotType.Zoning || !lot.zoningLayout.Configured || !catalog) return -1;
+            if (!string.IsNullOrEmpty(record.growthBuildingId))
+                return lot.objects.FindIndex(item => item.id == record.growthBuildingId);
+
+            // Older grown lots append the building after the authored objects.
+            int last = lot.objects.Count - 1;
+            if (last < 0) return -1;
+            var layout = lot.zoningLayout;
+            var asset = catalog.Find(lot.objects[last].assetId);
+            return asset?.CanPreviewGrowable(layout.zone, layout.wealth, lot.firstEraId) == true ? last : -1;
+        }
+
+        private void ChangeSelectedLotBuilding()
+        {
+            var record = selectedDistrictLot;
+            if (record == null || DistrictLoading || IsSaving || !districtLotRoots.ContainsKey(record)) return;
+            var catalog = LotAssetCatalog.Load();
+            int index = GrowthBuildingIndex(record, catalog);
+            if (index < 0) return;
+
+            var draft = LotDefinition.Parse(JsonUtility.ToJson(record.definition));
+            var current = draft.objects[index];
+            draft.objects.RemoveAt(index);
+            string era = ResidentialGround.LotEra(draft);
+            var choices = LotGrowableBuildings.Candidates(draft, catalog)
+                .Where(item => catalog.Find(item.assetId).eraId == era).ToArray();
+            int currentIndex = Array.FindIndex(choices, item => item.assetId == current.assetId);
+            if (choices.Length == 0 || (choices.Length == 1 && currentIndex == 0))
+            {
+                selectedLotFeedback.text = "No other eligible building fits this lot.";
+                return;
+            }
+
+            var building = choices[(currentIndex + 1) % choices.Length];
+            building.id = current.id;
+            draft.objects.Insert(index, building);
+            draft.paths.RemoveAll(path => path.generatedResidentialEntry ||
+                IsLegacyResidentialEntryPath(draft, current, path));
+            AddResidentialEntryPath(record, building, draft);
+
+            record.definition = draft;
+            record.growthBuildingId = building.id;
+            RebuildDistrictLots();
+            selectedLotFeedback.text = $"Building changed to {catalog.Find(building.assetId).label}. Save the region to keep it.";
         }
 
         private static Text AddLotButton(Transform parent, Font font, string label, int x, int width,
@@ -326,14 +383,14 @@ namespace CityForge.World
         private WildlifeWaterAccess DistrictLotWater() => ApprovedDistrict && ApprovedDistrict.DisplayTerrain
             ? new WildlifeWaterAccess(ApprovedDistrict) : null;
 
-        private string LotSiteProblem(DistrictLotRecord record, WildlifeWaterAccess water, bool editing = false)
+        private string LotSiteProblem(DistrictLotRecord record, WildlifeWaterAccess water, bool editing = false, bool growing = false)
         {
             var footprint = new DistrictLotFootprint(record);
             foreach (var other in PlacedLots)
                 if ((record.id == null || record.id != other.id) && footprint.Overlaps(new DistrictLotFootprint(other)))
                     return "That lot overlaps another lot.";
 
-            if (LotOverlapsDistrictRoad(record)) return "Keep lots clear of roads.";
+            if (LotOverlapsDistrictRoad(record, growing ? ResidentialRoadCornerInset : 0f)) return "Keep lots clear of roads.";
 
             if (record.definition.IsWaterfront)
                 return WaterfrontSiteProblem(record, InActiveDistrict, LotHeight, (point, height) =>
@@ -341,6 +398,8 @@ namespace CityForge.World
 
             float low = float.PositiveInfinity, high = float.NegativeInfinity;
             var size = record.definition.Size;
+            // Keep the grade limit comparable across different growable lot widths.
+            float maxRise = growing ? Mathf.Clamp(Mathf.Min(size.x, size.y) * .16f, 2f, 5.2f) : 2f;
             int stepsX = Mathf.CeilToInt(size.x / 2);
             int stepsY = Mathf.CeilToInt(size.y / 2);
             for (int z = 0; z <= stepsY; z++)
@@ -354,7 +413,7 @@ namespace CityForge.World
                 float height = LotHeight(point);
                 low = Mathf.Min(low, height);
                 high = Mathf.Max(high, height);
-                if (!editing && high - low > 2f) return "Choose flatter ground.";
+                if (!editing && high - low > maxRise) return "Choose flatter ground.";
             }
             return null;
         }
@@ -543,7 +602,9 @@ namespace CityForge.World
             RefreshDirtRoadEndFades();
             districtLotRoots.Clear();
             roadBuildings.Clear();
+            eagleBuildingBounds.Clear();
             lotTreePositions.Clear();
+            eagleLotTrees.Clear();
             dockWorkerHomes.Clear();
             if (selectedDistrictLot != null && (SelectedDistrict < 0 || !ActiveDistrictMembers.Contains(selectedDistrictLot.district)))
                 SelectDistrictLot(null);
@@ -605,10 +666,13 @@ namespace CityForge.World
                 Transform harborPorch = null;
                 var porches = new List<(LotObjectDefinition item, Transform view)>();
                 var characters = new List<(LotObjectDefinition item, Transform view)>();
-                foreach (var item in definition.objects)
+                foreach (var authored in definition.objects)
                 {
+                    var item = authored;
                     var asset = catalog ? catalog.Find(item.assetId) : null;
                     if (asset == null || !asset.prefab) continue;
+                    if (item.varyTreeOnPlacement && asset.category == "Trees")
+                        (item, asset) = VaryPlacedTree(record.id, definition, item, asset, catalog);
                     bool dockWorker = asset.IsCharacter && definition.AttractsVessels &&
                         item.characterScript.scriptedBehavior == LotScriptedBehavior.DockWorker;
                     if (dockWorker && !item.characterScript.dockStayVisible) continue;
@@ -619,13 +683,19 @@ namespace CityForge.World
                     if (definition.IsWaterfront && LotRuntimeLoader.Footprint(item, asset).Overlaps(definition.WaterfrontBounds))
                         point.y = Mathf.Max(point.y, record.waterfrontDeckHeight);
                     instance.position = point;
-                    if (asset.category == "Trees") lotTreePositions.Add(new Vector2(point.x, point.z));
+                    if (asset.category == "Trees")
+                    {
+                        lotTreePositions.Add(new Vector2(point.x, point.z));
+                        eagleLotTrees.Add(instance);
+                    }
                     if (asset.category == "Buildings")
                     {
                         if (meadowGrade) DistrictLotSurfaces.MatchGradedBuilding(instance);
                         roadBuildings.Add(new RoadBuildingFootprint(instance, asset.footprint * item.scale));
+                        RegisterEagleObstacle(instance);
                     }
                     ResidentialWindowLights.Attach(instance.gameObject, asset, TimeOfDay);
+                    SetVehicleMotion(instance, asset.id, false);
                     LamppostLight.Attach(instance.gameObject, asset, TimeOfDay);
                     if (item.assetId == LotCharacterDeck.HarborHouse)
                     {
@@ -642,6 +712,20 @@ namespace CityForge.World
                         if (LotCharacterDeck.TryHeight(building, item.position, out float deck))
                             point.y = Mathf.Max(point.y, porch.position.y + deck);
                     character.position = point;
+                    if (item.characterScript.configured && item.characterScript.scriptedBehavior == LotScriptedBehavior.Shopkeeper &&
+                        LotShopkeeper.TryEntrance(definition, catalog, item.position, null, out var door, out var forward))
+                    {
+                        var runner = character.gameObject.AddComponent<DistrictShopkeeper>();
+                        runner.districtCamera = camera;
+                        foreach (var animator in character.GetComponentsInChildren<Animator>())
+                            animator.cullingMode = AnimatorCullingMode.CullCompletely;
+                        runner.behavior = new LotShopkeeper(character, catalog.Find(item.assetId), door, forward, local =>
+                        {
+                            var world = root.TransformPoint(new Vector3(local.x, 0f, local.y));
+                            world.y = LotHeight(new Vector2(world.x, world.z));
+                            return root.InverseTransformPoint(world).y;
+                        });
+                    }
                 }
                 if (definition.AttractsVessels && ApprovedDistrict && ApprovedDistrict.DisplayTerrain)
                     HarborLanding.Build(root, ApprovedDistrict, record, harborPorch);
@@ -649,6 +733,31 @@ namespace CityForge.World
                 root.gameObject.AddComponent<DistrictLotSurfaces>().Build(definition, LotHeight, record.waterfrontDeckHeight, meadowGrade);
             }
             residentialGround.Build();
+            RefreshDistrictSidewalks();
+        }
+
+        private static (LotObjectDefinition item, LotAssetCatalogEntry asset) VaryPlacedTree(
+            string lotId, LotDefinition lot, LotObjectDefinition authored, LotAssetCatalogEntry original, LotAssetCatalog catalog)
+        {
+            // Derive the choice from saved IDs so reloading, moving or changing seasons never rerolls it.
+            uint seed = 2166136261;
+            foreach (char character in lotId + authored.id)
+                seed = unchecked((seed ^ character) * 16777619);
+            var item = new LotObjectDefinition
+            {
+                id = authored.id, position = authored.position, assetId = authored.assetId,
+                scale = Mathf.Clamp(authored.scale * Mathf.Lerp(.9f, 1.1f, (seed & 255) / 255f), .25f, 3f),
+                yaw = Mathf.Repeat(authored.yaw + ((seed >> 8) & 255) * (360f / 256f), 360f)
+            };
+            var choices = catalog.entries.Where(asset => asset != null && asset.prefab &&
+                asset.category == "Trees" && asset.group == original.group &&
+                (!original.playerPlaceable || asset.playerPlaceable) &&
+                LotRuntimeLoader.Fits(lot, item, asset))
+                .OrderBy(asset => asset.id, StringComparer.Ordinal).ToArray();
+            if (choices.Length == 0) return (authored, original);
+            var chosen = choices[(int)((seed >> 16) % (uint)choices.Length)];
+            item.assetId = chosen.id;
+            return (item, chosen);
         }
 
         internal GameObject DockWorkerHome(DistrictLotRecord lot, string worker) =>

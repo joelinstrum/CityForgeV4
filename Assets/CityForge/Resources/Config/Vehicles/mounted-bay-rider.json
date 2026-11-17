@@ -1,0 +1,27 @@
+{
+  "assetId": "v3-vehicle-mounted-bay-rider",
+  "eraNumbers": [
+    1,
+    2
+  ],
+  "wealthTiers": [
+    "Low",
+    "Medium",
+    "High"
+  ],
+  "label": "Rider on a bay horse",
+  "modelFolder": "BayRider",
+  "length": 2.45,
+  "motionFolder": "BayRider",
+  "travelState": "Trot",
+  "idleState": "Idle",
+  "trafficGroup": "mounted",
+  "spawnEvery": 12,
+  "zones": [
+    "Commercial1",
+    "Commercial2",
+    "Commercial3"
+  ],
+  "speed": 3.1,
+  "speedVariation": 0.15
+}

@@ -1,0 +1,12 @@
+{
+  "assetId": "v3-vehicle-hitched-horse",
+  "eras": [
+    "founders"
+  ],
+  "motionFolder": "Horse",
+  "idleState": "Idle",
+  "travelState": "Walk",
+  "parked": true,
+  "trafficGroup": "hitched-horse",
+  "spawnEvery": 8
+}

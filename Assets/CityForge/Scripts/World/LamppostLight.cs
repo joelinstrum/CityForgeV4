@@ -5,8 +5,11 @@ namespace CityForge.World
 {
     internal sealed class LamppostLight : MonoBehaviour
     {
-        private Light pool;
+        private static readonly int EmissionColor = Shader.PropertyToID("_EmissionColor");
+        private Light[] pools;
+        private Renderer[] lanternRenderers;
         private float intensityScale = 1f;
+        private float glowScale = 1f;
 
         internal static void Attach(GameObject instance, LotAssetCatalogEntry asset, RegionTimeOfDay time,
             int cullingMask = -1)
@@ -110,23 +113,52 @@ namespace CityForge.World
             var bounds = renderers[0].bounds;
             foreach (var renderer in renderers) bounds.Encapsulate(renderer.bounds);
 
-            var source = new GameObject("Lantern light");
-            source.layer = instance.layer;
-            source.transform.SetParent(instance.transform, false);
-            source.transform.SetPositionAndRotation(
-                new Vector3(bounds.center.x, bounds.min.y + bounds.size.y * .88f, bounds.center.z),
-                Quaternion.Euler(90f, 0f, 0f));
-
             var lamp = instance.AddComponent<LamppostLight>();
-            lamp.pool = source.AddComponent<Light>();
-            lamp.pool.type = LightType.Spot;
-            lamp.pool.innerSpotAngle = 55f;
-            lamp.pool.spotAngle = 110f;
-            lamp.pool.range = Mathf.Clamp(bounds.size.y * 2.6f, 5f, 13f);
-            lamp.pool.color = new Color(1f, .75f, .41f);
-            lamp.pool.cullingMask = cullingMask;
-            lamp.pool.shadows = LightShadows.None;
+            if (asset.materialOverride && asset.materialOverride.IsKeywordEnabled("_EMISSION"))
+                lamp.lanternRenderers = renderers;
+
+            if (asset.id == "v3-simple-street-lamppost")
+            {
+                lamp.glowScale = 1.6f;
+                lamp.intensityScale = 1.3f;
+            }
+
+            var fittedHeight = bounds.size.y / instance.transform.lossyScale.y;
+            float width = asset.footprint.x;
+            var center = instance.transform.InverseTransformPoint(bounds.center);
+            float baseHeight = center.y - fittedHeight * .5f;
+            if (asset.id == "v3-three-lantern-lamppost")
+            {
+                lamp.pools = new[]
+                {
+                    AddPool(0f, .88f), AddPool(-width * .40f, .74f), AddPool(width * .40f, .74f)
+                };
+                lamp.intensityScale = .4f;
+            }
+            else
+            {
+                lamp.pools = new[] { asset.id == "v3-18th-century-lamppost"
+                    ? AddPool(-width * .29f, .715f) : AddPool(0f, .80f) };
+            }
             lamp.SetTime(time);
+
+            Light AddPool(float offset, float height)
+            {
+                var source = new GameObject("Lantern light");
+                source.layer = instance.layer;
+                source.transform.SetParent(instance.transform, false);
+                source.transform.localPosition = new Vector3(center.x + offset, baseHeight + fittedHeight * height, center.z);
+                source.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                var light = source.AddComponent<Light>();
+                light.type = LightType.Spot;
+                light.innerSpotAngle = 55f;
+                light.spotAngle = 110f;
+                light.range = Mathf.Clamp(bounds.size.y * 2.6f, 5f, 13f);
+                light.color = new Color(1f, .75f, .41f);
+                light.cullingMask = cullingMask;
+                light.shadows = LightShadows.None;
+                return light;
+            }
         }
 
         private static void AddWallLantern(GameObject instance, Vector3 position, int mask, RegionTimeOfDay time)
@@ -141,7 +173,7 @@ namespace CityForge.World
             light.color = new Color(1f, .72f, .37f);
             light.cullingMask = mask;
             var controller = lantern.AddComponent<LamppostLight>();
-            controller.pool = light;
+            controller.pools = new[] { light };
             controller.intensityScale = .16f;
             controller.SetTime(time);
         }
@@ -155,8 +187,23 @@ namespace CityForge.World
 
         private void SetTime(RegionTimeOfDay time)
         {
-            pool.enabled = time == RegionTimeOfDay.Evening || time == RegionTimeOfDay.Night;
-            pool.intensity = (time == RegionTimeOfDay.Night ? 11f : 8f) * intensityScale;
+            bool night = time == RegionTimeOfDay.Night;
+            bool lit = night || time == RegionTimeOfDay.Evening;
+            foreach (var pool in pools)
+            {
+                pool.enabled = lit;
+                pool.intensity = (night ? 11f : 8f) * intensityScale;
+            }
+
+            if (lanternRenderers == null) return;
+            var glow = lit ? (night ? new Color(2.1f, 1.13f, .46f) : new Color(1.3f, .72f, .31f)) : Color.black;
+            var properties = new MaterialPropertyBlock();
+            foreach (var renderer in lanternRenderers)
+            {
+                renderer.GetPropertyBlock(properties);
+                properties.SetColor(EmissionColor, glow * glowScale);
+                renderer.SetPropertyBlock(properties);
+            }
         }
     }
 }

@@ -34,6 +34,25 @@ namespace CityForge.World
             foreach(var tree in source)if(!hidden.Contains(tree.position))remaining.Add(tree);
             return remaining.ToArray();
         }
+        internal bool TryClosestCanopy(Vector3 from, out Vector3 canopy)
+        {
+            canopy = default;
+            if (!land) return false;
+            float best = float.PositiveInfinity;
+            for (int i = 0; i < trees.Count; i++)
+            {
+                if ((presentationMask != null && !presentationMask[i]) || (palmMask != null && !palmMask[i])) continue;
+                var tree = trees[i];
+                if (land.View.IsForestRemoved(new Vector2(tree.matrix.m03, tree.matrix.m23))) continue;
+                var point = new Vector3(tree.center.x, 2f * tree.center.y - tree.matrix.m13, tree.center.z);
+                float distance = (point - from).sqrMagnitude;
+                if (distance >= best) continue;
+                best = distance;
+                canopy = point;
+            }
+            return !float.IsPositiveInfinity(best);
+        }
+
         bool[] presentationMask,palmMask;
         public int PresentedTreeCount {get;private set;}
         public void SetDiagnosticDensity(int percent){presentationMask=PanningTestDistricts.Mask(trees.Count,percent);PresentedTreeCount=trees.Count*percent/100;RefreshPalms();}

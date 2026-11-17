@@ -12,8 +12,11 @@ namespace CityForge.Lots
             "v3-building-low-wealth-vertical-siding-front-gable" or "v3-building-low-wealth-front-gable-cottage" => 90f,
             "v3-building-medium-wealth-old-yeller" or "v3-building-medium-wealth-stone-house" => 90f,
             "v3-building-frontier-log-cabin" or "v3-building-small-colonial-cabin" => 180f,
+            "v3-building-plymouth-store" or "v3-building-founders-bakery" or "v3-building-founders-blacksmith"
+                or "v3-building-founders-cooperage" or "v3-building-founders-tavern" => 180f,
             string id when id.StartsWith("v3-building-low-wealth-", System.StringComparison.Ordinal) ||
-                id.StartsWith("v3-building-medium-wealth-", System.StringComparison.Ordinal) => 180f,
+                id.StartsWith("v3-building-medium-wealth-", System.StringComparison.Ordinal) ||
+                id.StartsWith("v3-building-founders-shop-", System.StringComparison.Ordinal) => 180f,
             _ => 0f
         };
 
@@ -35,17 +38,16 @@ namespace CityForge.Lots
         {
             if (!catalog || !lot.zoningLayout.Configured) return System.Array.Empty<LotObjectDefinition>();
             var layout = lot.zoningLayout;
-            if (layout.restrictGrowthBuildings && string.IsNullOrEmpty(lot.firstEraId))
-                return System.Array.Empty<LotObjectDefinition>();
+            string era = ResidentialGround.LotEra(lot);
             return catalog.entries
-                .Where(asset => asset != null && layout.AllowsGrowthBuilding(asset.id) && asset.CanPreviewGrowable(layout.zone, layout.wealth, lot.firstEraId))
+                .Where(asset => asset != null && layout.AllowsGrowthBuilding(asset.id) && asset.CanPreviewGrowable(layout.zone, layout.wealth, era))
                 .Select(asset => PlacementProblem(lot, asset, catalog, out var building) == null ? building : null)
                 .Where(building => building != null)
                 .ToArray();
         }
 
         internal static string PlacementProblem(LotDefinition lot, LotAssetCatalogEntry asset, LotAssetCatalog catalog,
-            out LotObjectDefinition building)
+            out LotObjectDefinition building, bool enforceFit = false)
         {
             var layout = lot.zoningLayout;
             var info = LotBuildingInfo.Load(asset.id);
@@ -65,9 +67,12 @@ namespace CityForge.Lots
                 yaw = yaw,
                 position = layout.hasEntrance ? layout.entrance - anchor : layout.buildingCenter
             };
-            var bounds = LotRuntimeLoader.Footprint(placement, asset, Vector2.Max(asset.footprint, footprint));
-            var problem = layout.BuildingFitProblem(lot, bounds, catalog);
-            if (problem != null) return problem;
+            if (!layout.overrideBuildingFit || enforceFit)
+            {
+                var bounds = LotRuntimeLoader.Footprint(placement, asset, Vector2.Max(asset.footprint, footprint));
+                var problem = layout.BuildingFitProblem(lot, bounds, catalog);
+                if (problem != null) return problem;
+            }
             building = placement;
             return null;
         }

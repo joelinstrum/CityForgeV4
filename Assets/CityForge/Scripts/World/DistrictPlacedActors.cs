@@ -38,6 +38,7 @@ namespace CityForge.World
     public sealed partial class PrototypeRegionView
     {
         private const int MaxPlacedActors = 512;
+        internal const string FarmerAssetId = "v3-farmer";
         internal readonly List<DistrictPlacedActor> PlacedActors = new();
         private string armedDistrictActor;
         private bool armedPedestrian, armedTree;
@@ -53,8 +54,17 @@ namespace CityForge.World
             public int IdleHash, WalkHash;
             public float Speed;
             public Vector2[] Route;
-            public int Next, Direction = 1;
-            public bool Closed, Ambient;
+            public Transform[] Wheels;
+            public Transform Carriage;
+            public Vector3 CarriageRestPosition;
+            public Quaternion CarriageRestRotation;
+            public float HorseYaw, CarriageYaw, TurnFrom, TurnTarget;
+            public float TurnProgress, CarriageTurnFrom, CarriageTurnTarget, CarriageTurnProgress;
+            public bool HeadingInitialized;
+            public Vector2 PassingOffset;
+            public int Next, Direction = 1, TrafficRank;
+            public bool Closed, Ambient, Vehicle, EagleCarried;
+            public ActorSimulationCadence Cadence;
         }
 
         private readonly List<Pedestrian> pedestrians = new();
@@ -63,9 +73,12 @@ namespace CityForge.World
         private CityForgeCameraController pedestrianCamera;
         private bool pedestrianRoutesDirty;
         private float pedestrianTick;
+        private int ambientTrafficCount;
+        private RegionTimeOfDay? trafficVisibilityPhase;
 
         internal void ArmDistrictActor(string id, int count, bool pedestrian, bool tree = false)
         {
+            if (pedestrian && id == FarmerAssetId) return;
             armedDistrictActor = id;
             armedActorCount = count;
             armedPedestrian = pedestrian;
@@ -127,7 +140,7 @@ namespace CityForge.World
                     RebuildPedestrianRoutes();
                     foreach (var existing in pedestrians)
                         if (!existing.Ambient && existing != walker) SetPedestrianRoute(existing);
-                    RebuildResidentialWalkers(LotAssetCatalog.Load());
+                    RebuildAmbientTraffic(LotAssetCatalog.Load());
                 }
                 SetPedestrianRoute(walker);
                 ShowDistrictMessage(walker.Route.Length > 1 ? "Pedestrian placed." : "Character placed. Build a sidewalk or road nearby to start walking.");
@@ -182,10 +195,10 @@ namespace CityForge.World
             RebuildPedestrianRoutes();
             var active = new HashSet<int>(ActiveDistrictMembers);
             foreach (var record in PlacedActors)
-                if (record.pedestrian && active.Contains(record.district) && catalog.Find(record.assetId) is { } asset &&
+                if (record.pedestrian && record.assetId != FarmerAssetId && active.Contains(record.district) && catalog.Find(record.assetId) is { } asset &&
                     asset.prefab && asset.IsCharacter)
                     SetPedestrianRoute(CreatePedestrian(record, asset));
-            RebuildResidentialWalkers(catalog);
+            RebuildAmbientTraffic(catalog);
         }
 
         private void RebuildPlacedTrees()
@@ -245,6 +258,7 @@ namespace CityForge.World
             {
                 animator.applyRootMotion = false;
                 animator.keepAnimatorStateOnDisable = true;
+                animator.cullingMode = AnimatorCullingMode.CullCompletely;
             }
             var walker = new Pedestrian
             {
@@ -257,7 +271,7 @@ namespace CityForge.World
             return walker;
         }
 
-        private void RebuildResidentialWalkers(LotAssetCatalog catalog)
+        private void RebuildAmbientTraffic(LotAssetCatalog catalog)
         {
             for (int i = pedestrians.Count - 1; i >= 0; i--)
             {
@@ -267,52 +281,111 @@ namespace CityForge.World
                 pedestrians.RemoveAt(i);
             }
 
-            var homes = districtLotRoots.Keys.Where(lot => lot.definition.zoningLayout.zone == TownZone.Residential1)
+            ambientTrafficCount = 0;
+            trafficVisibilityPhase = null;
+            var buildings = districtLotRoots.Keys.Where(lot =>
+                lot.definition.objects.Any(item => catalog && catalog.Find(item.assetId)?.category == "Buildings"))
                 .OrderBy(lot => lot.center.y).ThenBy(lot => lot.center.x).ToArray();
-            if (!catalog || homes.Length < 3) return;
-            var routes = ResidentialBlockRoutes();
-            if (routes.Count == 0) return;
+            if (!catalog || buildings.Length == 0) return;
+            var blocks = ResidentialBlockRoutes();
             var pools = new Dictionary<LotWealth, LotAssetCatalogEntry[]>
             {
-                [LotWealth.Low] = Pool("v3-hooligan", "v3-farmer", "v3-axeman"),
-                [LotWealth.Medium] = Pool("v3-farmer", "v3-dock-worker"),
+                [LotWealth.Low] = Pool("v3-hooligan", "v3-axeman"),
+                [LotWealth.Medium] = Pool("v3-dock-worker"),
                 [LotWealth.High] = Pool("v3-victorian-gentleman")
             };
+            var foundersLow = Pool("v3-founders-cook", "v3-founders-stout-townsperson",
+                "v3-founders-townsperson", "v3-founders-privateer");
+            var foundersHigh = Pool("v3-founders-gentleman-black", "v3-founders-gentleman-blue",
+                "v3-founders-lady-gray", "v3-founders-lady-red");
+            int districtYear = TownYear(SelectedDistrict);
+            string vehicleEra = CityForgeTimeline.Eras.FirstOrDefault(era =>
+                districtYear >= era.FirstYear && districtYear <= era.LastYear)?.id;
+            var vehicleGroups = VehicleProfile.All.Where(profile => profile.spawnEvery > 0 && profile.AvailableIn(vehicleEra))
+                .Select(profile => (profile, asset: catalog.Find(profile.assetId)))
+                .Where(entry => entry.asset != null && entry.asset.prefab)
+                .GroupBy(entry => (group: string.IsNullOrEmpty(entry.profile.trafficGroup) ? entry.profile.assetId :
+                    entry.profile.trafficGroup, every: entry.profile.spawnEvery, parked: entry.profile.parked))
+                .Select(group => (group.Key, choices: group.ToArray())).ToArray();
+            var vehicleCounts = new int[vehicleGroups.Length];
+            var vehicleRoutes = districtRoadMeshes.Keys.Select(road =>
+                (Points: RoadCenterline(road).ToArray(), Closed: road.closed)).Where(route => route.Points.Length > 1).ToArray();
             var random = new System.Random(SelectedDistrict);
-            for (int i = 0; i + 2 < homes.Length; i += 3)
+            var walking = blocks.Select(route => (Points: route, Closed: true))
+                .Concat(pedestrianRoutes.Select(route => (route.Points, route.Closed))).ToArray();
+            foreach (var lot in buildings)
             {
-                var home = homes[i + random.Next(3)];
-                var pool = pools.GetValueOrDefault(home.definition.zoningLayout.wealth) ?? pools[LotWealth.Medium];
-                if (pool.Length == 0) pool = pools.Values.SelectMany(entries => entries).ToArray();
-                if (pool.Length == 0) break;
-
-                Vector2[] loop = null;
-                Vector2 start = home.center;
-                int next = 0;
-                float nearest = float.PositiveInfinity;
-                foreach (var route in routes)
-                for (int j = 0; j < route.Length; j++)
+                var wealth = lot.definition.zoningLayout.Configured
+                    ? lot.definition.zoningLayout.wealth : lot.definition.wealth;
+                var zone = lot.definition.zoningLayout.zone;
+                if (zone == TownZone.None && LotClassification.FindCategory(lot.definition.category)?.id == "commercial")
+                    zone = TownZone.Commercial1;
+                var eligibleVehicles = vehicleGroups.Select(group => group.choices
+                    .Where(entry => entry.profile.AllowsTraffic(vehicleEra, zone, wealth)).ToArray()).ToArray();
+                var era = ResidentialGround.LotEra(lot.definition);
+                var pool = pools.GetValueOrDefault(wealth) ?? pools[LotWealth.Low];
+                if (era == "founders")
                 {
-                    int end = (j + 1) % route.Length;
-                    var edge = route[end] - route[j];
-                    if (edge.sqrMagnitude < .01f) continue;
-                    var point = route[j] + edge * Mathf.Clamp01(Vector2.Dot(home.center - route[j], edge) / edge.sqrMagnitude);
-                    float distance = (point - home.center).sqrMagnitude;
-                    if (distance >= nearest) continue;
-                    nearest = distance;
-                    start = point;
-                    next = end;
-                    loop = route;
+                    if (wealth == LotWealth.High && foundersHigh.Length > 0) pool = foundersHigh;
+                    if (wealth == LotWealth.Low && foundersLow.Length > 0 &&
+                        lot.definition.zoningLayout.zone is TownZone.Residential1 or TownZone.Commercial1)
+                        pool = foundersLow;
                 }
-                if (loop == null) continue;
-                var asset = pool[random.Next(pool.Length)];
-                var walker = CreatePedestrian(new DistrictPlacedActor { position = start }, asset);
-                walker.Ambient = true;
-                walker.Route = loop;
-                walker.Next = next;
-                walker.Closed = true;
-                walker.Body.gameObject.SetActive(TimeOfDay != RegionTimeOfDay.Night);
+                if (pool.Length == 0) pool = pools.Values.SelectMany(entries => entries).ToArray();
+                var root = districtLotRoots[lot];
+                foreach (var item in lot.definition.objects.Where(item => catalog.Find(item.assetId)?.category == "Buildings"))
+                {
+                    var position = root.TransformPoint(new Vector3(item.position.x, 0, item.position.y));
+                    var origin = new Vector2(position.x, position.z);
+                    if (pool.Length > 0)
+                    {
+                        var route = FindTrafficRoute(origin, walking);
+                        if (route.points == null)
+                        {
+                            var frontage = lot.definition.LandBounds;
+                            var local = new Vector2(frontage.center.x, frontage.yMin + .5f);
+                            var facing = (int)lot.definition.zoningLayout.frontage;
+                            local = facing == 0 ? local : LotGroundOverlay.QuarterTurn(local - frontage.center, facing) + frontage.center;
+                            var outside = root.TransformPoint(new Vector3(local.x, 0, local.y));
+                            route.start = new Vector2(outside.x, outside.z);
+                        }
+                        SpawnTraffic(pool[random.Next(pool.Length)], route.start, route.points, route.next, route.closed, random);
+                    }
+                    for (int i = 0; i < vehicleGroups.Length; i++)
+                    {
+                        var eligible = eligibleVehicles[i];
+                        var group = vehicleGroups[i].Key;
+                        if (eligible.Length == 0 || ++vehicleCounts[i] % group.every != 0) continue;
+                        var choice = eligible[random.Next(eligible.Length)].asset;
+                        if (!group.parked)
+                        {
+                            var route = FindTrafficRoute(origin, vehicleRoutes);
+                            if (route.points != null)
+                                SpawnTraffic(choice, route.start, route.points, route.next, route.closed, random, true);
+                            continue;
+                        }
+                        var bounds = lot.definition.LandBounds;
+                        var local = new Vector3(bounds.xMax - .7f, 0, bounds.yMin + 1.5f);
+                        var world = root.TransformPoint(local);
+                        var point = new Vector2(world.x, world.z);
+                        if (StreetscapePlacementProblem(new LotObjectDefinition(), point, DistrictLotWater()) == null)
+                        {
+                            var vehicle = SpawnTraffic(choice, point, null, 0, false, random, true);
+                            vehicle.Body.rotation = root.rotation;
+                        }
+                    }
+                }
             }
+
+            var traffic = pedestrians.Where(actor => actor.Ambient).ToArray();
+            ambientTrafficCount = traffic.Length;
+            for (int i = traffic.Length - 1; i > 0; i--)
+            {
+                int swap = random.Next(i + 1);
+                (traffic[i], traffic[swap]) = (traffic[swap], traffic[i]);
+            }
+            for (int i = 0; i < traffic.Length; i++) traffic[i].TrafficRank = i;
+            RefreshTrafficVisibility();
 
             LotAssetCatalogEntry[] Pool(params string[] ids) => ids.Select(catalog.Find).Where(asset =>
                 asset != null && asset.prefab && asset.prefab.GetComponentInChildren<Animator>() is { } animator &&
@@ -431,6 +504,108 @@ namespace CityForge.World
             static Vector2 Quantize(Vector2 point) => (Vector2)Vector2Int.RoundToInt(point * 100f) * .01f;
         }
 
+        private Pedestrian SpawnTraffic(LotAssetCatalogEntry asset, Vector2 start, Vector2[] route,
+            int next, bool closed, System.Random random, bool vehicle = false)
+        {
+            if (route is { Length: > 1 })
+            {
+                int previous = (next - 1 + route.Length) % route.Length;
+                var edge = route[next] - route[previous];
+                float length = edge.magnitude;
+                if (length > .001f)
+                {
+                    float spread = vehicle ? 9f : 4f;
+                    float distance = Vector2.Distance(route[previous], start);
+                    float randomized = Mathf.Lerp(Mathf.Max(0f, distance - spread),
+                        Mathf.Min(length, distance + spread), (float)random.NextDouble());
+                    start = route[previous] + edge * (randomized / length);
+                }
+            }
+            var actor = CreatePedestrian(new DistrictPlacedActor { position = start }, asset);
+            actor.Ambient = true;
+            actor.Vehicle = vehicle;
+            actor.Route = route ?? Array.Empty<Vector2>();
+            actor.Next = next;
+            actor.Closed = closed;
+            if (vehicle)
+            {
+                var profile = VehicleProfile.Find(asset.id);
+                float variation = Mathf.Clamp01(profile?.speedVariation ?? 0f);
+                actor.Speed = (profile?.speed ?? 0f) * Mathf.Lerp(1f - variation, 1f + variation, (float)random.NextDouble());
+                SetVehicleMotion(actor.Body, asset.id, actor.Route.Length > 1);
+                foreach (var animator in actor.Body.GetComponentsInChildren<Animator>())
+                    animator.cullingMode = AnimatorCullingMode.CullCompletely;
+                if (profile?.team == true && actor.Body.childCount > 0 && actor.Body.GetChild(0).childCount > 1)
+                {
+                    actor.Carriage = actor.Body.GetChild(0).GetChild(0);
+                    actor.CarriageRestPosition = actor.Carriage.localPosition;
+                    actor.CarriageRestRotation = actor.Carriage.localRotation;
+                }
+                if (profile?.rollWheels == true)
+                    actor.Wheels = actor.Body.GetComponentsInChildren<Transform>().Where(part =>
+                        part.name is "Carriage_Front_Left" or "Carriage_Front_Right" or
+                        "Carriage_Rear_Left" or "Carriage_Rear_Right").ToArray();
+            }
+            else actor.Speed *= Mathf.Lerp(.83f, 1.17f, (float)random.NextDouble());
+            return actor;
+        }
+
+        private static (Vector2 start, Vector2[] points, int next, bool closed) FindTrafficRoute(Vector2 origin,
+            IEnumerable<(Vector2[] Points, bool Closed)> routes)
+        {
+            (Vector2 start, Vector2[] points, int next, bool closed) best = (origin, null, 0, false);
+            float nearest = float.PositiveInfinity;
+            foreach (var (points, closed) in routes)
+                for (int i = 0; i < points.Length - (closed ? 0 : 1); i++)
+                {
+                    int end = (i + 1) % points.Length;
+                    var edge = points[end] - points[i];
+                    if (edge.sqrMagnitude < .01f) continue;
+                    var point = points[i] + edge * Mathf.Clamp01(Vector2.Dot(origin - points[i], edge) / edge.sqrMagnitude);
+                    float distance = (point - origin).sqrMagnitude;
+                    if (distance >= nearest) continue;
+                    nearest = distance;
+                    best = (point, points, end, closed);
+                }
+            return best;
+        }
+
+        internal static void SetVehicleMotion(Transform body, string assetId, bool travelling)
+        {
+            var profile = VehicleProfile.Find(assetId);
+            if (profile == null || string.IsNullOrEmpty(profile.motionFolder) || body.childCount == 0) return;
+            string folder = $"Lots/V3Vehicles/{profile.motionFolder}/";
+            var controller = Resources.Load<RuntimeAnimatorController>(folder + "Motion");
+            if (!controller) return;
+            var model = body.GetChild(0);
+            if (profile.team)
+            {
+                for (int i = 1; i < model.childCount; i++) Animate(model.GetChild(i));
+            }
+            else Animate(model);
+
+            void Animate(Transform part)
+            {
+                var animators = part.GetComponentsInChildren<Animator>();
+                if (animators.Length == 0 && profile.team)
+                {
+                    var avatar = Resources.LoadAll<Avatar>(folder + "Model").FirstOrDefault();
+                    if (!avatar) return;
+                    var animator = part.gameObject.AddComponent<Animator>();
+                    animator.avatar = avatar;
+                    animators = new[] { animator };
+                }
+                foreach (var animator in animators)
+                {
+                    animator.runtimeAnimatorController = controller;
+                    animator.applyRootMotion = false;
+                    animator.keepAnimatorStateOnDisable = true;
+                    string state = travelling ? profile.travelState : profile.idleState;
+                    if (!string.IsNullOrEmpty(state)) animator.Play(state);
+                }
+            }
+        }
+
         private Vector3 PedestrianGround(Vector2 point) => new Vector3(point.x, LotHeight(point) + .04f, point.y);
 
         private void SetPedestrianRoute(Pedestrian walker)
@@ -543,6 +718,26 @@ namespace CityForge.World
 
         }
 
+        private void RefreshTrafficVisibility()
+        {
+            if (trafficVisibilityPhase == TimeOfDay) return;
+            trafficVisibilityPhase = TimeOfDay;
+            int limit = TimeOfDay switch
+            {
+                RegionTimeOfDay.Morning => (ambientTrafficCount + 2) / 4,
+                RegionTimeOfDay.Evening => (ambientTrafficCount + 1) / 2,
+                RegionTimeOfDay.Night => 0,
+                _ => ambientTrafficCount
+            };
+            foreach (var actor in pedestrians)
+            {
+                bool active = !actor.Ambient || actor.TrafficRank < limit;
+                if (actor.Body.gameObject.activeSelf != active) actor.Body.gameObject.SetActive(active);
+            }
+        }
+
+        private readonly List<(Vector2 center, Vector2 forward)> wagonTraffic = new();
+
         private void TickPlacedPedestrians()
         {
             if (SelectedDistrict < 0 || DistrictLoading || IsSaving) return;
@@ -551,9 +746,10 @@ namespace CityForge.World
                 RebuildPedestrianRoutes();
                 foreach (var walker in pedestrians)
                     if (!walker.Ambient) SetPedestrianRoute(walker);
-                RebuildResidentialWalkers(LotAssetCatalog.Load());
+                RebuildAmbientTraffic(LotAssetCatalog.Load());
             }
             if (!pedestrianRoot) return;
+            RefreshTrafficVisibility();
             bool visible = pedestrianCamera && pedestrianCamera.ZoomLevel <= 2;
             if (pedestrianRoot.gameObject.activeSelf != visible) pedestrianRoot.gameObject.SetActive(visible);
             if (!visible) return;
@@ -561,34 +757,157 @@ namespace CityForge.World
             if (pedestrianTick < (pedestrianCamera.ZoomLevel < 2 ? 1f / 30f : .1f)) return;
             float elapsed = pedestrianTick;
             pedestrianTick = 0f;
+            var camera = pedestrianCamera.GetComponent<Camera>();
+            wagonTraffic.Clear();
+            foreach (var wagon in pedestrians)
+            {
+                if (!wagon.Carriage || !wagon.Body.gameObject.activeSelf) continue;
+                var center = wagon.Body.position - wagon.Body.forward * 1.3f;
+                wagonTraffic.Add((new Vector2(center.x, center.z), new Vector2(wagon.Body.forward.x, wagon.Body.forward.z)));
+            }
             foreach (var walker in pedestrians)
             {
-                bool active = !walker.Ambient || TimeOfDay != RegionTimeOfDay.Night;
-                if (walker.Body.gameObject.activeSelf != active) walker.Body.gameObject.SetActive(active);
-                if (!active) continue;
-                // On reload or after visibility changes the Animator can still be in its default state.
-                // Confirm locomotion before translating so an idle character cannot slide.
-                if (walker.Route.Length < 2 || !SetPedestrianAnimation(walker, true)) continue;
+                if (!walker.Body.gameObject.activeSelf || walker.EagleCarried || walker.Route.Length < 2) continue;
                 var p = walker.Body.position;
-                var current = new Vector2(p.x, p.z);
-                var target = walker.Route[walker.Next];
-                var next = Vector2.MoveTowards(current, target, elapsed * walker.Speed);
-                var delta = next - current;
-                if (delta.sqrMagnitude > .000001f)
+                bool nearCamera = ActorSimulationVisibility.NearCamera(camera, p);
+                float simulationTime = walker.Cadence.Step(elapsed, nearCamera, walker.Body.GetInstanceID());
+                if (simulationTime <= 0f) continue;
+                // A culled Animator may still report its previous state as it returns to view.
+                if (nearCamera && !walker.Vehicle && !SetPedestrianAnimation(walker, true)) continue;
+                var current = new Vector2(p.x, p.z) - walker.PassingOffset;
+                float budget = simulationTime * walker.Speed;
+                if (walker.Carriage && walker.HeadingInitialized)
                 {
-                    walker.Body.position = PedestrianGround(next);
-                    walker.Body.rotation = Quaternion.LookRotation(new Vector3(delta.x, 0, delta.y));
+                    var nextHeading = (walker.Route[walker.Next] - current).normalized;
+                    if (nextHeading != Vector2.zero &&
+                        Mathf.Abs(Mathf.DeltaAngle(walker.HorseYaw, Mathf.Atan2(nextHeading.x, nextHeading.y) * Mathf.Rad2Deg)) > 30f)
+                    {
+                        TurnHorseTeam(walker, nextHeading, simulationTime);
+                        continue;
+                    }
                 }
-                if (next != target) continue;
-                int index = walker.Next + walker.Direction;
-                if (walker.Closed) index = (index + walker.Route.Length) % walker.Route.Length;
-                else if (index < 0 || index >= walker.Route.Length)
+                if (walker.Vehicle && !walker.Carriage)
+                    budget = SteerAroundWagons(walker, current, simulationTime, budget);
+                var heading = Vector2.zero;
+                float travelled = 0f;
+                for (int segment = 0; segment < walker.Route.Length && budget > 0f; segment++)
                 {
-                    walker.Direction = -walker.Direction;
-                    index = walker.Next + walker.Direction;
+                    var target = walker.Route[walker.Next];
+                    var next = Vector2.MoveTowards(current, target, budget);
+                    var delta = next - current;
+                    float distance = delta.magnitude;
+                    if (distance > .0001f) heading = delta / distance;
+                    budget -= distance;
+                    travelled += distance;
+                    current = next;
+                    if (next != target) break;
+                    int index = walker.Next + walker.Direction;
+                    if (walker.Closed) index = (index + walker.Route.Length) % walker.Route.Length;
+                    else if (index < 0 || index >= walker.Route.Length)
+                    {
+                        walker.Direction = -walker.Direction;
+                        index = walker.Next + walker.Direction;
+                    }
+                    walker.Next = index;
                 }
-                walker.Next = index;
+                var destination = current + walker.PassingOffset;
+                walker.Body.position = PedestrianGround(destination);
+                if (walker.Carriage)
+                    TurnHorseTeam(walker, heading, simulationTime);
+                else
+                {
+                    var motion = walker.Vehicle ? destination - new Vector2(p.x, p.z) : heading;
+                    if (motion.sqrMagnitude > .00001f)
+                        walker.Body.rotation = Quaternion.LookRotation(new Vector3(motion.x, 0, motion.y));
+                }
+                if (walker.Wheels != null)
+                    foreach (var wheel in walker.Wheels)
+                        wheel.Rotate(wheel.InverseTransformDirection(walker.Body.right),
+                            travelled * Mathf.Rad2Deg / .48f, Space.Self);
             }
         }
+        private float SteerAroundWagons(Pedestrian rider, Vector2 position, float delta, float budget)
+        {
+            var direction = (rider.Route[rider.Next] - position).normalized;
+            if (direction == Vector2.zero) direction = new Vector2(rider.Body.forward.x, rider.Body.forward.z);
+            var right = new Vector2(direction.y, -direction.x);
+            Vector2 targetOffset = Vector2.zero;
+            float nearest = float.PositiveInfinity;
+            float blockingDistance = float.PositiveInfinity;
+            foreach (var (center, forward) in wagonTraffic)
+            {
+                var relative = center - position;
+                float forwardDistance = Vector2.Dot(relative, direction);
+                float sideDistance = Vector2.Dot(relative, right);
+                if (forwardDistance < -4.25f || forwardDistance > 13f ||
+                    Mathf.Abs(sideDistance) > 2.6f || relative.sqrMagnitude >= nearest) continue;
+                nearest = relative.sqrMagnitude;
+                float side = sideDistance > .4f ? -1f : 1f;
+                // Keep the selected side while alongside the team.
+                if (rider.PassingOffset.sqrMagnitude > .2f)
+                    side = Vector2.Dot(rider.PassingOffset, right) < 0 ? -1f : 1f;
+                targetOffset = right * (side * 1.85f);
+                float reach = Mathf.Lerp(2.3f, 4.1f, Mathf.Abs(Vector2.Dot(forward, direction)));
+                if (forwardDistance > 0f) blockingDistance = Mathf.Max(0f, forwardDistance - reach);
+            }
+            rider.PassingOffset = Vector2.MoveTowards(rider.PassingOffset, targetOffset, 1.7f * delta);
+            if (targetOffset != Vector2.zero && Vector2.Dot(rider.PassingOffset, targetOffset.normalized) < 1.65f)
+                budget = Mathf.Min(budget, blockingDistance);
+            return budget;
+        }
+
+        private static void TurnHorseTeam(Pedestrian team, Vector2 heading, float elapsed)
+        {
+            if (heading != Vector2.zero)
+            {
+                float yaw = Mathf.Atan2(heading.x, heading.y) * Mathf.Rad2Deg;
+                if (!team.HeadingInitialized)
+                {
+                    team.HeadingInitialized = true;
+                    team.HorseYaw = team.CarriageYaw = team.TurnFrom = team.TurnTarget = yaw;
+                    team.TurnProgress = team.CarriageTurnProgress = 1f;
+                    team.CarriageTurnFrom = team.CarriageTurnTarget = yaw;
+                }
+                else if (Mathf.Abs(Mathf.DeltaAngle(team.TurnTarget, yaw)) >
+                    (team.TurnProgress < 1f ? 12f : .5f))
+                {
+                    team.TurnFrom = team.HorseYaw;
+                    team.TurnTarget = yaw;
+                    team.TurnProgress = 0f;
+                }
+            }
+            if (!team.HeadingInitialized) return;
+            float turn = Mathf.DeltaAngle(team.TurnFrom, team.TurnTarget);
+            float duration = Mathf.Max(.15f, Mathf.Abs(turn) / 100f);
+            team.TurnProgress = Mathf.Min(1f, team.TurnProgress + elapsed / duration);
+            team.HorseYaw = StagedTurn(team.TurnFrom, turn, team.TurnProgress);
+            if (team.TurnProgress >= 1f)
+            {
+                // The wagon starts its own turn only once the horse faces down the new street.
+                if (Mathf.Abs(Mathf.DeltaAngle(team.CarriageTurnTarget, team.TurnTarget)) > .5f)
+                {
+                    team.CarriageTurnFrom = team.CarriageYaw;
+                    team.CarriageTurnTarget = team.TurnTarget;
+                    team.CarriageTurnProgress = 0f;
+                }
+                float carriageTurn = Mathf.DeltaAngle(team.CarriageTurnFrom, team.CarriageTurnTarget);
+                team.CarriageTurnProgress = Mathf.Min(1f, team.CarriageTurnProgress +
+                    elapsed / Mathf.Max(.15f, Mathf.Abs(carriageTurn) / 65f));
+                team.CarriageYaw = StagedTurn(team.CarriageTurnFrom, carriageTurn, team.CarriageTurnProgress);
+            }
+            team.Body.rotation = Quaternion.Euler(0, team.HorseYaw, 0);
+            var hinge = Quaternion.Euler(0, Mathf.DeltaAngle(team.HorseYaw, team.CarriageYaw), 0);
+            team.Carriage.localRotation = hinge * team.CarriageRestRotation;
+            team.Carriage.localPosition = hinge * team.CarriageRestPosition;
+        }
+
+        private static float StagedTurn(float from, float angle, float progress)
+        {
+            float half = Mathf.Min(45f, Mathf.Abs(angle) * .5f) * Mathf.Sign(angle);
+            return from + (progress <= .5f
+                ? Mathf.Lerp(0f, half, Mathf.SmoothStep(0f, 1f, progress * 2f))
+                : Mathf.Lerp(half, angle, Mathf.SmoothStep(0f, 1f, (progress - .5f) * 2f)));
+        }
+
     }
 }

@@ -24,45 +24,50 @@ namespace CityForge.World
         private static int ResidentialDepth(TownZone zone) => zone switch
         {
             TownZone.Residential1 => 6,
+            TownZone.Commercial1 => LotDefinition.MaxTiles,
             TownZone.Residential2 => 4,
             TownZone.Residential3 => 5,
             _ => 0
         };
 
-        private static string ResidentialDragHint(TownZone zone) =>
-            $"Drag beside a road, up to {ResidentialDepth(zone)} cells deep · Tab to rotate frontage";
+        private string ResidentialDragHint(TownZone zone) =>
+            zone == TownZone.Commercial1 ? "Drag along a street to zone small shops · Tab to change street frontage" :
+                $"Drag beside a road, up to {ZonePaintDepth(zone)} cells deep · Tab to rotate frontage";
 
         private TownZoneFacing ResidentialFacing(TownZoneFacing frontage) =>
             frontage != TownZoneFacing.None
-                ? (TownZoneFacing)(1 + ((int)frontage - 1 + 4 - residentialFacingTurns) % 4)
+                ? (TownZoneFacing)(1 + ((int)frontage - 1 + 4 - residentialFacingTurns % 4) % 4)
                 : frontage;
+
+        private const float ResidentialRoadCornerInset = .85f;
 
         private string ResidentialFrontageProblem(RectInt cells, int maxDepth, out TownZoneFacing frontage,
             bool? frontageAlongX = null, bool allowEnclosedBlock = false,
-            TownZoneFacing requiredFacing = TownZoneFacing.None)
+            TownZoneFacing requiredFacing = TownZoneFacing.None, bool commercial = false)
         {
             frontage = TownZoneFacing.None;
             const float edgeTolerance = .15f;
             // Rounded grid-aligned corners can clip a small part of the outside cells.
-            const float cornerInset = .85f;
-            string depthProblem = $"This residential density allows up to {maxDepth} cells deep from the road.";
-            bool enclosedBlock = allowEnclosedBlock && cells.width > 6 && cells.height > 6;
+            const float cornerInset = ResidentialRoadCornerInset;
+            string depthProblem = $"This zone allows up to {maxDepth} cells deep from the road.";
+            bool enclosedBlock = !commercial && allowEnclosedBlock && cells.width > maxDepth && cells.height > maxDepth;
             if (!enclosedBlock && Mathf.Min(cells.width, cells.height) > maxDepth) return depthProblem;
             var streetSpans = requiredFacing == TownZoneFacing.None ? null : new List<(float start, float end)>();
-            var coverage = enclosedBlock ? new List<(float start, float end)>[4] : null;
+            var coverage = enclosedBlock || (commercial && streetSpans == null) ? new List<(float start, float end)>[4] : null;
             if (coverage != null)
                 for (int side = 0; side < coverage.Length; side++) coverage[side] = new();
 
             var min = ZoneCorner(cells.min);
             var max = ZoneCorner(cells.max);
-            float reach = DistrictGridCellMeters - edgeTolerance;
+            float reach = commercial ? .65f : DistrictGridCellMeters + edgeTolerance;
             var search = new Rect(min - Vector2.one * reach, max - min + Vector2.one * (2 * reach));
             float bestGap = reach;
             int bestDepth = int.MaxValue;
             var bestFacing = TownZoneFacing.None;
 
-            foreach (var filter in districtRoadMeshes.Values)
+            foreach (var (road, filter) in districtRoadMeshes)
             {
+                bool eligibleFrontage = !commercial || SupportsCommercialFrontage(road.surfaceId);
                 var mesh = filter.sharedMesh;
                 var bounds = mesh.bounds;
                 if (!search.Overlaps(Rect.MinMaxRect(bounds.min.x, bounds.min.z, bounds.max.x, bounds.max.z))) continue;
@@ -77,7 +82,8 @@ namespace CityForge.World
                     if (RoadTriangleSpan(a, b, c, min.y + cornerInset, max.y - cornerInset, false,
                             out float innerWest, out float innerEast) &&
                         innerWest < max.x - cornerInset && innerEast > min.x + cornerInset)
-                        return "Keep residential zoning clear of the road surface.";
+                        return "Keep zoning clear of the road surface.";
+                    if (!eligibleFrontage) continue;
                     if (streetSpans != null)
                     {
                         bool sideStreet = requiredFacing is TownZoneFacing.East or TownZoneFacing.West;
@@ -118,44 +124,50 @@ namespace CityForge.World
                 }
             }
 
+            const string commercialFrontageProblem = "Commercial I needs street frontage along the full edge. Use a Dirt Street.";
+            bool Covers(List<(float start, float end)> spans, TownZoneFacing side)
+            {
+                bool eastOrWest = side is TownZoneFacing.East or TownZoneFacing.West;
+                float coveredTo = (eastOrWest ? min.y : min.x) + cornerInset;
+                float target = (eastOrWest ? max.y : max.x) - cornerInset;
+                spans.Sort((a, b) => a.start.CompareTo(b.start));
+                foreach (var span in spans)
+                {
+                    if (span.start > coveredTo + .01f) break;
+                    coveredTo = Mathf.Max(coveredTo, span.end);
+                    if (coveredTo >= target) return true;
+                }
+                return false;
+            }
+
             if (coverage != null)
             {
+                var commercialFacings = commercial ? new List<(TownZoneFacing facing, int depth)>() : null;
                 for (int side = 0; side < coverage.Length; side++)
                 {
-                    bool eastOrWest = side % 2 == 0;
-                    float coveredTo = (eastOrWest ? min.y : min.x) + cornerInset;
-                    float target = (eastOrWest ? max.y : max.x) - cornerInset;
-                    var spans = coverage[side];
-                    spans.Sort((a, b) => a.start.CompareTo(b.start));
-                    foreach (var span in spans)
+                    var facing = (TownZoneFacing)(side + 1);
+                    bool covers = Covers(coverage[side], facing);
+                    if (commercial)
                     {
-                        if (span.start > coveredTo + .01f) break;
-                        coveredTo = Mathf.Max(coveredTo, span.end);
-                        if (coveredTo >= target) break;
+                        int depth = side % 2 == 0 ? cells.width : cells.height;
+                        if (covers && depth <= maxDepth) commercialFacings.Add((facing, depth));
                     }
-                    if (coveredTo < target)
-                        return "Surround a large residential block with roads on all four sides.";
+                    else if (!covers) return "Surround a large residential block with roads on all four sides.";
                 }
+                if (!commercial) return null;
+                if (commercialFacings.Count == 0) return commercialFrontageProblem;
+                commercialFacings.Sort((a, b) => a.depth == b.depth ? a.facing.CompareTo(b.facing) : a.depth.CompareTo(b.depth));
+                frontage = commercialFacings[residentialFacingTurns % commercialFacings.Count].facing;
                 return null;
             }
 
             if (streetSpans != null)
             {
+                if (!Covers(streetSpans, requiredFacing))
+                    return commercial ? commercialFrontageProblem : "Keep the lot frontage beside the road.";
+                frontage = requiredFacing;
                 bool sideStreet = requiredFacing is TownZoneFacing.East or TownZoneFacing.West;
-                float covered = (sideStreet ? min.y : min.x) + cornerInset;
-                float end = (sideStreet ? max.y : max.x) - cornerInset;
-                streetSpans.Sort((a, b) => a.start.CompareTo(b.start));
-                foreach (var span in streetSpans)
-                {
-                    if (span.start > covered + .01f) break;
-                    covered = Mathf.Max(covered, span.end);
-                    if (covered >= end)
-                    {
-                        frontage = requiredFacing;
-                        return (sideStreet ? cells.width : cells.height) > maxDepth ? depthProblem : null;
-                    }
-                }
-                return "Keep the lot frontage beside the road.";
+                return (sideStreet ? cells.width : cells.height) > maxDepth ? depthProblem : null;
             }
 
             frontage = bestFacing;
@@ -186,22 +198,14 @@ namespace CityForge.World
             return westHalf ? TownZoneFacing.North : TownZoneFacing.East;
         }
 
-        private void AddResidentialEntryPath(DistrictLotRecord record, LotObjectDefinition building)
+        private void AddResidentialEntryPath(DistrictLotRecord record, LotObjectDefinition building, LotDefinition draft = null)
         {
-            var lot = record.definition;
+            var lot = draft ?? record.definition;
             var layout = lot.zoningLayout;
             if (!layout.autoPaths || layout.faceAwayFromRoad || lot.paths.Count > 0) return;
-            var info = LotBuildingInfo.LoadEntry(building.assetId);
-            var asset = LotAssetCatalog.Load()?.Find(building.assetId);
-            if (asset == null || (info == null && !building.assetId.StartsWith("v3-building-low-wealth-",
-                    System.StringComparison.Ordinal))) return;
+            if (!TryResidentialEntry(lot, building, out var entry, out var forward)) return;
 
             int frontage = (int)layout.frontage;
-            var forward = LotGroundOverlay.QuarterTurn(Vector2.down, frontage);
-            var entry = info != null
-                ? building.position + LotGroundOverlay.QuarterTurn(info.entrance * building.scale,
-                    Mathf.RoundToInt(building.yaw / 90f))
-                : building.position + forward * (asset.footprint.y * building.scale * .5f);
             var front = LotGroundOverlay.QuarterTurn(lot.LandBounds, -frontage);
             var aligned = LotGroundOverlay.QuarterTurn(entry, -frontage);
             const float halfPath = .5f;
@@ -216,7 +220,7 @@ namespace CityForge.World
             float sign = alongZ ? Mathf.Sign(outward.y) : Mathf.Sign(outward.x);
             float across = alongZ ? edge.x : edge.y;
             float edgeAlong = (alongZ ? edge.y : edge.x) * sign;
-            float gap = DistrictGridCellMeters;
+            float gap = DistrictGridCellMeters + .15f;
             foreach (var filter in districtRoadMeshes.Values)
             {
                 var mesh = filter.sharedMesh;
@@ -239,12 +243,41 @@ namespace CityForge.World
             }
 
             float length = setback + gap;
-            if (gap >= DistrictGridCellMeters || length < .10f) return;
+            if (gap >= DistrictGridCellMeters + .15f || length < .10f) return;
             lot.paths.Add(new LotPathDefinition
             {
                 points = new[] { entry, entry + forward * length },
-                width = 1, materialId = LotPathMaterial.ResidentialFootpath, edgeBlend = 75
+                width = 1, materialId = LotPathMaterial.ResidentialFootpath, edgeBlend = 75, generatedResidentialEntry = true
             });
+        }
+
+        private static bool IsLegacyResidentialEntryPath(LotDefinition lot, LotObjectDefinition building, LotPathDefinition path)
+        {
+            if (!lot.zoningLayout.autoPaths || lot.zoningLayout.faceAwayFromRoad || lot.paths.Count != 1 ||
+                path.materialId != LotPathMaterial.ResidentialFootpath || path.width != 1 ||
+                path.edgeBlend != 75 || path.closed || path.curved || path.HasRecess ||
+                path.textureRotation != 0 || path.use != LotPathUse.Pedestrian || path.points.Length != 2)
+                return false;
+            return TryResidentialEntry(lot, building, out var entry, out var forward) &&
+                (path.points[0] - entry).sqrMagnitude < .0001f &&
+                Vector2.Dot((path.points[1] - path.points[0]).normalized, forward) > .9999f;
+        }
+
+        private static bool TryResidentialEntry(LotDefinition lot, LotObjectDefinition building,
+            out Vector2 entry, out Vector2 forward)
+        {
+            entry = forward = default;
+            var info = LotBuildingInfo.LoadEntry(building.assetId);
+            var asset = LotAssetCatalog.Load()?.Find(building.assetId);
+            if (asset == null || (info == null && !building.assetId.StartsWith("v3-building-low-wealth-",
+                    System.StringComparison.Ordinal))) return false;
+
+            forward = LotGroundOverlay.QuarterTurn(Vector2.down, (int)lot.zoningLayout.frontage);
+            entry = info != null
+                ? building.position + LotGroundOverlay.QuarterTurn(info.entrance * building.scale,
+                    Mathf.RoundToInt(building.yaw / 90f))
+                : building.position + forward * (asset.footprint.y * building.scale * .5f);
+            return true;
         }
 
         // Project the part of the pavement triangle within the frontage's transverse interval.

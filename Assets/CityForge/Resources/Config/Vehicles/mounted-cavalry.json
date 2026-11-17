@@ -1,0 +1,27 @@
+{
+  "assetId": "v3-vehicle-mounted-cavalry",
+  "eraNumbers": [
+    1,
+    2
+  ],
+  "wealthTiers": [
+    "Low",
+    "Medium",
+    "High"
+  ],
+  "label": "Mounted cavalry rider",
+  "modelFolder": "MountedCavalry",
+  "length": 2.5,
+  "motionFolder": "MountedCavalry",
+  "travelState": "Trot",
+  "idleState": "Idle",
+  "trafficGroup": "mounted",
+  "spawnEvery": 12,
+  "zones": [
+    "Commercial1",
+    "Commercial2",
+    "Commercial3"
+  ],
+  "speed": 3.1,
+  "speedVariation": 0.15
+}

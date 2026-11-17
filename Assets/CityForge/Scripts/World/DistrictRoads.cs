@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using CityForge.CameraSystem;
 using CityForge.Lots;
 using CityForge.UI;
@@ -30,18 +31,24 @@ namespace CityForge.World
             ("wagon", "Wagon Road", "packed-earth", "A rural road with wheel ruts from wagon traffic."),
             ("gravel", "Gravel Road", "gravel", "A compacted gravel surface for rural connections."),
             ("macadam", "Macadam Road", "gravel", "A road built up from layers of crushed stone."),
-            ("cobblestone", "Cobblestone Road", "cobblestone", "A road paved with rounded stone setts."),
-            ("brick", "Brick Road", "brick", "A road paved with laid brick."),
+            ("cobblestone", "Cobblestone Road", "cobblestone-road-9", "A one-tile road paved with rounded stone setts and soft shoulders."),
+            ("brick", "Brick Road", "damaged-brick", "A one-tile road paved with weathered brick and soft shoulders."),
             ("blacktop", "Blacktop Road", "concrete", "An asphalt surface for motor traffic."),
-            ("paved-street", "Paved Street", "concrete", "A paved street for built-up districts.")
+            ("paved-street", "Paved Street", "concrete", "A paved street for built-up districts."),
+            (FoundersStreetId, "Dirt Street", "packed-earth", "A one-tile dirt street with plank sidewalks. Supports Commercial I zoning.")
         };
 
         private const int HistoricalRoadSurfaceCount = 6;
         private const int PavedStreetIndex = HistoricalRoadSurfaceCount + 1;
+        private const int FoundersStreetIndex = PavedStreetIndex + 1;
+        private const string FoundersStreetId = "founders-dirt-street";
         private const int RoadWidth = 3;
+        private const int OneTileRoadWidth = (int)DistrictGridCellMeters;
         private static readonly int DirtEndFadeProperty = Shader.PropertyToID("_DirtEndFade");
         private MaterialPropertyBlock dirtEndProperties;
         private const float RoadSurfaceLift = .13f;
+        private const float MasonryPavingLift = .115f;
+        private const float SidewalkLift = .088f;
         private const int MaxDistrictRoads = 256;
         private const int MaxRoadPoints = 64;
         private const float MaxRoadLength = 1024f;
@@ -49,19 +56,22 @@ namespace CityForge.World
         private readonly List<UnityEngine.Object> roadPresentationAssets = new();
         private readonly Dictionary<string, Material> districtRoadMaterials = new();
         private readonly Dictionary<DistrictRoadRecord, MeshFilter> districtRoadMeshes = new();
-        private Transform districtRoadRoot;
+        private Transform districtRoadRoot, districtSidewalkRoot;
+        private readonly List<UnityEngine.Object> sidewalkAssets = new();
         private PointWireTool roadWire;
         private RectTransform roadControls;
         private Button finishRoadButton;
         private int roadSurfaceIndex;
         private int? lastRepaveSurface;
         private DistrictRoadRecord repaveTarget;
-        private DistrictRoadRecord roadExtensionHint;
+        private DistrictRoadRecord roadExtensionHint, preferredRoadExtension;
+        private bool preferredRoadPrepend;
+        private Vector2? roadGestureStart;
 
         private bool RoadPlacementArmed => roadWire && roadWire.Armed;
         private Terrain RoadTerrain => ApprovedDistrict && ApprovedDistrict.DisplayTerrain
             ? ApprovedDistrict.DisplayTerrain : terrain;
-        private bool CanPlaceRoad => CanEditRoad && TownConstructionVisible;
+        private bool CanPlaceRoad => CanEditRoad;
         private bool CanEditRoad => CanBuildTown && !IsSaving && RoadTerrain &&
             !playerLotWorkspace && !founderPicker && !returning && !RemakeBlocksInput;
 
@@ -69,7 +79,13 @@ namespace CityForge.World
 
         private void RestoreDistrictRoads(DistrictRoadRecord[] records)
         {
-            if (records != null) districtRoads.AddRange(records);
+            if (records == null) return;
+            foreach (var road in records)
+            {
+                if (HasSidewalks(road.surfaceId) && road.width > OneTileRoadWidth)
+                    road.width = OneTileRoadWidth;
+                districtRoads.Add(road);
+            }
         }
 
         internal static void ValidateDistrictRoads(DistrictRoadRecord[] records, int districtCount, float mapSide)
@@ -79,13 +95,28 @@ namespace CityForge.World
             foreach (var record in records)
             {
                 if (record == null || record.district < 0 || record.district >= districtCount ||
-                    FindRoadSurface(record.surfaceId) < 0 || Array.IndexOf(LotPathSurface.Widths, record.width) < 0 ||
+                    FindRoadSurface(record.surfaceId) < 0 || (record.width != OneTileRoadWidth && Array.IndexOf(LotPathSurface.Widths, record.width) < 0) ||
                     RoadGuideProblem(record.points, record.closed, mapSide * .5f) != null)
                     throw new InvalidDataException("Invalid district road.");
             }
         }
 
         private static int FindRoadSurface(string id) => Array.FindIndex(RoadSurfaces, surface => surface.Id == id);
+
+        private static bool IsMasonryRoad(string id) => id is "brick" or "cobblestone";
+
+        private static bool HasSidewalks(string id) => IsMasonryRoad(id) || id == FoundersStreetId;
+
+        private static bool SupportsCommercialFrontage(string id) => id is FoundersStreetId or "paved-street";
+
+        private static int DefaultRoadWidth(string id) => HasSidewalks(id) ? OneTileRoadWidth : RoadWidth;
+
+        private static LotPathMaterial DistrictRoadStyle(string id)
+        {
+            var style = LotPathMaterial.Find(RoadSurfaces[FindRoadSurface(id)].Material);
+            // Source-only checkouts can still render these roads with the simpler surface.
+            return IsMasonryRoad(id) && !style.IsAvailable ? LotPathMaterial.Find(id) : style;
+        }
 
         private static string RoadGuideProblem(IReadOnlyList<Vector2> points, bool closed, float halfMap)
         {
@@ -129,6 +160,11 @@ namespace CityForge.World
                 roadWire.FinishOverUi = true;
                 roadWire.AllowClosedUndo = false;
                 roadWire.SnapPoint = SnapRoadPlacementPoint;
+                roadWire.FinishOpenAtMarker = point =>
+                {
+                    var source = FindRoadExtensionEnd(roadWire.Points[0], .001f, out _);
+                    return TrySnapRoadJunction(point, out var target, source) && (point - target).sqrMagnitude < .0025f;
+                };
                 roadWire.StartPointHovered += HighlightRoadStartTile;
                 roadWire.CompletionRequested = points => PlaceDistrictRoad(points, false);
                 roadWire.LoopCompletionRequested = points => PlaceDistrictRoad(points, true);
@@ -140,6 +176,7 @@ namespace CityForge.World
                 TownButton(roadControls, lotFont, "Cancel", 138, 0, 104, CancelRoadPlacement);
             }
 
+            preferredRoadExtension = null;
             roadSurfaceIndex = surfaceIndex;
             lastRepaveSurface = surfaceIndex;
             string label = RoadSurfaces[surfaceIndex].Label;
@@ -181,6 +218,8 @@ namespace CityForge.World
 
         private void CancelRoadPlacement()
         {
+            preferredRoadExtension = null;
+            roadGestureStart = null;
             if (roadWire) roadWire.Cancel();
             if (roadControls) roadControls.gameObject.SetActive(false);
         }
@@ -190,36 +229,49 @@ namespace CityForge.World
             if (!CanPlaceRoad) return "Road placement is unavailable.";
             if (points.Count > 0 && FindRoadExtensionEnd(points[0], .001f, out bool prepend) is { } road)
                 return ExtendDistrictRoad(road, prepend, points, closed);
-            if (districtRoads.Count >= MaxDistrictRoads) return "This region has reached its road limit.";
+            if (!closed && points.Count >= 2 && TryContinueFromRoadRun(points, out var existing, out bool atStart, out var tail))
+                return tail.Length < 2 ? null : ExtendDistrictRoad(existing, atStart, tail, false);
             var problem = RoadGuideProblem(points, closed, MapSide * .5f);
             if (problem != null) return problem;
 
+            int width = DefaultRoadWidth(RoadSurfaces[roadSurfaceIndex].Id);
+            var guide = NewRoadGuide(points, closed, width, out bool aligned);
             var record = new DistrictRoadRecord
             {
                 district = SelectedDistrict,
                 surfaceId = RoadSurfaces[roadSurfaceIndex].Id,
-                points = new List<Vector2>(points).ToArray(),
+                points = guide,
                 closed = closed,
-                width = RoadWidth
+                gridAligned = aligned,
+                width = width
             };
-            var mesh = BuildDistrictRoadMesh(record);
-            bool committed = false;
-            try
+            return CommitNewRoadPieces(UnpavedRoadPieces(record));
+        }
+
+        private string CommitNewRoadPieces(List<DistrictRoadRecord> pieces)
+        {
+            if (districtRoads.Count + pieces.Count > MaxDistrictRoads) return "This region has reached its road limit.";
+            var meshes = new List<Mesh>(pieces.Count);
+            foreach (var piece in pieces)
             {
-                problem = RoadSiteProblem(mesh);
-                if (problem != null) return problem;
-                PresentDistrictRoad(record, mesh, districtRoads.Count);
-                districtRoads.Add(record);
-                committed = true;
-                RefreshRoadShoulderDetails();
-                RefreshDirtRoadEndFades();
-                RefreshDirtJunctionWear();
-                return null;
+                var mesh = BuildDistrictRoadMesh(piece);
+                meshes.Add(mesh);
+                var problem = RoadSiteProblem(mesh);
+                if (problem == null) continue;
+                foreach (var rejected in meshes) Destroy(rejected);
+                return problem;
             }
-            finally
+            for (int i = 0; i < pieces.Count; i++)
             {
-                if (!committed) Destroy(mesh);
+                PresentDistrictRoad(pieces[i], meshes[i], districtRoads.Count);
+                districtRoads.Add(pieces[i]);
             }
+            if (pieces.Count == 0) return null;
+            RefreshRoadShoulderDetails();
+            RefreshDirtRoadEndFades();
+            RefreshDirtJunctionWear();
+            QueueLotGrowth();
+            return null;
         }
 
         private void RefreshRoadPlacementHint(bool force = false)
@@ -227,14 +279,45 @@ namespace CityForge.World
             var road = roadWire.Points.Count > 0 ? FindRoadExtensionEnd(roadWire.Points[0], .001f, out _) : null;
             if (!force && roadExtensionHint == road) return;
             roadExtensionHint = road;
-            roadWire.RibbonWidth = road?.width ?? RoadWidth;
+            roadWire.RibbonWidth = road?.width ?? DefaultRoadWidth(RoadSurfaces[roadSurfaceIndex].Id);
             roadWire.DrawingHint = road == null
                 ? roadWire.Label + " · Click an existing endpoint to continue that road, or click open ground to start a road\n" +
                     "Click the first marker to close a loop · Enter to place · Esc to cancel · Backspace to undo"
                 : "Continue " + RoadSurfaces[FindRoadSurface(road.surfaceId)].Label +
-                    " · Click to add markers · Enter to finish · Esc to cancel · Backspace to undo";
+                    " · Click another road to connect, or press Enter to finish · Esc to cancel";
             roadWire.SetMessage(roadWire.DrawingHint);
             finishRoadButton.GetComponentInChildren<Text>().text = road == null ? "Place Road" : "Extend Road";
+        }
+
+        private bool TryStartRoadFromClick(Vector2 screen)
+        {
+            if (!CanPlaceRoad || roadContext || !TryRoadGround(screen, out var point)) return false;
+            var road = PickDistrictRoad(point);
+            if (road == null) return false;
+            StartRoadPlacement(FindRoadSurface(road.surfaceId));
+            if (!RoadPlacementArmed) return false;
+            if (!road.closed && FindRoadExtensionEnd(point, road.width * .5f + .6f, out bool prepend) == road)
+            {
+                preferredRoadExtension = road;
+                preferredRoadPrepend = prepend;
+                point = prepend ? road.points[0] : road.points[^1];
+            }
+            if (!roadWire.PlaceMarker(ClosestRoadPoint(road, point))) return false;
+            roadGestureStart = screen;
+            RefreshRoadPlacementHint(force: true);
+            return true;
+        }
+
+        private void CompleteRoadGesture(Event pointer)
+        {
+            if (pointer.type != EventType.MouseUp || pointer.button != 0 || !roadGestureStart.HasValue) return;
+            var start = roadGestureStart.Value;
+            roadGestureStart = null;
+            var end = new Vector2(pointer.mousePosition.x, Screen.height - pointer.mousePosition.y);
+            if ((end - start).sqrMagnitude < 64f || RoadContextOverUi(end) || !TryRoadGround(end, out var point)) return;
+            if (!roadWire.PlaceMarker(point)) return;
+            roadWire.CompletePath();
+            pointer.Use();
         }
 
         private Vector2 SnapRoadPlacementPoint(Vector2 point)
@@ -244,11 +327,8 @@ namespace CityForge.World
                 var road = FindRoadExtensionEnd(point, 1.25f, out bool prepend);
                 if (road != null) return prepend ? road.points[0] : road.points[^1];
             }
-            else if (FindRoadExtensionEnd(roadWire.Points[0], .001f, out _) != null)
-            {
-                return point;
-            }
-
+            var source = roadWire.Points.Count == 0 ? null : FindRoadExtensionEnd(roadWire.Points[0], .001f, out _);
+            if (TrySnapRoadJunction(point, out var junction, source)) return junction;
             if (!snapNewRoadsToTileCenters) return point;
             float origin = -MapSide * .5f;
             return new Vector2(TileCenter(point.x), TileCenter(point.y));
@@ -257,8 +337,151 @@ namespace CityForge.World
                 (Mathf.Floor((coordinate - origin) / DistrictGridCellMeters) + .5f) * DistrictGridCellMeters;
         }
 
+        private bool TryContinueFromRoadRun(IReadOnlyList<Vector2> points, out DistrictRoadRecord road,
+            out bool prepend, out Vector2[] tail)
+        {
+            road = PickDistrictRoad(points[0]);
+            prepend = false;
+            tail = null;
+            if (road == null || road.closed) return false;
+            var original = road.points;
+            var direction = (original[^1] - original[0]).normalized;
+            if (original.Any(point => Mathf.Abs(Vector2.Dot(point - original[0],
+                Vector2.Perpendicular(direction))) > .1f)) return false;
+            var outward = (points[1] - points[0]).normalized;
+            if (Mathf.Abs(Vector2.Dot(outward, direction)) < .98f) return false;
+            prepend = Vector2.Dot(outward, direction) < 0;
+            var endpoint = prepend ? road.points[0] : road.points[^1];
+            tail = new[] { endpoint }.Concat(points.Skip(1).SkipWhile(point =>
+                Vector2.Dot(point - endpoint, outward) < 1f)).ToArray();
+            return true;
+        }
+
+        private List<DistrictRoadRecord> UnpavedRoadPieces(DistrictRoadRecord proposal, DistrictRoadRecord exclude = null)
+        {
+            var existing = districtRoadMeshes.Keys.Where(road => road != exclude)
+                .Select(road => (Road: road, Line: RoadCenterline(road))).ToArray();
+            var pieces = new List<DistrictRoadRecord>();
+            var run = new List<Vector2>();
+            bool clipped = false;
+            int count = proposal.closed ? proposal.points.Length : proposal.points.Length - 1;
+            for (int i = 0; i < count; i++)
+            {
+                var start = proposal.points[i];
+                var end = proposal.points[(i + 1) % proposal.points.Length];
+                float length = Vector2.Distance(start, end);
+                if (length < .001f) continue;
+                var direction = (end - start) / length;
+                var normal = Vector2.Perpendicular(direction);
+                var covered = new List<(float Start, float End)>();
+                foreach (var (road, line) in existing)
+                {
+                    int segments = road.closed ? line.Count : line.Count - 1;
+                    for (int j = 0; j < segments; j++)
+                    {
+                        var a = line[j] - start;
+                        var b = line[(j + 1) % line.Count] - start;
+                        if (Mathf.Abs(Vector2.Dot((b - a).normalized, direction)) < .995f ||
+                            Mathf.Abs(Vector2.Dot(a, normal)) > road.width * .5f ||
+                            Mathf.Abs(Vector2.Dot(b, normal)) > road.width * .5f) continue;
+                        float x = Vector2.Dot(a, direction), y = Vector2.Dot(b, direction);
+                        float low = Mathf.Max(0f, Mathf.Min(x, y)), high = Mathf.Min(length, Mathf.Max(x, y));
+                        if (high - low > .025f) covered.Add((low, high));
+                    }
+                }
+                float cursor = 0f;
+                foreach (var (low, high) in covered.OrderBy(pair => pair.Start))
+                {
+                    clipped = true;
+                    if (low > cursor + .025f) AddSpan(cursor, low);
+                    FinishRun();
+                    cursor = Mathf.Max(cursor, high);
+                }
+                if (length > cursor + .025f) AddSpan(cursor, length);
+
+                void AddSpan(float from, float to)
+                {
+                    var a = start + direction * from;
+                    var b = start + direction * to;
+                    if (from > .025f && TrySnapRoadJunction(a, out var joinA)) a = joinA;
+                    if (to < length - .025f && TrySnapRoadJunction(b, out var joinB)) b = joinB;
+                    if (run.Count == 0) run.Add(a);
+                    run.Add(b);
+                }
+            }
+            if (!clipped) return new List<DistrictRoadRecord> { proposal };
+            FinishRun();
+            return pieces;
+
+            void FinishRun()
+            {
+                if (run.Count >= 2 && RoadGuideProblem(run, false, MapSide * .5f) == null)
+                    pieces.Add(new DistrictRoadRecord
+                    {
+                        district = proposal.district, surfaceId = proposal.surfaceId, width = proposal.width,
+                        points = run.ToArray(), curved = proposal.curved
+                    });
+                run.Clear();
+            }
+        }
+
+        private bool TrySnapRoadJunction(Vector2 point, out Vector2 junction, DistrictRoadRecord exclude = null)
+        {
+            junction = point;
+            bool found = false;
+            float best = float.PositiveInfinity;
+            foreach (var road in districtRoadMeshes.Keys)
+            {
+                if (road == exclude) continue;
+                var candidate = ClosestRoadPoint(road, point);
+                float distance = (point - candidate).sqrMagnitude;
+                float reach = road.width * .5f + .6f;
+                if (distance > reach * reach || distance >= best) continue;
+                junction = candidate;
+                best = distance;
+                found = true;
+            }
+            return found;
+        }
+
+        private Vector2[] NewRoadGuide(IReadOnlyList<Vector2> points, bool closed, int width, out bool aligned)
+        {
+            var result = points.ToArray();
+            bool joined = false;
+            if (!closed)
+            {
+                if (TrySnapRoadJunction(result[0], out var start)) { result[0] = start; joined = true; }
+                if (TrySnapRoadJunction(result[^1], out var end)) { result[^1] = end; joined = true; }
+                if (RoadGuideProblem(result, false, MapSide * .5f) != null)
+                {
+                    aligned = false;
+                    return points.ToArray();
+                }
+            }
+            if (snapNewRoadsToTileCenters && !joined)
+            {
+                var snapped = AlignRoadGuide(result, closed, width);
+                if (RoadGuideProblem(snapped, closed, MapSide * .5f) == null)
+                {
+                    aligned = true;
+                    return snapped;
+                }
+            }
+            aligned = false;
+            return result;
+        }
+
         private DistrictRoadRecord FindRoadExtensionEnd(Vector2 point, float radius, out bool prepend)
         {
+            if (preferredRoadExtension is { } preferred && districtRoadMeshes.ContainsKey(preferred))
+            {
+                var endpoint = preferredRoadPrepend ? preferred.points[0] : preferred.points[^1];
+                if ((endpoint - point).sqrMagnitude <= radius * radius)
+                {
+                    prepend = preferredRoadPrepend;
+                    return preferred;
+                }
+            }
             DistrictRoadRecord nearest = null;
             prepend = false;
             float best = radius * radius;
@@ -280,7 +503,7 @@ namespace CityForge.World
         {
             if (points.Count < 2) return points;
             var road = FindRoadExtensionEnd(points[0], .001f, out bool prepend);
-            if (road == null || !road.gridAligned) return points;
+            if (road == null) return NewRoadGuide(points, closed, DefaultRoadWidth(RoadSurfaces[roadSurfaceIndex].Id), out _);
             var combined = BuildRoadExtensionGuide(road, prepend, points);
             var preview = new Vector2[points.Count];
             for (int i = 0; i < preview.Length; i++)
@@ -297,23 +520,41 @@ namespace CityForge.World
             var interior = prepend ? road.points[1] : road.points[^2];
             var outgoing = points[1] - end;
             if (Vector2.Dot((interior - end).normalized, outgoing.normalized) > .995f)
+            {
+                if (TryContinueFromRoadRun(points, out var opposite, out bool atStart, out var tail) && opposite == road)
+                    return tail.Length < 2 ? null : ExtendDistrictRoad(road, atStart, tail, false);
                 return "Extend away from the endpoint to avoid doubling back over the road.";
-            return CommitRoadEdit(road, BuildRoadExtensionGuide(road, prepend, points), road.curved, road.gridAligned);
+            }
+            var guide = BuildRoadExtensionGuide(road, prepend, points);
+            int added = guide.Length - road.points.Length;
+            var extension = new DistrictRoadRecord
+            {
+                district = road.district, surfaceId = road.surfaceId, width = road.width, curved = road.curved,
+                points = prepend ? guide.Take(added + 1).ToArray() : guide.Skip(road.points.Length - 1).ToArray()
+            };
+            var pieces = UnpavedRoadPieces(extension, road);
+            if (pieces.Count != 1 || pieces[0] != extension) return CommitNewRoadPieces(pieces);
+            bool aligned = road.gridAligned && guide.Zip(guide.Skip(1), (a, b) =>
+                Mathf.Abs(a.x - b.x) < .001f || Mathf.Abs(a.y - b.y) < .001f).All(value => value);
+            return CommitRoadEdit(road, guide, road.curved, aligned, preserveGuide: true);
         }
 
         private Vector2[] BuildRoadExtensionGuide(DistrictRoadRecord road, bool prepend, IReadOnlyList<Vector2> points)
         {
-            var combined = new Vector2[road.points.Length + points.Count - 1];
-            int added = points.Count - 1;
-            Array.Copy(road.points, 0, combined, prepend ? added : 0, road.points.Length);
-            for (int i = 1; i < points.Count; i++)
-                combined[prepend ? added - i : road.points.Length + i - 1] = points[i];
-            if (!road.gridAligned) return combined;
-            // Establish existing runs first, even when adding to the beginning of the road.
-            if (prepend) Array.Reverse(combined);
-            var aligned = AlignRoadGuide(combined, false, road.width);
-            if (prepend) Array.Reverse(aligned);
-            return aligned;
+            var extension = points.ToArray();
+            if (road.gridAligned)
+            {
+                var aligned = AlignRoadGuide(extension, false, road.width);
+                if (RoadGuideProblem(aligned, false, MapSide * .5f) == null) extension = aligned;
+            }
+            // The saved endpoint and the destination junction take priority over grid alignment.
+            extension[0] = prepend ? road.points[0] : road.points[^1];
+            if (TrySnapRoadJunction(points[^1], out var junction, road))
+                extension[^1] = junction;
+
+            return prepend
+                ? extension.Skip(1).Reverse().Concat(road.points).ToArray()
+                : road.points.Concat(extension.Skip(1)).ToArray();
         }
 
         private string RoadSiteProblem(Mesh mesh)
@@ -340,7 +581,7 @@ namespace CityForge.World
 
         private Mesh BuildDistrictRoadMesh(DistrictRoadRecord record)
         {
-            var style = LotPathMaterial.Find(RoadSurfaces[FindRoadSurface(record.surfaceId)].Material);
+            var style = DistrictRoadStyle(record.surfaceId);
             var path = new LotPathDefinition
             {
                 points = record.points,
@@ -348,17 +589,30 @@ namespace CityForge.World
                 curved = record.curved,
                 width = record.width
             };
-            return LotPathSurface.BuildMesh(path, style.TileSize, RoadSurfaceLift, LotHeight);
+            float lift = HasSidewalks(record.surfaceId) ? MasonryPavingLift : RoadSurfaceLift;
+            var mesh = LotPathSurface.BuildMesh(path, style.TileSize, lift, LotHeight);
+            if (record.surfaceId == FoundersStreetId)
+            {
+                var ribbon = new List<Vector4>();
+                mesh.GetUVs(1, ribbon);
+                const float nominalRepeat = 4.5f;
+                float loopLength = record.closed && ribbon.Count > 0 ? -ribbon[0].w : 0f;
+                float repeat = loopLength > 0f ? loopLength / Mathf.Max(1, Mathf.RoundToInt(loopLength / nominalRepeat)) : nominalRepeat;
+                mesh.SetUVs(0, ribbon.ConvertAll(uv => new Vector2(uv.z / repeat, uv.x / uv.y)));
+                mesh.RecalculateTangents();
+            }
+            return mesh;
         }
 
         private void PresentDistrictRoad(DistrictRoadRecord record, Mesh mesh, int order)
         {
             if (!districtRoadMaterials.TryGetValue(record.surfaceId, out var material))
             {
-                material = LotPathMaterial.Find(RoadSurfaces[FindRoadSurface(record.surfaceId)].Material).CreateMaterial();
+                material = DistrictRoadStyle(record.surfaceId).CreateMaterial();
                 if (record.surfaceId == "blacktop")
                     material.SetColor("_BaseColor", new Color(.27f, .28f, .30f));
-                LotPathMaterial.ApplyEdgeTreatment(material, new LotPathDefinition { width = RoadWidth }, 8, 0);
+                if (!HasSidewalks(record.surfaceId))
+                    LotPathMaterial.ApplyEdgeTreatment(material, new LotPathDefinition { width = RoadWidth }, 8, 0);
                 if (record.surfaceId == "dirt" && material.HasProperty("_RoadWearMap"))
                 {
                     const string folder = "Lots/PathMaterials/";
@@ -373,17 +627,20 @@ namespace CityForge.World
                         material.EnableKeyword("_ROAD_WEAR");
                     }
                 }
-                if (record.surfaceId == "wagon" && material.HasProperty("_WagonMask"))
+                if (record.surfaceId is "wagon" or FoundersStreetId)
                 {
                     var albedo = Resources.Load<Texture2D>("Lots/PathMaterials/WagonRoadAlbedo");
                     var mask = Resources.Load<Texture2D>("Lots/PathMaterials/WagonRoadMask");
-                    if (albedo && mask)
+                    if (albedo && (record.surfaceId == FoundersStreetId || mask && material.HasProperty("_WagonMask")))
                     {
                         material.SetTexture("_BaseMap", albedo);
-                        material.SetTexture("_WagonMask", mask);
                         material.SetColor("_BaseColor", new Color(.83f, .78f, .72f, 1f));
                         material.SetFloat("_Smoothness", .03f);
-                        material.EnableKeyword("_WAGON_SURFACE");
+                        if (record.surfaceId == "wagon")
+                        {
+                            material.SetTexture("_WagonMask", mask);
+                            material.EnableKeyword("_WAGON_SURFACE");
+                        }
                     }
                 }
                 districtRoadMaterials.Add(record.surfaceId, material);
@@ -402,6 +659,7 @@ namespace CityForge.World
             var renderer = road.GetComponent<MeshRenderer>();
             renderer.sharedMaterial = material;
             renderer.sortingOrder = order;
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             renderer.enabled = !showRoadPaths;
             if (showRoadPaths) RefreshRoadPathGuide(record);
             roadPresentationAssets.Add(mesh);
@@ -418,6 +676,7 @@ namespace CityForge.World
                 if (active.Contains(road.district)) PresentDistrictRoad(road, BuildDistrictRoadMesh(road), i);
             }
             RefreshRoadShoulderDetails();
+            RefreshDirtRoadEndFades();
             RefreshDirtJunctionWear();
         }
 
@@ -426,7 +685,7 @@ namespace CityForge.World
             foreach (var pair in districtRoadMeshes)
             {
                 var road = pair.Key;
-                if (road.surfaceId != "dirt" || road.closed) continue;
+                if (road.closed) continue;
                 var renderer = pair.Value.GetComponent<MeshRenderer>();
                 dirtEndProperties ??= new MaterialPropertyBlock();
                 renderer.GetPropertyBlock(dirtEndProperties);
@@ -453,12 +712,73 @@ namespace CityForge.World
 
         private void RefreshRoadShoulderDetails()
         {
+            pedestrianRoutesDirty = true;
             if (ApprovedDistrict) ApprovedDistrict.RefreshRoadShoulders(districtRoads);
+            RefreshDistrictSidewalks();
+        }
+
+        private void RefreshDistrictSidewalks()
+        {
+            ClearDistrictSidewalks();
+            if (!districtRoadRoot) return;
+            var roads = districtRoadMeshes.Keys.Where(road => HasSidewalks(road.surfaceId)).ToArray();
+            if (roads.Length == 0) return;
+            districtSidewalkRoot = new GameObject("District sidewalks").transform;
+            districtSidewalkRoot.SetParent(districtRoadRoot, false);
+            var materials = new Dictionary<string, Material>();
+            foreach (var road in roads)
+            {
+                bool plank = road.surfaceId == FoundersStreetId;
+                string styleId = plank ? LotPathMaterial.Plankboard : LotPathMaterial.Bluestone;
+                var style = LotPathMaterial.Find(styleId);
+                if (!materials.TryGetValue(styleId, out var material))
+                {
+                    material = style.CreateMaterial();
+                    materials.Add(styleId, material);
+                    sidewalkAssets.Add(material);
+                }
+                const int width = LotPathSurface.ResidentialSidewalkWidth;
+                for (int side = -1; side <= 1; side += 2)
+                {
+                    var path = new LotPathDefinition { points = road.points, width = road.width, closed = road.closed, curved = road.curved };
+                    // Use the same cross sections as the pavement so the inner sidewalk edge cannot curl over it.
+                    var mesh = LotPathSurface.BuildMesh(path, style.TileSize, SidewalkLift, LotHeight,
+                        shoulderSide: side, shoulderWidth: width);
+                    if (plank)
+                    {
+                        var ribbon = new List<Vector4>();
+                        mesh.GetUVs(1, ribbon);
+                        mesh.SetUVs(0, ribbon.ConvertAll(uv => new Vector2(uv.x / uv.y, uv.z / style.TileSize.y)));
+                        mesh.RecalculateTangents();
+                    }
+                    var walk = new GameObject(plank ? "Plank sidewalk" : "Bluestone sidewalk", typeof(MeshFilter), typeof(MeshRenderer));
+                    walk.transform.SetParent(districtSidewalkRoot, false);
+                    walk.GetComponent<MeshFilter>().sharedMesh = mesh;
+                    var renderer = walk.GetComponent<MeshRenderer>();
+                    renderer.sharedMaterial = material;
+                    renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                    sidewalkAssets.Add(mesh);
+                }
+            }
+
+        }
+
+        private void ClearDistrictSidewalks()
+        {
+            if (districtSidewalkRoot)
+            {
+                districtSidewalkRoot.gameObject.SetActive(false);
+                Destroy(districtSidewalkRoot.gameObject);
+                districtSidewalkRoot = null;
+            }
+            foreach (var asset in sidewalkAssets) Destroy(asset);
+            sidewalkAssets.Clear();
         }
 
         private void ClearDistrictRoadPresentation()
         {
             ClearRoadPathGuides();
+            ClearDistrictSidewalks();
             if (districtRoadRoot)
             {
                 districtRoadRoot.gameObject.SetActive(false);

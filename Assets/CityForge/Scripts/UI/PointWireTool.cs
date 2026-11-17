@@ -24,6 +24,7 @@ namespace CityForge.UI
         public event Action<bool> ProcessingChanged;
         RegionLoadingOverlay completionOverlay;bool acceptingCompletion;
         public Func<Vector2,Vector2> SnapPoint;
+        public Func<Vector2,bool> FinishOpenAtMarker;
         internal event Action<Vector2?> StartPointHovered;
         public Func<IReadOnlyList<Vector2>, bool, IReadOnlyList<Vector2>> ProjectGuide;
         public string DrawingHint;
@@ -180,7 +181,9 @@ namespace CityForge.UI
                 BuildGuide(preview, ProjectGuide(guide, snap), snap);
             }
             else if(points.Count>0){Segment(preview,points[points.Count-1],p);preview.Add(Ground(p));}
-            if (!waitRelease && Input.GetMouseButtonDown(0)) AddMarker(p, snap);
+            if (!waitRelease && Input.GetMouseButtonDown(0) && AddMarker(p, snap) &&
+                !snap && OpenPath && points.Count >= 2 && FinishOpenAtMarker?.Invoke(p) == true)
+                CompletePath();
             if (StartPointHovered != null)
                 StartPointHovered(points.Count == 0 && surface.Contains(p) ? p : (Vector2?)null);
         }

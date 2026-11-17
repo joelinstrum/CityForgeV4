@@ -17,6 +17,7 @@ namespace CityForge.World
         private DistrictRoadRecord detonateHoverRoad;
         private readonly HashSet<DistrictLotRecord> detonateLots = new();
         private readonly HashSet<DistrictRoadRecord> detonateRoads = new();
+        private readonly Dictionary<DistrictRoadRecord, List<DistrictRoadRecord>> roadRuns = new();
 
         private bool CanDetonate => TownConstructionVisible && CanBuildTown && !IsSaving &&
             !RemakeBlocksInput && !playerLotWorkspace && !founderPicker && !transportModal;
@@ -69,6 +70,8 @@ namespace CityForge.World
                 SelectDistrictLot(null);
             }
             detonateArmed = armed;
+            roadRuns.Clear();
+            if (armed) BuildDetonateRoadRuns();
             ClearDetonateStroke();
             if (!detonateButton) return;
             MarkTownButton(detonateButton, armed);
@@ -138,7 +141,7 @@ namespace CityForge.World
         {
             var (lot, road) = DetonateTarget(screen);
             if (lot != null) detonateLots.Add(lot);
-            if (road != null) detonateRoads.Add(road);
+            if (road != null && detonateRoads.Count == 0) detonateRoads.Add(road);
         }
 
         private (DistrictLotRecord Lot, DistrictRoadRecord Road) DetonateTarget(Vector2 screen)
@@ -148,7 +151,10 @@ namespace CityForge.World
             if (!camera) return default;
             var lot = PickDistrictLot(camera.ScreenPointToRay(screen));
             if (lot != null) return (lot, null);
-            return (null, RoadTerrain && TryRoadGround(screen, out var point) ? PickDistrictRoad(point) : null);
+            if (!RoadTerrain || !TryRoadGround(screen, out var point)) return default;
+            var road = PickDistrictRoad(point);
+            if (road == null || !roadRuns.TryGetValue(road, out var runs)) return default;
+            return (null, runs.OrderBy(run => (ClosestRoadPoint(run, point) - point).sqrMagnitude).FirstOrDefault());
         }
 
         private void RefreshDetonatePreview()
@@ -210,15 +216,124 @@ namespace CityForge.World
             }
         }
 
+        private void BuildDetonateRoadRuns()
+        {
+            roadRuns.Clear();
+            var roads = districtRoadMeshes.Keys.ToDictionary(road => road, RoadCenterline);
+            foreach (var road in roads.Keys)
+            {
+                var runs = new List<DistrictRoadRecord>();
+                int count = road.points.Length;
+                int segments = road.closed ? count : count - 1;
+                var current = new List<Vector2> { road.points[0] };
+                bool firstIsTurn = false;
+                for (int i = 0; i < segments; i++)
+                {
+                    Vector2 start = road.points[i], end = road.points[(i + 1) % count];
+                    var cuts = new SortedSet<float>();
+                    foreach (var (other, line) in roads)
+                    {
+                        if (other == road) continue;
+                        int length = other.closed ? line.Count : line.Count - 1;
+                        for (int j = 0; j < length; j++)
+                        {
+                            Vector2 delta = end - start, across = line[(j + 1) % line.Count] - line[j];
+                            Vector2 offset = line[j] - start;
+                            float cross = Cross(delta, across);
+                            if (Mathf.Abs(cross) < .0001f) continue;
+                            float t = Cross(offset, across) / cross;
+                            float u = Cross(offset, delta) / cross;
+                            if (u >= -.001f && u <= 1.001f && t >= -.001f && t <= 1.001f)
+                                cuts.Add(Mathf.Clamp01(t));
+                        }
+                    }
+
+                    foreach (float t in cuts)
+                    {
+                        var cut = Vector2.Lerp(start, end, t);
+                        if ((cut - current[^1]).sqrMagnitude >= 1f && (cut - end).sqrMagnitude >= 1f)
+                        {
+                            current.Add(cut);
+                            FinishRun();
+                        }
+                    }
+
+                    current.Add(end);
+                    var next = road.points[(i + 2) % count];
+                    bool turn = Vector2.Dot((end - start).normalized, (next - end).normalized) < .995f;
+                    if (i == segments - 1 && road.closed) firstIsTurn = turn || cuts.Contains(1f);
+                    if (turn || cuts.Contains(1f) || i == segments - 1) FinishRun();
+                }
+                if (road.closed && !firstIsTurn && runs.Count > 1)
+                {
+                    var first = runs[0];
+                    first.points = runs[^1].points.Concat(first.points.Skip(1)).ToArray();
+                    runs.RemoveAt(runs.Count - 1);
+                }
+                roadRuns.Add(road, runs);
+
+                void FinishRun()
+                {
+                    if (current.Count < 2) return;
+                    runs.Add(new DistrictRoadRecord
+                    {
+                        district = road.district, surfaceId = road.surfaceId, width = road.width,
+                        gridAligned = road.gridAligned, points = current.ToArray()
+                    });
+                    current = new List<Vector2> { current[^1] };
+                }
+            }
+
+            static float Cross(Vector2 a, Vector2 b) => a.x * b.y - a.y * b.x;
+        }
+
+        private int RemoveDetonatedRoadRun()
+        {
+            foreach (var (road, runs) in roadRuns)
+            {
+                int selected = runs.FindIndex(detonateRoads.Contains);
+                if (selected < 0) continue;
+                var remaining = road.closed
+                    ? new[] { Join(runs.Skip(selected + 1).Concat(runs.Take(selected))) }
+                    : new[] { Join(runs.Take(selected)), Join(runs.Skip(selected + 1)) };
+                var replacements = remaining.Where(piece => piece != null).ToArray();
+                if (districtRoads.Count - 1 + replacements.Length > MaxDistrictRoads ||
+                    replacements.Any(piece => RoadGuideProblem(piece.points, false, MapSide * .5f) != null))
+                {
+                    ShowDistrictMessage("This road section cannot be separated from the remaining road.");
+                    return 0;
+                }
+                int index = districtRoads.IndexOf(road);
+                districtRoads.RemoveAt(index);
+                districtRoads.InsertRange(index, replacements);
+                undoRoadEdits.RemoveAll(edit => edit.Road == road);
+                redoRoadEdits.RemoveAll(edit => edit.Road == road);
+                return 1;
+
+                DistrictRoadRecord Join(IEnumerable<DistrictRoadRecord> pieces)
+                {
+                    var points = new List<Vector2>();
+                    foreach (var piece in pieces)
+                        points.AddRange(points.Count == 0 ? piece.points : piece.points.Skip(1));
+                    return points.Count < 2 ? null : new DistrictRoadRecord
+                    {
+                        district = road.district, surfaceId = road.surfaceId, width = road.width,
+                        gridAligned = road.gridAligned, curved = road.curved, points = points.ToArray()
+                    };
+                }
+            }
+            return 0;
+        }
+
         private void CommitDetonateStroke()
         {
             int lots = PlacedLots.RemoveAll(detonateLots.Contains);
-            int roads = districtRoads.RemoveAll(detonateRoads.Contains);
+            int roads = RemoveDetonatedRoadRun();
             if (roads > 0)
             {
-                undoRoadEdits.RemoveAll(edit => detonateRoads.Contains(edit.Road));
-                redoRoadEdits.RemoveAll(edit => detonateRoads.Contains(edit.Road));
                 RebuildDistrictRoads();
+                BuildDetonateRoadRuns();
+                QueueLotGrowth();
             }
             if (lots > 0)
             {

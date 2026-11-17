@@ -25,7 +25,7 @@ namespace CityForge.World
         private bool clockPaused;
         private Toggle clockPauseToggle;
         private RectTransform clockFace, clockHand;
-        private static readonly float[] ClockHours = { 6f, 12f, 15f, 18f, 20f };
+        private static readonly float[] ClockHours = { 6f, 12f, 15f, 20f, 22f };
         private Transform clockRegionSun;
         private Dropdown daylightPicker;
         private Dropdown afternoonShadowPicker;
@@ -263,7 +263,7 @@ namespace CityForge.World
             {
                 if (!clockRegionSun) clockRegionSun = transform.Find("RegionSun");
                 if (clockRegionSun)
-                    clockRegionSun.rotation = BlendSunRotation(TimeOfDay, SunRotation(TimeOfDay, 32f), SunRotation(next, 32f), phaseProgress);
+                    clockRegionSun.rotation = BlendSunRotation(TimeOfDay, SunRotation(HeldDaylight(TimeOfDay), 32f), SunRotation(next, 32f), phaseProgress);
             }
         }
 
@@ -273,6 +273,11 @@ namespace CityForge.World
             RegionTimeOfDay.Night => 4f,
             _ => 1f
         };
+
+        internal static RegionTimeOfDay HeldDaylight(RegionTimeOfDay phase) =>
+            phase == RegionTimeOfDay.Afternoon ? RegionTimeOfDay.Noon : phase;
+
+        internal static float LateAfternoonProgress(float progress) => Mathf.InverseLerp(.8f, 1f, progress);
 
         internal static float MorningLightingProgress(float progress) => 1f - Mathf.Pow(1f - progress, 3f);
 
@@ -332,11 +337,12 @@ namespace CityForge.World
                 ApprovedDistrict.ApplyDistrictDaylight(TimeOfDay);
                 return;
             }
+            var lighting = HeldDaylight(TimeOfDay);
             var sun = transform.Find("RegionSun");
-            if (sun) ApplySun(sun.GetComponent<Light>(), TimeOfDay, Quaternion.Euler(32f, 205f, 0f),
+            if (sun) ApplySun(sun.GetComponent<Light>(), lighting, Quaternion.Euler(32f, 205f, 0f),
                 RegionSunIntensity * DistrictSunScale, new Color(1f, .94f, .82f));
             ApplyAmbient(LotDaylightProbe(), new Color(.32f, .38f, .46f), new Color(.22f, .245f, .25f),
-                new Color(.105f, .095f, .08f), 1f, TimeOfDay);
+                new Color(.105f, .095f, .08f), 1f, lighting);
         }
 
         private const float NoonElevation = 55f;
@@ -373,6 +379,14 @@ namespace CityForge.World
 
         internal static Quaternion BlendSunRotation(RegionTimeOfDay phase, Quaternion from, Quaternion to, float progress)
         {
+            if (phase == RegionTimeOfDay.Noon) return from;
+            if (phase == RegionTimeOfDay.Afternoon)
+            {
+                var late = Quaternion.Slerp(from, to, .52f);
+                return progress < .8f
+                    ? Quaternion.Slerp(from, late, Mathf.SmoothStep(0f, 1f, progress / .8f))
+                    : Quaternion.Slerp(late, to, Mathf.SmoothStep(0f, 1f, LateAfternoonProgress(progress)));
+            }
             if (phase != RegionTimeOfDay.Morning)
                 return Quaternion.Slerp(from, to, Mathf.SmoothStep(0f, 1f, progress));
 
@@ -486,7 +500,7 @@ namespace CityForge.World
 
         internal float DistrictAmbientScale => (CalibratedAfternoon || UseBalancedNoon(View.TimeOfDay)) ? View.AfternoonAmbient : 1f;
         internal Color DistrictAmbientTint => CalibratedAfternoon || UseBalancedNoon(View.TimeOfDay)
-            ? PrototypeRegionView.CalibratedAmbientTint(View.TimeOfDay) : Color.white;
+            ? PrototypeRegionView.CalibratedAmbientTint(PrototypeRegionView.HeldDaylight(View.TimeOfDay)) : Color.white;
 
         private void BuildAfternoonCalibrationVolume()
         {
@@ -511,13 +525,13 @@ namespace CityForge.World
             if (!afternoonCalibrationVolume) return;
             afternoonCalibrationVolume.weight = 1f;
             afternoonCalibrationVolume.enabled = CalibratedAfternoon || UseBalancedNoon(View.TimeOfDay);
-            PrototypeRegionView.ApplyCalibratedGrade(afternoonColor, View.TimeOfDay, View.AfternoonExposure, LinearAfternoon);
+            PrototypeRegionView.ApplyCalibratedGrade(afternoonColor, PrototypeRegionView.HeldDaylight(View.TimeOfDay), View.AfternoonExposure, LinearAfternoon);
         }
 
         private readonly List<(Light light, Quaternion rotation, float intensity, Color color, bool pipelineBias, float depthBias, float normalBias)> districtSuns = new();
 
         private bool UseBalancedNoon(RegionTimeOfDay time) =>
-            time == RegionTimeOfDay.Noon && !IsRegionOverview;
+            PrototypeRegionView.HeldDaylight(time) == RegionTimeOfDay.Noon && !IsRegionOverview;
 
         internal void InterpolateDistrictSun(RegionTimeOfDay current, RegionTimeOfDay next, float progress)
         {
@@ -530,9 +544,11 @@ namespace CityForge.World
                 afternoonCalibrationVolume.weight = morningBlend;
                 PrototypeRegionView.ApplyCalibratedGrade(afternoonColor, next, View.AfternoonExposure, linear);
             }
+            if (current == RegionTimeOfDay.Afternoon && afternoonCalibrationVolume)
+                afternoonCalibrationVolume.weight = 1f - Mathf.SmoothStep(0f, 1f, PrototypeRegionView.LateAfternoonProgress(progress));
             foreach (var sun in districtSuns)
             {
-                var from = Rotation(current, sun.rotation.eulerAngles.x);
+                var from = Rotation(PrototypeRegionView.HeldDaylight(current), sun.rotation.eulerAngles.x);
                 var to = Rotation(next, sun.rotation.eulerAngles.x);
                 sun.light.transform.rotation = PrototypeRegionView.BlendSunRotation(current, from, to, progress);
                 if (morning)
@@ -545,13 +561,9 @@ namespace CityForge.World
                 else if (current is RegionTimeOfDay.Afternoon or RegionTimeOfDay.Evening)
                 {
                     bool afternoon = current == RegionTimeOfDay.Afternoon;
-                    float fromIntensity = afternoon ? (View.AfternoonCalibrationEnabled ? View.AfternoonSunlight : 1f) : .58f;
-                    var fromColor = afternoon
-                        ? (View.AfternoonCalibrationEnabled
-                            ? (linear ? new Color(1f, .927f, .8058f) : new Color(1f, .97f, .90f))
-                            : View.UseRefinedAfternoon ? new Color(sun.color.r, sun.color.g * .985f, sun.color.b * .955f) : sun.color)
-                        : new Color(.80f, .88f, 1f);
-                    float blend = Mathf.SmoothStep(0f, 1f, progress);
+                    float fromIntensity = afternoon ? View.AfternoonSunlight * (linear ? .70f : .76f) : .58f;
+                    var fromColor = afternoon ? new Color(1f, .99f, .965f) : new Color(.80f, .88f, 1f);
+                    float blend = Mathf.SmoothStep(0f, 1f, afternoon ? PrototypeRegionView.LateAfternoonProgress(progress) : progress);
                     sun.light.intensity = sun.intensity * Mathf.Lerp(fromIntensity, afternoon ? .58f : .35f, blend);
                     sun.light.color = Color.Lerp(fromColor,
                         afternoon ? new Color(.80f, .88f, 1f) : new Color(.71f, .81f, 1f), blend);
@@ -569,8 +581,8 @@ namespace CityForge.World
 
         internal void ApplyDistrictSun()
         {
-            var time = View.TimeOfDay;
-            bool refined = !IsRegionOverview && View.UseRefinedAfternoon;
+            var time = PrototypeRegionView.HeldDaylight(View.TimeOfDay);
+            bool refined = !IsRegionOverview && time == RegionTimeOfDay.Afternoon && View.UseRefinedAfternoon;
             bool balanced = UseBalancedNoon(time);
             if (settingsApplied && !IsRegionOverview)
                 Shader.SetGlobalFloat(FoliageShadowCutout,
@@ -604,7 +616,7 @@ namespace CityForge.World
             for (int coefficient = 0; coefficient < 9; coefficient++)
                 irradiance[channel, coefficient] = Baseline.ambientSH[channel * 9 + coefficient] * (channel == 2 ? 1.28f : 1.20f);
             PrototypeRegionView.ApplyAmbient(irradiance, Baseline.ambientSky, Baseline.ambientEquator,
-                Baseline.ambientGround, Baseline.ambientIntensity * 1.20f, time, DistrictAmbientScale, DistrictAmbientTint);
+                Baseline.ambientGround, Baseline.ambientIntensity * 1.20f, PrototypeRegionView.HeldDaylight(time), DistrictAmbientScale, DistrictAmbientTint);
             if (LinearAfternoon)
                 RenderSettings.ambientProbe = AddAfternoonSkyFill(RenderSettings.ambientProbe);
         }

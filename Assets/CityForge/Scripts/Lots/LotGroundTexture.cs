@@ -134,24 +134,40 @@ namespace CityForge.Lots
             new LotGroundTexture("", "Clear All Overlays", "", Color.clear),
             new LotGroundTexture("tileable-grass", "Tileable Grass", "Lots/GroundTextures/tileable-grass", Color.clear),
             new LotGroundTexture("worn-sidewalk", "Worn Sidewalk", "Lots/GroundTextures/worn-sidewalk", Color.clear),
-            new LotGroundTexture("brick-walkway", "Brick Walkway", "Lots/GroundTextures/brick-walkway", Color.clear)
+            new LotGroundTexture("brick-walkway", "Brick Walkway", "Lots/GroundTextures/brick-walkway", Color.clear),
+            new LotGroundTexture("weathered-red-brick-herringbone", "Weathered Red Brick Herringbone",
+                "Lots/PathMaterials/weathered-red-brick-herringbone", Color.clear, requiresTexture: true),
+            new LotGroundTexture("english-garden-flagstones", "English Garden Flagstones",
+                "Lots/PathMaterials/english-garden-flagstones", Color.clear, requiresTexture: true),
+            new LotGroundTexture("english-garden-brick-medallion", "English Garden Brick Medallion",
+                "Lots/PathMaterials/english-garden-brick-medallion", Color.clear, requiresTexture: true),
+            new LotGroundTexture("gray-diamond-stonework", "Gray Diamond Stonework",
+                "Lots/PathMaterials/gray-diamond-stonework", Color.clear, requiresTexture: true),
+            new LotGroundTexture("interlocking-brick-and-stone", "Interlocking Brick and Stone",
+                "Lots/PathMaterials/interlocking-brick-and-stone", Color.clear, requiresTexture: true),
+            new LotGroundTexture("weathered-brick-and-stone-mosaic", "Weathered Brick and Stone Mosaic",
+                "Lots/PathMaterials/weathered-brick-and-stone-mosaic", Color.clear, requiresTexture: true)
         };
 
         public readonly string Id, Label;
         public readonly Color Fallback;
         public readonly int DefaultSpan;
         private readonly string resource;
+        private readonly bool requiresTexture;
 
-        private LotGroundTexture(string id, string label, string resource, Color fallback, int defaultSpan = 1)
+        private LotGroundTexture(string id, string label, string resource, Color fallback, int defaultSpan = 1,
+            bool requiresTexture = false)
         {
             Id = id;
             Label = label;
             this.resource = resource;
             Fallback = fallback;
             DefaultSpan = defaultSpan;
+            this.requiresTexture = requiresTexture;
         }
 
         public Texture2D Texture => resource.Length == 0 ? null : Resources.Load<Texture2D>(resource);
+        public bool IsAvailable => !requiresTexture || Texture;
         public static LotGroundTexture Find(bool overlay, string id) =>
             Array.Find(overlay ? Overlay : Base, entry => entry.Id == (id ?? ""));
         internal const float RepeatMeters = 8f;

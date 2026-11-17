@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using CityForge.Lots;
@@ -18,6 +19,9 @@ internal static class LotCatalogSetup
     [MenuItem("CityForge/Lots/Prepare local catalog")]
     private static void EnsureCatalog()
     {
+        foreach (var profile in VehicleProfile.All.Where(profile => !string.IsNullOrEmpty(profile.motionFolder))
+            .GroupBy(profile => profile.motionFolder).Select(group => group.First()))
+            EnsureVehicleMotion(profile);
         const string meadow = "Assets/CityForge/Art/Environment/MeadowNativeURP/";
         const string resources = "Assets/CityForge/Resources/";
         var house = AssetDatabase.LoadAssetAtPath<GameObject>(meadow +
@@ -34,8 +38,9 @@ internal static class LotCatalogSetup
         var candidates = new[]
         {
             farmhouse,
-            LotVehicle("ford-model-t", "Ford Model T", "ModelT", "machine", 3.4f, ".png"),
-            LotVehicle("rolls-royce-1926", "1926 Rolls-Royce", "RollsRoyce", "modern", 4.7f, ".jpeg"),
+            HitchedHorse(),
+            HorseDrawnVehicle("covered-wagon", "Horse-drawn covered wagon", "CoveredWagon", 2.7773728f, 2.45f, 2),
+            HorseDrawnVehicle("food-wagon", "Horse-drawn food wagon", "FoodWagon", 2.301941f, 2.02f),
             HorseDrawnVehicle("horse-and-buggy", "Horse and buggy", "Buggy", 2.644676f, 2.05f),
             HorseDrawnVehicle("lumber-wagon", "Horse-drawn lumber wagon", "LumberWagon", 2.4001557f, 2.12f),
             FoundersBuilding("timber-council-hall", "Timber Council Hall", "TimberCouncilHall", 12f),
@@ -85,7 +90,23 @@ internal static class LotCatalogSetup
                 "LowWealthFrontGableCottage", span: 7.5f, normalExtension: ".jpg"),
             FoundersHome("low-wealth-side-gable", "Side Gable House", "LowWealthSideGable"),
             V3Building("wooden-cottage", "Wooden Cottage", "WoodenCottage", "residential", "founders", 8f),
-            V3Building("plymouth-store", "Plymouth Store", "PlymouthStore", "commercial", "founders", 9.26f, ".jpeg", ".jpeg"),
+            FoundersShop("plymouth-store", "Plymouth Store", "PlymouthStore", 9.26f, ".jpeg"),
+            FoundersShop("founders-bakery", "Bakery", "FoundersBakery", 8f),
+            FoundersShop("founders-blacksmith", "Blacksmith", "FoundersBlacksmith", 8f),
+            FoundersShop("founders-cooperage", "Cooperage", "FoundersOldBarn", 8.5f),
+            FoundersShop("founders-tavern", "Tavern", "FoundersTavern", 9f),
+            FoundersShop("founders-shop-blacksmith-2", "Blacksmith (False Front)", "FoundersBlacksmithTwo", 8.5f),
+            FoundersShop("founders-shop-bootmaker", "Boot & Shoe Maker", "FoundersBootmaker", 6.5f),
+            FoundersShop("founders-shop-apothecary", "Apothecary", "FoundersApothecary", 7.5f),
+            FoundersShop("founders-shop-general-store", "General Store", "FoundersGeneralStoreTwo", 8.6f),
+            FoundersShop("founders-shop-hardware", "Hardware Store", "FoundersHardware", 9f),
+            FoundersShop("founders-shop-livery", "Livery Stable", "FoundersLivery", 9f),
+            FoundersShop("founders-shop-printing", "Printing Office", "FoundersPrintingOffice", 8f),
+            FoundersShop("founders-shop-saloon", "Saloon", "FoundersSaloonTwo", 8.6f),
+            FoundersShop("founders-shop-wagon-works", "Wagon Works", "FoundersWagonWorks", 9.2f),
+            FoundersShop("founders-shop-right-corner-cooperage", "Right Corner · Cooperage", "FoundersRightCornerCooperage", 7.3323f),
+            FoundersShop("founders-shop-right-corner-dry-goods", "Right Corner · Dry Goods", "FoundersRightCornerDryGoods", 7.8836f),
+            FoundersShop("founders-shop-right-corner-inn", "Right Corner · Inn", "FoundersRightCornerInn", 8.6f),
             V3Building("small-school", "Small School", "SmallSchool", "civics", "founders", 9f, ".jpg", ".png"),
             V3Building("lumber-mill", "Lumber Mill", "LumberMill", "industrial", "industrial", 11.95f),
             V3Building("queen-anne-house", "Queen Anne House", "QueenAnneHouse", "residential", "victorian", 12f),
@@ -107,7 +128,7 @@ internal static class LotCatalogSetup
                 "CF_Prop_OrnateIronGate_v01", "gate-", 2.2f, byHeight: true, extension: ".jpg"),
             StreetFurniture("ornate-bench", "Ornate park bench", "Seating", 1.8f),
             StreetFurniture("simple-street-lamppost", "Simple street lamppost", "Lighting", 3.6f, byHeight: true),
-            StreetFurniture("three-lantern-lamppost", "Three-lantern lamppost", "Lighting", .9f),
+            StreetFurniture("three-lantern-lamppost", "Three-lantern lamppost", "Lighting", 4.5f, byHeight: true),
             // The district Streetscape picker also reads these shared catalog entries.
             StreetFurniture("18th-century-lamppost", "18th-century lamppost", "Lighting", 3.6f, byHeight: true),
             V3Fence("founders-fence-panel", "Founders fence panel", "FoundersFence",
@@ -165,7 +186,7 @@ internal static class LotCatalogSetup
         var catalog = AssetDatabase.LoadAssetAtPath<LotAssetCatalog>(CatalogPath);
         var entries = (catalog ? catalog.entries : System.Array.Empty<LotAssetCatalogEntry>()).ToList();
         bool changed = false;
-        foreach (var entry in candidates.Concat(PlaceableSeasonalTrees.CatalogEntries()).Concat(foundersHomes).Concat(mediumHomes).Concat(meadowPoplars).Concat(Characters()).Concat(Landscaping()).Concat(Corn()).Concat(Wheat()).Where(item => item.prefab))
+        foreach (var entry in candidates.Concat(ConfiguredVehicles()).Concat(PlaceableSeasonalTrees.CatalogEntries()).Concat(foundersHomes).Concat(mediumHomes).Concat(meadowPoplars).Concat(Characters()).Concat(Landscaping()).Concat(Corn()).Concat(Wheat()).Where(item => item.prefab))
         {
             if (entry.category != "Buildings" && !entry.IsCharacter)
                 entry.distantPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(
@@ -192,10 +213,13 @@ internal static class LotCatalogSetup
                 existing.footprint = entry.footprint;
                 changed = true;
             }
-            else if (((entry.category == "Landscaping" && entry.group == "Agriculture") ||
+            else if (((entry.category == "Landscaping" && (entry.group == "Agriculture" || entry.id == "boxwood-curved-02")) ||
+                      (entry.category == LotAssetCatalog.StreetFurniture && entry.group == "Lighting") ||
                       entry.id.StartsWith("v3-building-medium-wealth-home-", System.StringComparison.Ordinal) ||
                       entry.id is "v3-building-low-wealth-vertical-siding-front-gable" or
-                          "v3-building-low-wealth-front-gable-cottage") &&
+                          "v3-building-low-wealth-front-gable-cottage" or
+                          "v3-building-founders-shop-right-corner-cooperage" or
+                          "v3-building-founders-shop-right-corner-dry-goods") &&
                 (existing.prefab != entry.prefab || existing.footprint != entry.footprint ||
                  existing.materialOverride != entry.materialOverride))
             {
@@ -351,6 +375,12 @@ internal static class LotCatalogSetup
         return home;
     }
 
+    private static IEnumerable<LotAssetCatalogEntry> ConfiguredVehicles() => VehicleProfile.All
+        .Where(profile => !string.IsNullOrEmpty(profile.modelFolder) && profile.length > 0 &&
+            profile.assetId.StartsWith("v3-vehicle-", System.StringComparison.Ordinal))
+        .Select(profile => LotVehicle(profile.assetId.Substring("v3-vehicle-".Length), profile.label,
+            profile.modelFolder, profile.EraIds().FirstOrDefault(), profile.length, profile.colorExtension ?? ".jpg"));
+
     private static LotAssetCatalogEntry LotVehicle(string id, string label, string folder, string era,
         float length, string colorExtension = ".jpg")
     {
@@ -360,7 +390,7 @@ internal static class LotCatalogSetup
         return entry;
     }
 
-    private static LotAssetCatalogEntry HorseDrawnVehicle(string id, string label, string folder, float height, float hitch)
+    private static LotAssetCatalogEntry HorseDrawnVehicle(string id, string label, string folder, float height, float hitch, int horseCount = 1)
     {
         var wagon = LotVehicle(id, label, folder, "founders", 1f);
         var horse = LotVehicle("horse", "Horse", "Horse", "founders", 1f);
@@ -373,17 +403,18 @@ internal static class LotCatalogSetup
             try
             {
                 AddModel(wagon, height, -hitch);
-                AddModel(horse, 1.75f, 0f);
+                for (int i = 0; i < horseCount; i++)
+                    AddModel(horse, 1.75f, 0f, i - (horseCount - 1) * .5f);
                 team = PrefabUtility.SaveAsPrefabAsset(root, path);
             }
             finally { UnityEngine.Object.DestroyImmediate(root); }
 
-            void AddModel(LotAssetCatalogEntry entry, float targetHeight, float z)
+            void AddModel(LotAssetCatalogEntry entry, float targetHeight, float z, float x = 0f)
             {
                 var model = UnityEngine.Object.Instantiate(entry.prefab, root.transform, false);
                 var bounds = FenceBounds(model);
                 if (bounds.size.y > .001f) model.transform.localScale *= targetHeight / bounds.size.y;
-                model.transform.localPosition = new Vector3(0f, -FenceBounds(model).min.y, z);
+                model.transform.localPosition = new Vector3(x, -FenceBounds(model).min.y, z);
                 foreach (var renderer in model.GetComponentsInChildren<Renderer>())
                     renderer.sharedMaterials = renderer.sharedMaterials.Select(_ => entry.materialOverride).ToArray();
             }
@@ -395,12 +426,118 @@ internal static class LotCatalogSetup
         return result;
     }
 
+    private static LotAssetCatalogEntry HitchedHorse()
+    {
+        var horse = LotVehicle("horse", "Horse", "Horse", "founders", 2.3f);
+        if (!horse.prefab) return Entry("v3-vehicle-hitched-horse", "Hitched horse", LotAssetCatalog.Transport,
+            null, Vector2.zero, true, false);
+        string folder = $"{DirectoryPath}/V3Vehicles/Horse/";
+        var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(folder + "Hitched.prefab");
+        if (!prefab)
+        {
+            var root = new GameObject("Hitched horse");
+            try
+            {
+                LotRuntimeLoader.InstantiateObject(new LotObjectDefinition { assetId = horse.id }, horse, root.transform);
+                var wood = AssetDatabase.LoadAssetAtPath<Material>(folder + "HitchingPost.mat");
+                if (!wood)
+                {
+                    wood = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+                    wood.color = new Color(.26f, .17f, .10f);
+                    AssetDatabase.CreateAsset(wood, folder + "HitchingPost.mat");
+                }
+                var post = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                post.name = "Hitching post";
+                post.transform.SetParent(root.transform, false);
+                post.transform.localPosition = new Vector3(.55f, .53f, 1.38f);
+                post.transform.localScale = new Vector3(.14f, 1.06f, .14f);
+                post.GetComponent<Renderer>().sharedMaterial = wood;
+                UnityEngine.Object.DestroyImmediate(post.GetComponent<Collider>());
+                var tether = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                tether.name = "Tether";
+                tether.transform.SetParent(root.transform, false);
+                var halter = new Vector3(0f, 1.24f, .95f);
+                var tie = new Vector3(.55f, 1f, 1.38f);
+                tether.transform.localPosition = (halter + tie) * .5f;
+                tether.transform.localRotation = Quaternion.LookRotation(tie - halter);
+                tether.transform.localScale = new Vector3(.024f, .024f, Vector3.Distance(tie, halter));
+                tether.GetComponent<Renderer>().sharedMaterial = wood;
+                UnityEngine.Object.DestroyImmediate(tether.GetComponent<Collider>());
+                prefab = PrefabUtility.SaveAsPrefabAsset(root, folder + "Hitched.prefab");
+            }
+            finally { UnityEngine.Object.DestroyImmediate(root); }
+        }
+        var size = FenceBounds(prefab).size;
+        var entry = Entry("v3-vehicle-hitched-horse", "Hitched horse", LotAssetCatalog.Transport,
+            prefab, new Vector2(size.x, size.z), true, false);
+        SetEra(entry, "founders");
+        return entry;
+    }
+
+    private static void EnsureVehicleMotion(VehicleProfile profile)
+    {
+        string root = $"{DirectoryPath}/V3Vehicles/{profile.motionFolder}/";
+        var controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(root + "Motion.controller");
+        if (AssetImporter.GetAtPath(root + "Model.fbx") is ModelImporter importer &&
+            (importer.animationType != ModelImporterAnimationType.Generic || importer.clipAnimations.Length == 0))
+        {
+            importer.animationType = ModelImporterAnimationType.Generic;
+            importer.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
+            importer.importAnimation = true;
+            var clipsToImport = importer.defaultClipAnimations;
+            foreach (var clip in clipsToImport) clip.loopTime = true;
+            importer.clipAnimations = clipsToImport;
+            importer.SaveAndReimport();
+        }
+        var clips = AssetDatabase.LoadAllAssetsAtPath(root + "Model.fbx").OfType<AnimationClip>()
+            .Where(clip => !clip.name.StartsWith("__preview__")).ToArray();
+        var idle = FindClip(profile.idleState);
+        var travel = FindClip(profile.travelState);
+        if (!idle || !travel) return;
+        if (!controller) controller = AnimatorController.CreateAnimatorControllerAtPath(root + "Motion.controller");
+        var states = controller.layers[0].stateMachine;
+        var idleState = State(profile.idleState, idle);
+        if (states.defaultState != idleState)
+        {
+            states.defaultState = idleState;
+            EditorUtility.SetDirty(states);
+        }
+        State(profile.travelState, travel);
+        AssetDatabase.SaveAssetIfDirty(controller);
+
+        AnimationClip FindClip(string name) => string.IsNullOrEmpty(name) ? null :
+            clips.FirstOrDefault(clip => clip.name.IndexOf(name, System.StringComparison.OrdinalIgnoreCase) >= 0);
+
+        AnimatorState State(string name, AnimationClip clip)
+        {
+            var state = states.states.FirstOrDefault(entry => entry.state.name == name).state;
+            if (!state) state = states.AddState(name);
+            if (state.motion != clip)
+            {
+                state.motion = clip;
+                EditorUtility.SetDirty(state);
+                EditorUtility.SetDirty(states);
+            }
+            return state;
+        }
+    }
+
     private static LotAssetCatalogEntry MediumWealthStoneHouse() =>
         MediumWealthHome("medium-wealth-stone-house", "Stone House", "MediumWealthStoneHouse", 9f);
 
     private static LotAssetCatalogEntry MediumWealthHome(string id, string label, string folder,
         float span, string normalExtension = ".jpg") =>
         FoundersResidentialHome(id, label, folder, span, LotWealth.Medium, normalExtension);
+
+    private static LotAssetCatalogEntry FoundersShop(string id, string label, string folder,
+        float span, string extension = ".jpg")
+    {
+        var shop = V3Building(id, label, folder, "commercial", "founders", span, extension, extension);
+        shop.growableZone = TownZone.Commercial1;
+        shop.growableWealth = LotWealth.Low;
+        ConfigureBuildingWindowMask(shop, $"{DirectoryPath}/V3Buildings/{folder}/Windows.png");
+        return shop;
+    }
 
     private static LotAssetCatalogEntry FoundersResidentialHome(string id, string label, string folder,
         float span, LotWealth wealth, string normalExtension = ".jpg")
@@ -409,21 +546,31 @@ internal static class LotCatalogSetup
         home.growableZone = TownZone.Residential1;
         home.growableWealth = wealth;
         string maskPath = $"{DirectoryPath}/V3Buildings/{folder}/Windows.png";
+        string paneMaskPath = $"{DirectoryPath}/V3Buildings/{folder}/WindowPanes.png";
+        if (wealth == LotWealth.High && File.Exists(paneMaskPath)) maskPath = paneMaskPath;
+        ConfigureBuildingWindowMask(home, maskPath);
+        return home;
+    }
+
+    private static void ConfigureBuildingWindowMask(LotAssetCatalogEntry building, string maskPath)
+    {
         if (AssetImporter.GetAtPath(maskPath) is TextureImporter maskImporter && maskImporter.sRGBTexture)
         {
             maskImporter.sRGBTexture = false;
             maskImporter.SaveAndReimport();
         }
-        if (home.materialOverride && AssetDatabase.LoadAssetAtPath<Texture2D>(maskPath) is { } mask &&
-            (home.materialOverride.GetTexture("_EmissionMap") != mask || !home.materialOverride.IsKeywordEnabled("_EMISSION")))
+        if (building.materialOverride && AssetDatabase.LoadAssetAtPath<Texture2D>(maskPath) is { } mask &&
+            (building.materialOverride.GetTexture("_EmissionMap") != mask || !building.materialOverride.IsKeywordEnabled("_EMISSION") ||
+             building.materialOverride.globalIlluminationFlags != MaterialGlobalIlluminationFlags.BakedEmissive))
         {
-            home.materialOverride.SetTexture("_EmissionMap", mask);
+            building.materialOverride.SetTexture("_EmissionMap", mask);
             // Keep the Lit emission variant enabled when Unity validates the material.
-            home.materialOverride.SetColor("_EmissionColor", new Color(.001f, .001f, .001f, 1f));
-            home.materialOverride.EnableKeyword("_EMISSION");
-            EditorUtility.SetDirty(home.materialOverride);
+            building.materialOverride.SetColor("_EmissionColor", new Color(.001f, .001f, .001f, 1f));
+            building.materialOverride.globalIlluminationFlags = MaterialGlobalIlluminationFlags.BakedEmissive;
+            building.materialOverride.EnableKeyword("_EMISSION");
+            EditorUtility.SetDirty(building.materialOverride);
+            AssetDatabase.SaveAssetIfDirty(building.materialOverride);
         }
-        return home;
     }
 
     private static LotAssetCatalogEntry V3Building(string id, string label, string folder, string category,
@@ -473,6 +620,8 @@ internal static class LotCatalogSetup
         GardenModel("wheat-garden", "Wheat Garden", "Agriculture", "WheatGarden", 3.5f),
         GardenModel("corn-garden", "Corn Garden", "Agriculture", "CornGarden", 3.5f, "Color.jpg", "Normal.jpg"),
         GardenModel("boxwood-hedge", "Clipped boxwood hedge", "Hedges", "Boxwood", 3f, "Color.png"),
+        GardenModel("boxwood-hedge-half", "Clipped boxwood hedge · Half", "Hedges", "Boxwood", 1.5f,
+            "Color.png", modelFile: "Half.fbx"),
         Boxwood("boxwood-corner-02", "Boxwood corner", "Corner02", 3f),
         Boxwood("boxwood-curved-02", "Curved boxwood hedge", "Curved02", 3f),
         Boxwood("boxwood-rectangular-03", "Rectangular boxwood hedge", "Rectangular03", 3f),
@@ -485,6 +634,10 @@ internal static class LotCatalogSetup
         FlowerBed("square-flower-bed", "Square flower bed", "square", new Vector2(4, 4)),
         FlowerBed("rectangular-flower-bed", "Rectangular flower bed", "rectangle", new Vector2(6, 3)),
         GardenModel("ornate-garden-bench", "Ornate garden bench", "Benches", "GardenBench", 1.8f, "Color.jpg", "Normal.jpg"),
+        GardenModel("blue-gazebo", "Blue Gazebo", "Gazebos", "BlueGazebo", 4f, "Color.jpg", "Normal.jpg"),
+        GardenModel("mediterranean-gazebo", "Mediterranean Gazebo", "Gazebos", "MediterraneanGazebo", 4f, "Color.jpg", "Normal.jpg"),
+        GardenModel("rustic-gazebo", "Rustic Gazebo", "Gazebos", "RusticGazebo", 4f, "Color.jpg", "Normal.jpg"),
+        GardenModel("white-gazebo", "White Gazebo", "Gazebos", "WhiteGazebo", 4f, "Color.jpg", "Normal.jpg"),
         GardenModel("stone-garden-fountain", "Stone garden fountain", "Fountains", "StoneFountain", 3f, "Color.jpg", "Normal.png")
     };
 
@@ -502,7 +655,7 @@ internal static class LotCatalogSetup
             if (!model) continue;
             var size = FenceBounds(model).size;
             if (size.x <= .001f || size.y <= .001f || size.z <= .001f) continue;
-            material ??= GardenMaterial(root + "Corn.mat", color, root + "Corn_Normal.tga", cutout: true);
+            material ??= TexturedLotMaterial(root + "Corn.mat", color, root + "Corn_Normal.tga", cutout: true);
             var entry = Entry($"corn-v{variant}", labels[i], "Landscaping", model,
                 new Vector2(size.x, size.z), true, true);
             entry.group = "Vegetables";
@@ -536,7 +689,7 @@ internal static class LotCatalogSetup
             if (!model) continue;
             var size = FenceBounds(model).size;
             if (size.x <= .001f || size.y <= .001f || size.z <= .001f) continue;
-            material ??= GardenMaterial(root + "Wheat.mat", color, root + "Wheat_Normal.tga", cutout: true);
+            material ??= TexturedLotMaterial(root + "Wheat.mat", color, root + "Wheat_Normal.tga", cutout: true);
             var entry = Entry(modelName.ToLowerInvariant().Replace('_', '-'), label, "Landscaping", model,
                 new Vector2(size.x, size.z), true, true);
             entry.group = "Vegetables";
@@ -600,7 +753,29 @@ internal static class LotCatalogSetup
         var color = AssetDatabase.LoadAssetAtPath<Texture2D>(root + "Color.png");
         if (!color) color = AssetDatabase.LoadAssetAtPath<Texture2D>(root + "Color.jpg");
         string normalPath = File.Exists(root + "Normal.png") ? root + "Normal.png" : root + "Normal.jpg";
-        entry.materialOverride = GardenMaterial(root + "Prop.mat", color, normalPath, cutout: false);
+        entry.materialOverride = TexturedLotMaterial(root + "Prop.mat", color, normalPath, cutout: false);
+        if (group == "Lighting")
+        {
+            string glowPath = root + "LanternGlow.png";
+            if (File.Exists(glowPath) && AssetImporter.GetAtPath(glowPath) is TextureImporter glowImporter)
+            {
+                if (glowImporter.sRGBTexture)
+                {
+                    glowImporter.sRGBTexture = false;
+                    glowImporter.SaveAndReimport();
+                }
+                var glow = AssetDatabase.LoadAssetAtPath<Texture2D>(glowPath);
+                if (glow && (entry.materialOverride.GetTexture("_EmissionMap") != glow ||
+                    !entry.materialOverride.IsKeywordEnabled("_EMISSION")))
+                {
+                    entry.materialOverride.SetTexture("_EmissionMap", glow);
+                    entry.materialOverride.SetColor("_EmissionColor", new Color(.001f, .001f, .001f, 1f));
+                    entry.materialOverride.EnableKeyword("_EMISSION");
+                    EditorUtility.SetDirty(entry.materialOverride);
+                    AssetDatabase.SaveAssetIfDirty(entry.materialOverride);
+                }
+            }
+        }
         return entry;
     }
 
@@ -617,7 +792,7 @@ internal static class LotCatalogSetup
         if (widest > .001f) entry.footprint = new Vector2(bounds.x, bounds.z) * (span / widest);
         if (colorFile == null) return entry;
         var color = AssetDatabase.LoadAssetAtPath<Texture2D>(root + colorFile);
-        entry.materialOverride = GardenMaterial(root + "Garden.mat", color, normalFile == null ? null : root + normalFile,
+        entry.materialOverride = TexturedLotMaterial(root + "Garden.mat", color, normalFile == null ? null : root + normalFile,
             cutout: group == "Hedges");
         return entry;
     }
@@ -632,8 +807,8 @@ internal static class LotCatalogSetup
         if (!prefab && plan && blooms)
         {
             var garden = new GameObject(label);
-            var surface = GardenMaterial(root + shape + ".mat", plan, null, cutout: true);
-            var flowers = GardenMaterial(root + "Flowers.mat", blooms, null, cutout: true);
+            var surface = TexturedLotMaterial(root + shape + ".mat", plan, null, cutout: true);
+            var flowers = TexturedLotMaterial(root + "Flowers.mat", blooms, null, cutout: true);
             AddQuad("Planting plan", new Vector3(0, .045f, 0), Quaternion.Euler(90, 0, 0), size, surface);
             for (int row = -1; row <= 1; row += 2)
             for (int x = -1; x <= 1; x++)
@@ -661,7 +836,7 @@ internal static class LotCatalogSetup
         return entry;
     }
 
-    private static Material GardenMaterial(string path, Texture2D color, string normalPath, bool cutout)
+    private static Material TexturedLotMaterial(string path, Texture2D color, string normalPath, bool cutout)
     {
         var material = AssetDatabase.LoadAssetAtPath<Material>(path);
         if (material) return material;
@@ -699,6 +874,14 @@ internal static class LotCatalogSetup
             Native("native-chief", "Indigenous Chief", native ? native.chief : null),
             Native("native-warrior", "Indigenous Warrior", native ? native.warrior : null),
             Native("native-resident", "Indigenous Resident", native ? native.resident : null),
+            V3("founders-gentleman-black", "Founders Gentleman in Black", "FoundersGentlemanBlack", "founders"),
+            V3("founders-gentleman-blue", "Founders Gentleman in Blue", "FoundersGentlemanBlue", "founders"),
+            V3("founders-lady-gray", "Founders Lady in Gray", "FoundersLadyGray", "founders"),
+            V3("founders-lady-red", "Founders Lady in Red", "FoundersLadyRed", "founders"),
+            V3("founders-cook", "Founders Cook", "FoundersCook", "founders"),
+            V3("founders-stout-townsperson", "Founders Stout Townsperson", "FoundersStoutTownsperson", "founders"),
+            V3("founders-townsperson", "Founders Townsperson", "FoundersTownsperson", "founders"),
+            V3("founders-privateer", "Founders Privateer", "FoundersPrivateer", "founders"),
             V3("farmer", "Farmer", "Farmer", "founders"),
             V3("axeman", "Axeman (Lumberjack)", "Axeman", "founders"),
             V3("musketman", "Revolutionary-era Musketman", "Musketman", "founders"),
@@ -744,6 +927,7 @@ internal static class LotCatalogSetup
         if (prefab)
         {
             AddCharacterWalk(root, modelPath);
+            AddCharacterFoldArms(root);
             return prefab;
         }
         if (!(AssetImporter.GetAtPath(modelPath) is ModelImporter importer)) return null;
@@ -783,10 +967,10 @@ internal static class LotCatalogSetup
             child.transform.localScale *= scale;
             child.transform.localPosition -= new Vector3(bounds.center.x, bounds.min.y, bounds.center.z) * scale;
 
-            var material = new Material(Shader.Find("Universal Render Pipeline/Lit")) { name = folder + " Color" };
-            material.SetTexture("_BaseMap", AssetDatabase.LoadAssetAtPath<Texture2D>(root + "Color.jpg"));
+            var material = TexturedLotMaterial(root + "Character.mat",
+                AssetDatabase.LoadAssetAtPath<Texture2D>(root + "Color.jpg"),
+                File.Exists(root + "Normal.jpg") ? root + "Normal.jpg" : null, false);
             material.SetFloat("_Smoothness", .18f);
-            AssetDatabase.CreateAsset(material, root + "Character.mat");
             foreach (var renderer in renderers)
                 renderer.sharedMaterials = renderer.sharedMaterials.Select(_ => material).ToArray();
 
@@ -800,9 +984,25 @@ internal static class LotCatalogSetup
             }
             var result = PrefabUtility.SaveAsPrefabAsset(wrapper, root + "Character.prefab");
             AddCharacterWalk(root, modelPath);
+            AddCharacterFoldArms(root);
             return result;
         }
         finally { Object.DestroyImmediate(wrapper); }
+    }
+
+    private static void AddCharacterFoldArms(string root)
+    {
+        var clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(root + "FoldArms.anim");
+        var controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(root + "Idle.controller");
+        if (!clip || !controller) return;
+        var machine = controller.layers[0].stateMachine;
+        var fold = machine.states.FirstOrDefault(state => state.state.name == "FoldArms").state;
+        if (!fold) fold = machine.AddState("FoldArms");
+        if (fold.motion == clip) return;
+        fold.motion = clip;
+        EditorUtility.SetDirty(fold);
+        EditorUtility.SetDirty(machine);
+        AssetDatabase.SaveAssets();
     }
 
     private static void AddCharacterWalk(string root, string modelPath)
