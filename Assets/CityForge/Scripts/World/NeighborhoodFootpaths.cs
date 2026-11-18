@@ -6,6 +6,7 @@ namespace CityForge.World
 {
     internal static class NeighborhoodFootpaths
     {
+        internal const int Width = 2;
         internal readonly struct Frontage
         {
             internal readonly Vector2 A, B, Outward;
@@ -60,10 +61,10 @@ namespace CityForge.World
                 var relative = point - edge.A;
                 float along = Vector2.Dot(relative, span / length);
                 float across = Vector2.Dot(relative, edge.Outward);
-                if (across < -1.5f || across > 4.25f) continue;
+                if (across < -2.25f || across > 4.25f) continue;
                 // Fade over the frontage ends, taking the union where neighboring lots meet.
                 float fade = Mathf.SmoothStep(0, 1, Mathf.Min(along + .65f, length - along + .65f) / 1.3f);
-                fade *= Mathf.SmoothStep(0, 1, (across + 1.5f) / .7f) * Mathf.SmoothStep(0, 1, (4.25f - across) / .7f);
+                fade *= Mathf.SmoothStep(0, 1, (across + 2.25f) / .5f) * Mathf.SmoothStep(0, 1, (4.25f - across) / .7f);
                 coverage = Mathf.Min(1, coverage + fade);
             }
             return coverage;

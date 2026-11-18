@@ -1,3 +1,14 @@
+# CityForge V4 handoff · November 18, 2026 · Wider neighborhood footpaths
+
+At the user's request, low-wealth R2/R3 dirt walking strips are now 2m wide.
+The edge feather remains approximately 0.36m, leaving about 1.3m of worn center.
+Existing plank/bluestone widths remain unchanged. Frontage coverage admits the outer
+2m lot band so the widened strip does not disappear at a flush road frontage.
+Width/ribbon, blending, adjacency and street-replacement QA passed and previews were
+regenerated in outputs/Neighborhood-Footpaths. No player saves were written.
+
+---
+
 # CityForge V4 handoff · November 18, 2026 · R2/R3 low-wealth walking paths
 
 Roadside sidewalk space beside low-wealth R2/R3 lots now displays a softly blended dirt

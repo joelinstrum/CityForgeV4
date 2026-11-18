@@ -753,13 +753,13 @@ namespace CityForge.World
                     {
                         var earth = LotPathMaterial.Find(LotPathMaterial.ResidentialFootpath);
                         var mesh = LotPathSurface.BuildMesh(path, earth.TileSize, SidewalkLift + .002f, LotHeight,
-                            shoulderSide: side, shoulderWidth: width);
+                            shoulderSide: side, shoulderWidth: NeighborhoodFootpaths.Width);
                         NeighborhoodFootpaths.ApplyCoverage(mesh, line, nearby, inverse: false);
                         dirt = mesh.colors.Any(color => color.a > .001f);
                         if (dirt)
                         {
                             var ribbon = new List<Vector4>(); mesh.GetUVs(1, ribbon);
-                            mesh.SetUVs(1, ribbon.ConvertAll(uv => new Vector4(uv.x / uv.y * width, width, uv.z, uv.w)));
+                            mesh.SetUVs(1, ribbon.ConvertAll(uv => new Vector4(uv.x / uv.y * NeighborhoodFootpaths.Width, NeighborhoodFootpaths.Width, uv.z, uv.w)));
                             var material = Material(earth.Id + "-neighborhood", earth, soft: true);
                             Add("Soft dirt walking path", mesh, material);
                         }
@@ -787,8 +787,8 @@ namespace CityForge.World
                 var material = style.CreateMaterial();
                 if (soft || masked)
                 {
-                    var treatment = new LotPathDefinition { width = width, materialId = style.Id };
-                    LotPathMaterial.ApplyEdgeTreatment(material, treatment, soft ? 80 : 0, 0);
+                    var treatment = new LotPathDefinition { width = soft ? NeighborhoodFootpaths.Width : width, materialId = style.Id };
+                    LotPathMaterial.ApplyEdgeTreatment(material, treatment, soft ? 40 : 0, 0);
                     material.SetFloat("_VertexOpacity", 1);
                     material.SetFloat("_NaturalFootpath", soft ? 1 : 0);
                 }

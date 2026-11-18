@@ -42,8 +42,8 @@ namespace CityForge.Editor
             var material = style.CreateMaterial();
             try
             {
-                LotPathMaterial.ApplyEdgeTreatment(material, new LotPathDefinition { materialId = style.Id, width = 1 }, 80, 0);
-                Require(material.GetFloat("_EdgeBlend") > .3f && material.GetFloat("_PathOpacity") < 1,
+                LotPathMaterial.ApplyEdgeTreatment(material, new LotPathDefinition { materialId = style.Id, width = NeighborhoodFootpaths.Width }, 40, 0);
+                Require(material.GetFloat("_EdgeBlend") > .3f && material.GetFloat("_EdgeBlend") < .4f && material.GetFloat("_PathOpacity") < 1,
                     "Footpath lost soft edges or ground blending");
                 Require(material.HasProperty("_VertexOpacity") && material.HasProperty("_NaturalFootpath"), "Missing neighborhood transition controls");
             }
