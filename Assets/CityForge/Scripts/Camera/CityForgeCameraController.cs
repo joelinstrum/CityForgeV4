@@ -10,6 +10,7 @@ namespace CityForge.CameraSystem
     {
         public const float IsometricPitch = 35.26439f;
         private const float PointerTiltSensitivity = .06f;
+        private const float KeyboardTiltSpeed = 1f;
         private const float MaxOverviewPitch = 90f;
         private float MinimumPitch => reliefFraming ? 0f : 15f;
         private float MaximumPitch => reliefFraming ? MaxOverviewPitch : IsometricPitch;
@@ -41,6 +42,8 @@ namespace CityForge.CameraSystem
         private Vector3 flyInStart, flyInTarget;
         private float flyInSize, flyInElapsed;
         private bool flyingIntoDistrict;
+        internal bool FlyingIntoDistrict => flyingIntoDistrict;
+        private const int DistrictFlyInZoom = 4;
         private const float DistrictFlyInDuration = 2.4f;
 
         private float DistrictZoomSize(int level)
@@ -73,22 +76,20 @@ namespace CityForge.CameraSystem
 
         private void AdvanceDistrictFlyIn(float delta)
         {
-            flyInElapsed += delta;
+            flyInElapsed += Mathf.Min(delta, 1f / 30f);
             float progress = Mathf.Clamp01(flyInElapsed / DistrictFlyInDuration);
             float ease = Mathf.SmoothStep(0f, 1f, progress);
             focus = Vector3.Lerp(flyInStart, flyInTarget, ease);
             if (progress >= 1f)
             {
-                SetZoomLevel(1);
+                SetZoomLevel(DistrictFlyInZoom);
                 return;
             }
-            float endSize = DistrictZoomSize(1);
+            float endSize = DistrictZoomSize(DistrictFlyInZoom);
             orthographicSize = flyInSize * Mathf.Pow(endSize / flyInSize, ease);
-            int presentationLevel = Mathf.Clamp(5 - Mathf.FloorToInt(ease * 5f), 1, 5);
+            // Keep the distant presentation while flying in. Apply the destination
+            // tier once the camera arrives, without intermediate detail changes.
             ApplyPose();
-            if (ZoomLevel == presentationLevel) return;
-            ZoomLevel = presentationLevel;
-            ZoomChanged?.Invoke(ZoomLevel);
         }
 
         private void Awake()
@@ -146,8 +147,8 @@ namespace CityForge.CameraSystem
             var movement = Vector2.zero;
             if (Input.GetKey(KeyCode.A) || (!shift && left)) movement.x -= 1f;
             if (Input.GetKey(KeyCode.D) || (!shift && right)) movement.x += 1f;
-            if (Input.GetKey(KeyCode.S) || down) movement.y -= 1f;
-            if (Input.GetKey(KeyCode.W) || up) movement.y += 1f;
+            if (Input.GetKey(KeyCode.S) || (!shift && down)) movement.y -= 1f;
+            if (Input.GetKey(KeyCode.W) || (!shift && up)) movement.y += 1f;
 
             if (rotate && left != right)
                 yaw = Mathf.Repeat(yaw + (right ? 1f : -1f) * rotationSpeed * dt, 360f);
@@ -208,9 +209,17 @@ namespace CityForge.CameraSystem
             if (infoPressed && !inDistrict) ToggleViewAngle();
             if (regionSide == 0f && Input.GetKeyDown(KeyCode.P)) ToggleProjection();
             if (Input.GetKeyDown(KeyCode.Home)) ResetView();
-            else if (adjustingTilt)
+            else if (rotate && up != down && reliefFraming)
             {
-                float tilt = Mathf.Clamp01(ViewTilt + (Input.GetAxisRaw("Mouse Y") + scroll) * PointerTiltSensitivity);
+                pitch = Mathf.Clamp(ViewPitch + (up ? 1f : -1f) * rotationSpeed * dt, MinimumPitch, MaximumPitch);
+                SetViewTilt(1f);
+                return;
+            }
+            else
+            {
+                float keyboardTilt = rotate && up != down ? (up ? 1f : -1f) * KeyboardTiltSpeed * dt : 0f;
+                float pointerTilt = adjustingTilt ? (Input.GetAxisRaw("Mouse Y") + scroll) * PointerTiltSensitivity : 0f;
+                float tilt = Mathf.Clamp01(ViewTilt + keyboardTilt + pointerTilt);
                 if (tilt != ViewTilt)
                 {
                     SetViewTilt(tilt);
@@ -360,7 +369,8 @@ namespace CityForge.CameraSystem
                 // foreground/background ranges waste directional shadow texels.
                 var depthMargin = orthographicSize * 2f + shadowTerrainHeight;
                 if(perspectiveRelief || (reliefFraming && posePitch < 10f))depthMargin=Mathf.Max(depthMargin,regionSide+shadowTerrainHeight);
-                near=lowerView ? .5f : Mathf.Max(1f,poseDistance-depthMargin);far=poseDistance+depthMargin;
+                near=lowerView ? .5f : Mathf.Max(1f,poseDistance-depthMargin);
+                far=lowerView ? Mathf.Max(poseDistance + depthMargin, regionSide * 1.5f + poseDistance) : poseDistance+depthMargin;
                 if(FitShadowDepth&&!lowerView&&!perspectiveRelief&&posePitch>=10f)
                 {
                     // Orthographic screen Y and world height bound depth exactly:
@@ -371,8 +381,14 @@ namespace CityForge.CameraSystem
                     near=Mathf.Max(1f,poseDistance-screenDepth-(shadowTerrainHeight+80f-focus.y)/sin-20f);
                     far=Mathf.Max(near+10f,poseDistance+screenDepth+(focus.y+10f)/sin+20f);
                 }
-                if(GraphicsSettings.currentRenderPipeline is UniversalRenderPipelineAsset pipeline&&pipeline.shadowDistance!=far)
-                    pipeline.shadowDistance=far;
+                float shadowDistance = lowerView
+                    ? Mathf.Min(far, Mathf.Max(100f, poseDistance + orthographicSize * 3f + 80f))
+                    : far;
+                // Hold cascade extent between small pose adjustments to avoid constant rescaling.
+                if (lowerView) shadowDistance = Mathf.Ceil(shadowDistance / 25f) * 25f;
+                if(GraphicsSettings.currentRenderPipeline is UniversalRenderPipelineAsset pipeline &&
+                    !Mathf.Approximately(pipeline.shadowDistance, shadowDistance))
+                    pipeline.shadowDistance = shadowDistance;
             }
             if(viewCamera.nearClipPlane!=near)viewCamera.nearClipPlane=near;
             if(viewCamera.farClipPlane!=far)viewCamera.farClipPlane=far;

@@ -14,6 +14,7 @@ namespace CityForge.World
         private Renderer[] eaglePassengerRenderers;
         private Transform eagle;
         private Animator eagleAnimator;
+        private AnimatorCullingMode eaglePassengerCulling;
         private Transform eagleLeftGrip, eagleRightGrip;
         private int eagleDistrict = -1, eagleLotCount;
         private Vector2 eagleOrbitCenter;
@@ -461,7 +462,12 @@ namespace CityForge.World
             if (!HasVisibleEaglePassenger()) return false;
             eaglePassengerOrigin = origin;
             eaglePassenger.EagleCarried = true;
-            SetPedestrianAnimation(eaglePassenger, false);
+            if (eaglePassenger.Animator)
+            {
+                eaglePassengerCulling = eaglePassenger.Animator.cullingMode;
+                eaglePassenger.Animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+                SetPedestrianAnimation(eaglePassenger, false);
+            }
             foreach (var renderer in eaglePassengerRenderers)
                 if (renderer is SkinnedMeshRenderer skin && skin.enabled && !skin.updateWhenOffscreen)
                 {
@@ -581,6 +587,8 @@ namespace CityForge.World
             {
                 eaglePassenger.Body.position = eaglePassengerOrigin;
                 eaglePassenger.EagleCarried = false;
+                if (eaglePassenger.Animator)
+                    eaglePassenger.Animator.cullingMode = eaglePassengerCulling;
             }
             foreach (var renderer in eagleHiddenRenderers)
                 if (renderer) renderer.enabled = true;

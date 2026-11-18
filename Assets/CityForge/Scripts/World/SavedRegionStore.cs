@@ -19,6 +19,7 @@ namespace CityForge.World
         public int lakeWaterVersion=1;
         public RegionTimeOfDay timeOfDay;
         public bool animals;
+        public string[] readMessages;
         // Also supports climate on legacy coastal maps without inventing a creation recipe.
         public RegionClimate climate;
         public RegionCreationSettings creation;
@@ -99,6 +100,7 @@ namespace CityForge.World
             var baseline=Resources.Load<MeadowRuntimeBaseline>("Region/MeadowRuntimeBaseline");
             var info=new SavedRegionInfo{animals=view.AnimalsEnabled,id=id??view.SavedRegionId??Guid.NewGuid().ToString("N"),name=name??view.RegionName,season=(int)view.Season,timeOfDay=view.TimeOfDay,terrainHeightRange=view.TerrainHeightRange,seed=view.Data.Seed,size=(int)view.Size,district=view.SelectedDistrict,meadow=view.PrefersMeadow,waterBodies=view.Data.WaterBodies,waterless=view.Waterless,coastline=view.Coastline,coastVersion=view.CoastVersion,minimalRiverCrest=view.MinimalRiverCrest,stillWater=false,lakeWaterVersion=LakeWaterRenderer.UsesCalmWater(view)?1:-1,riverBedVersion=view.RiverBedVersion,savedUtc=DateTime.UtcNow.ToString("O"),baselineVersion=baseline?baseline.generationVersion:0,camera=view.GetComponentInChildren<CameraSystem.CityForgeCameraController>().CaptureRegionState()};
             info.deepHarborDistricts = view.DeepHarborDistricts;
+            info.readMessages = view.CaptureReadRegionMessages();
             info.townZones = view.CaptureTownZones();
             info.townZoneGridVersion = PrototypeRegionView.TownZoneGridVersion;
             info.districtRoads = view.CaptureDistrictRoads();

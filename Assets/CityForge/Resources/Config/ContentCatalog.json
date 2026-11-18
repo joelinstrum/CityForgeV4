@@ -3,159 +3,316 @@
   "eras": [
     {
       "id": "founders",
+      "messageIllustration": "UI/TownConstruction/FounderEraIllustration",
       "name": "Founder's Era",
       "periods": [
         {
           "name": "Frontier Settlement",
           "firstYear": 1740,
-          "lastYear": 1759
+          "lastYear": 1759,
+          "summary": "A landing, a mill, and a few cabins mark the beginning of a town. Beyond them lie the woods and the promise of a new settlement.",
+          "suggestions": [
+            "Choose a dry site near water and timber.",
+            "Lay out a short route between the landing and the first workshops."
+          ]
         },
         {
           "name": "Colonial Growth",
           "firstYear": 1760,
-          "lastYear": 1779
+          "lastYear": 1779,
+          "summary": "The settlement finds its footing. Farms send their harvests to market, and workshops fill the streets leading down to the wharf.",
+          "suggestions": [
+            "Connect farms to mills and markets.",
+            "Make room for shops along the busiest streets."
+          ]
         },
         {
           "name": "A New Nation",
           "firstYear": 1780,
-          "lastYear": 1799
+          "lastYear": 1799,
+          "summary": "A new nation must supply itself. Local trades take on work once carried across the ocean, while merchants seek routes of their own.",
+          "suggestions": [
+            "Strengthen local processing and repair trades.",
+            "Connect trading settlements by road and water."
+          ]
         },
         {
           "name": "Early Republic",
           "firstYear": 1800,
-          "lastYear": 1819
+          "lastYear": 1819,
+          "summary": "Market towns push inland. More people, produce, and timber move along the rivers, and inland roads begin to carry heavier traffic.",
+          "suggestions": [
+            "Extend roads toward productive land.",
+            "Reserve waterfront sites for loading and receiving goods."
+          ]
         }
+      ],
+      "summary": "Your nation takes root at the water’s edge. Cabins give way to market streets, and roads carry the first goods between settlements.",
+      "suggestions": [
+        "Settle near timber, farmland, and dependable water access.",
+        "Link workshops and landing places to the town center."
       ]
     },
     {
       "id": "industrial",
+      "messageIllustration": "UI/TownConstruction/IndustrialEraIllustration",
       "name": "Industrial Era",
       "periods": [
         {
           "name": "Transportation Revolution",
           "firstYear": 1820,
-          "lastYear": 1839
+          "lastYear": 1839,
+          "summary": "Canals and early railroads cut new paths across the country. Steam starts to carry goods farther than a wagon team could take them.",
+          "suggestions": [
+            "Reserve a route from freight landings to mills.",
+            "Keep space for roads alongside major transport corridors."
+          ]
         },
         {
           "name": "Industrial Expansion",
           "firstYear": 1840,
-          "lastYear": 1859
+          "lastYear": 1859,
+          "summary": "The mill town grows into a factory town. Its workshops need more workers, more raw materials, and a dependable way to get goods to market.",
+          "suggestions": [
+            "Cluster related processors and workshops.",
+            "Connect workers’ neighborhoods to industrial streets."
+          ]
         },
         {
           "name": "Transformation",
           "firstYear": 1860,
-          "lastYear": 1869
+          "lastYear": 1869,
+          "summary": "Rail and steam bring larger factories within reach. Towns at the junction of trade routes begin to shape what their regions produce.",
+          "suggestions": [
+            "Leave expansion room near major freight routes.",
+            "Separate heavy through traffic from local streets."
+          ]
         }
+      ],
+      "summary": "Your nation lays down railroads and puts steam to work. Mills and foundries draw small towns into a growing network of trade.",
+      "suggestions": [
+        "Reserve corridors linking industry to the waterfront and future rail yards.",
+        "Place processing lots close to their raw materials."
       ]
     },
     {
       "id": "victorian",
+      "messageIllustration": "UI/TownConstruction/VictorianEraIllustration",
       "name": "Victorian Era",
       "periods": [
         {
           "name": "Railroad City",
           "firstYear": 1870,
-          "lastYear": 1879
+          "lastYear": 1879,
+          "summary": "The depot becomes a new center of town life. A rail connection can turn a local workshop into a supplier for an entire region.",
+          "suggestions": [
+            "Reserve room for freight handling near depots.",
+            "Connect warehouses to industrial streets."
+          ]
         },
         {
           "name": "Urban Boom",
           "firstYear": 1880,
-          "lastYear": 1889
+          "lastYear": 1889,
+          "summary": "New streets fill with houses and storefronts. Workshops and rail yards take on the work of supplying a fast-growing city.",
+          "suggestions": [
+            "Extend services toward new neighborhoods.",
+            "Keep deliveries accessible behind busy commercial streets."
+          ]
         },
         {
           "name": "Metropolitan Age",
           "firstYear": 1890,
-          "lastYear": 1899
+          "lastYear": 1899,
+          "summary": "The city reaches beyond any one district. Its stations, markets, streets, and harbor must move people and goods together.",
+          "suggestions": [
+            "Strengthen links between districts.",
+            "Reserve land near major junctions for commerce and freight."
+          ]
         }
+      ],
+      "summary": "Rail lines bind the nation together as towns swell into cities. Depots, workshops, and crowded market streets set the pace of urban life.",
+      "suggestions": [
+        "Leave room around stations for freight and commerce.",
+        "Extend streets ahead of growing neighborhoods."
       ]
     },
     {
       "id": "machine",
+      "messageIllustration": "UI/TownConstruction/MachineEraIllustration",
       "name": "Machine Age",
       "periods": [
         {
           "name": "New Century",
           "firstYear": 1900,
-          "lastYear": 1909
+          "lastYear": 1909,
+          "summary": "The new century brings faster machinery and bigger markets. Old workshops adapt while factories and warehouses fill the blocks around them.",
+          "suggestions": [
+            "Connect production sites to regional freight routes.",
+            "Keep local repair shops near the industries they serve."
+          ]
         },
         {
           "name": "Motor Age Begins",
           "firstYear": 1910,
-          "lastYear": 1920
+          "lastYear": 1920,
+          "summary": "Motor vehicles begin to share the road with horses. Streets built for local journeys take on longer trips and heavier loads.",
+          "suggestions": [
+            "Plan wider routes where freight traffic converges.",
+            "Leave maneuvering space at loading areas."
+          ]
         }
+      ],
+      "summary": "Engines promise to change who can travel, how far they can go, and how quickly goods reach market. The city begins to make room for the motor age.",
+      "suggestions": [
+        "Reserve routes for traffic between workshops and commercial streets.",
+        "Keep new industrial sites accessible from more than one direction."
       ]
     },
     {
       "id": "modern",
-      "name": "Modern Era",
+      "messageIllustration": "UI/TownConstruction/ModernEraIllustration",
+      "name": "Art Deco Era",
       "periods": [
         {
           "name": "Roaring Twenties",
           "firstYear": 1921,
-          "lastYear": 1929
+          "lastYear": 1929,
+          "summary": "Shops, workshops, and traffic fill the city streets. Growing demand reaches from the factory floor to the newest outlying neighborhoods.",
+          "suggestions": [
+            "Link new housing to established commercial streets.",
+            "Keep loading access available as storefronts multiply."
+          ]
         },
         {
           "name": "Depression Era",
           "firstYear": 1930,
-          "lastYear": 1938
+          "lastYear": 1938,
+          "summary": "Hard times change what the city needs. Repair and reuse matter more as households and businesses make existing buildings and equipment last.",
+          "suggestions": [
+            "Prioritize maintenance and adaptable workshops.",
+            "Make use of streets and services already in place."
+          ]
         },
         {
           "name": "Wartime City",
           "firstYear": 1939,
-          "lastYear": 1945
+          "lastYear": 1945,
+          "summary": "Wartime work puts ports, factories, and repair shops under pressure. Moving supplies reliably becomes as important as producing them.",
+          "suggestions": [
+            "Give ports and industrial yards dependable road access.",
+            "Keep alternative routes available for essential freight."
+          ]
         }
+      ],
+      "summary": "Your cities face a generation of sharp turns, from the bustle of the twenties through hard times and into wartime production.",
+      "suggestions": [
+        "Keep essential industries connected to reliable supply routes.",
+        "Reserve sites for repair shops and future production."
       ]
     },
     {
       "id": "postwar",
+      "messageIllustration": "UI/TownConstruction/PostwarEraIllustration",
       "name": "Postwar Era",
       "periods": [
         {
           "name": "Postwar Boom",
           "firstYear": 1946,
-          "lastYear": 1954
+          "lastYear": 1954,
+          "summary": "Homebuilding surges and factories turn to peacetime goods. The city must house new families while its industry finds new markets.",
+          "suggestions": [
+            "Support building-material suppliers near freight routes.",
+            "Connect new homes to established jobs and shops."
+          ]
         },
         {
           "name": "Suburban Expansion",
           "firstYear": 1955,
-          "lastYear": 1964
+          "lastYear": 1964,
+          "summary": "New neighborhoods spread beyond the old street grid. Longer trips change where shops and services can thrive.",
+          "suggestions": [
+            "Plan routes between suburbs and town centers.",
+            "Reserve land for neighborhood shops near growing populations."
+          ]
         },
         {
           "name": "Urban Transformation",
           "firstYear": 1965,
-          "lastYear": 1974
+          "lastYear": 1974,
+          "summary": "The city weighs renewal against the cost of losing familiar streets. Former industrial sites and older neighborhoods face new uses.",
+          "suggestions": [
+            "Look for vacant or underused sites near services.",
+            "Keep useful links between established neighborhoods."
+          ]
         }
+      ],
+      "summary": "New homes spread beyond the old city as highways carry workers and freight farther than before. The center must find its place in a larger metropolis.",
+      "suggestions": [
+        "Plan connections between new neighborhoods and established job centers.",
+        "Keep through freight clear of local shopping streets."
       ]
     },
     {
       "id": "contemporary",
+      "messageIllustration": "UI/TownConstruction/ContemporaryEraIllustration",
       "name": "Contemporary Era",
       "periods": [
         {
           "name": "Reinvention",
           "firstYear": 1975,
-          "lastYear": 1989
+          "lastYear": 1989,
+          "summary": "Former industrial districts face a choice about what comes next. Workshops, warehouses, and waterfronts can find new work as the city changes around them.",
+          "suggestions": [
+            "Reuse well-connected industrial sites.",
+            "Keep room for small workshops and specialty production."
+          ]
         },
         {
           "name": "Information Age",
           "firstYear": 1990,
-          "lastYear": 2000
+          "lastYear": 2000,
+          "summary": "Information travels faster than freight, but goods still need roads, ports, and warehouses. New businesses look for places connected to both.",
+          "suggestions": [
+            "Choose sites with dependable access to regional markets.",
+            "Reuse older buildings where their locations still serve the city."
+          ]
         },
         {
           "name": "New Millennium",
           "firstYear": 2001,
-          "lastYear": 2009
+          "lastYear": 2009,
+          "summary": "Established cities return to their centers and waterfronts. New housing and commerce share streets built for older patterns of work.",
+          "suggestions": [
+            "Connect redevelopment to existing streets and services.",
+            "Preserve working freight access where it is still needed."
+          ]
         },
         {
           "name": "Connected City",
           "firstYear": 2010,
-          "lastYear": 2019
+          "lastYear": 2019,
+          "summary": "Orders and deliveries can be coordinated across the city. Freight routes and local streets must handle more frequent journeys.",
+          "suggestions": [
+            "Plan loading access away from busy pedestrian routes.",
+            "Connect distribution sites to more than one major road."
+          ]
         },
         {
           "name": "Twenty-First Century City",
           "firstYear": 2020,
-          "lastYear": 2026
+          "lastYear": 2026,
+          "summary": "The city must make room for new homes and industries while facing a changing climate. Its future depends on what it can reuse, reconnect, and protect.",
+          "suggestions": [
+            "Keep new development away from vulnerable low ground.",
+            "Reuse established streets and sites to limit unnecessary expansion."
+          ]
         }
+      ],
+      "summary": "Old industrial ground takes on new purposes. Your cities rebuild around changing industries, renewed waterfronts, and a growing demand for connections.",
+      "suggestions": [
+        "Look for industrial sites that can be reused near existing roads.",
+        "Preserve useful freight links while opening room for mixed development."
       ]
     }
   ],
@@ -277,22 +434,281 @@
         {
           "id": "agriculture",
           "name": "Agriculture",
-          "legacyName": "Agriculture"
+          "legacyName": "Agriculture",
+          "industryTabOrder": 4,
+          "industryLotNames": [
+            "farm",
+            "orchard",
+            "pasture",
+            "plantation"
+          ]
         },
         {
           "id": "extraction",
           "name": "Extraction",
-          "legacyName": "Extraction"
+          "legacyName": "Extraction",
+          "industryTabOrder": 1,
+          "industryLotNames": [
+            "lumber camp",
+            "lumberjack camp",
+            "stone quarry",
+            "clay pit",
+            "iron mine",
+            "coal mine",
+            "sand pit",
+            "gravel pit",
+            "sand or gravel pit"
+          ]
         },
         {
           "id": "manufacturing",
           "name": "Manufacturing",
-          "legacyName": "Manufacturing"
+          "legacyName": "Manufacturing",
+          "industryTabOrder": 3
+        },
+        {
+          "id": "processing",
+          "name": "Processing",
+          "industryTabOrder": 2
+        },
+        {
+          "id": "maritime",
+          "name": "Maritime",
+          "industryTabOrder": 5
+        },
+        {
+          "id": "specialized",
+          "name": "Specialized",
+          "industryTabOrder": 6,
+          "industryLotNames": [
+            "printing press",
+            "foundry",
+            "tannery",
+            "distillery"
+          ]
+        },
+        {
+          "id": "sawmill",
+          "name": "Processing / Sawmill",
+          "industryTab": "processing",
+          "industryCardTitle": "Sawmill",
+          "industryArtwork": 1,
+          "industryLotNames": [
+            "sawmill",
+            "saw mill",
+            "lumber mill"
+          ],
+          "industryAssetIds": [
+            "v3-building-lumber-mill"
+          ],
+          "industryMessages": [
+            {"firstYear": 1740, "text": "Saw local logs into boards for cabins and barns."},
+            {"firstYear": 1760, "text": "Supply boards for growing settlements and waterfront sheds."},
+            {"firstYear": 1780, "text": "Mill framing and planks for homes, workshops, and wharves."},
+            {"firstYear": 1800, "text": "Cut boards and beams for new towns and river landings."},
+            {"firstYear": 1820, "text": "Produce bridge timbers and decking for canal and road crews."},
+            {"firstYear": 1840, "text": "Saw standardized framing lumber for expanding towns."},
+            {"firstYear": 1860, "text": "Supply depot timbers and planks as rail connections spread."},
+            {"firstYear": 1870, "text": "Ship rough lumber to builders along the rail network."},
+            {"firstYear": 1880, "text": "Keep rapidly growing neighborhoods supplied with framing lumber."},
+            {"firstYear": 1890, "text": "Cut heavy timber for warehouses and factory floors."},
+            {"firstYear": 1900, "text": "Supply dimensional lumber for housing and industrial construction."},
+            {"firstYear": 1910, "text": "Cut boards for crates, factories, and new housing."},
+            {"firstYear": 1921, "text": "Supply lumber for homebuilding and commercial expansion."},
+            {"firstYear": 1930, "text": "Cut lumber for repairs and modest construction projects."},
+            {"firstYear": 1939, "text": "Produce lumber for crates, temporary buildings, and repair work."},
+            {"firstYear": 1946, "text": "Supply framing lumber for the surge in homebuilding."},
+            {"firstYear": 1955, "text": "Mill standardized studs and joists for suburban housing."},
+            {"firstYear": 1965, "text": "Cut timber for renovations and regional construction."},
+            {"firstYear": 1975, "text": "Supply graded lumber to builders and building yards."},
+            {"firstYear": 1990, "text": "Sort and cut lumber to customer specifications."},
+            {"firstYear": 2001, "text": "Produce kiln-dried boards for builders and wood shops."},
+            {"firstYear": 2010, "text": "Fill scheduled lumber orders for regional projects."},
+            {"firstYear": 2020, "text": "Supply dimensioned lumber for construction and renovation."}
+          ]
+        },
+        {
+          "id": "gristmill",
+          "name": "Processing / Gristmill",
+          "industryTab": "processing",
+          "industryCardTitle": "Gristmill",
+          "industryArtwork": 2,
+          "industryLotNames": [
+            "gristmill",
+            "grist mill"
+          ],
+          "industryMessages": [
+            {"firstYear": 1740, "text": "Grind settlers’ grain into meal and flour."},
+            {"firstYear": 1760, "text": "Mill local grain for households and town bakers."},
+            {"firstYear": 1780, "text": "Turn farmers’ harvests into flour for households and trade."},
+            {"firstYear": 1800, "text": "Sift flour for bakeries and pack meal for regional markets."},
+            {"firstYear": 1820, "text": "Send bagged flour to market by canal or wagon."},
+            {"firstYear": 1840, "text": "Grind larger harvests for growing towns and bakeries."},
+            {"firstYear": 1860, "text": "Supply flour and meal to towns linked by rail."},
+            {"firstYear": 1870, "text": "Ship bagged flour on rail lines to regional markets."},
+            {"firstYear": 1880, "text": "Keep urban bakeries supplied with milled flour."},
+            {"firstYear": 1890, "text": "Mill grain for wholesale flour merchants and city bakers."},
+            {"firstYear": 1900, "text": "Produce consistent flour for larger commercial bakeries."},
+            {"firstYear": 1910, "text": "Supply flour and meal for packaged foods and local baking."},
+            {"firstYear": 1921, "text": "Mill flour for retail shops and expanding bakeries."},
+            {"firstYear": 1930, "text": "Grind staple grains for everyday household and bakery use."},
+            {"firstYear": 1939, "text": "Supply flour for staple foods and institutional kitchens."},
+            {"firstYear": 1946, "text": "Mill flour for bakeries and packaged food producers."},
+            {"firstYear": 1955, "text": "Supply standardized flour blends for regional bakeries."},
+            {"firstYear": 1965, "text": "Mill grain for a range of commercial bread and cereal products."},
+            {"firstYear": 1975, "text": "Produce specialty flours alongside standard baking grades."},
+            {"firstYear": 1990, "text": "Mill and blend flour to customer specifications."},
+            {"firstYear": 2001, "text": "Supply flour for bakeries, food processors, and retail packs."},
+            {"firstYear": 2010, "text": "Track grain batches through milling and packaging."},
+            {"firstYear": 2020, "text": "Mill traceable flour blends for commercial and specialty markets."}
+          ]
+        },
+        {
+          "id": "brickworks",
+          "name": "Processing / Brickworks",
+          "industryTab": "processing",
+          "industryCardTitle": "Brickworks",
+          "industryArtwork": 3,
+          "industryLotNames": [
+            "brickworks",
+            "brick works"
+          ],
+          "industryMessages": [
+            {"firstYear": 1740, "text": "Fire local clay for hearths and chimneys."},
+            {"firstYear": 1760, "text": "Supply brick for foundations, ovens, and town chimneys."},
+            {"firstYear": 1780, "text": "Fire brick for workshops and growing town streets."},
+            {"firstYear": 1800, "text": "Produce brick for civic buildings, home walls, and hearths."},
+            {"firstYear": 1820, "text": "Supply fired brick for canal structures and nearby buildings."},
+            {"firstYear": 1840, "text": "Turn local clay into brick for mills and workers’ housing."},
+            {"firstYear": 1860, "text": "Fire brick for factories, depots, and expanding streets."},
+            {"firstYear": 1870, "text": "Ship brick by rail to builders in nearby towns."},
+            {"firstYear": 1880, "text": "Supply facing brick for new streets and storefronts."},
+            {"firstYear": 1890, "text": "Fire large batches for warehouses and urban blocks."},
+            {"firstYear": 1900, "text": "Produce durable brick for masonry buildings and factories."},
+            {"firstYear": 1910, "text": "Supply building brick for homes, schools, and commercial sites."},
+            {"firstYear": 1921, "text": "Fire facing brick for neighborhood shops and apartment blocks."},
+            {"firstYear": 1930, "text": "Supply brick for repairs and public construction."},
+            {"firstYear": 1939, "text": "Produce brick for plant buildings and essential repairs."},
+            {"firstYear": 1946, "text": "Supply brick for new homes and civic construction."},
+            {"firstYear": 1955, "text": "Fire facing brick for suburban homes and schools."},
+            {"firstYear": 1965, "text": "Supply brick for redevelopment and commercial building."},
+            {"firstYear": 1975, "text": "Produce facing brick for renovation and new construction."},
+            {"firstYear": 1990, "text": "Supply consistent colors and grades for architectural masonry."},
+            {"firstYear": 2001, "text": "Fire brick for housing, streetscapes, and restoration."},
+            {"firstYear": 2010, "text": "Fill scheduled orders for architectural brick and pavers."},
+            {"firstYear": 2020, "text": "Produce facing brick for infill housing and restoration."}
+          ]
+        },
+        {
+          "id": "blacksmith",
+          "name": "Manufacturing / Blacksmith",
+          "industryTab": "manufacturing",
+          "industryCardTitle": "Blacksmith",
+          "industryArtwork": 4,
+          "industryLotNames": [
+            "blacksmith"
+          ],
+          "industryMessages": [
+            {"firstYear": 1740, "text": "Forge nails, hinges, horseshoes, and farm tools."},
+            {"firstYear": 1760, "text": "Make hardware and repair tools for farms and trades."},
+            {"firstYear": 1780, "text": "Forge wagon fittings and repair tools for local workshops."},
+            {"firstYear": 1800, "text": "Supply builders with hinges, fasteners, and iron fittings."},
+            {"firstYear": 1820, "text": "Repair wagon gear and forge fittings for transport crews."},
+            {"firstYear": 1840, "text": "Forge replacement tools and fittings for busy workshops."},
+            {"firstYear": 1860, "text": "Repair ironwork on farm equipment and freight wagons."},
+            {"firstYear": 1870, "text": "Supply repairs and fittings near depots and rail yards."},
+            {"firstYear": 1880, "text": "Forge architectural hardware and repair trade equipment."},
+            {"firstYear": 1890, "text": "Fabricate iron fittings for urban builders and workshops."},
+            {"firstYear": 1900, "text": "Repair metal tools and make custom fittings for industry."},
+            {"firstYear": 1910, "text": "Adapt the forge to vehicle repairs and machinery fittings."},
+            {"firstYear": 1921, "text": "Forge custom brackets and repair shop tooling."},
+            {"firstYear": 1930, "text": "Rework worn metal parts and repair equipment."},
+            {"firstYear": 1939, "text": "Make and repair tooling for essential production."},
+            {"firstYear": 1946, "text": "Fabricate brackets, gates, and repair parts for rebuilding."},
+            {"firstYear": 1955, "text": "Supply custom railings and hardware for growing neighborhoods."},
+            {"firstYear": 1965, "text": "Repair industrial tools and fabricate architectural ironwork."},
+            {"firstYear": 1975, "text": "Make custom metalwork for restoration and construction."},
+            {"firstYear": 1990, "text": "Fabricate repair parts and specialized decorative ironwork."},
+            {"firstYear": 2001, "text": "Forge custom hardware for buildings and restoration."},
+            {"firstYear": 2010, "text": "Produce made-to-order fixtures and repair worn metalwork."},
+            {"firstYear": 2020, "text": "Make custom ironwork and support historic building restoration."}
+          ]
+        },
+        {
+          "id": "cooperage",
+          "name": "Manufacturing / Cooperage",
+          "industryTab": "manufacturing",
+          "industryCardTitle": "Cooperage",
+          "industryArtwork": 5,
+          "industryLotNames": [
+            "cooperage"
+          ],
+          "industryMessages": [
+            {"firstYear": 1740, "text": "Make wooden barrels for storing grain and salted food."},
+            {"firstYear": 1760, "text": "Build casks for merchants, brewers, and waterfront trade."},
+            {"firstYear": 1780, "text": "Make sturdy barrels for farm produce and coastal shipments."},
+            {"firstYear": 1800, "text": "Supply containers for flour, staples, and spirits."},
+            {"firstYear": 1820, "text": "Build casks for goods moving by canal and wagon."},
+            {"firstYear": 1840, "text": "Supply barrels to mills, breweries, and wholesale merchants."},
+            {"firstYear": 1860, "text": "Build shipping barrels for regional rail freight."},
+            {"firstYear": 1870, "text": "Make casks for goods moving through rail and harbor depots."},
+            {"firstYear": 1880, "text": "Supply brewers and food merchants with wooden containers."},
+            {"firstYear": 1890, "text": "Produce standardized casks for large shippers and producers."},
+            {"firstYear": 1900, "text": "Build tight barrels for liquids and durable shipping containers."},
+            {"firstYear": 1910, "text": "Make casks for beverage producers and industrial users."},
+            {"firstYear": 1921, "text": "Supply wooden containers for food and specialty trades."},
+            {"firstYear": 1930, "text": "Repair and reuse casks alongside new barrel production."},
+            {"firstYear": 1939, "text": "Make durable casks for storage and transport."},
+            {"firstYear": 1946, "text": "Supply barrels for beverage makers and specialty storage."},
+            {"firstYear": 1955, "text": "Make and repair oak casks for drinks producers."},
+            {"firstYear": 1965, "text": "Concentrate on aging casks and specialty wooden containers."},
+            {"firstYear": 1975, "text": "Build oak barrels for aging and small-batch producers."},
+            {"firstYear": 1990, "text": "Supply casks made to beverage producers’ specifications."},
+            {"firstYear": 2001, "text": "Make and refurbish barrels for wine and spirits."},
+            {"firstYear": 2010, "text": "Build specialty casks for regional drinks producers."},
+            {"firstYear": 2020, "text": "Produce and recondition oak casks for beverage aging."}
+          ]
+        },
+        {
+          "id": "shipyard",
+          "name": "Maritime / Shipyard",
+          "industryTab": "maritime",
+          "industryCardTitle": "Shipyard",
+          "industryArtwork": 6,
+          "industryLotNames": [
+            "shipyard"
+          ],
+          "industryMessages": [
+            {"firstYear": 1740, "text": "Build and repair small wooden vessels for trade and fishing."},
+            {"firstYear": 1760, "text": "Fit out coastal craft and repair hulls for local merchants."},
+            {"firstYear": 1780, "text": "Build and refit sailing vessels for coastal trade."},
+            {"firstYear": 1800, "text": "Maintain fishing boats, ferries, and coastal freight vessels."},
+            {"firstYear": 1820, "text": "Build barges and service vessels for growing water routes."},
+            {"firstYear": 1840, "text": "Repair wooden hulls and service steam-powered vessels."},
+            {"firstYear": 1860, "text": "Fit out workboats and support regional steam traffic."},
+            {"firstYear": 1870, "text": "Repair hulls and machinery for rail-linked waterfront trade."},
+            {"firstYear": 1880, "text": "Service freight vessels, ferries, and harbor craft."},
+            {"firstYear": 1890, "text": "Refit workboats and repair larger commercial vessels."},
+            {"firstYear": 1900, "text": "Repair steamships and build harbor service craft."},
+            {"firstYear": 1910, "text": "Fit and maintain engines and equipment for working vessels."},
+            {"firstYear": 1921, "text": "Build and service commercial vessels and harbor craft."},
+            {"firstYear": 1930, "text": "Extend vessel service life through hull and machinery repairs."},
+            {"firstYear": 1939, "text": "Build and repair workboats and vessels for wartime service."},
+            {"firstYear": 1946, "text": "Refit merchant vessels and repair harbor infrastructure craft."},
+            {"firstYear": 1955, "text": "Service commercial fleets and build specialized workboats."},
+            {"firstYear": 1965, "text": "Repair and convert vessels for changing freight needs."},
+            {"firstYear": 1975, "text": "Refit working fleets and service modern cargo vessels."},
+            {"firstYear": 1990, "text": "Install modern machinery and repair commercial hulls."},
+            {"firstYear": 2001, "text": "Refit ferries, workboats, and commercial vessels."},
+            {"firstYear": 2010, "text": "Service fleet equipment and carry out scheduled vessel repairs."},
+            {"firstYear": 2020, "text": "Refit commercial vessels and install modern propulsion equipment."}
+          ]
         },
         {
           "id": "warehousing",
           "name": "Warehousing",
-          "legacyName": "Warehousing"
+          "legacyName": "Warehousing",
+          "industryTab": "specialized"
         }
       ]
     },

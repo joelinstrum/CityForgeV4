@@ -161,6 +161,112 @@ namespace CityForge.World
             return false;
         }
 
+        private void ClearLotStructures(DistrictLotRecord record)
+        {
+            var footprint = new DistrictLotFootprint(record);
+            var removed = PlacedLots.Where(other => other != movingDistrictLot &&
+                other.id != record.id && footprint.Overlaps(new DistrictLotFootprint(other))).ToHashSet();
+            PlacedLots.RemoveAll(removed.Contains);
+            if (removed.Count > 0) QueueDemolitionGrowth(removed);
+            PlacedActors.RemoveAll(actor =>
+            {
+                if (actor.streetscape == null || !footprint.Contains(actor.position)) return false;
+                if (streetscapeViews.Remove(actor, out var view) && view)
+                {
+                    view.SetActive(false);
+                    Destroy(view);
+                }
+                return true;
+            });
+        }
+
+        private readonly HashSet<DistrictLotRecord> revealingLots = new();
+
+        private System.Collections.IEnumerator LotPlacementDust(DistrictLotRecord record)
+        {
+            var shader = Resources.Load<Shader>("Weather/Precipitation");
+            if (!shader) yield break;
+            revealingLots.Add(record);
+            if (districtLotRoots.TryGetValue(record, out var hiddenLot) && hiddenLot)
+                hiddenLot.gameObject.SetActive(false);
+            var material = new Material(shader) { name = "Lot construction dust" };
+            var emitter = new GameObject("Settling lot dust");
+            emitter.transform.SetParent(transform, false);
+            var system = emitter.AddComponent<ParticleSystem>();
+            system.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            var main = system.main;
+            main.playOnAwake = false;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            main.startLifetime = 4.2f;
+            main.startSpeed = 0f;
+            main.maxParticles = 10000;
+            var emission = system.emission;
+            emission.enabled = false;
+            var shape = system.shape;
+            shape.enabled = false;
+            var renderer = system.GetComponent<ParticleSystemRenderer>();
+            renderer.sharedMaterial = material;
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+            renderer.maxParticleSize = 1f;
+            var fade = system.colorOverLifetime;
+            fade.enabled = true;
+            var gradient = new Gradient();
+            gradient.SetKeys(new[] { new GradientColorKey(new Color(.43f, .28f, .14f), 0f),
+                new GradientColorKey(new Color(.62f, .45f, .27f), 1f) },
+                new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(.8f, .12f), new GradientAlphaKey(.7f, .55f),
+                    new GradientAlphaKey(0f, 1f) });
+            fade.color = gradient;
+            var growth = system.sizeOverLifetime;
+            growth.enabled = true;
+            growth.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.EaseInOut(0f, .35f, 1f, 1.7f));
+            var turbulence = system.noise;
+            turbulence.enabled = true;
+            turbulence.strength = 1.1f;
+            turbulence.frequency = .3f;
+            turbulence.scrollSpeed = .45f;
+            var footprint = new DistrictLotFootprint(record);
+            var size = record.definition.Size;
+            float step = Mathf.Max(2f, Mathf.Max(size.x, size.y) / 48f);
+            try
+            {
+                system.Play();
+                // Emit fresh overlapping billows at ground level while older ones climb and expand.
+                const int waves = 14;
+                for (int wave = 0; wave < waves; wave++)
+                {
+                    for (float z = step * .5f; z < size.y; z += step)
+                    for (float x = step * .5f; x < size.x; x += step)
+                    {
+                        var point = footprint.WorldPoint(new Vector2(
+                            x - size.x * .5f + UnityEngine.Random.Range(-step * .4f, step * .4f),
+                            z - size.y * .5f + UnityEngine.Random.Range(-step * .4f, step * .4f)));
+                        var particle = new ParticleSystem.EmitParams
+                        {
+                            position = new Vector3(point.x, LotHeight(point) + UnityEngine.Random.Range(.1f, .8f), point.y),
+                            velocity = new Vector3(UnityEngine.Random.Range(-.7f, .7f),
+                                UnityEngine.Random.Range(3f, 5f), UnityEngine.Random.Range(-.7f, .7f)),
+                            startSize = UnityEngine.Random.Range(step * 1.4f, step * 2.6f),
+                            startLifetime = UnityEngine.Random.Range(3.5f, 4.2f),
+                            startColor = new Color(UnityEngine.Random.Range(.8f, 1f), .9f, .85f, 1f),
+                            rotation = UnityEngine.Random.Range(0f, 360f)
+                        };
+                        system.Emit(particle, 1);
+                    }
+                    yield return new WaitForSeconds(.13f);
+                }
+                yield return new WaitForSeconds(4.3f);
+            }
+            finally
+            {
+                revealingLots.Remove(record);
+                if (districtLotRoots.TryGetValue(record, out var revealedLot) && revealedLot)
+                    revealedLot.gameObject.SetActive(true);
+                if (emitter) Destroy(emitter);
+                if (material) Destroy(material);
+            }
+        }
+
         private void ClearLotVegetation(DistrictLotRecord record)
         {
             var footprint = new DistrictLotFootprint(record);

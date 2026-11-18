@@ -30,6 +30,8 @@ namespace CityForge.CameraSystem
                 || Mathf.Abs(view.fieldOfView - previousFov) > .0001f);
             previousPosition = transform.position; previousRotation = transform.rotation;
             previousSize = view.orthographicSize; previousFov = view.fieldOfView; initialized = true;
+            var controller = GetComponent<CityForgeCameraController>();
+            if (controller && controller.FlyingIntoDistrict) moved = true;
             if (moved) { lastMotion = Time.unscaledTime; Reduce(); }
             else if (ReducedQuality && Time.unscaledTime - lastMotion >= SettleSeconds) Restore();
         }

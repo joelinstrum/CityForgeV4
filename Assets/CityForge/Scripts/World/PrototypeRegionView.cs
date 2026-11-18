@@ -333,6 +333,7 @@ namespace CityForge.World
             {
                 progress?.Invoke("Preparing region",.15f);yield return null;
                 if (snapshot?.info.lots != null) view.PlacedLots.AddRange(snapshot.info.lots);
+                view.RestoreReadRegionMessages(snapshot?.info.readMessages);
                 view.RestoreTownZones(snapshot?.info.townZones, snapshot?.info.townZoneGridVersion ?? 0);
                 view.RestoreDistrictRoads(snapshot?.info.districtRoads);
                 if (snapshot?.info.placedActors != null) view.PlacedActors.AddRange(snapshot.info.placedActors);
@@ -508,6 +509,7 @@ namespace CityForge.World
         {
             var root = new GameObject("RegionHud", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             root.transform.SetParent(transform);
+            regionHudVisibility = root.AddComponent<CanvasGroup>();
             root.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
             if(loadingProgress!=null)root.SetActive(false);
             var scaler = root.GetComponent<CanvasScaler>();
@@ -801,8 +803,20 @@ namespace CityForge.World
             }
         }
 
+        private CanvasGroup regionHudVisibility;
+
         private void Update()
         {
+            if (UpdateRegionMessage()) return;
+            if (regionHudVisibility && !DistrictLoading && !IsSaving && Input.GetKeyDown(KeyCode.H) &&
+                !(EventSystem.current && EventSystem.current.currentSelectedGameObject &&
+                  EventSystem.current.currentSelectedGameObject.TryGetComponent<InputField>(out var input) && input.isFocused))
+            {
+                bool show = regionHudVisibility.alpha == 0f;
+                regionHudVisibility.alpha = show ? 1f : 0f;
+                regionHudVisibility.interactable = show;
+                regionHudVisibility.blocksRaycasts = show;
+            }
             TickDistrictClock();
             RefreshTownConstruction();
             UpdateRegionDistrictHover();
@@ -817,7 +831,7 @@ namespace CityForge.World
             }
             TickPlacedPedestrians();
             TickDistrictEagle();
-            if (UpdateDistrictScripts()) return;
+            if ((!regionHudVisibility || regionHudVisibility.alpha > 0f) && UpdateDistrictScripts()) return;
             if (armedDistrictActor != null && Input.GetKeyDown(KeyCode.Escape))
             {
                 CancelDistrictActor();
@@ -848,6 +862,7 @@ namespace CityForge.World
                 return;
             }
             UpdateLotGrowth();
+            if (regionHudVisibility && regionHudVisibility.alpha == 0f) return;
             if (UpdateDetonate() || UpdateParkTreeBrush() || UpdateStreetscape()) return;
             if (UpdateRoadPlacement() || UpdateRoadContext() || UpdateRoadPaths()) return;
             if (townTools && townTools.HandleDistrictContext()) return;
@@ -979,13 +994,54 @@ namespace CityForge.World
                 ShowOverview();regionNote.text="Could not open district. Please try again.";Debug.LogException(error);
             });
         }
+        private bool TryCommercialZoneCenter(out Vector2 point)
+        {
+            Vector2 CellCenter(Vector2Int cell) => ZoneCorner(cell) + Vector2.one * (DistrictGridCellMeters * .5f);
+            var cells = new HashSet<Vector2Int>(townZones
+                .Where(pair => (pair.Value is TownZone.Commercial1 or TownZone.Commercial2 or TownZone.Commercial3) &&
+                    InActiveDistrict(CellCenter(pair.Key)))
+                .Select(pair => pair.Key));
+            var directions = new[] { Vector2Int.left, Vector2Int.right, Vector2Int.up, Vector2Int.down };
+            var area = new List<Vector2Int>();
+            int largest = 0;
+            point = default;
+            while (cells.Count > 0)
+            {
+                var first = cells.First();
+                cells.Remove(first);
+                area.Clear();
+                area.Add(first);
+                Vector2 sum = Vector2.zero;
+                for (int i = 0; i < area.Count; i++)
+                {
+                    var cell = area[i];
+                    sum += cell;
+                    foreach (var direction in directions)
+                        if (cells.Remove(cell + direction)) area.Add(cell + direction);
+                }
+
+                if (area.Count < largest) continue;
+                Vector2 center = sum / area.Count;
+                var focus = CellCenter(area.OrderBy(cell => ((Vector2)cell - center).sqrMagnitude).First());
+                if (area.Count == largest && (point - ActiveDistrictBounds.center).sqrMagnitude <=
+                    (focus - ActiveDistrictBounds.center).sqrMagnitude) continue;
+                largest = area.Count;
+                point = focus;
+            }
+            return largest > 0;
+        }
+
         private bool TryDistrictFlyInFocus(out Vector3 destination)
         {
             destination = default;
+            if (TryCommercialZoneCenter(out var point))
+            {
+                destination = new Vector3(point.x, LotHeight(point) + 1.5f, point.y);
+                return true;
+            }
             var town = Towns.Where(candidate => InActiveDistrict((candidate.position - Vector2.one * .5f) * MapSide))
                 .OrderBy(candidate => candidate.awaitingFoundersBuilding).ThenByDescending(candidate => candidate.capital)
                 .FirstOrDefault(candidate => !candidate.awaitingFoundersBuilding);
-            Vector2 point;
             if (town != null)
                 point = (town.position - Vector2.one * .5f) * MapSide;
             else

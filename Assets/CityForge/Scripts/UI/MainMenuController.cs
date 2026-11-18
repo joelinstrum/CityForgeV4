@@ -232,6 +232,7 @@ namespace CityForge.UI
             World.SavedRegionSnapshot snapshot=null;
             yield return World.RegionMapGenerator.GenerateStages(name,size,settings,value=>snapshot=value,progress);
             yield return World.PrototypeRegionView.OpenStages(name,menu,snapshot:snapshot,progress:progress);
+            FindFirstObjectByType<World.PrototypeRegionView>()?.ShowNewRegionWelcome();
         }
 
         private static void Exit()

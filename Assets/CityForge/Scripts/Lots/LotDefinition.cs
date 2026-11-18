@@ -237,13 +237,16 @@ namespace CityForge.Lots
     public enum LotCapitalEffect
     {
         None, PublicBuildingCostReduction, CrimeReduction, CivicPrestigeIncrease,
-        PublicBuildingRepairCostReduction, PortFeeRevenueIncrease, PopulationGrowthIncrease
+        PublicBuildingRepairCostReduction, PortFeeRevenueIncrease, PopulationGrowthIncrease, ResourceCostReduction
     }
+
+    public enum LotCostResource { Lumber, Bricks, Stone, Iron, Coal, Clay }
 
     [Serializable]
     public struct LotCapitalBonus
     {
         public LotCapitalEffect effect;
+        public LotCostResource resource;
         public int percent;
         // Zero means ongoing; a positive value limits the public building discount.
         public int eligibleBuildings;
@@ -256,6 +259,8 @@ namespace CityForge.Lots
                 if (!Enum.IsDefined(typeof(LotCapitalEffect), effect)) return false;
                 if (effect == LotCapitalEffect.None)
                     return percent == 0 && eligibleBuildings == 0 && !requiresOperatingPort;
+                if (effect == LotCapitalEffect.ResourceCostReduction && !Enum.IsDefined(typeof(LotCostResource), resource))
+                    return false;
                 return percent >= 1 && percent <= 100 && eligibleBuildings >= 0 && eligibleBuildings <= 99 &&
                     (eligibleBuildings == 0 || effect == LotCapitalEffect.PublicBuildingCostReduction);
             }

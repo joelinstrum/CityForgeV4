@@ -58,9 +58,9 @@ namespace CityForge.World
             public Transform Carriage;
             public Vector3 CarriageRestPosition;
             public Quaternion CarriageRestRotation;
-            public float HorseYaw, CarriageYaw, TurnFrom, TurnTarget;
-            public float TurnProgress, CarriageTurnFrom, CarriageTurnTarget, CarriageTurnProgress;
+            public float CarriageYaw, HitchToRearAxle;
             public bool HeadingInitialized;
+            public float VehicleRestartTime;
             public Vector2 PassingOffset;
             public int Next, Direction = 1, TrafficRank;
             public bool Closed, Ambient, Vehicle, EagleCarried;
@@ -310,6 +310,14 @@ namespace CityForge.World
             var vehicleCounts = new int[vehicleGroups.Length];
             var vehicleRoutes = districtRoadMeshes.Keys.Select(road =>
                 (Points: RoadCenterline(road).ToArray(), Closed: road.closed)).Where(route => route.Points.Length > 1).ToArray();
+            var teamRoutes = districtRoadMeshes.Keys.Select(road =>
+            {
+                if (road.curved) return (Points: RoadCenterline(road).ToArray(), Closed: road.closed);
+                var points = new List<Vector2>();
+                // Keep the turn close to the intersection on square-cornered roads.
+                LotPathSurface.RoundCorners(road.points, null, road.closed, road.width * .4f, points);
+                return (Points: points.ToArray(), Closed: road.closed);
+            }).Where(route => route.Points.Length > 1).ToArray();
             var random = new System.Random(SelectedDistrict);
             var walking = blocks.Select(route => (Points: route, Closed: true))
                 .Concat(pedestrianRoutes.Select(route => (route.Points, route.Closed))).ToArray();
@@ -359,7 +367,7 @@ namespace CityForge.World
                         var choice = eligible[random.Next(eligible.Length)].asset;
                         if (!group.parked)
                         {
-                            var route = FindTrafficRoute(origin, vehicleRoutes);
+                            var route = FindTrafficRoute(origin, VehicleProfile.Find(choice.id)?.team == true ? teamRoutes : vehicleRoutes);
                             if (route.points != null)
                                 SpawnTraffic(choice, route.start, route.points, route.next, route.closed, random, true);
                             continue;
@@ -545,6 +553,13 @@ namespace CityForge.World
                     actor.Wheels = actor.Body.GetComponentsInChildren<Transform>().Where(part =>
                         part.name is "Carriage_Front_Left" or "Carriage_Front_Right" or
                         "Carriage_Rear_Left" or "Carriage_Rear_Right").ToArray();
+                if (actor.Carriage)
+                {
+                    var rearWheel = actor.Wheels?.FirstOrDefault(wheel => wheel.name == "Carriage_Rear_Left");
+                    actor.HitchToRearAxle = rearWheel
+                        ? Mathf.Max(.25f, Vector3.Dot(actor.Body.position - rearWheel.position, actor.Body.forward))
+                        : 2f;
+                }
             }
             else actor.Speed *= Mathf.Lerp(.83f, 1.17f, (float)random.NextDouble());
             return actor;
@@ -722,6 +737,12 @@ namespace CityForge.World
         {
             if (trafficVisibilityPhase == TimeOfDay) return;
             trafficVisibilityPhase = TimeOfDay;
+            foreach (var actor in pedestrians)
+                SetTrafficVisibility(actor);
+        }
+
+        private void SetTrafficVisibility(Pedestrian actor)
+        {
             int limit = TimeOfDay switch
             {
                 RegionTimeOfDay.Morning => (ambientTrafficCount + 2) / 4,
@@ -729,11 +750,8 @@ namespace CityForge.World
                 RegionTimeOfDay.Night => 0,
                 _ => ambientTrafficCount
             };
-            foreach (var actor in pedestrians)
-            {
-                bool active = !actor.Ambient || actor.TrafficRank < limit;
-                if (actor.Body.gameObject.activeSelf != active) actor.Body.gameObject.SetActive(active);
-            }
+            bool active = actor.VehicleRestartTime <= 0f && (!actor.Ambient || actor.TrafficRank < limit);
+            if (actor.Body.gameObject.activeSelf != active) actor.Body.gameObject.SetActive(active);
         }
 
         private readonly List<(Vector2 center, Vector2 forward)> wagonTraffic = new();
@@ -762,11 +780,17 @@ namespace CityForge.World
             foreach (var wagon in pedestrians)
             {
                 if (!wagon.Carriage || !wagon.Body.gameObject.activeSelf) continue;
-                var center = wagon.Body.position - wagon.Body.forward * 1.3f;
-                wagonTraffic.Add((new Vector2(center.x, center.z), new Vector2(wagon.Body.forward.x, wagon.Body.forward.z)));
+                var forward = Quaternion.Euler(0f, wagon.HeadingInitialized ? wagon.CarriageYaw : wagon.Body.eulerAngles.y, 0f) * Vector3.forward;
+                var center = wagon.Body.position - forward * (wagon.HitchToRearAxle * .5f);
+                wagonTraffic.Add((new Vector2(center.x, center.z), new Vector2(forward.x, forward.z)));
             }
             foreach (var walker in pedestrians)
             {
+                if (walker.VehicleRestartTime > 0f && Time.time >= walker.VehicleRestartTime)
+                {
+                    walker.VehicleRestartTime = 0f;
+                    SetTrafficVisibility(walker);
+                }
                 if (!walker.Body.gameObject.activeSelf || walker.EagleCarried || walker.Route.Length < 2) continue;
                 var p = walker.Body.position;
                 bool nearCamera = ActorSimulationVisibility.NearCamera(camera, p);
@@ -776,16 +800,6 @@ namespace CityForge.World
                 if (nearCamera && !walker.Vehicle && !SetPedestrianAnimation(walker, true)) continue;
                 var current = new Vector2(p.x, p.z) - walker.PassingOffset;
                 float budget = simulationTime * walker.Speed;
-                if (walker.Carriage && walker.HeadingInitialized)
-                {
-                    var nextHeading = (walker.Route[walker.Next] - current).normalized;
-                    if (nextHeading != Vector2.zero &&
-                        Mathf.Abs(Mathf.DeltaAngle(walker.HorseYaw, Mathf.Atan2(nextHeading.x, nextHeading.y) * Mathf.Rad2Deg)) > 30f)
-                    {
-                        TurnHorseTeam(walker, nextHeading, simulationTime);
-                        continue;
-                    }
-                }
                 if (walker.Vehicle && !walker.Carriage)
                     budget = SteerAroundWagons(walker, current, simulationTime, budget);
                 var heading = Vector2.zero;
@@ -796,7 +810,11 @@ namespace CityForge.World
                     var next = Vector2.MoveTowards(current, target, budget);
                     var delta = next - current;
                     float distance = delta.magnitude;
-                    if (distance > .0001f) heading = delta / distance;
+                    if (distance > .0001f)
+                    {
+                        heading = delta / distance;
+                        if (walker.Carriage) AdvanceHorseTeam(walker, heading, distance);
+                    }
                     budget -= distance;
                     travelled += distance;
                     current = next;
@@ -805,22 +823,38 @@ namespace CityForge.World
                     if (walker.Closed) index = (index + walker.Route.Length) % walker.Route.Length;
                     else if (index < 0 || index >= walker.Route.Length)
                     {
+                        if (walker.Vehicle)
+                        {
+                            // End this trip and start a fresh forward pass after a short gap.
+                            walker.Body.gameObject.SetActive(false);
+                            walker.VehicleRestartTime = Time.time + 2f;
+                            walker.Body.position = PedestrianGround(walker.Route[0]);
+                            walker.PassingOffset = Vector2.zero;
+                            walker.HeadingInitialized = false;
+                            walker.Next = 1;
+                            var forward = (walker.Route[1] - walker.Route[0]).normalized;
+                            if (forward != Vector2.zero)
+                            {
+                                if (walker.Carriage) AdvanceHorseTeam(walker, forward, 0f);
+                                else walker.Body.rotation = Quaternion.LookRotation(new Vector3(forward.x, 0f, forward.y));
+                            }
+                            break;
+                        }
                         walker.Direction = -walker.Direction;
                         index = walker.Next + walker.Direction;
                     }
                     walker.Next = index;
                 }
+                if (walker.VehicleRestartTime > 0f) continue;
                 var destination = current + walker.PassingOffset;
                 walker.Body.position = PedestrianGround(destination);
-                if (walker.Carriage)
-                    TurnHorseTeam(walker, heading, simulationTime);
-                else
+                if (!walker.Carriage)
                 {
                     var motion = walker.Vehicle ? destination - new Vector2(p.x, p.z) : heading;
                     if (motion.sqrMagnitude > .00001f)
                         walker.Body.rotation = Quaternion.LookRotation(new Vector3(motion.x, 0, motion.y));
                 }
-                if (walker.Wheels != null)
+                if (!walker.Carriage && walker.Wheels != null)
                     foreach (var wheel in walker.Wheels)
                         wheel.Rotate(wheel.InverseTransformDirection(walker.Body.right),
                             travelled * Mathf.Rad2Deg / .48f, Space.Self);
@@ -856,57 +890,39 @@ namespace CityForge.World
             return budget;
         }
 
-        private static void TurnHorseTeam(Pedestrian team, Vector2 heading, float elapsed)
+        private static void AdvanceHorseTeam(Pedestrian team, Vector2 heading, float distance)
         {
-            if (heading != Vector2.zero)
+            float horseYaw = Mathf.Atan2(heading.x, heading.y) * Mathf.Rad2Deg;
+            if (!team.HeadingInitialized)
             {
-                float yaw = Mathf.Atan2(heading.x, heading.y) * Mathf.Rad2Deg;
-                if (!team.HeadingInitialized)
-                {
-                    team.HeadingInitialized = true;
-                    team.HorseYaw = team.CarriageYaw = team.TurnFrom = team.TurnTarget = yaw;
-                    team.TurnProgress = team.CarriageTurnProgress = 1f;
-                    team.CarriageTurnFrom = team.CarriageTurnTarget = yaw;
-                }
-                else if (Mathf.Abs(Mathf.DeltaAngle(team.TurnTarget, yaw)) >
-                    (team.TurnProgress < 1f ? 12f : .5f))
-                {
-                    team.TurnFrom = team.HorseYaw;
-                    team.TurnTarget = yaw;
-                    team.TurnProgress = 0f;
-                }
+                team.HeadingInitialized = true;
+                team.CarriageYaw = horseYaw;
             }
-            if (!team.HeadingInitialized) return;
-            float turn = Mathf.DeltaAngle(team.TurnFrom, team.TurnTarget);
-            float duration = Mathf.Max(.15f, Mathf.Abs(turn) / 100f);
-            team.TurnProgress = Mathf.Min(1f, team.TurnProgress + elapsed / duration);
-            team.HorseYaw = StagedTurn(team.TurnFrom, turn, team.TurnProgress);
-            if (team.TurnProgress >= 1f)
-            {
-                // The wagon starts its own turn only once the horse faces down the new street.
-                if (Mathf.Abs(Mathf.DeltaAngle(team.CarriageTurnTarget, team.TurnTarget)) > .5f)
-                {
-                    team.CarriageTurnFrom = team.CarriageYaw;
-                    team.CarriageTurnTarget = team.TurnTarget;
-                    team.CarriageTurnProgress = 0f;
-                }
-                float carriageTurn = Mathf.DeltaAngle(team.CarriageTurnFrom, team.CarriageTurnTarget);
-                team.CarriageTurnProgress = Mathf.Min(1f, team.CarriageTurnProgress +
-                    elapsed / Mathf.Max(.15f, Mathf.Abs(carriageTurn) / 65f));
-                team.CarriageYaw = StagedTurn(team.CarriageTurnFrom, carriageTurn, team.CarriageTurnProgress);
-            }
-            team.Body.rotation = Quaternion.Euler(0, team.HorseYaw, 0);
-            var hinge = Quaternion.Euler(0, Mathf.DeltaAngle(team.HorseYaw, team.CarriageYaw), 0);
-            team.Carriage.localRotation = hinge * team.CarriageRestRotation;
-            team.Carriage.localPosition = hinge * team.CarriageRestPosition;
-        }
 
-        private static float StagedTurn(float from, float angle, float progress)
-        {
-            float half = Mathf.Min(45f, Mathf.Abs(angle) * .5f) * Mathf.Sign(angle);
-            return from + (progress <= .5f
-                ? Mathf.Lerp(0f, half, Mathf.SmoothStep(0f, 1f, progress * 2f))
-                : Mathf.Lerp(half, angle, Mathf.SmoothStep(0f, 1f, (progress - .5f) * 2f)));
+            // Pull the wagon by its hitch. The rear axle trails behind and rolls
+            // along the wagon's heading as the hitch moves along each route segment.
+            float oldYaw = team.CarriageYaw;
+            float angle = Mathf.DeltaAngle(oldYaw, horseYaw) * Mathf.Deg2Rad;
+            float halfAngle = angle * .5f;
+            float decay = Mathf.Exp(-distance / team.HitchToRearAxle);
+            float remaining = 2f * Mathf.Atan2(Mathf.Sin(halfAngle) * decay, Mathf.Cos(halfAngle));
+            float turned = (angle - remaining) * Mathf.Rad2Deg;
+            team.CarriageYaw = oldYaw + turned;
+            team.Body.rotation = Quaternion.Euler(0f, horseYaw, 0f);
+            var articulation = Quaternion.Euler(0f, Mathf.DeltaAngle(horseYaw, team.CarriageYaw), 0f);
+            team.Carriage.localRotation = articulation * team.CarriageRestRotation;
+            team.Carriage.localPosition = articulation * team.CarriageRestPosition;
+
+            if (team.Wheels == null) return;
+            var carriageHeading = Quaternion.Euler(0f, team.CarriageYaw, 0f);
+            var axle = carriageHeading * Vector3.right;
+            float axleTravel = distance * Mathf.Cos((angle + remaining) * .5f);
+            foreach (var wheel in team.Wheels)
+            {
+                float lateralOffset = Vector3.Dot(wheel.position - team.Body.position, axle);
+                float wheelTravel = axleTravel - lateralOffset * turned * Mathf.Deg2Rad;
+                wheel.Rotate(wheel.InverseTransformDirection(axle), wheelTravel * Mathf.Rad2Deg / .48f, Space.Self);
+            }
         }
 
     }

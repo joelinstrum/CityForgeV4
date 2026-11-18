@@ -136,6 +136,7 @@ namespace CityForge.World
             SavedRegionSnapshot snapshot = null;
             yield return RegionMapGenerator.GenerateStages(RegionName, Size, settings, value => snapshot = value, overlay.Report);
             if (saved) snapshot.info.id = SavedRegionId;
+            snapshot.info.readMessages = CaptureReadRegionMessages();
 
             var regionField = Shader.GetGlobalTexture("_RegionField");
             var meadowCover = Shader.GetGlobalTexture("_MeadowCoverField");

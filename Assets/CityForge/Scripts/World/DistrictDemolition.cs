@@ -24,7 +24,7 @@ namespace CityForge.World
 
         private void BuildDetonateButton(Font font)
         {
-            detonateButton = TownButton(townToolbar, font, "Detonate", 1048, -14, 64,
+            detonateButton = TownButton(townToolbar, font, "Detonate", 1200, -14, 64,
                 () => SetDetonate(!detonateArmed));
             detonateButton.GetComponentInChildren<Text>(true).gameObject.SetActive(false);
             var icon = FounderRect(detonateButton.transform, "Dynamite icon", new Vector2(0, -1), new Vector2(36, 24));
