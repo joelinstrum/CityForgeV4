@@ -1,3 +1,30 @@
+# CityForge V4 handoff · November 18, 2026 · R2/R3 low-wealth walking paths
+
+Roadside sidewalk space beside low-wealth R2/R3 lots now displays a softly blended dirt
+walking path using the existing ResidentialFootpath/packed-earth palette. Other density,
+wealth and opposite-side sidewalk defaults remain unchanged. Corner lots contribute
+both street frontages; lot rotations and curved road cross sections remain supported.
+The band uses the existing 1m shoulder next to the pedestrian route rather than painting
+terrain or editing authored lot paths. Existing towns acquire it on district load.
+
+`NeighborhoodFootpaths` derives frontage coverage from presented lots. Coverage feathers
+at outer frontage ends and sums adjoining lots to avoid seams. `RefreshDistrictSidewalks`
+filters nearby frontages, reuses district materials, prunes transparent-only triangles,
+and inversely masks existing planks/bluestone where the dirt band replaces them.
+`LotPathBlend` has opt-in vertex opacity and lightly varied feather width; default
+properties preserve existing road/lot path appearance. Dirt remains partially transparent
+to reveal the real ground. No per-frame path rebuilding, save schema, terrain repaint,
+forest change or finish reroll is introduced.
+
+`NeighborhoodFootpathChecks.Run` verifies density/wealth, all four frontages/eight lot
+rotations, road side, feathered ends, adjoining lots and corner frontages. Isolated QA
+uses the real sidewalk builder and R2 models, verifies 1m ribbon coordinates and shader
+compilation, and checks partial plank-sidewalk replacement on the correct side.
+Preview outputs: this chat's outputs/Neighborhood-Footpaths. No original map or lot
+library was saved. Live player-town visual acceptance remains with the user.
+
+---
+
 # CityForge V4 handoff · November 18, 2026 · Smooth pursuit and intermittent gestures
 
 The Hooligan follow jitter came from snapping the camera to movement occurring at

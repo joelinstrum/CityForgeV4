@@ -28,6 +28,8 @@ Shader "CityForge/Lot Path Blend"
         [HideInInspector] _RecessDirt("Dirt Lining", 2D) = "white" {}
         [HideInInspector] _RecessBrick("Brick Lining", 2D) = "white" {}
         _PathOpacity("Path Opacity", Range(0,1)) = 1
+        [HideInInspector] _VertexOpacity("Vertex Opacity", Float) = 0
+        [HideInInspector] _NaturalFootpath("Natural Footpath Edges", Float) = 0
     }
     SubShader
     {
@@ -67,6 +69,8 @@ Shader "CityForge/Lot Path Blend"
             float _EdgeBlend;
             float _Recessed;
             float _PathOpacity;
+            float _VertexOpacity;
+            float _NaturalFootpath;
             float _RecessDepth;
             float _RecessBorder;
             TEXTURE2D(_RecessDirt);
@@ -105,6 +109,7 @@ Shader "CityForge/Lot Path Blend"
                 float4 tangentOS : TANGENT;
                 float2 uv : TEXCOORD0;
                 float4 ribbon : TEXCOORD1;
+                half4 color : COLOR;
             };
 
             struct Varyings
@@ -116,6 +121,7 @@ Shader "CityForge/Lot Path Blend"
                 float2 uv : TEXCOORD3;
                 float4 ribbon : TEXCOORD4;
                 half fog : TEXCOORD5;
+                half vertexOpacity : TEXCOORD6;
             };
 
             Varyings PathVertex(Attributes input)
@@ -130,6 +136,7 @@ Shader "CityForge/Lot Path Blend"
                 output.uv = TRANSFORM_TEX(input.uv, _BaseMap);
                 output.ribbon = input.ribbon;
                 output.fog = ComputeFogFactor(position.positionCS.z);
+                output.vertexOpacity = input.color.a;
                 return output;
             }
 
@@ -311,7 +318,11 @@ Shader "CityForge/Lot Path Blend"
 
                 // x/y are across the ribbon in meters. z/w describe its open ends.
                 float edgeDistance = sideDistance;
-                float opacity = _EdgeBlend > 0 ? smoothstep(0, _EdgeBlend, sideDistance) : 1;
+                float feather = _EdgeBlend;
+                if (_NaturalFootpath > .5)
+                    feather *= 1 + .18 * sin(dot(input.positionWS.xz, float2(2.31, .83)))
+                        * sin(dot(input.positionWS.xz, float2(.61, 1.97)));
+                float opacity = feather > 0 ? smoothstep(0, feather, sideDistance) : 1;
                 #if defined(_ROAD_WEAR)
                     // Alpha lets the actual lit terrain show through. Limit the patch
                     // breakup to the shoulder so the wheel bed stays continuously dirt.
@@ -382,7 +393,7 @@ Shader "CityForge/Lot Path Blend"
                     color.rgb *= 1 - .20 * shadow;
                 }
                 color.rgb = MixFog(color.rgb, input.fog);
-                color.a = opacity * _PathOpacity;
+                color.a = opacity * _PathOpacity * lerp(1, input.vertexOpacity, saturate(_VertexOpacity));
                 return color;
             }
             ENDHLSL
