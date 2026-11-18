@@ -1,3 +1,30 @@
+# CityForge V4 handoff · November 18, 2026 · Evening Harass pursuit
+
+Harass now performs its raised-arm dance and bounded random pedestrian following
+only during Evening. Other phases lower the arms and idle at the current position.
+The Lot Editor preview also gates its dance on the Evening preset. Targets are active,
+walking, non-vehicle pedestrians within 24m; encounters are transient and not saved.
+A chase lasts at most 12 seconds before choosing again, stops 2m away, and uses short
+0.5m collision-certified segments. New lot/road/forest/water changes invalidate the
+current movement certificate; blocked approaches wait rather than find global detours.
+Nearby victims turn away along their retained circuit and hurry for three seconds at
+1.6× walking speed, without damage, combat, route rebuilding or police response.
+
+Performance policy: target searches occur no more often than every four seconds,
+inspect at most eight randomly sampled entries, and allocate no candidate lists.
+Movement runs at 10Hz; short segment certificates are reused between checks. Scare
+line-of-sight checks are limited to once per 1.5 seconds. Visual harassment pauses
+outside the close camera view/Zoom 0–2; authored character animators use visibility
+culling. There is no background/off-district crime simulation.
+
+`HarassFollowChecks.Run` passes isolated evening-only pursuit, standoff, retained-route
+flight direction, capped sampling/probes, offscreen pause, vehicle exclusion, new
+blocker rejection and 10,000 steady active/inactive updates without managed allocation.
+These checks are not a live-town FPS benchmark. The original saves/libraries were
+not written. Police arrival and disappearing offenders remain future work.
+
+---
+
 # CityForge V4 handoff · November 18, 2026 · Harass character script
 
 `LotScriptedBehavior.Harass` appends saved enum value 4; previous values remain intact.

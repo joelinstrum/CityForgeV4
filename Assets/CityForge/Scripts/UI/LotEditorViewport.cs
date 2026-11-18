@@ -978,7 +978,7 @@ namespace CityForge.UI
             if (!image) return;
             if (!animationsPaused)
             {
-                characterPreview.Tick(Time.unscaledDeltaTime, draggedObject == null ? null : selectionFootprints.Keys);
+                characterPreview.Tick(Time.unscaledDeltaTime, draggedObject == null ? null : selectionFootprints.Keys, PreviewTime == RegionTimeOfDay.Evening);
                 foreach (var pair in selectionFootprints)
                     if (instances.TryGetValue(pair.Key, out var selectedView))
                         pair.Value.localPosition = selectedView.localPosition + Vector3.up * .075f;

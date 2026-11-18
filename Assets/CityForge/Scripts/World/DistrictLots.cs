@@ -762,7 +762,10 @@ namespace CityForge.World
                     {
                         var harass = character.gameObject.AddComponent<DistrictHarass>();
                         harass.districtCamera = camera;
-                        harass.behavior = new LotHarass(character);
+                        harass.behavior = new LotHarass(character, startAnimation: false);
+                        harass.view = this;
+                        foreach (var animator in character.GetComponentsInChildren<Animator>())
+                            animator.cullingMode = AnimatorCullingMode.CullCompletely;
                     }
                     if (item.characterScript.configured && item.characterScript.scriptedBehavior == LotScriptedBehavior.Lumberjack && ApprovedDistrict)
                         character.gameObject.AddComponent<DistrictLumberjack>().Initialize(ApprovedDistrict, camera, record);

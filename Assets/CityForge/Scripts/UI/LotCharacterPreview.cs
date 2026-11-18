@@ -115,7 +115,7 @@ namespace CityForge.UI
             actor.requestedAnimation = null;
             actor.shopkeeper = null;
             actor.harass = actor.settings.scriptedBehavior == LotScriptedBehavior.Harass && LotHarass.Supports(view.gameObject)
-                ? new LotHarass(view, item.yaw, !paused) : null;
+                ? new LotHarass(view, item.yaw, false) : null;
             if (actor.settings.scriptedBehavior == LotScriptedBehavior.Shopkeeper &&
                 LotShopkeeper.TryEntrance(lot, catalog, item.position, growablePreview, out var door, out var forward))
                 actor.shopkeeper = new LotShopkeeper(view, asset, door, forward, _ => 0f, preview: true);
@@ -174,7 +174,7 @@ namespace CityForge.UI
             actor.talking = false;
         }
 
-        public void Tick(float delta, ICollection<string> dragged)
+        public void Tick(float delta, ICollection<string> dragged, bool evening = true)
         {
             if (delta <= 0) return;
             previewTime += delta;
@@ -184,7 +184,8 @@ namespace CityForge.UI
                 if (!actor.settings.configured) continue;
                 if (actor.harass != null)
                 {
-                    if (dragged?.Contains(pair.Key) != true) actor.harass.Tick(delta);
+                    if (!evening) actor.harass.Stop();
+                    else if (dragged?.Contains(pair.Key) != true) actor.harass.Tick(delta);
                     continue;
                 }
                 if (actor.shopkeeper != null)

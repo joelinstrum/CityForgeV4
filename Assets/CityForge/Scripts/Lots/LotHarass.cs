@@ -8,7 +8,9 @@ namespace CityForge.Lots
     internal sealed class LotHarass
     {
         private readonly Transform view, spine;
-        private readonly Quaternion heading, spineRest;
+        private Quaternion heading;
+        private readonly Quaternion spineRest;
+        private readonly Quaternion[] armRest;
         private readonly Animator animator;
         private readonly (Transform upper, Transform elbow, Transform hand, float side)[] arms;
         private float time;
@@ -44,6 +46,7 @@ namespace CityForge.Lots
                 (Find(bones, "L_Upperarm", "LeftArm", "UpperArm.L"), Find(bones, "L_Forearm", "LeftForeArm", "Forearm.L"), Find(bones, "L_Hand", "LeftHand", "Hand.L"), -1f),
                 (Find(bones, "R_Upperarm", "RightArm", "UpperArm.R"), Find(bones, "R_Forearm", "RightForeArm", "Forearm.R"), Find(bones, "R_Hand", "RightHand", "Hand.R"), 1f)
             };
+            armRest = arms.SelectMany(arm => new[] { arm.Item1 ? arm.Item1.localRotation : Quaternion.identity, arm.Item2 ? arm.Item2.localRotation : Quaternion.identity }).ToArray();
             animator = view.GetComponentInChildren<Animator>();
             if (startAnimation) StartAnimation();
         }
@@ -57,6 +60,29 @@ namespace CityForge.Lots
                 int walk = Animator.StringToHash(animator.GetLayerName(0) + ".Walk");
                 if (animator.HasState(0, walk)) animator.Play(walk, 0, 0);
                 animator.speed = .75f;
+                animator.Update(0);
+            }
+        }
+
+        internal void Face(Quaternion worldRotation) => heading = view.parent
+            ? Quaternion.Inverse(view.parent.rotation) * worldRotation : worldRotation;
+
+        internal void Stop()
+        {
+            if (!animationStarted) return;
+            animationStarted = false;
+            view.localRotation = heading;
+            if (spine) spine.localRotation = spineRest;
+            for (int i = 0; i < arms.Length; i++)
+            {
+                if (arms[i].upper) arms[i].upper.localRotation = armRest[i * 2];
+                if (arms[i].elbow) arms[i].elbow.localRotation = armRest[i * 2 + 1];
+            }
+            if (animator && animator.runtimeAnimatorController)
+            {
+                animator.speed = 1;
+                int idle = Animator.StringToHash(animator.GetLayerName(0) + ".Idle");
+                if (animator.HasState(0, idle)) animator.Play(idle, 0, 0);
                 animator.Update(0);
             }
         }

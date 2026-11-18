@@ -1979,7 +1979,7 @@ namespace CityForge.UI
             var shopkeeper = Control(scripted, "Shopkeeper", 177, 0, 166, () => { });
             var lumberjack = Control(scripted, "Lumberjack", 354, 0, 166, () => { });
             var harass = Control(scripted, "Harass", 0, 44, 166, () => { });
-            var harassNote = Label(scripted, "Raises both arms, sways and shuffles in place to represent nonviolent street trouble.", 8, 94, 495, 16);
+            var harassNote = Label(scripted, "Evening only: raises both arms and follows nearby pedestrians, who hurry away.", 8, 94, 495, 16);
             At(harassNote.rectTransform, 8, 94, 495, 78);
             var lumberNote = Label(scripted, "Claims a nearby forest tree within 80m, walks over, chops it down, then returns home. Requires Walk and Chop animations. Harvesting runs in the district.", 8, 47, 495, 16);
             At(lumberNote.rectTransform, 8, 94, 495, 100);
@@ -2116,7 +2116,7 @@ namespace CityForge.UI
                 CloseAssetPopup();
                 viewport.RestartCharacterPreview(character.id);
                 Refresh(settings.scriptedBehavior == LotScriptedBehavior.Harass
-                    ? "Harass assigned · raises arms and dances in place."
+                    ? "Harass assigned · follows and scares pedestrians in the evening."
                     : settings.scriptedBehavior == LotScriptedBehavior.Shopkeeper
                     ? "Shopkeeper assigned · uses the nearest marked pedestrian entrance."
                     : "Character behavior applied.");
