@@ -325,6 +325,19 @@ namespace CityForge.World
             return 0;
         }
 
+        private void DetonateSelectedLot()
+        {
+            var lot = selectedDistrictLot;
+            if (lot == null || SelectedDistrict < 0 || DistrictLoading || IsSaving || RemakeBlocksInput ||
+                playerLotWorkspace || movingDistrictLot != null || lotPlacementDraft != null || !PlacedLots.Contains(lot)) return;
+            // Reuse the existing demolition path, with a fresh target set containing
+            // only this lot. Roads and neighboring lots are not part of this action.
+            SetDetonate(false);
+            SelectDistrictLot(null);
+            detonateLots.Add(lot);
+            CommitDetonateStroke();
+        }
+
         private void CommitDetonateStroke()
         {
             int lots = PlacedLots.RemoveAll(detonateLots.Contains);

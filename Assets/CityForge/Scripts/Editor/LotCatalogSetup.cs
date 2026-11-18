@@ -193,6 +193,7 @@ internal static class LotCatalogSetup
             if (entry.category != "Buildings" && !entry.IsCharacter)
                 entry.distantPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(
                     $"{DirectoryPath}/PropLOD/{entry.id}.fbx");
+            entry.PrepareFenceSpan();
             var existing = entries.Find(item => item != null && item.id == entry.id);
             if (existing == null)
             {
@@ -252,6 +253,15 @@ internal static class LotCatalogSetup
                 entries[entries.IndexOf(existing)] = entry;
                 changed = true;
             }
+            else if (entry.category == LotAssetCatalog.Transport &&
+                VehicleProfile.All.Any(profile => profile.assetId == entry.id && profile.team) &&
+                (existing.prefab != entry.prefab || existing.footprint != entry.footprint || existing.fitModel != entry.fitModel))
+            {
+                existing.prefab = entry.prefab;
+                existing.footprint = entry.footprint;
+                existing.fitModel = entry.fitModel;
+                changed = true;
+            }
             else if ((entry.category == "Buildings" || entry.IsCharacter) &&
                 (existing.group != entry.group || existing.eraId != entry.eraId ||
                     existing.fromYear != entry.fromYear || existing.toYear != entry.toYear ||
@@ -271,6 +281,7 @@ internal static class LotCatalogSetup
                 changed = true;
             }
         }
+        DeliveryCargoAssetSetup.Prepare();
         if (!changed) return;
         if (!catalog)
         {
@@ -399,32 +410,86 @@ internal static class LotCatalogSetup
         if (!wagon.prefab || !horse.prefab) return Entry(wagon.id, label, LotAssetCatalog.Transport, null, Vector2.zero, true, false);
         string path = $"{DirectoryPath}/V3Vehicles/{folder}/Team.prefab";
         var team = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-        if (!team)
+        const string geometryVersion = "CityForgeHorseTeamGeometryV5";
+        if (!team || !AssetDatabase.GetLabels(team).Contains(geometryVersion))
         {
             var root = new GameObject(label);
             try
             {
                 AddModel(wagon, height, -hitch);
+                float horseHeight = VehicleProfile.All.FirstOrDefault(profile => profile.assetId == wagon.id)?.teamHorseHeight ?? 0f;
                 for (int i = 0; i < horseCount; i++)
-                    AddModel(horse, 1.75f, 0f, i - (horseCount - 1) * .5f);
+                    AddModel(horse, horseHeight > 0f ? horseHeight : 1.75f, 0f, i - (horseCount - 1) * .5f);
                 team = PrefabUtility.SaveAsPrefabAsset(root, path);
+                AssetDatabase.SetLabels(team, AssetDatabase.GetLabels(team).Append(geometryVersion).Distinct().ToArray());
             }
             finally { UnityEngine.Object.DestroyImmediate(root); }
 
             void AddModel(LotAssetCatalogEntry entry, float targetHeight, float z, float x = 0f)
             {
-                var model = UnityEngine.Object.Instantiate(entry.prefab, root.transform, false);
-                var bounds = FenceBounds(model);
+                // Keep fitted dimensions outside the animated FBX root, whose clips may restore its source scale.
+                var model = new GameObject(entry.label);
+                model.transform.SetParent(root.transform, false);
+                var visual = UnityEngine.Object.Instantiate(entry.prefab, model.transform, false);
+                if (entry.id == horse.id)
+                {
+                    var controller = Resources.Load<RuntimeAnimatorController>("Lots/V3Vehicles/Horse/Motion");
+                    var animator = model.GetComponentInChildren<Animator>();
+                    if (!animator) animator = visual.AddComponent<Animator>();
+                    animator.avatar = Resources.LoadAll<Avatar>("Lots/V3Vehicles/Horse/Model").FirstOrDefault();
+                    animator.runtimeAnimatorController = controller;
+                    animator.applyRootMotion = false;
+                }
+                foreach (var animator in model.GetComponentsInChildren<Animator>())
+                    if (animator.runtimeAnimatorController) { animator.Rebind(); animator.Update(0f); }
+                var bounds = PosedVehicleBounds(model);
                 if (bounds.size.y > .001f) model.transform.localScale *= targetHeight / bounds.size.y;
-                model.transform.localPosition = new Vector3(x, -FenceBounds(model).min.y, z);
+                var fitted = PosedVehicleBounds(model);
+                model.transform.localPosition = new Vector3(x - fitted.center.x, -fitted.min.y, z);
                 foreach (var renderer in model.GetComponentsInChildren<Renderer>())
                     renderer.sharedMaterials = renderer.sharedMaterials.Select(_ => entry.materialOverride).ToArray();
             }
         }
         if (!team) return Entry(wagon.id, label, LotAssetCatalog.Transport, null, Vector2.zero, true, false);
-        var size = FenceBounds(team).size;
-        var result = Entry(wagon.id, label, LotAssetCatalog.Transport, team, new Vector2(size.x, size.z), true, true);
+        var size = PosedVehicleBounds(team).size;
+        // Team geometry is authored in metres around its hitch; renderer bounds must not refit an animated horse.
+        var result = Entry(wagon.id, label, LotAssetCatalog.Transport, team, new Vector2(size.x, size.z), true, false);
         SetEra(result, "founders");
+        return result;
+    }
+
+    private static Bounds PosedVehicleBounds(GameObject model)
+    {
+        var result = new Bounds(); bool first = true;
+        void Include(Vector3 point)
+        {
+            if (first) { result = new Bounds(point, Vector3.zero); first = false; }
+            else result.Encapsulate(point);
+        }
+        foreach (var renderer in model.GetComponentsInChildren<Renderer>())
+        {
+            if (renderer is SkinnedMeshRenderer skin && skin.sharedMesh)
+            {
+                var mesh = skin.sharedMesh; var vertices = mesh.vertices; var weights = mesh.boneWeights;
+                var poses = mesh.bindposes; var bones = skin.bones;
+                var matrices = bones.Select((bone, index) => bone.localToWorldMatrix * poses[index]).ToArray();
+                for (int i = 0; i < vertices.Length; i++)
+                {
+                    if (weights.Length != vertices.Length) { Include(renderer.transform.TransformPoint(vertices[i])); continue; }
+                    var w = weights[i]; var v = vertices[i]; var point = Vector3.zero;
+                    if (w.weight0 > 0) point += matrices[w.boneIndex0].MultiplyPoint3x4(v) * w.weight0;
+                    if (w.weight1 > 0) point += matrices[w.boneIndex1].MultiplyPoint3x4(v) * w.weight1;
+                    if (w.weight2 > 0) point += matrices[w.boneIndex2].MultiplyPoint3x4(v) * w.weight2;
+                    if (w.weight3 > 0) point += matrices[w.boneIndex3].MultiplyPoint3x4(v) * w.weight3;
+                    Include(point);
+                }
+                continue;
+            }
+            var bounds = renderer.localBounds;
+            for (int i = 0; i < 8; i++) Include(renderer.transform.TransformPoint(new Vector3(
+                (i & 1) == 0 ? bounds.min.x : bounds.max.x, (i & 2) == 0 ? bounds.min.y : bounds.max.y,
+                (i & 4) == 0 ? bounds.min.z : bounds.max.z)));
+        }
         return result;
     }
 

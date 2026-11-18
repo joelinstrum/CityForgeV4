@@ -149,6 +149,28 @@ namespace CityForge.World
                     yield return (new Vector2(i % side, i / side) / (side - 1), values[i] / 255f);
         }
 
+        internal bool InCapture(string type, Vector2 center, float radius, Func<Vector2,bool> inSphere=null)
+        {
+            if(data==null)return false;
+            foreach(var deposit in data.deposits)
+                if(deposit.type==type&&known.Contains(deposit.id))
+                {
+                    float distance=Vector2.Distance(center,deposit.position);
+                    if(distance>radius+deposit.radius)continue;
+                    var nearest=distance>.00001f?deposit.position+(center-deposit.position)*(Mathf.Min(distance,deposit.radius)/distance):center;
+                    if(inSphere==null||inSphere(nearest))return true;
+                }
+            if(!layers.TryGetValue(type,out var values))return false;
+            if(Contains(center)&&Sample(values,center)>=.25f&&(inSphere==null||inSphere(center)))return true;
+            for(int ring=1;ring<=2;ring++)for(int i=0;i<16;i++)
+            {
+                float angle=i*Mathf.PI*2/16;
+                var point=center+new Vector2(Mathf.Cos(angle),Mathf.Sin(angle))*(radius*ring*.5f);
+                if(Contains(point)&&Sample(values,point)>=.25f&&(inSphere==null||inSphere(point)))return true;
+            }
+            return false;
+        }
+
         public Dictionary<string, float> At(Vector2 position) => SampleAt(position, false);
 
 #if UNITY_EDITOR

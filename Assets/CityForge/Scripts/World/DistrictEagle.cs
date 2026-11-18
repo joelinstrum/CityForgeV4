@@ -168,7 +168,7 @@ namespace CityForge.World
                     float lead = Mathf.Clamp((Vector3.Distance(eagle.position, gripTarget) - 2f) / 18f, 0f, .65f);
                     var approach = gripTarget + eaglePassenger.Body.forward * (eaglePassenger.Speed * lead) -
                         (EagleGrip() - eagle.position);
-                    if (eagleStreetHeading != Vector3.zero)
+                    if (eagleStreetHeading != Vector3.zero && !EaglePickupSidewalk(gripTarget))
                     {
                         var offset = approach - eagleStreetEntry;
                         var streetSide = Vector3.Cross(Vector3.up, eagleStreetHeading);
@@ -443,6 +443,8 @@ namespace CityForge.World
             }
             if (!close) return false;
 
+            // Sidewalks and road margins are authoritative open pickup space, including overhanging renderer bounds.
+            if (EagleSidewalkSegment(grip, target)) return true;
             foreach (var (bounds, worldToLocal, _) in eagleBuildingBounds)
             {
                 var localGrip = worldToLocal.MultiplyPoint3x4(grip);
@@ -545,9 +547,13 @@ namespace CityForge.World
             if (slowForLanding)
                 advance = Mathf.Min(horizontal.magnitude, Mathf.Min(speed,
                     Mathf.Max(pickupApproach ? .55f : 2.5f, horizontal.magnitude)) * delta);
-            float lookAhead = pickupApproach ? 2.5f : speed * 1.4f;
-            float roofAhead = EagleRoofAhead(position, forward, Mathf.Max(advance, lookAhead), advance,
-                pickupApproach ? .55f * (1f - SidewalkForgiveness) : 1.6f, out float roofAtStep);
+            bool sidewalkPickup = pickupApproach && EagleSidewalkSegment(position, target);
+            if (sidewalkPickup && horizontal.magnitude < 2.5f && horizontal.sqrMagnitude > .0001f)
+                forward = horizontal.normalized;
+            float lookAhead = pickupApproach ? Mathf.Min(2.5f, horizontal.magnitude) : speed * 1.4f;
+            float roofAtStep = float.NegativeInfinity;
+            float roofAhead = sidewalkPickup ? float.NegativeInfinity : EagleRoofAhead(position, forward, Mathf.Max(advance, lookAhead), advance,
+                pickupApproach ? .55f * (1f - SidewalkForgiveness) : 1.6f, out roofAtStep);
             float nextHeight = Mathf.MoveTowards(position.y, Mathf.Max(target.y, roofAhead), speed * .8f * delta);
             // Hold at the edge until the wings and any passenger clear the roof.
             if (Mathf.Min(position.y, nextHeight) < roofAtStep) advance = 0f;

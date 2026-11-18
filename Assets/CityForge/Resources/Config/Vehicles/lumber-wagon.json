@@ -9,7 +9,32 @@
   "team": true,
   "rollWheels": true,
   "trafficGroup": "wagon",
-  "spawnEvery": 4,
+  "spawnEvery": 0,
   "speed": 2.25,
-  "speedVariation": 0.17
+  "speedVariation": 0.17,
+  "supportsLumberFreight": true,
+  "teamHorseHeight": 2.3,
+  "supportsResourceFreight": true,
+  "emptyCargoMesh": "Lots/V3Vehicles/LumberWagon/EmptyBody",
+  "cargoMeshPart": "Carriage_Body",
+  "cargoCenter": {
+    "x": 0,
+    "y": 1.06,
+    "z": -1.55
+  },
+  "cargoSize": {
+    "x": 1.18,
+    "y": 0.75,
+    "z": 1.95
+  },
+  "cargoCutCenter": {
+    "x": 0,
+    "y": 2,
+    "z": -1.55
+  },
+  "cargoCutSize": {
+    "x": 2,
+    "y": 1.9,
+    "z": 2.5
+  }
 }

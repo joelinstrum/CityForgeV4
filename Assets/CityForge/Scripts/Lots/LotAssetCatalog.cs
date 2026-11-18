@@ -41,6 +41,15 @@ namespace CityForge.Lots
         public bool fitModel;
         public Material materialOverride;
         public float fenceSpan, fenceDepth;
+        public float FencePlacementLength => LotPropStyles.Find(id) is { Straight: true } style ? style.Length : fenceSpan;
+        // Editor catalog preparation calls this without depending on internal style types.
+        public void PrepareFenceSpan()
+        {
+            if (LotPropStyles.Find(id) is not { Straight: true } || fenceSpan > 0) return;
+            fenceAlongZ = footprint.y > footprint.x;
+            fenceSpan = Mathf.Max(footprint.x, footprint.y);
+            fenceDepth = Mathf.Min(footprint.x, footprint.y);
+        }
         public bool fenceAlongZ;
         public Vector3 fenceCenter;
         public GameObject fencePost;
@@ -62,7 +71,22 @@ namespace CityForge.Lots
             return catalog;
         }
 
-        public LotAssetCatalogEntry Find(string id) => Array.Find(entries, item => item != null && item.id == id);
+        private LotAssetCatalogEntry[] lookupSource;
+        private readonly System.Collections.Generic.Dictionary<string, LotAssetCatalogEntry> lookup = new(StringComparer.Ordinal);
+        private void OnValidate() => lookupSource = null;
+        public LotAssetCatalogEntry Find(string id)
+        {
+            if (id == null) return null;
+            if (!ReferenceEquals(lookupSource, entries))
+            {
+                lookup.Clear();
+                if (entries != null)
+                    foreach (var entry in entries)
+                        if (entry != null && entry.id != null && !lookup.ContainsKey(entry.id)) lookup.Add(entry.id, entry);
+                lookupSource = entries;
+            }
+            return lookup.TryGetValue(id, out var found) ? found : null;
+        }
     }
 
     public static class LotRuntimeLoader
@@ -174,6 +198,8 @@ namespace CityForge.Lots
                 DistrictBuildingDetail.Attach(wrapper.transform, model.transform, asset, districtCamera, season);
             if (asset.category == "Trees")
                 TintPlaceableTree(wrapper, asset.id, season);
+            if (item.vehicleScript.behavior != LotVehicleBehavior.None && item.vehicleScript.ResourceTask && VehicleProfile.Find(asset.id) is { } cargoProfile)
+                VehicleCargoPresentation.Attach(wrapper.transform, cargoProfile)?.SetLoad(item.vehicleScript.resource, 0, item.vehicleScript.Capacity);
             return wrapper;
         }
 

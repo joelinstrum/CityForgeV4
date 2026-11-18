@@ -39,11 +39,18 @@ namespace CityForge.Lots
         public int monthlyCost;
         public string category = "";
         public string subcategory = "";
+        public LotDeliveryRole deliveryRole;
+        public bool deliveryRoleConfigured;
+        internal LotDeliveryRole DeliveryRole => !deliveryRoleConfigured && deliveryRole == LotDeliveryRole.None &&
+            objects != null && objects.Exists(item => item.assetId == LotCharacterDeck.HarborHouse)
+                ? LotDeliveryRole.TownCenter : deliveryRole;
         public LotWealth wealth;
         public string firstEraId = "";
         public int firstEraYear;
         public List<LotRequiredResource> requiredResources = new List<LotRequiredResource>();
         public bool requiresKiln;
+        public bool resourceCaptureConfigured;
+        public LotRequiredResource captureResource;
         public LotCapitalBonus capitalBonus;
         public int width = 6;
         public int length = 8;
@@ -148,6 +155,8 @@ namespace CityForge.Lots
                 string.IsNullOrWhiteSpace(lot.name) || !ValidSize(lot.width, lot.length) ||
                 !Enum.IsDefined(typeof(LotWaterfrontSide), lot.waterfrontSide) ||
                 !Enum.IsDefined(typeof(HarborVesselTraffic), lot.harborVesselTraffic) ||
+                !Enum.IsDefined(typeof(LotDeliveryRole), lot.deliveryRole) ||
+                !Enum.IsDefined(typeof(LotRequiredResource), lot.captureResource) ||
                 lot.waterfrontRows < 0 || lot.waterfrontRows >= lot.WaterfrontDepth ||
                 !Enum.IsDefined(typeof(LotType), lot.type) || !lot.zoningLayout.Valid ||
                 !Enum.IsDefined(typeof(LotStreetFrontage), lot.streetFrontage) ||
@@ -174,7 +183,7 @@ namespace CityForge.Lots
                     !float.IsFinite(item.scale) || item.scale < .25f || item.scale > 3f ||
                     !float.IsFinite(item.fenceLength) || item.fenceLength < 0f || item.fenceLength > 192f ||
                     !float.IsFinite(item.position.x) || !float.IsFinite(item.position.y) ||
-                    !item.characterScript.IsValid)
+                    !item.characterScript.IsValid || !item.vehicleScript.IsValid)
                     throw new InvalidDataException("Invalid lot object.");
             }
             lot.paths ??= new List<LotPathDefinition>();
@@ -267,7 +276,7 @@ namespace CityForge.Lots
         }
     }
 
-    public enum LotScriptedBehavior { None, DockWorker, Shopkeeper }
+    public enum LotScriptedBehavior { None, DockWorker, Shopkeeper, Lumberjack }
 
     [Serializable]
     public struct LotCharacterScript
@@ -307,6 +316,7 @@ namespace CityForge.Lots
         public bool fenceEndPost;
         public bool varyTreeOnPlacement;
         public LotCharacterScript characterScript;
+        public LotVehicleScript vehicleScript;
     }
 
     internal sealed class LotEditorSession

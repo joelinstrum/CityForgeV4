@@ -198,7 +198,7 @@ internal static class LotEditorChecks
         Point(new Vector2(12.6f, 0));
         Require(Spans().Length == 1 && Spans()[0].childCount == 3, "Single fence has its rail and two posts.");
         var style = LotAssetCatalog.Load().Find("wood-fence");
-        Require(Mathf.Abs(Spans()[0].localPosition.x + (style.fenceSpan + style.fencePostWidth) / 2 - 12) < .01f,
+        Require(Mathf.Abs(Spans()[0].localPosition.x + (style.FencePlacementLength + style.fencePostWidth) / 2 - 12) < .01f,
             "A click just outside the lot seats the panel flush inside the edge.");
         footer.Find("Undo").GetComponent<Button>().onClick.Invoke();
 

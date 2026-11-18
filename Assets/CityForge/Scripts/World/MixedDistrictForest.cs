@@ -69,6 +69,36 @@ namespace CityForge.World
             foreach(var p in placements)unchecked{signature=(signature^p.hash)*1099511628211UL;signature=(signature^(uint)p.variant)*1099511628211UL;}
             PlacementSignature=signature.ToString("x16");
         }
+        private string captureSignature;
+        private readonly HashSet<Vector2Int> capturePoints = new();
+        internal bool HasTimberAt(Vector2 point)
+        {
+            if(!Ready)return false;
+            if(captureSignature!=PlacementSignature)
+            {
+                capturePoints.Clear();
+                foreach(var placement in placements)if(placement.root)
+                    capturePoints.Add(Vector2Int.RoundToInt(new Vector2(placement.root.position.x,placement.root.position.z)*100f));
+                captureSignature=PlacementSignature;
+            }
+            return capturePoints.Contains(Vector2Int.RoundToInt(point*100f));
+        }
+
+        internal bool TryTimberVisual(Vector2 point, out GameObject prefab, out Vector3 position, out Quaternion rotation, out Vector3 scale)
+        {
+            foreach (var placement in placements)
+            {
+                if (!placement.root || (new Vector2(placement.root.position.x, placement.root.position.z) - point).sqrMagnitude > .0001f) continue;
+                prefab = MixedForestLibrary.Load().prefabs[placement.variant];
+                position = placement.root.position;
+                rotation = placement.root.rotation;
+                scale = placement.root.localScale;
+                return true;
+            }
+            prefab = null; position = default; rotation = Quaternion.identity; scale = Vector3.one;
+            return false;
+        }
+
         public int RemoveWithin(Vector2 center,float radius)=>RemoveWithin(new[]{center},radius);
         public int RemoveWithin(IReadOnlyList<Vector2> centers,float radius)
         {

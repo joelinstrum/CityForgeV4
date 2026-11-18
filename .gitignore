@@ -273,3 +273,16 @@ venv/
 !/Assets/CityForge/Scenes/Gameplay/
 !/Assets/CityForge/Scenes/Gameplay/Startup.unity
 !/Assets/CityForge/Scenes/Gameplay/Startup.unity.meta
+
+# Shared vehicle behavior/cargo configuration is source, not private artwork.
+!/Assets/CityForge/Resources/Config/VehicleScripts.json
+!/Assets/CityForge/Resources/Config/VehicleScripts.json.meta
+!/Assets/CityForge/Resources/Config/VehicleCargo.json
+!/Assets/CityForge/Resources/Config/VehicleCargo.json.meta
+
+# Extraction placement overlay shader is source, not artwork.
+!/Assets/CityForge/Resources/UI/ExtractionCaptureSphere.shader
+!/Assets/CityForge/Resources/UI/ExtractionCaptureSphere.shader.meta
+
+!/Assets/CityForge/Resources/Config/LotPropStyles.json
+!/Assets/CityForge/Resources/Config/LotPropStyles.json.meta

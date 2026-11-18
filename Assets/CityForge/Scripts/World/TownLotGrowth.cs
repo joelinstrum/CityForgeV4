@@ -264,6 +264,7 @@ namespace CityForge.World
                     else
                         record.definition = LotDefinition.Parse(JsonUtility.ToJson(layout));
                     record.id = Guid.NewGuid().ToString("N");
+                    LotPropStyles.Apply(record.definition, record.id, LotAssetCatalog.Load());
                     PlacedLots.Add(record);
                     grownLots.Add(record);
                     grownNames.Add(layout.name);

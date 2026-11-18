@@ -55,6 +55,7 @@ namespace CityForge.World
         private readonly List<DistrictRoadRecord> districtRoads = new();
         private readonly List<UnityEngine.Object> roadPresentationAssets = new();
         private readonly Dictionary<string, Material> districtRoadMaterials = new();
+        internal int FreightRoadRevision { get; private set; }
         private readonly Dictionary<DistrictRoadRecord, MeshFilter> districtRoadMeshes = new();
         private Transform districtRoadRoot, districtSidewalkRoot;
         private readonly List<UnityEngine.Object> sidewalkAssets = new();
@@ -655,7 +656,7 @@ namespace CityForge.World
             road.transform.SetParent(districtRoadRoot, false);
             var filter = road.GetComponent<MeshFilter>();
             filter.sharedMesh = mesh;
-            districtRoadMeshes.Add(record, filter);
+            districtRoadMeshes.Add(record, filter); FreightRoadRevision++;
             var renderer = road.GetComponent<MeshRenderer>();
             renderer.sharedMaterial = material;
             renderer.sortingOrder = order;
@@ -788,7 +789,7 @@ namespace CityForge.World
             foreach (var asset in roadPresentationAssets) Destroy(asset);
             roadPresentationAssets.Clear();
             districtRoadMaterials.Clear();
-            districtRoadMeshes.Clear();
+            districtRoadMeshes.Clear(); FreightRoadRevision++;
         }
 
         private sealed class RoadWireSurface : PointWireSurface

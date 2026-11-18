@@ -30,16 +30,20 @@ namespace CityForge.World
         public LotDefinition definition;
         public LotCustomization customization;
         public string growthBuildingId;
+        public int storedTimber, receivedTimber;
+        public List<LotResourceAmount> storedResources = new(), receivedResources = new();
+        public List<LotVehicleJobState> vehicleJobs = new();
     }
 
     public sealed partial class PrototypeRegionView
     {
         internal List<DistrictLotRecord> PlacedLots { get; } = new List<DistrictLotRecord>();
         private Transform lotInstances;
+        internal int LotPresentationBuilds { get; private set; }
         private GameObject lotActions;
         private Text lotFeedback;
         private Text placeLotLabel, lotFacingLabel, selectedLotTitle, selectedLotDetails, selectedLotFeedback;
-        private Button lotFacingButton, changeBuildingButton;
+        private Button lotFacingButton, changeBuildingButton, deliveryRoleButton, selectedLotDetonateButton;
         private GameObject selectedLotPanel;
         private DistrictLotRecord selectedDistrictLot;
         private LineRenderer selectedLotOutline;
@@ -58,7 +62,7 @@ namespace CityForge.World
             rect.anchorMin = rect.anchorMax = new Vector2(.5f, 1);
             rect.pivot = new Vector2(.5f, 1);
             rect.anchoredPosition = new Vector2(0, -23);
-            rect.sizeDelta = new Vector2(556, 72);
+            rect.sizeDelta = new Vector2(556, 92);
             lotFont = font;
             placeLotLabel = AddLotButton(lotActions.transform, font, "Place saved lot", 0, 220, () =>
             {
@@ -77,7 +81,7 @@ namespace CityForge.World
             lotFacingButton = lotFacingLabel.GetComponentInParent<Button>(includeInactive: true);
             AddLotButton(lotActions.transform, font, "Customize centered lot", 364, 190, () => CustomizeLot(font));
             lotFeedback = HudText(lotActions.transform, "Lot feedback", font, 16);
-            Position(lotFeedback.rectTransform, new Vector2(0, -39), new Vector2(520, 29));
+            Position(lotFeedback.rectTransform, new Vector2(0, -39), new Vector2(556, 46));
             lotActions.SetActive(false);
             BuildSelectedLotPanel(hud, font);
         }
@@ -122,6 +126,19 @@ namespace CityForge.World
                     BeginLotPlacement(selectedDistrictLot.definition, selectedDistrictLot);
             });
             changeBuildingButton = AddPanelButton("Change building", 14, -184, 272, ChangeSelectedLotBuilding);
+            deliveryRoleButton = AddPanelButton("Receives: None · change", 14, -228, 272, () =>
+            {
+                var lot = selectedDistrictLot;
+                if (lot == null || DistrictLoading || IsSaving) return;
+                // Clone before editing: a receiver role belongs to this placed lot instance.
+                lot.definition = LotDefinition.Parse(JsonUtility.ToJson(lot.definition));
+                lot.definition.deliveryRole = (LotDeliveryRole)(((int)lot.definition.DeliveryRole + 1) % 3);
+                lot.definition.deliveryRoleConfigured = true;
+                SelectDistrictLot(lot);
+                selectedLotFeedback.text = "Delivery role changed. Save the region to keep it.";
+            });
+            selectedLotDetonateButton = AddPanelButton("Detonate", 14, -272, 272, DetonateSelectedLot);
+            selectedLotDetonateButton.GetComponent<Image>().color = new Color(.40f, .14f, .10f, 1f);
             selectedLotFeedback = HudText(rect, "Lot action feedback", font, 14);
             Position(selectedLotFeedback.rectTransform, new Vector2(14, -226), new Vector2(270, 46));
             selectedLotPanel.SetActive(false);
@@ -161,9 +178,32 @@ namespace CityForge.World
             bool growable = GrowthBuildingIndex(record, LotAssetCatalog.Load()) >= 0;
             changeBuildingButton.gameObject.SetActive(growable);
             var panel = (RectTransform)selectedLotPanel.transform;
-            panel.sizeDelta = new Vector2(300, growable ? 278 : 234);
-            Position(selectedLotFeedback.rectTransform, new Vector2(14, growable ? -226 : -182), new Vector2(270, 46));
-            selectedLotFeedback.text = "";
+            panel.sizeDelta = new Vector2(300, growable ? 366 : 322);
+            ((RectTransform)deliveryRoleButton.transform).anchoredPosition = new Vector2(14, growable ? -228 : -184);
+            deliveryRoleButton.GetComponentInChildren<Text>().text = "Receives: " + (record.definition.DeliveryRole switch
+            { LotDeliveryRole.LumberMill => "Lumber Mill", LotDeliveryRole.TownCenter => "Town Center", _ => "None" }) + " · change";
+            ((RectTransform)selectedLotDetonateButton.transform).anchoredPosition = new Vector2(14, growable ? -272 : -228);
+            Position(selectedLotFeedback.rectTransform, new Vector2(14, growable ? -314 : -270), new Vector2(270, 46));
+            RefreshSelectedFreight(record);
+        }
+
+        internal void RefreshSelectedFreight(DistrictLotRecord record)
+        {
+            if (record != selectedDistrictLot || !selectedLotFeedback) return;
+            var job = record.vehicleJobs?.FirstOrDefault();
+            var item = job == null ? null : record.definition.objects.Find(candidate => candidate.id == job.objectId);
+            if (job != null && item != null)
+            {
+                var resource = job.cargo > 0 ? job.cargoResource : item.vehicleScript.resource;
+                string state = job.phase switch
+                {
+                    LotFreightPhase.Loading when job.cargo >= item.vehicleScript.Capacity => "Full · waiting",
+                    LotFreightPhase.Loading => "Loading", LotFreightPhase.Unloading => "Unloading",
+                    LotFreightPhase.Outbound => "Delivering", LotFreightPhase.Returning => "Returning empty", _ => "Empty"
+                };
+                selectedLotFeedback.text = $"{VehicleResources.Label(resource)}: {job.cargo}/{item.vehicleScript.Capacity} · {state}\nAt lot: {VehicleResources.Stored(record, resource)} · Delivered: {VehicleResources.Received(record, resource)}";
+            }
+            else selectedLotFeedback.text = $"Timber at lot: {record.storedTimber} · Delivered: {record.receivedTimber}";
         }
 
         private bool TrySelectDistrictLot(Ray ray)
@@ -392,6 +432,7 @@ namespace CityForge.World
 
             if (LotOverlapsDistrictRoad(record, growing ? ResidentialRoadCornerInset : 0f)) return "Keep lots clear of roads.";
 
+            if (!growing && ExtractionSiteProblem(record) is { } captureProblem) return captureProblem;
             if (record.definition.IsWaterfront)
                 return WaterfrontSiteProblem(record, InActiveDistrict, LotHeight, (point, height) =>
                     TryLotWater(point, height, water, out float level) ? level : (float?)null, editing);
@@ -634,6 +675,7 @@ namespace CityForge.World
 
         private void PresentDistrictLots(IEnumerable<DistrictLotRecord> records)
         {
+            LotPresentationBuilds++;
             pedestrianRoutesDirty = true;
             var catalog = LotAssetCatalog.Load();
             if (!lotInstances)
@@ -697,6 +739,8 @@ namespace CityForge.World
                     }
                     ResidentialWindowLights.Attach(instance.gameObject, asset, TimeOfDay);
                     SetVehicleMotion(instance, asset.id, false);
+                    if (item.vehicleScript.behavior != LotVehicleBehavior.None)
+                        AttachVehicleScript(instance, item, asset, record, camera);
                     LamppostLight.Attach(instance.gameObject, asset, TimeOfDay);
                     if (item.assetId == LotCharacterDeck.HarborHouse)
                     {
@@ -713,6 +757,8 @@ namespace CityForge.World
                         if (LotCharacterDeck.TryHeight(building, item.position, out float deck))
                             point.y = Mathf.Max(point.y, porch.position.y + deck);
                     character.position = point;
+                    if (item.characterScript.configured && item.characterScript.scriptedBehavior == LotScriptedBehavior.Lumberjack && ApprovedDistrict)
+                        character.gameObject.AddComponent<DistrictLumberjack>().Initialize(ApprovedDistrict, camera, record);
                     if (item.characterScript.configured && item.characterScript.scriptedBehavior == LotScriptedBehavior.Shopkeeper &&
                         LotShopkeeper.TryEntrance(definition, catalog, item.position, null, out var door, out var forward))
                     {
@@ -778,6 +824,7 @@ namespace CityForge.World
                     !float.IsFinite(record.center.x) || !float.IsFinite(record.center.y) ||
                     record.rotation < 0 || record.rotation > 3 || record.definition == null || !float.IsFinite(record.waterfrontDeckHeight))
                     throw new InvalidDataException("Invalid placed lot.");
+                LotFreightValidation.Validate(record);
                 var validated = LotDefinition.Parse(JsonUtility.ToJson(record.definition));
                 if (record.definition.schema != LotDefinition.CurrentSchema)
                     record.definition = validated;

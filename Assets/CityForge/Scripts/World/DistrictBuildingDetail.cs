@@ -9,8 +9,10 @@ namespace CityForge.World
     internal sealed class DistrictBuildingDetail : MonoBehaviour
     {
         private const int DistantZoom = 2;
+        private int distantZoom = DistantZoom;
 
         private CityForgeCameraController cameraRig;
+        private CameraMotionQuality motionQuality;
         private Renderer[] closeRenderers;
         private Renderer[] distantRenderers;
         private (LODGroup group, int tier)[] nativeLevels;
@@ -27,6 +29,7 @@ namespace CityForge.World
                 if (levels.Length == 0) return;
                 var nativeDetail = instance.gameObject.AddComponent<DistrictBuildingDetail>();
                 nativeDetail.nativeLevels = levels;
+                nativeDetail.distantZoom = asset.category == "Fences" ? 3 : DistantZoom;
                 nativeDetail.Bind(rig);
                 return;
             }
@@ -45,7 +48,11 @@ namespace CityForge.World
                 Quaternion.Inverse(source.localRotation) * distantModel.localRotation;
             distantModel.localScale *= fit;
 
+            if (asset.category == "Fences" && asset.fenceSpan > 0 && closeModel.parent != instance)
+                AlignFenceDistant(closeModel, distantModel);
+
             var detail = instance.gameObject.AddComponent<DistrictBuildingDetail>();
+            detail.distantZoom = asset.category == "Fences" ? 3 : DistantZoom;
             detail.closeRenderers = closeRenderers;
             detail.distantRenderers = distantModel.GetComponentsInChildren<Renderer>();
             for (int i = 0; i < detail.distantRenderers.Length; i++)
@@ -63,6 +70,41 @@ namespace CityForge.World
                 else renderer.sharedMaterials = original.sharedMaterials;
             }
             detail.Bind(rig);
+        }
+
+        private static void AlignFenceDistant(Transform closeModel, Transform distantModel)
+        {
+            var space = closeModel.parent;
+            var near = LocalBounds(closeModel, space);
+            var far = LocalBounds(distantModel, space);
+            if (near.size.x < .001f || far.size.x < .001f) return;
+            // Reduced meshes can lose a few end vertices. Keep their span endpoints
+            // and ground seating identical without stretching their height or posts.
+            var alignment = new GameObject("Distant fence alignment").transform;
+            alignment.SetParent(space, false);
+            distantModel.SetParent(alignment, false);
+            float stretch = near.size.x / far.size.x;
+            alignment.localScale = new Vector3(stretch, 1, 1);
+            alignment.localPosition = new Vector3(near.center.x - far.center.x * stretch,
+                near.min.y - far.min.y, near.center.z - far.center.z);
+        }
+
+        private static Bounds LocalBounds(Transform model, Transform space)
+        {
+            var bounds = new Bounds(); bool first = true;
+            foreach (var renderer in model.GetComponentsInChildren<Renderer>())
+            {
+                var local = renderer.localBounds;
+                var matrix = space.worldToLocalMatrix * renderer.localToWorldMatrix;
+                for (int corner = 0; corner < 8; corner++)
+                {
+                    var point = matrix.MultiplyPoint3x4(local.center + Vector3.Scale(local.extents,
+                        new Vector3((corner & 1) == 0 ? -1 : 1, (corner & 2) == 0 ? -1 : 1, (corner & 4) == 0 ? -1 : 1)));
+                    if (first) { bounds = new Bounds(point, Vector3.zero); first = false; }
+                    else bounds.Encapsulate(point);
+                }
+            }
+            return bounds;
         }
 
         private static int ShadowCompatibleTier(LODGroup group)
@@ -84,26 +126,31 @@ namespace CityForge.World
         {
             cameraRig = rig;
             rig.ZoomChanged += ApplyZoom;
+            motionQuality = rig.GetComponent<CameraMotionQuality>();
+            if (motionQuality) motionQuality.QualityChanged += ApplyMotionQuality;
             ApplyZoom(rig.ZoomLevel);
         }
 
+        private void ApplyMotionQuality(bool reduced) => ApplyZoom(cameraRig.ZoomLevel);
+
         private void ApplyZoom(int zoom)
         {
-            bool distant = zoom >= DistantZoom;
+            bool distant = zoom >= distantZoom || (motionQuality && motionQuality.ReducedQuality && motionQuality.ReduceAuthoredDetailDuringNavigation);
             if (showingDistant == distant) return;
             showingDistant = distant;
             if (nativeLevels != null)
             {
-                foreach (var (group, tier) in nativeLevels) group.ForceLOD(distant ? tier : -1);
+                foreach (var (group, tier) in nativeLevels) if (group) group.ForceLOD(distant ? tier : -1);
                 return;
             }
-            foreach (var renderer in closeRenderers) renderer.enabled = !distant;
-            foreach (var renderer in distantRenderers) renderer.enabled = distant;
+            foreach (var renderer in closeRenderers) if (renderer) renderer.enabled = !distant;
+            foreach (var renderer in distantRenderers) if (renderer) renderer.enabled = distant;
         }
 
         private void OnDestroy()
         {
             if (cameraRig) cameraRig.ZoomChanged -= ApplyZoom;
+            if (motionQuality) motionQuality.QualityChanged -= ApplyMotionQuality;
         }
     }
 }

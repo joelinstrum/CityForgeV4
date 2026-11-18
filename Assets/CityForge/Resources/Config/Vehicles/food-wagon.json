@@ -11,5 +11,38 @@
   "trafficGroup": "wagon",
   "spawnEvery": 4,
   "speed": 2.25,
-  "speedVariation": 0.17
+  "speedVariation": 0.17,
+  "supportsResourceFreight": true,
+  "emptyCargoMesh": "Lots/V3Vehicles/FoodWagon/EmptyBody",
+  "cargoMeshPart": "Carriage_Body",
+  "cargoCenter": {
+    "x": 0,
+    "y": 1.06,
+    "z": -1.5
+  },
+  "cargoSize": {
+    "x": 1.25,
+    "y": 0.75,
+    "z": 1.6
+  },
+  "cargoCutCenter": {
+    "x": 0,
+    "y": 2,
+    "z": -1.6
+  },
+  "cargoCutSize": {
+    "x": 2.1,
+    "y": 1.9,
+    "z": 2
+  },
+  "cargoKeepCenter": {
+    "x": 0,
+    "y": 1.65,
+    "z": -0.2
+  },
+  "cargoKeepSize": {
+    "x": 1.2,
+    "y": 1.8,
+    "z": 1.9
+  }
 }

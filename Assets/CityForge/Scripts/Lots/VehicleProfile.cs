@@ -14,10 +14,13 @@ namespace CityForge.Lots
         public string motionFolder, idleState, travelState;
         public int[] eraNumbers;
         public string[] eras, zones, wealthTiers;
-        public float length, speed, speedVariation;
+        public float length, speed, speedVariation, teamHorseHeight;
         public string trafficGroup;
+        public string emptyCargoMesh, cargoMeshPart;
+        public Vector3 cargoCenter, cargoSize, cargoCutCenter, cargoCutSize, cargoKeepCenter, cargoKeepSize;
+        public bool enclosedCargo;
         public int spawnEvery;
-        public bool parked, team, rollWheels;
+        public bool parked, team, rollWheels, supportsLumberFreight, supportsResourceFreight;
 
         public IEnumerable<string> EraIds()
         {
