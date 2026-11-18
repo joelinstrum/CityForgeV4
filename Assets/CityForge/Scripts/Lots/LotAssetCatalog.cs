@@ -36,6 +36,8 @@ namespace CityForge.Lots
             _ => prefab
         };
         public Vector2 footprint;
+        // Prepared model bounds at placement scale: width (X), height (Y), depth (Z), in meters.
+        public Vector3 buildingDimensionsMeters;
         public bool playerPlaceable;
         public int fromYear, toYear;
         public bool fitModel;

@@ -11,7 +11,7 @@ namespace CityForge.World
 
         internal static void Attach(GameObject instance, CityForge.Lots.LotAssetCatalogEntry asset, RegionTimeOfDay time)
         {
-            if (asset.growableZone is not (TownZone.Residential1 or TownZone.Commercial1) || !asset.materialOverride ||
+            if (asset.growableZone is not (TownZone.Residential1 or TownZone.Residential2 or TownZone.Commercial1) || !asset.materialOverride ||
                 !asset.materialOverride.IsKeywordEnabled("_EMISSION")) return;
             var lights = instance.AddComponent<ResidentialWindowLights>();
             lights.highWealth = asset.growableWealth == CityForge.Lots.LotWealth.High;

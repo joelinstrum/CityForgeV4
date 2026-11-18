@@ -1681,6 +1681,9 @@ namespace CityForge.UI
 
         private static Vector3 ApproximateBuildingDimensions(LotAssetCatalogEntry asset)
         {
+            var prepared = asset.buildingDimensionsMeters;
+            if (LotBuildingInfo.Positive(prepared.x) && LotBuildingInfo.Positive(prepared.y) &&
+                LotBuildingInfo.Positive(prepared.z)) return prepared;
             var model = LotRuntimeLoader.InstantiateObject(new LotObjectDefinition { assetId = asset.id, scale = 1f },
                 asset, null);
             var renderers = model.GetComponentsInChildren<Renderer>();

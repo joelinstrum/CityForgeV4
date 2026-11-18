@@ -14,7 +14,8 @@ namespace CityForge.Lots
             "v3-building-frontier-log-cabin" or "v3-building-small-colonial-cabin" => 180f,
             "v3-building-plymouth-store" or "v3-building-founders-bakery" or "v3-building-founders-blacksmith"
                 or "v3-building-founders-cooperage" or "v3-building-founders-tavern" => 180f,
-            string id when id.StartsWith("v3-building-low-wealth-", System.StringComparison.Ordinal) ||
+            string id when id.StartsWith("v3-building-r2-", System.StringComparison.Ordinal) ||
+                id.StartsWith("v3-building-low-wealth-", System.StringComparison.Ordinal) ||
                 id.StartsWith("v3-building-medium-wealth-", System.StringComparison.Ordinal) ||
                 id.StartsWith("v3-building-founders-shop-", System.StringComparison.Ordinal) => 180f,
             _ => 0f

@@ -81,6 +81,16 @@ internal static class LotCatalogSetup
                 "HighWealthMediterraneanVilla", 14f, LotWealth.High),
             FoundersResidentialHome("high-wealth-georgian-three-dormers", "Georgian Colonial Three Dormers",
                 "HighWealthGeorgianThreeDormers", 12f, LotWealth.High),
+            R2LowWealthHome("r2-four-story-low-wealth-stone-base", "Four Story Low Wealth Stone Base", "R2FourStoryLowWealthStoneBase", 10.818288f),
+            R2LowWealthHome("r2-four-story-shanty", "Four Story Shanty", "R2FourStoryShanty", 12.607938f),
+            R2LowWealthHome("r2-low-wealth-brick-apartment", "Low Wealth Brick Apartment", "R2LowWealthBrickApartment", 13.325564f),
+            R2LowWealthHome("r2-low-wealth-double-entry", "Low Wealth Double Entry", "R2LowWealthDoubleEntry", 11.602993f),
+            R2LowWealthHome("r2-low-wealth-duplex", "Low Wealth Duplex", "R2LowWealthDuplex", 13.081451f),
+            R2LowWealthHome("r2-low-wealth-res-stone-apartment", "Low Wealth Res Stone Apartment", "R2LowWealthResStoneApartment", 11.640968f),
+            R2LowWealthHome("r2-low-wealth-res-trio-2", "Low Wealth Res Trio 2", "R2LowWealthResTrio2", 13.375496f),
+            R2LowWealthHome("r2-low-wealth-stone-house-2", "Low Wealth Stone House 2", "R2LowWealthStoneHouse2", 12.289818f),
+            R2LowWealthHome("r2-low-wealth-trio", "Low Wealth Trio", "R2LowWealthTrio", 15.387814f),
+            R2LowWealthHome("r2-low-wealth-apartment-collapse", "Low Wealth Apartment Collapse", "R2LowWealthApartmentCollapse", 14.357811f),
             FrontierLogCabin(),
             SmallColonialCabin(),
             FoundersHome("low-wealth-front-gable", "Front Gable House", "LowWealthFrontGable"),
@@ -596,6 +606,13 @@ internal static class LotCatalogSetup
         float span, string normalExtension = ".jpg") =>
         FoundersResidentialHome(id, label, folder, span, LotWealth.Medium, normalExtension);
 
+    private static LotAssetCatalogEntry R2LowWealthHome(string id, string label, string folder, float span)
+    {
+        var home = FoundersResidentialHome(id, label, folder, span, LotWealth.Low);
+        home.growableZone = TownZone.Residential2;
+        return home;
+    }
+
     private static LotAssetCatalogEntry FoundersShop(string id, string label, string folder,
         float span, string extension = ".jpg")
     {
@@ -654,7 +671,11 @@ internal static class LotCatalogSetup
 
         var bounds = FenceBounds(model).size;
         float widest = Mathf.Max(bounds.x, bounds.z);
-        if (widest > .001f) entry.footprint = new Vector2(bounds.x, bounds.z) * (span / widest);
+        if (widest > .001f)
+        {
+            entry.footprint = new Vector2(bounds.x, bounds.z) * (span / widest);
+            entry.buildingDimensionsMeters = bounds * (span / widest);
+        }
         string normalPath = root + "Normal" + normalExtension;
         if (AssetImporter.GetAtPath(normalPath) is TextureImporter importer &&
             importer.textureType != TextureImporterType.NormalMap)

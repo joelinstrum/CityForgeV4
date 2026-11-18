@@ -1,3 +1,35 @@
+# CityForge V4 handoff · November 18, 2026 · R2 low-wealth residential imports
+
+Branch: `feature/r2-low-wealth-import`, based on merged PR #25 (`origin/main`).
+Ten private building imports from `/Users/joelinstrum/Downloads/low-wealth-residential-II`
+are registered as Founders-era Residential2 / Low wealth. Original archives are untouched.
+Private prepared assets live in `Resources/Lots/V3Buildings/R2*` with `Model.fbx`,
+`Distant.fbx`, `Color.jpg`, `Normal.jpg`, `Windows.png`, and `ImportInfo.json`.
+Detached artifact components were removed from six buildings; attached lean-tos,
+barrels, woodpiles and the collapsed façade remain. The misspelled source archive
+`low-welath-apartment-collapse` has a correctly spelled catalog ID.
+
+`LotAssetCatalogEntry.buildingDimensionsMeters` persists width X, height Y and depth Z
+at placement scale. The building-info editor uses these prepared defaults, retaining
+user overrides and its feet display. Sizes are architectural estimates because the
+source meshes are normalized, not survey measurements. Per-model private ImportInfo
+also records dimensions, triangle counts and removed artifact vertex counts.
+
+R2 uses the existing window-light behavior at evening/night, with daytime emission off.
+Selected front panes have UV masks retaining sash detail. Original color/normal maps
+remain intact. Near/distant tiers retain the same UVs and physical coordinates; the
+reductions retain 65% of source triangles after visual review, preserving
+roof/chimney and façade detail. Existing Zoom 0–2 / 3–5 switching applies. R2 zoning growth/tool availability
+is separate from importing these eligible catalog buildings; no zoning simulation
+expansion was introduced.
+
+Isolated QA and review outputs:
+`/Users/joelinstrum/Documents/Codex/2026-11-18/ple/outputs/R2-Residential`.
+No player region was loaded or saved. All model assets and the generated local catalog
+remain private/ignored; source changes only belong in Git.
+
+---
+
 # CityForge V4 handoff · November 18, 2026 · Extraction, deliveries and route caching
 
 Work on `feature/extraction-deliveries-and-route-caching`, based on `main` after merged PR #24.
