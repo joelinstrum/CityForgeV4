@@ -1,3 +1,22 @@
+# CityForge V4 handoff · November 18, 2026 · Follow camera and Escape
+
+The temporary `Hooligan harass` command now follows its Hooligan at close Zoom 0.
+Escape cancels this test before other modal/tool handlers run, clears its test-only
+pedestrian fright, closes any district-script dialog, and releases the camera where
+it stopped. Timeout/replacement/district departure also release the camera target.
+No camera restoration teleport or district navigation occurs on test cancellation.
+
+Escape no longer implicitly calls ShowOverview or ReturnToMenu from the main view.
+It still dismisses dialogs, selections and active tools. Use the explicit navigation
+buttons to leave a district or return to the menu. Eagle follow remains available
+when no Hooligan test is active.
+
+Isolated HarassFollowChecks verifies a moving target updates camera focus, follow
+forces close zoom, cancellation is idempotent and preserves SelectedDistrict, test
+fright is cleared, and natural expiry releases the camera without navigation.
+
+---
+
 # CityForge V4 handoff · November 18, 2026 · Hooligan district test command
 
 Cmd+S > `Hooligan harass` starts one temporary unarmed Hooligan encounter for 60

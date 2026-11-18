@@ -807,6 +807,8 @@ namespace CityForge.World
 
         private void Update()
         {
+            // Cancel a followed test before any modal/tool or navigation consumes Escape.
+            if (Input.GetKeyDown(KeyCode.Escape) && EndHarassTest()) { CloseDistrictScripts(); return; }
             if (UpdateRegionMessage()) return;
             if (regionHudVisibility && !DistrictLoading && !IsSaving && Input.GetKeyDown(KeyCode.H) &&
                 !(EventSystem.current && EventSystem.current.currentSelectedGameObject &&
@@ -880,7 +882,7 @@ namespace CityForge.World
                 SetDistrictInfoVisible(!regionTitle.gameObject.activeSelf);
 
             if (Input.GetKeyDown(KeyCode.Escape) && !DismissTownConstruction() && !(townTools && townTools.Cancel()))
-            { var toolbar=GetComponent<CityForge.UI.NatureToolbar>();if(!toolbar||!toolbar.Dismiss()){if (SelectedDistrict >= 0) ShowOverview(); else ReturnToMenu();} }
+            { var toolbar=GetComponent<CityForge.UI.NatureToolbar>();if(toolbar)toolbar.Dismiss(); }
             if (sampling && Time.realtimeSinceStartup >= sampleStart)
             {
                 sampleElapsed += Time.unscaledDeltaTime;

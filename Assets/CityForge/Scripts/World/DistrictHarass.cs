@@ -26,7 +26,12 @@ namespace CityForge.World
         internal void Step(float delta, float now, bool visible)
         {
             if (behavior == null || !view) return;
-            if (TestMode && (now >= TestEnds || view.SelectedDistrict != TestDistrict)) { Destroy(gameObject); return; }
+            if (TestMode && (now >= TestEnds || view.SelectedDistrict != TestDistrict))
+            {
+                if (view.HarassTest == this) view.EndHarassTest(showMessage: false);
+                else Destroy(gameObject);
+                return;
+            }
             if (!TestMode && view.TimeOfDay != RegionTimeOfDay.Evening)
             {
                 behavior.Stop(); target = null; hasSegment = false; pending = 0; nextSearch = 0;

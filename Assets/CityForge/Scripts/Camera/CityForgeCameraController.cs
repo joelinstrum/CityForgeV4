@@ -110,18 +110,24 @@ namespace CityForge.CameraSystem
             }
         }
         public void StepZoom(bool closer)=>SetZoomLevel(ZoomLevel+(closer?-1:1));
+        internal bool FollowDistrictActor(World.PrototypeRegionView region)
+        {
+            if (!region) return false;
+            var target = region.HarassCameraTarget;
+            if (!target) target = region.EagleCameraTarget;
+            if (!target) return false;
+            focus = target.position;
+            if (ZoomLevel != 0 || flyingIntoDistrict) SetZoomLevel(0);
+            ApplyPose();
+            return true;
+        }
+
         private void LateUpdate()
         {
             var dt = Time.unscaledDeltaTime;
             var region = GetComponentInParent<World.PrototypeRegionView>();
             if (region && region.DistrictScriptDialogOpen) return;
-            if (region && region.EagleCameraTarget is Transform target && target)
-            {
-                focus = target.position;
-                if (ZoomLevel != 0 || flyingIntoDistrict) SetZoomLevel(0);
-                ApplyPose();
-                return;
-            }
+            if (FollowDistrictActor(region)) return;
             if (flyingIntoDistrict)
             {
                 if (!region || region.SelectedDistrict < 0) flyingIntoDistrict = false;

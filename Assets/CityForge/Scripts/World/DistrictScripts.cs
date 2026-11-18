@@ -210,7 +210,7 @@ namespace CityForge.World
                 if (TryStartHarassTest(out var problem))
                 {
                     CloseDistrictScripts();
-                    ShowDistrictMessage("Hooligan harass test started · 60 seconds.");
+                    ShowDistrictMessage("Following Hooligan · Esc to end · 60 seconds.");
                     return;
                 }
                 districtScriptFeedback.text = problem;

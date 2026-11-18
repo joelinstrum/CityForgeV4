@@ -8,6 +8,24 @@ namespace CityForge.World
     {
         private DistrictHarass harassTest;
         internal DistrictHarass HarassTest => harassTest;
+        internal Transform HarassCameraTarget => harassTest && harassTest.gameObject.activeInHierarchy ? harassTest.transform : null;
+
+        internal bool EndHarassTest(bool showMessage = true)
+        {
+            if (!harassTest) return false;
+            var actor = harassTest.gameObject;
+            harassTest = null;
+            actor.SetActive(false);
+            foreach (var pedestrian in pedestrians)
+            {
+                if (pedestrian.HarassTestUntil <= 0) continue;
+                pedestrian.HarassTestUntil = pedestrian.ScaredUntil = 0;
+                if (pedestrian.Animator) pedestrian.Animator.speed = 1;
+            }
+            if (Application.isPlaying) Destroy(actor); else DestroyImmediate(actor);
+            if (showMessage) ShowDistrictMessage("Hooligan harass test ended.");
+            return true;
+        }
 
         internal bool TryStartHarassTest(out string problem)
         {
@@ -35,11 +53,7 @@ namespace CityForge.World
             var asset = LotAssetCatalog.Load()?.Find("v3-hooligan");
             if (asset?.prefab == null || !LotHarass.Supports(asset.prefab))
             { problem = "Street Hooligan is not available in the local catalog."; return false; }
-            if (harassTest)
-            {
-                harassTest.gameObject.SetActive(false);
-                Destroy(harassTest.gameObject);
-            }
+            EndHarassTest(showMessage: false);
             var instance = LotRuntimeLoader.InstantiateObject(new LotObjectDefinition { assetId = asset.id }, asset, transform);
             instance.name = "Hooligan harass test (temporary)";
             instance.transform.position = new Vector3(start.x, HarassGroundHeight(start), start.y);

@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using CityForge.Lots;
+using CityForge.CameraSystem;
 using CityForge.World;
 using UnityEngine;
 namespace CityForge.Editor
@@ -76,6 +77,7 @@ namespace CityForge.Editor
                 person.transform.position = new Vector3(16, 20, 20);
                 target.Next = 0; target.Direction = -1; target.ScaredUntil = target.HarassTestUntil = 0;
                 Set(view, "<TimeOfDay>k__BackingField", RegionTimeOfDay.Noon);
+                Set(view, "<SelectedDistrict>k__BackingField", 3);
                 int savedActors = view.PlacedActors.Count;
                 Require(view.TryStartHarassTest(out var problem), "District test command failed: " + problem);
                 var test = view.HarassTest;
@@ -86,7 +88,22 @@ namespace CityForge.Editor
                     "Test command did not bypass evening for pursuit and fright while preserving the clock");
                 Require(view.PlacedActors.Count == savedActors && view.PlacedLots.Count == 0 && test.TestEnds >= now + 59,
                     "Test command persisted a character or lost its cleanup deadline");
-                Debug.Log("HARASS FOLLOW CHECKS PASS: evening-only following, personal space, pedestrian turns away on retained route, bounded searches/probes, offscreen pause, vehicle exclusion, new blockers, 10000 active and inactive updates without allocations.");
+                var cameraObject = new GameObject("Disposable follow camera"); cameraObject.transform.SetParent(root.transform);
+                var camera = cameraObject.AddComponent<CityForgeCameraController>(); camera.SetZoomLevel(2);
+                Require(camera.FollowDistrictActor(view) && camera.ZoomLevel == 0 && camera.CaptureRegionState().focus == test.transform.position,
+                    "Camera did not follow the Hooligan at close zoom");
+                test.transform.position += Vector3.right;
+                camera.FollowDistrictActor(view);
+                Require(camera.CaptureRegionState().focus == test.transform.position, "Follow camera lost moving target");
+                var cameraAtEnd = camera.CaptureRegionState().focus;
+                Require(view.EndHarassTest(showMessage: false) && !view.HarassCameraTarget && view.SelectedDistrict == 3 && target.HarassTestUntil == 0,
+                    "Cancel failed to clear the test or changed districts");
+                Require(!camera.FollowDistrictActor(view) && camera.CaptureRegionState().focus == cameraAtEnd && !view.EndHarassTest(false),
+                    "Camera follow continued or cancellation was not idempotent");
+                Require(view.TryStartHarassTest(out problem), "Could not restart test for expiry check: " + problem);
+                view.HarassTest.Step(.1f, view.HarassTest.TestEnds, true);
+                Require(!view.HarassCameraTarget && view.SelectedDistrict == 3, "Expiry did not release camera or changed districts");
+                Debug.Log("HARASS FOLLOW CHECKS PASS: evening-only following, personal space, pedestrian turns away on retained route, bounded searches/probes, offscreen pause, vehicle exclusion, new blockers, 10000 active and inactive updates without allocations; daytime command, moving camera follow, cancellation and expiry without district navigation.");
             }
             finally { UnityEngine.Object.DestroyImmediate(root); UnityEngine.Object.DestroyImmediate(td); }
         }
