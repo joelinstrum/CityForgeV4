@@ -17,7 +17,7 @@ namespace CityForge.World
         private (LotDefinition Layout, LotObjectDefinition[] Buildings)[] FoundersGrowthLayouts(out string problem)
         {
             var options = new System.Collections.Generic.List<(LotDefinition Layout, LotObjectDefinition[] Buildings)>();
-            problem = "Save a Founders-era R1 lot in the Zoning Lots library.";
+            problem = "Save a Founders-era residential lot in the Zoning Lots library.";
             try
             {
                 var catalog = LotAssetCatalog.Load();
@@ -183,14 +183,14 @@ namespace CityForge.World
                     Vector2.one * (DistrictGridCellMeters * .5f))) continue;
                 hasGrowableZoning = true;
                 var facing = residentialFacing.GetValueOrDefault(cell);
-                if (facing == TownZoneFacing.None && zone == TownZone.Residential1) continue;
+                if (facing == TownZoneFacing.None && IsResidentialZone(zone)) continue;
                 var wealth = zone == TownZone.Commercial1 ? LotWealth.Low : WealthAt(cell);
                 var key = (zone, wealth);
                 if (!pass.TryGetValue(key, out var sizeGroups))
                 {
                     if (!layoutsByWealth.ContainsKey(key) && !fillersByWealth.ContainsKey(key))
                         blocked ??= zone == TownZone.Commercial1 ? "Add a Founders-era C1 shop and zoning layout." :
-                            $"Save a Founders-era R1 · {new string('$', (int)wealth)} lot in the Zoning Lots library.";
+                            $"Save a Founders-era R{(int)zone} · {new string('$', (int)wealth)} lot in the Zoning Lots library.";
                     continue;
                 }
                 bool placed = false;
@@ -259,7 +259,7 @@ namespace CityForge.World
                         var building = ChooseGrowthBuilding(record, roadFacing, buildings);
                         record.definition = LotGrowableBuildings.Materialize(layout, building);
                         record.growthBuildingId = record.definition.objects.Last().id;
-                        if (zone == TownZone.Residential1) AddResidentialEntryPath(record, building);
+                        if (IsResidentialZone(zone)) AddResidentialEntryPath(record, building);
                     }
                     else
                         record.definition = LotDefinition.Parse(JsonUtility.ToJson(layout));
@@ -510,7 +510,7 @@ namespace CityForge.World
                 if (zoneLotAnchors.TryGetValue(cell, out var anchor) != anchored ||
                     (anchored && anchor != cells.min)) return false;
                 if (!townZones.TryGetValue(cell, out var zone) || zone != targetZone ||
-                    (zone == TownZone.Residential1 && WealthAt(cell) != wealth) || ZonedLotSize(cell) != lotSize ||
+                    (IsResidentialZone(zone) && WealthAt(cell) != wealth) || ZonedLotSize(cell) != lotSize ||
                     residentialFacing.GetValueOrDefault(cell) != facing) return false;
             }
             return true;

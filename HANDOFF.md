@@ -1,3 +1,22 @@
+# CityForge V4 handoff · November 18, 2026 · Residential density growth
+
+R1, R2 and R3 now enter the same Founders-era town-growth pipeline with no density
+progression, population, demand or service unlock. Matching saved zoning layouts and
+building density/wealth, dry usable space, street frontage and existing building-fit
+rules still apply. C1 behavior is preserved; other commercial/industrial growth is
+unchanged. R2/R3 now share residential exact-size parcels, authored-depth selection,
+wealth-boundary enforcement and automatic entry paths. Existing saved zoning is
+checked when reopening the district; no repaint or save migration is required.
+
+`ResidentialGrowthChecks.Run` verifies all residential densities, scheduling,
+parcel/wealth/density boundaries, exact-parcel save restoration and candidate selection.
+R3 candidate checks use a transient test tag because no production R3 models were
+supplied. The isolated QA library check copies ShantyTown I and verifies all five
+allowed R2 buildings plus the authored 3×3 parcel option. Original player lots and
+regions are untouched. See the local R2-Residential/Growth-Verification.txt output.
+
+---
+
 # CityForge V4 handoff · November 18, 2026 · R2 low-wealth residential imports
 
 Branch: `feature/r2-low-wealth-import`, based on merged PR #25 (`origin/main`).
