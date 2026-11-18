@@ -82,7 +82,27 @@ namespace CityForge.World
                 if (i < HistoricalRoadSurfaceCount)
                     surfaceFaces[i] = RoadButtonArtwork(button, surfacesArt, SurfaceCrop(i, false), 247);
                 else
-                    button.GetComponentInChildren<Text>().fontSize = 22;
+                {
+                    var caption = button.GetComponentInChildren<Text>();
+                    caption.fontSize = 22;
+                    if (IsFoundersStreet(RoadSurfaces[i].Id))
+                    {
+                        var texture = StreetTexture(i);
+                        if (texture)
+                        {
+                            var swatch = new GameObject("Street material", typeof(RectTransform), typeof(RawImage));
+                            swatch.transform.SetParent(button.transform, false);
+                            var rect = (RectTransform)swatch.transform;
+                            rect.anchorMin = new Vector2(0, .32f); rect.anchorMax = Vector2.one;
+                            rect.offsetMin = new Vector2(12, 10); rect.offsetMax = new Vector2(-12, -12);
+                            swatch.GetComponent<RawImage>().texture = texture;
+                            swatch.GetComponent<RawImage>().raycastTarget = false;
+                            caption.rectTransform.anchorMin = Vector2.zero;
+                            caption.rectTransform.anchorMax = new Vector2(1, .32f);
+                            caption.rectTransform.offsetMin = new Vector2(8, 4); caption.rectTransform.offsetMax = new Vector2(-8, 0);
+                        }
+                    }
+                }
                 var hover = button.gameObject.AddComponent<EventTrigger>();
                 AddPreviewEvent(EventTriggerType.PointerEnter, () => PreviewSurface(index));
                 AddPreviewEvent(EventTriggerType.PointerExit, () => ClearPreview(index));
@@ -143,15 +163,15 @@ namespace CityForge.World
                     : streets ? "Local streets for built-up districts."
                     : "No construction options are available for this category in this era.";
 
-                int columns = roads && laterEra ? 4 : 3;
+                int columns = (roads || streets) && laterEra ? 4 : 3;
                 float width = columns == 4 ? 163 : 219;
                 float height = columns == 4 ? 194 : 247;
                 for (int i = 0; i < surfaceButtons.Length; i++)
                 {
-                    bool visible = (roads && i < roadCount) || (streets && (i == FoundersStreetIndex || (laterEra && i == PavedStreetIndex)));
+                    bool visible = (roads && i < roadCount) || (streets && (IsFoundersStreet(RoadSurfaces[i].Id) || (laterEra && i == PavedStreetIndex)));
                     surfaceButtons[i].gameObject.SetActive(visible);
                     if (!visible) continue;
-                    int slot = streets ? (i == FoundersStreetIndex ? 0 : 1) : i;
+                    int slot = streets ? (i == PavedStreetIndex ? 3 : FoundersStreetSlot(RoadSurfaces[i].Id)) : i;
                     var rect = (RectTransform)surfaceButtons[i].transform;
                     rect.anchoredPosition = new Vector2(322 + slot % columns * (720 / columns),
                         -199 - slot / columns * (height + 20));
@@ -183,17 +203,27 @@ namespace CityForge.World
                 }
                 detailTitle.text = RoadSurfaces[index].Label;
                 details.text = RoadSurfaces[index].Description;
-                var texture = index >= HistoricalRoadSurfaceCount ? null
+                var texture = IsFoundersStreet(RoadSurfaces[index].Id) ? StreetTexture(index) : index >= HistoricalRoadSurfaceCount ? null
                     : index == 3 && concept ? concept : surfacesArt;
                 preview.gameObject.SetActive(texture != null);
                 if (!texture) return;
                 preview.texture = texture;
+                if (IsFoundersStreet(RoadSurfaces[index].Id))
+                {
+                    preview.uvRect = new Rect(0, 0, 1, 1);
+                    ((RectTransform)preview.transform).sizeDelta = new Vector2(396, 188);
+                    return;
+                }
                 var crop = texture == concept ? new Rect(1332, 216, 492, 203)
                     : new Rect(surfaceLeft[index] + 20, 105, 250, 204);
                 preview.uvRect = TownArtworkUV(texture, crop);
                 ((RectTransform)preview.transform).sizeDelta = texture == concept
                     ? new Vector2(396, 164) : new Vector2(230, 188);
             }
+
+            Texture2D StreetTexture(int index) => RoadSurfaces[index].Id == FoundersStreetId
+                ? Resources.Load<Texture2D>("Lots/PathMaterials/WagonRoadAlbedo")
+                : DistrictRoadStyle(RoadSurfaces[index].Id).Texture;
 
             Rect CategoryCrop(int index, bool active) => new Rect(active ? 914 : 261, categoryTop[index],
                 603, categoryTop[index + 1] - categoryTop[index]);

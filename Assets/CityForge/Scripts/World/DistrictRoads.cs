@@ -35,13 +35,23 @@ namespace CityForge.World
             ("brick", "Brick Road", "damaged-brick", "A one-tile road paved with weathered brick and soft shoulders."),
             ("blacktop", "Blacktop Road", "concrete", "An asphalt surface for motor traffic."),
             ("paved-street", "Paved Street", "concrete", "A paved street for built-up districts."),
-            (FoundersStreetId, "Dirt Street", "packed-earth", "A one-tile dirt street with plank sidewalks. Supports Commercial I zoning.")
+            (FoundersStreetId, "Dirt Street", "packed-earth", "A one-tile (4 m) street using worn wagon-trail dirt. Supports commercial frontage."),
+            (FoundersCobblestoneStreetId, "Cobblestone Street", "cobblestone-road-9", "A one-tile (4 m) street paved with rounded cobblestone. Supports commercial frontage."),
+            (FoundersBrickStreetId, "Weathered Brick Street", "damaged-brick", "A one-tile (4 m) street paved with weathered brick. Supports commercial frontage.")
         };
 
         private const int HistoricalRoadSurfaceCount = 6;
         private const int PavedStreetIndex = HistoricalRoadSurfaceCount + 1;
         private const int FoundersStreetIndex = PavedStreetIndex + 1;
         private const string FoundersStreetId = "founders-dirt-street";
+        private const string FoundersCobblestoneStreetId = "founders-cobblestone-street";
+        private const string FoundersBrickStreetId = "founders-brick-street";
+
+        private static bool IsFoundersStreet(string id) => id is FoundersStreetId or FoundersCobblestoneStreetId or FoundersBrickStreetId;
+        private static int FoundersStreetSlot(string id) => id switch
+        {
+            FoundersStreetId => 0, FoundersCobblestoneStreetId => 1, FoundersBrickStreetId => 2, _ => -1
+        };
         private const int RoadWidth = 3;
         private const int OneTileRoadWidth = (int)DistrictGridCellMeters;
         private static readonly int DirtEndFadeProperty = Shader.PropertyToID("_DirtEndFade");
@@ -104,11 +114,11 @@ namespace CityForge.World
 
         private static int FindRoadSurface(string id) => Array.FindIndex(RoadSurfaces, surface => surface.Id == id);
 
-        private static bool IsMasonryRoad(string id) => id is "brick" or "cobblestone";
+        private static bool IsMasonryRoad(string id) => id is "brick" or "cobblestone" or FoundersCobblestoneStreetId or FoundersBrickStreetId;
 
         private static bool HasSidewalks(string id) => IsMasonryRoad(id) || id == FoundersStreetId;
 
-        private static bool SupportsCommercialFrontage(string id) => id is FoundersStreetId or "paved-street";
+        private static bool SupportsCommercialFrontage(string id) => IsFoundersStreet(id) || id == "paved-street";
 
         private static int DefaultRoadWidth(string id) => HasSidewalks(id) ? OneTileRoadWidth : RoadWidth;
 
@@ -116,7 +126,7 @@ namespace CityForge.World
         {
             var style = LotPathMaterial.Find(RoadSurfaces[FindRoadSurface(id)].Material);
             // Source-only checkouts can still render these roads with the simpler surface.
-            return IsMasonryRoad(id) && !style.IsAvailable ? LotPathMaterial.Find(id) : style;
+            return IsMasonryRoad(id) && !style.IsAvailable ? LotPathMaterial.Find(id is "brick" or FoundersBrickStreetId ? "brick" : "cobblestone") : style;
         }
 
         private static string RoadGuideProblem(IReadOnlyList<Vector2> points, bool closed, float halfMap)

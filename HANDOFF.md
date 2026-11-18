@@ -1,3 +1,25 @@
+# CityForge V4 handoff · November 18, 2026 · Founders street surfaces
+
+The Transport/Roads popup's Streets category now offers Dirt Street, Cobblestone
+Street and Weathered Brick Street in the Founders era. Each carriageway is one tile
+(4m) wide; sidewalks remain additional roadside space and honor the low-wealth
+R2/R3 dirt-footpath treatment. Dirt Street retains its existing stable ID and
+WagonRoadAlbedo texture/along-road mapping. New IDs are founders-cobblestone-street
+and founders-brick-street, appended without changing older road indices or IDs.
+They reuse cobblestone-road-9 and damaged-brick materials, with source-only fallbacks.
+
+All three support commercial frontage, normal road tools, extensions, repaving,
+sidewalk generation, saved-record validation and loading. The popup uses actual
+material swatches, and later-era Paved Street remains available in its existing eras.
+The commercial frontage hint now asks for a street rather than specifically dirt.
+
+FoundersStreetChecks verifies width, IDs/indices, frontage, classification and save
+roundtrip. Isolated QA uses the actual road builder/materials and menu callbacks,
+verifies Founders and later-era choices, and renders the surfaces and menu. Outputs:
+this chat's outputs/Founders-Streets. No player maps or lot libraries were saved.
+
+---
+
 # CityForge V4 handoff · November 18, 2026 · Wider neighborhood footpaths
 
 At the user's request, low-wealth R2/R3 dirt walking strips are now 2m wide.
