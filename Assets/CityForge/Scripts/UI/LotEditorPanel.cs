@@ -1973,21 +1973,24 @@ namespace CityForge.UI
             var randomized = AddImage("Randomized settings", frame, PanelColor).rectTransform;
             At(randomized, 20, 146, 520, 316);
             var scripted = AddImage("Scripted settings", frame, PanelColor).rectTransform;
-            At(scripted, 20, 146, 520, 250);
+            At(scripted, 20, 146, 520, 316);
             var behavior = settings.scriptedBehavior;
             var dockWorker = Control(scripted, "Dock Worker", 0, 0, 166, () => { });
             var shopkeeper = Control(scripted, "Shopkeeper", 177, 0, 166, () => { });
             var lumberjack = Control(scripted, "Lumberjack", 354, 0, 166, () => { });
+            var harass = Control(scripted, "Harass", 0, 44, 166, () => { });
+            var harassNote = Label(scripted, "Raises both arms, sways and shuffles in place to represent nonviolent street trouble.", 8, 94, 495, 16);
+            At(harassNote.rectTransform, 8, 94, 495, 78);
             var lumberNote = Label(scripted, "Claims a nearby forest tree within 80m, walks over, chops it down, then returns home. Requires Walk and Chop animations. Harvesting runs in the district.", 8, 47, 495, 16);
-            At(lumberNote.rectTransform, 8, 47, 495, 100);
+            At(lumberNote.rectTransform, 8, 94, 495, 100);
             var shopNote = Label(scripted, "Steps outside the nearest marked pedestrian entrance, looks for customers, then returns inside.",
                 8, 47, 495, 16);
-            At(shopNote.rectTransform, 8, 47, 495, 54);
+            At(shopNote.rectTransform, 8, 94, 495, 54);
             var dockNote = Label(scripted, "Starts when a visiting ship is berthed at this harbor lot.",
                 8, 47, 495, 16);
-            At(dockNote.rectTransform, 8, 47, 495, 30);
+            At(dockNote.rectTransform, 8, 94, 495, 30);
             var dockOptions = AddImage("Dock worker options", scripted, PanelColor).rectTransform;
-            At(dockOptions, 0, 80, 520, 182);
+            At(dockOptions, 0, 130, 520, 182);
             var delay = NumberField(dockOptions, "Arrival delay (seconds)", settings.dockArrivalDelay, 8);
             var duration = NumberField(dockOptions, "Work time (seconds)", settings.DockWorkSeconds, 50);
             var cargo = Checkbox(dockOptions, "Move cargo", "Move cargo on deck", 14, 92, 492, !settings.dockIdleOnly);
@@ -1996,6 +1999,7 @@ namespace CityForge.UI
             dockWorker.onClick.AddListener(() => SelectBehavior(LotScriptedBehavior.DockWorker));
             shopkeeper.onClick.AddListener(() => SelectBehavior(LotScriptedBehavior.Shopkeeper));
             lumberjack.onClick.AddListener(() => SelectBehavior(LotScriptedBehavior.Lumberjack));
+            harass.onClick.AddListener(() => SelectBehavior(LotScriptedBehavior.Harass));
             SelectBehavior(behavior);
 
             void SelectBehavior(LotScriptedBehavior selected)
@@ -2006,6 +2010,8 @@ namespace CityForge.UI
                 MarkActive(dockWorker, isDock);
                 MarkActive(shopkeeper, isShop);
                 MarkActive(lumberjack, selected == LotScriptedBehavior.Lumberjack);
+                MarkActive(harass, selected == LotScriptedBehavior.Harass);
+                harassNote.gameObject.SetActive(selected == LotScriptedBehavior.Harass);
                 lumberNote.gameObject.SetActive(selected == LotScriptedBehavior.Lumberjack);
                 dockNote.gameObject.SetActive(isDock);
                 dockOptions.gameObject.SetActive(isDock);
@@ -2082,6 +2088,12 @@ namespace CityForge.UI
                         return;
                     }
                 }
+                if (!randomizedSelected && behavior == LotScriptedBehavior.Harass &&
+                    !LotHarass.Supports(catalog.Find(character.assetId)?.prefab))
+                {
+                    error.text = "Choose Street Hooligan or a compatible character.";
+                    return;
+                }
                 if (!session.Lot.objects.Contains(character)) return;
                 settings.scriptedBehavior = randomizedSelected ? LotScriptedBehavior.None : behavior;
                 if (settings.scriptedBehavior == LotScriptedBehavior.DockWorker)
@@ -2103,7 +2115,9 @@ namespace CityForge.UI
                 session.Edit(_ => character.characterScript = settings);
                 CloseAssetPopup();
                 viewport.RestartCharacterPreview(character.id);
-                Refresh(settings.scriptedBehavior == LotScriptedBehavior.Shopkeeper
+                Refresh(settings.scriptedBehavior == LotScriptedBehavior.Harass
+                    ? "Harass assigned · raises arms and dances in place."
+                    : settings.scriptedBehavior == LotScriptedBehavior.Shopkeeper
                     ? "Shopkeeper assigned · uses the nearest marked pedestrian entrance."
                     : "Character behavior applied.");
             }

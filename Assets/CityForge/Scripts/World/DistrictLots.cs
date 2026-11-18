@@ -757,6 +757,13 @@ namespace CityForge.World
                         if (LotCharacterDeck.TryHeight(building, item.position, out float deck))
                             point.y = Mathf.Max(point.y, porch.position.y + deck);
                     character.position = point;
+                    if (item.characterScript.configured && item.characterScript.scriptedBehavior == LotScriptedBehavior.Harass &&
+                        LotHarass.Supports(character.gameObject))
+                    {
+                        var harass = character.gameObject.AddComponent<DistrictHarass>();
+                        harass.districtCamera = camera;
+                        harass.behavior = new LotHarass(character);
+                    }
                     if (item.characterScript.configured && item.characterScript.scriptedBehavior == LotScriptedBehavior.Lumberjack && ApprovedDistrict)
                         character.gameObject.AddComponent<DistrictLumberjack>().Initialize(ApprovedDistrict, camera, record);
                     if (item.characterScript.configured && item.characterScript.scriptedBehavior == LotScriptedBehavior.Shopkeeper &&

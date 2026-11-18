@@ -276,7 +276,7 @@ namespace CityForge.Lots
         }
     }
 
-    public enum LotScriptedBehavior { None, DockWorker, Shopkeeper, Lumberjack }
+    public enum LotScriptedBehavior { None, DockWorker, Shopkeeper, Lumberjack, Harass }
 
     [Serializable]
     public struct LotCharacterScript

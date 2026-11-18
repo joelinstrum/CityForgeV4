@@ -1011,6 +1011,7 @@ internal static class LotCatalogSetup
     {
         string root = DirectoryPath + "/V3Characters/" + folder + "/";
         string modelPath = root + "Model.fbx";
+        if (folder == "Hooligan") HooliganHarassSetup.Prepare();
         var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(root + "Character.prefab");
         if (prefab)
         {

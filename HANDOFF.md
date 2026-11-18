@@ -1,3 +1,26 @@
+# CityForge V4 handoff · November 18, 2026 · Harass character script
+
+`LotScriptedBehavior.Harass` appends saved enum value 4; previous values remain intact.
+Assign through Character Script > Scripted > Harass. The Hooligan uses a looping
+in-place shuffle with raised arms, wrist/arm waves and torso/heading sway. The behavior
+is stationary and nonviolent; it does not chase, attack or move through other lots.
+No crime economy, police dispatch, arrest or disappearance system is implemented yet.
+
+`LotHarass` shares the pose behavior between `LotCharacterPreview` and placed-lot
+`DistrictHarass`. Preview refreshes use authored yaw rather than accumulating sway;
+paused previews defer animation startup. Selection rejects unsupported arm skeletons.
+`HooliganHarassSetup` prepares a private unarmed mesh for this behavior, preserving
+source skinning, UVs, bones and animation data. The source character and other behaviors
+retain their original art. The generated HarassUnarmed.asset remains under ignored
+Resources/Lots/V3Characters/Hooligan. Prepare local catalog rebuilds it if missing.
+
+`HarassChecks.Run` checks enum compatibility, save roundtrip, unarmed mesh assignment,
+raised hands and varied motion over 20 seconds without moving the authored origin.
+Isolated preview renders are in this chat's outputs/Harass. Police arriving and making
+the character disappear is the user's intended later design, not a completed feature.
+
+---
+
 # CityForge V4 handoff · November 18, 2026 · Founders pedestrians and looping walks
 
 The four low-wealth Founders pedestrians are present in the private catalog:
