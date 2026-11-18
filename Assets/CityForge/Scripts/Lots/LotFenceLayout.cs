@@ -57,7 +57,7 @@ namespace CityForge.Lots
                     error = "Two fence markers are too close after fitting the path to the lot edge.";
                     return false;
                 }
-                int count = Mathf.Max(1, Mathf.RoundToInt(distance / asset.fenceSpan));
+                int count = Mathf.Max(1, Mathf.RoundToInt(distance / asset.FencePlacementLength));
                 if (count > capacity - pieces.Count)
                 {
                     error = "This path would exceed the lot’s object limit.";

@@ -149,6 +149,8 @@ namespace CityForge.Lots
                 "Lots/PathMaterials/weathered-brick-and-stone-mosaic", Color.clear, requiresTexture: true)
         };
 
+        public LotWealth Wealth(bool overlay) => LotPropStyles.FindGround(overlay, Id)?.wealth ?? LotWealth.None;
+        public string WealthGroup(bool overlay) => LotPropStyles.TextureWealthLabel(Wealth(overlay));
         public readonly string Id, Label;
         public readonly Color Fallback;
         public readonly int DefaultSpan;

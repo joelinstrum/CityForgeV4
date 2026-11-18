@@ -259,6 +259,8 @@ namespace CityForge.World
         {
             CloseSavedLotPicker();
             DestroySavedLotGhost();
+            if(extractionSphere)extractionSphere.SetActive(false);
+            captureCached=false;
             if (lotPlacementDraft == null) return;
             var moving = movingDistrictLot;
             if (moving != null)
@@ -353,6 +355,7 @@ namespace CityForge.World
             bool pressed, bool held, bool released, bool overUi)
         {
             if (lotGhost) lotGhost.SetActive(false);
+            if(extractionSphere)extractionSphere.SetActive(false);
             lotOutline.enabled = false;
             if (waterfrontGuide) waterfrontGuide.enabled = false;
             Vector2 cursor = default;
@@ -368,6 +371,7 @@ namespace CityForge.World
                     lotPlacementEvaluated = false;
                     lotPlacementProblem = null;
                     DrawLotOutline(movingDistrictLot);
+                    UpdateExtractionSphere(movingDistrictLot);
                     lotOutline.enabled = true;
                     return;
                 }
@@ -397,7 +401,8 @@ namespace CityForge.World
                 if (record.district < 0) return;
             }
             if (!lotPlacementEvaluated || record.center != evaluatedLotPlacement.center ||
-                record.district != evaluatedLotPlacement.district)
+                record.district != evaluatedLotPlacement.district ||
+                (LotExtraction.Applies(record.definition) && (captureRevision != WoodlandRevision || captureDiscoveries != RegionalResources.DiscoveryCount || captureSeason != VisualSeason)))
             {
                 var districtBounds = new Rect(origin, Vector2.one * DistrictSide);
                 if (record.definition.IsWaterfront && movingDistrictLot == null)
@@ -411,6 +416,7 @@ namespace CityForge.World
             }
 
             UpdateSavedLotGhost(evaluatedLotPlacement);
+            UpdateExtractionSphere(evaluatedLotPlacement);
             lotOutline.enabled = true;
             if (waterfrontGuide) waterfrontGuide.enabled = true;
             if (movingDistrictLot == null)
@@ -571,7 +577,7 @@ namespace CityForge.World
 
         private void CommitLotPlacement(RegionTown capital, DistrictLotRecord record)
         {
-            var problem = LotSiteProblem(record, DistrictLotWater(), editing: movingDistrictLot != null, replacing: true);
+            var problem = ExtractionSiteProblem(record, force:true) ?? LotSiteProblem(record, DistrictLotWater(), editing: movingDistrictLot != null, replacing: true);
             if (problem != null)
             {
                 lotPlacementWater = DistrictLotWater();
@@ -595,6 +601,7 @@ namespace CityForge.World
                 return;
             }
             record.id = Guid.NewGuid().ToString("N");
+            record.definition = LotDefinition.Parse(JsonUtility.ToJson(record.definition));
             PlacedLots.Add(record);
             ClearLotVegetation(record);
             if (capital != null)

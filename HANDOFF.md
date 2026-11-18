@@ -1,3 +1,96 @@
+# CityForge V4 handoff · November 18, 2026 · Extraction, deliveries and route caching
+
+Work on `feature/extraction-deliveries-and-route-caching`, based on `main` after merged PR #24.
+Unity **6000.1.12f1**; normal entry scene `Assets/CityForge/Scenes/Gameplay/MainMenu.unity`.
+Read `AGENTS.md` and the technical documents below. Repository remains public and source-only:
+licensed art, generated catalogs/empty wagon bodies/UI artwork, builds and player maps stay private.
+
+## Current gameplay and user decisions
+
+- Workers and wagons are explicitly authored on a lot. Assign Axeman > Character Script > Scripted > Lumberjack.
+  Industrial lots do not generate ambient street pedestrians or visiting wagons. Industrial wealth controls
+  ground appearance; it does not restrict growth by neighborhood wealth.
+- Vehicle Behavior uses **What / When / Where**. Resource supports all 13 cargo resources; Emergency/Event
+  remain None. Time choices are Morning/Noon/Afternoon/Evening/Night; destination currently Town Center.
+  Legacy Lumber Wagon saves retain mill-preferred routing. Configured deliveries target Town Center.
+- Harbor Council House defaults to a Town Center receiver in existing and new lots unless explicitly overridden.
+  The selected-lot panel exposes receiver role and **Detonate**. Detonate removes only the selected lot.
+- Wagons load progressively from actual lot inventory, wait for a full load and their departure window,
+  drive, unload progressively, then return. Partial amounts and handling progress survive saves.
+  Shared cargo visuals cover all 13 resources; new selected cargo requires no new behavior code.
+  This does not invent quarry/farm/mine production: non-timber extraction still needs a producer.
+- Extraction lots need the selected resource within an **80m sphere**. Timber requires **10 harvestable trees**
+  outside the clearing footprint. Placement/move preview is translucent green or red and blocks invalid placement.
+  Existing lots are not demolished if their resource is later depleted. Generic non-extraction lots remain exempt.
+- Every growable lot chooses fence/path variety **once at construction**. This is mandatory, with no editor toggle.
+  Fence replacements preserve source wealth, era and all required shapes; one family replaces the whole set or
+  the authored set remains. Full/partial spans are 2.4m/1.2m. No partial-to-full fallback or mixed-family substitution.
+  Path pools preserve surface role, wealth, era and geometry; choices persist with the populated lot.
+  Fancy textures are high wealth, plain textures medium, dirt/worn textures low. Compacted Gravel Pebble is shared
+  across all three wealth categories. Rendering, moving and reopening never reroll finishes.
+- Horse/wagon fitting is centered with a 2.3m horse, and turns use braking, look-ahead and smooth heading/articulation.
+  Eagle sidewalk pickups exempt the outer lot band from oversized building bounds while retaining interior collision.
+
+## Performance and established routes
+
+Holly Brook in the saved Guilford region, district 19, is the user's primary test town (54 lots, 5,043 trees).
+Matched short standalone tests on M1 Max at 3434x1818, small plants enabled, found repeated worker collision-scan
+allocation bursts. Indexed asset IDs and cached lot collision footprints removed the principal hitch:
+zoom-1 p99 wall frame **179.1 -> 15.8ms**, mean managed allocation **161,469 -> 3,523 bytes/frame**, and no sampled
+post-fix pan frames above 25ms. These measurements precede the additional established-route cache below.
+
+During panning, existing reduced models/forest instancing are used earlier. Wide views use 65% render scale,
+40% LOD bias and at most two cascades; stationary quality restores after 0.2s. The approved 4096 shadow atlas and
+stationary four-cascade policy remain. Wide forest batches coalesce to 256/512m cells, then restore at rest.
+No sampled panning window repainted terrain, rebuilt lot presentation, rerolled finishes or completed streamed tiles.
+Zooms 4-5 remain below steady 60fps and show long tails; do not claim every level is smooth/locked 60.
+
+`EstablishedRoute` now retains certified paths. Unchanged established movement performs zero route-clearance probes
+and no per-tick allocation. After a lot/road/forest/water change, only the approximately one-metre sections being
+entered are checked and remembered. An unrelated edit does not trigger a new global route search.
+Delivery wagons reuse certified out-and-back geometry across trips; missing/moved/ineligible receivers or encountered
+blockers permit replanning. Workers retain sorted tree alternatives and cached rejections, skipping claims/removals.
+Pedestrians keep their circuits/progress across layout refreshes; new/removed lots add/remove their own ambient actors.
+Caches are transient and reconstructed once on load. Worker navigation remains straight-line: blocked approaches can
+be abandoned; blocked returns wait. No general worker detour pathfinder or traffic right-of-way was introduced.
+
+## Verification and next-session priorities
+
+Disposable isolated QA checks passed; no normal player maps or lot libraries were saved:
+- `CityForge.Editor.EstablishedRouteChecks.Run`: 10,000 unchanged moves without probes/per-tick allocations,
+  local certificates, distant/second edits, blockers, reverse/closed paths, removed roads/sidewalks and pedestrian persistence.
+  Includes lumberjack/freight checks, real wagon tree-blocker/removal recovery and repeated delivery route reuse.
+- `CityForge.Editor.TownNavigationChecks.Run`: wealth/path/fence checks, 2,000 collision equivalence probes,
+  indexed lookup allocation checks, panning/settling/disable restoration, unchanged forest instance counts and batching.
+- `CityForge.Editor.ExtractionCaptureChecks.Run`: capture thresholds, 3D/range/footprint exclusions, resource selection,
+  deposit discovery, preview cleanup, plus vehicle/cargo/freight/worker regressions.
+- `CityForge.Editor.VehicleMotionChecks.Run`: fitting, braking, acceleration, horse heading and eagle sidewalk/interior rules.
+- All four original region files remained byte-for-byte unchanged by SHA-256. `git diff --check` passed.
+
+Known independent issue: original and modified development builds report a Metal shader error in
+`CityForge/Lot Path Blend`, combined `_ROAD_WEAR` / `_WAGON_SURFACE` variant: duplicate `repeatLength` declaration
+around line 200. Unity still reported successful builds and measured views rendered normally. Shader was not modified.
+The editor-only texture UI checks also log `Destroy may not be called from edit mode` from runtime picker-row cleanup;
+assertions pass and the batch process exits 0. This is a test-harness/UI edit-mode diagnostic, not a clean-console claim.
+
+Next session: begin with live Holly Brook acceptance of delivery cycles, new blockers, street circuits, build-time
+finish variety and editor controls. Profile remaining wide-zoom GPU/render load before changing more detail.
+Do not reinterpret synthetic tests as live visual acceptance or the earlier performance numbers as post-route-cache FPS.
+Preserve player saves and approved forest appearance. Background/off-district logistics, inventory spending/processing,
+general worker detours, non-timber production and Emergency/Event behaviors remain future work, not completed features.
+
+Technical references:
+- `Documentation/03_Technical/Lumberjack_Workers.md`
+- `Documentation/03_Technical/Lumber_Wagon_Scripts.md`
+- `Documentation/03_Technical/Lot_Prop_Finishes.md`
+- `Documentation/03_Technical/Town_Panning_Performance.md`
+- `Documentation/03_Technical/Established_Actor_Routes.md`
+
+The local session handoff in the Codex output folder records exact QA paths, logs, private inputs and the new PR URL.
+Earlier handoffs below are historical; the November 18 decisions above supersede conflicting routing/finish behavior.
+
+---
+
 # CityForge V4 handoff · Harbors and Town zoning
 
 The checkpoint branch is `feature/harbors-and-town-zoning`. Use Unity **6000.1.12f1** and open `Assets/CityForge/Scenes/Gameplay/MainMenu.unity`. Read `AGENTS.md` and this handoff before changing terrain or rendering. Richmond is the local test region and Halifax is its capital. Use a copy for tests that edit or save the region.

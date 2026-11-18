@@ -727,7 +727,7 @@ namespace CityForge.UI
             ClearPlacementGhost();
             if (asset == null) return;
             ghostAsset = asset;
-            placementGhost = LotRuntimeLoader.InstantiateObject(new LotObjectDefinition { assetId = asset.id, yaw = yaw, scale = scale, fenceLength = asset.fenceSpan, fenceEndPost = asset.fenceSpan > 0 }, asset, stage);
+            placementGhost = LotRuntimeLoader.InstantiateObject(new LotObjectDefinition { assetId = asset.id, yaw = yaw, scale = scale, fenceLength = asset.FencePlacementLength, fenceEndPost = asset.fenceSpan > 0 }, asset, stage);
             placementGhost.name = asset.label + " placement preview";
             foreach (var child in placementGhost.GetComponentsInChildren<Transform>(true))
                 child.gameObject.layer = PreviewLayer;

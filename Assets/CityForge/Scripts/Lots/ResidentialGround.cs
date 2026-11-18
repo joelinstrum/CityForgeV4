@@ -33,7 +33,7 @@ namespace CityForge.Lots
         [Serializable]
         internal sealed class Library
         {
-            public string category, era;
+            public string category, era, lotCategory;
             public TownZone zone;
             public LotWealth wealth;
             public float strength;
@@ -70,6 +70,9 @@ namespace CityForge.Lots
         {
             var zoning = lot.zoningLayout;
             bool residential = zoning.zone is >= TownZone.Residential1 and <= TownZone.Residential3;
+            string category = LotClassification.FindCategory(lot.category)?.id;
+            bool industrial = category == "industrial";
+            var wealth = industrial ? lot.wealth : zoning.wealth;
 
             if (libraries == null)
             {
@@ -77,8 +80,11 @@ namespace CityForge.Lots
                 libraries = config ? JsonUtility.FromJson<Catalog>(config.text)?.libraries : null;
                 libraries ??= Array.Empty<Library>();
             }
-            return Array.Find(libraries, item => (item.zone == TownZone.None ? residential : item.zone == zoning.zone) &&
-                item.wealth == zoning.wealth && item.era == era &&
+            return Array.Find(libraries, item =>
+                (string.IsNullOrEmpty(item.lotCategory)
+                    ? !industrial && (item.zone == TownZone.None ? residential : item.zone == zoning.zone)
+                    : item.lotCategory == category) &&
+                item.wealth == wealth && item.era == era &&
                 (string.IsNullOrEmpty(lot.residentialGround.category) || item.category == lot.residentialGround.category));
         }
 

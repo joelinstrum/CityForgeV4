@@ -1,0 +1,22 @@
+{
+  "scripts": [
+    {
+      "id": "none",
+      "name": "No script",
+      "category": "General",
+      "behavior": 0,
+      "summary": "Keep this vehicle parked on its lot.",
+      "description": "No production or delivery job is assigned to this vehicle."
+    },
+    {
+      "id": "lumber-wagon",
+      "name": "Lumber Wagon",
+      "category": "Freight",
+      "behavior": 1,
+      "requiredCapability": "lumber-freight",
+      "settingsPanel": "lumber-freight",
+      "summary": "Carry harvested timber from camp to mill or town center.",
+      "description": "Loads timber from this lot, follows connected roads to a Lumber Mill or Town Center, unloads, and returns. Place the wagon on clear ground within 24m of a road. Assign receiver lots through Deliveries."
+    }
+  ]
+}

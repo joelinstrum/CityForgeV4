@@ -14,6 +14,10 @@ namespace CityForge
         public float minimumInstancedViewSize = 200;
         public bool simplifiedDistantShadows;
         public Mesh[] shadowSources = Array.Empty<Mesh>(), shadowReplacements = Array.Empty<Mesh>();
+        private Camera qualityCamera;
+        private CameraSystem.CameraMotionQuality motionQuality;
+        public bool NavigationInstancing { get; private set; }
+        public int BatchCellMultiplier { get; private set; } = 1;
         public int TreeCount => trees.Count;
         public int SubmittedInstances { get; private set; }
         public int SubmittedBatches { get; private set; }
@@ -44,7 +48,7 @@ namespace CityForge
         bool selectionValid, cachedOrtho, cachedSimpleShadows;
         Vector3 cachedPosition; Quaternion cachedRotation;
         float cachedSize, cachedFov, cachedBias;
-        int cachedVisible;
+        int cachedVisible, cachedCellMultiplier;
         static Bounds WorldBounds(Bounds local,Matrix4x4 matrix)
         {
             var x=matrix.MultiplyVector(new Vector3(local.extents.x,0,0));
@@ -123,7 +127,9 @@ namespace CityForge
             // Let Unity cull bounded spatial groups for each camera, including reflections.
             var shadow=simplifiedDistantShadows?(shadowPass?ShadowCastingMode.ShadowsOnly:ShadowCastingMode.Off):part.shadows;
             var mesh=shadowPass?part.shadowMesh:part.mesh;
-            var key=(mesh,part.material,part.submesh,tree.x,tree.z,shadow);
+            int x = BatchCellMultiplier == 1 ? tree.x : Mathf.FloorToInt((float)tree.x / BatchCellMultiplier);
+            int z = BatchCellMultiplier == 1 ? tree.z : Mathf.FloorToInt((float)tree.z / BatchCellMultiplier);
+            var key=(mesh,part.material,part.submesh,x,z,shadow);
             if(!groups.TryGetValue(key,out var group)) {
                 group=new Group {mesh=mesh,material=part.material,submesh=part.submesh,shadows=shadow};groups.Add(key,group);
             }
@@ -135,7 +141,11 @@ namespace CityForge
         void LateUpdate()
         {
             if(!viewCamera)return;
-            Capture();bool useInstancing=instanced && viewCamera.orthographicSize>=minimumInstancedViewSize;
+            if (qualityCamera != viewCamera) { qualityCamera = viewCamera; motionQuality = viewCamera.GetComponent<CameraSystem.CameraMotionQuality>(); }
+            NavigationInstancing = viewCamera.orthographic && viewCamera.orthographicSize >= 75f && motionQuality &&
+                motionQuality.ReducedQuality && motionQuality.ReduceAuthoredDetailDuringNavigation;
+            BatchCellMultiplier = NavigationInstancing ? (viewCamera.orthographicSize >= 350f ? 4 : viewCamera.orthographicSize >= 175f ? 2 : 1) : 1;
+            Capture();bool useInstancing=instanced && (viewCamera.orthographicSize>=minimumInstancedViewSize || NavigationInstancing);
             if(applied!=useInstancing)SetOriginals(useInstancing);
             SubmittedInstances=SubmittedBatches=VisibleTrees=0;SubmissionAllocatedBytes=0;SubmissionMilliseconds=0;
             if(!useInstancing)return;
@@ -143,7 +153,7 @@ namespace CityForge
             // Orthographic LOD coverage depends on view size, not position or heading.
             // Unity still culls the spatial bounds separately for every camera.
             bool perspectiveMoved = !viewCamera.orthographic && (cachedPosition!=viewCamera.transform.position || cachedRotation!=viewCamera.transform.rotation);
-            bool rebuild = !selectionValid || perspectiveMoved
+            bool rebuild = !selectionValid || perspectiveMoved || cachedCellMultiplier != BatchCellMultiplier
                 || cachedSize!=viewCamera.orthographicSize || (!viewCamera.orthographic && cachedFov!=viewCamera.fieldOfView)
                 || cachedOrtho!=viewCamera.orthographic || cachedBias!=QualitySettings.lodBias || cachedSimpleShadows!=simplifiedDistantShadows;
             if(rebuild) {
@@ -160,7 +170,7 @@ namespace CityForge
             }
             cachedPosition=viewCamera.transform.position;cachedRotation=viewCamera.transform.rotation;
             cachedSize=viewCamera.orthographicSize;cachedFov=viewCamera.fieldOfView;cachedOrtho=viewCamera.orthographic;cachedBias=QualitySettings.lodBias;
-            cachedVisible=VisibleTrees;cachedSimpleShadows=simplifiedDistantShadows;selectionValid=true;
+            cachedVisible=VisibleTrees;cachedCellMultiplier=BatchCellMultiplier;cachedSimpleShadows=simplifiedDistantShadows;selectionValid=true;
             } else VisibleTrees=cachedVisible;
             foreach(var group in active) {
                 var parameters=new RenderParams(group.material){worldBounds=group.bounds,shadowCastingMode=group.shadows,receiveShadows=true};

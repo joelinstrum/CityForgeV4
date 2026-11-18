@@ -1,0 +1,365 @@
+{
+  "fences": [
+    {
+      "assetId": "wood-fence-section",
+      "family": "Rustic",
+      "wealth": 1,
+      "part": "Section",
+      "era": "founders"
+    },
+    {
+      "assetId": "rustic-fence-half",
+      "family": "Rustic",
+      "wealth": 1,
+      "part": "Partial",
+      "era": "founders"
+    },
+    {
+      "assetId": "weathered-picket-section",
+      "family": "Weathered picket",
+      "wealth": 1,
+      "part": "Section",
+      "era": "founders"
+    },
+    {
+      "assetId": "weathered-picket-partial",
+      "family": "Weathered picket",
+      "wealth": 1,
+      "part": "Partial",
+      "era": "founders"
+    },
+    {
+      "assetId": "founders-fence-panel",
+      "family": "Founders timber",
+      "wealth": 1,
+      "part": "Section",
+      "era": "founders"
+    },
+    {
+      "assetId": "wood-fence",
+      "family": "Wood fence",
+      "wealth": 1,
+      "part": "Section",
+      "era": "founders"
+    },
+    {
+      "assetId": "meadow-fence-02",
+      "family": "Meadow fence 02",
+      "wealth": 1,
+      "part": "Section",
+      "era": "founders"
+    },
+    {
+      "assetId": "meadow-fence-03",
+      "family": "Meadow fence 03",
+      "wealth": 1,
+      "part": "Section",
+      "era": "founders"
+    },
+    {
+      "assetId": "meadow-fence-04",
+      "family": "Meadow fence 04",
+      "wealth": 1,
+      "part": "Section",
+      "era": "founders"
+    },
+    {
+      "assetId": "meadow-fence-05",
+      "family": "Meadow fence 05",
+      "wealth": 1,
+      "part": "Section",
+      "era": "founders"
+    },
+    {
+      "assetId": "v3-white-picket",
+      "family": "White picket",
+      "wealth": 2,
+      "part": "Section",
+      "era": "founders"
+    },
+    {
+      "assetId": "flowered-picket-section",
+      "family": "Flowered picket",
+      "wealth": 2,
+      "part": "Section",
+      "era": "founders"
+    },
+    {
+      "assetId": "flowered-picket-partial",
+      "family": "Flowered picket",
+      "wealth": 2,
+      "part": "Partial",
+      "era": "founders"
+    },
+    {
+      "assetId": "v3-wrought-iron",
+      "family": "Wrought iron",
+      "wealth": 3,
+      "part": "Section",
+      "era": "founders"
+    },
+    {
+      "assetId": "stone-column-wrought-iron-section",
+      "family": "Stone column iron",
+      "wealth": 3,
+      "part": "Section",
+      "era": "founders"
+    },
+    {
+      "assetId": "beige-stone-wrought-iron-section",
+      "family": "Beige stone iron",
+      "wealth": 3,
+      "part": "Section",
+      "era": "founders"
+    },
+    {
+      "assetId": "beige-stone-wrought-iron-partial",
+      "family": "Beige stone iron",
+      "wealth": 3,
+      "part": "Partial",
+      "era": "founders"
+    },
+    {
+      "assetId": "v3-wrought-iron-corner",
+      "family": "Wrought iron",
+      "wealth": 3,
+      "part": "Corner",
+      "era": "founders"
+    },
+    {
+      "assetId": "v3-decorative-iron",
+      "family": "Decorative iron",
+      "wealth": 3,
+      "part": "Decorative",
+      "era": "founders"
+    },
+    {
+      "assetId": "v3-ornate-iron-gate",
+      "family": "Ornate iron",
+      "wealth": 3,
+      "part": "Gate",
+      "era": "founders"
+    }
+  ],
+  "paths": [
+    {
+      "materialId": "weathered-plankboard",
+      "wealth": 2,
+      "family": "Walk",
+      "era": "founders"
+    },
+    {
+      "materialId": "damaged-brick",
+      "wealth": 2,
+      "family": "Walk",
+      "era": "founders"
+    },
+    {
+      "materialId": "brick",
+      "wealth": 2,
+      "family": "Walk",
+      "era": "founders"
+    },
+    {
+      "materialId": "cobblestone",
+      "wealth": 2,
+      "family": "Walk",
+      "era": "founders"
+    },
+    {
+      "materialId": "weathered-red-brick-herringbone",
+      "wealth": 3,
+      "family": "Walk",
+      "era": "founders"
+    },
+    {
+      "materialId": "weathered-bluestone",
+      "wealth": 2,
+      "family": "Walk",
+      "era": "founders"
+    },
+    {
+      "materialId": "english-garden-flagstones",
+      "wealth": 3,
+      "family": "Walk",
+      "era": "founders"
+    },
+    {
+      "materialId": "english-garden-brick-medallion",
+      "wealth": 3,
+      "family": "Walk",
+      "era": "founders"
+    },
+    {
+      "materialId": "gray-diamond-stonework",
+      "wealth": 3,
+      "family": "Walk",
+      "era": "founders"
+    },
+    {
+      "materialId": "interlocking-brick-and-stone",
+      "wealth": 3,
+      "family": "Walk",
+      "era": "founders"
+    },
+    {
+      "materialId": "weathered-brick-and-stone-mosaic",
+      "wealth": 3,
+      "family": "Walk",
+      "era": "founders"
+    },
+    {
+      "materialId": "compacted-gravel-pebble",
+      "wealth": 1,
+      "family": "Natural",
+      "era": "founders",
+      "wealths": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "materialId": "gravel",
+      "wealth": 1,
+      "family": "Natural",
+      "era": "founders"
+    },
+    {
+      "materialId": "packed-earth",
+      "wealth": 1,
+      "family": "Natural",
+      "era": "founders"
+    },
+    {
+      "materialId": "residential-footpath",
+      "wealth": 1,
+      "family": "Natural",
+      "era": "founders"
+    },
+    {
+      "materialId": "rich-brown-garden-soil",
+      "wealth": 1,
+      "family": "Soil",
+      "era": "founders"
+    },
+    {
+      "materialId": "tilled-garden-soil",
+      "wealth": 1,
+      "family": "Soil",
+      "era": "founders"
+    },
+    {
+      "materialId": "garden-soil",
+      "wealth": 1,
+      "family": "Soil",
+      "era": "founders"
+    },
+    {
+      "materialId": "timber-deck",
+      "wealth": 2,
+      "family": "Deck",
+      "era": "founders"
+    },
+    {
+      "materialId": "cobblestone-road-9",
+      "wealth": 2,
+      "family": "Road",
+      "era": "founders"
+    },
+    {
+      "materialId": "cobblestone-road-9-wet",
+      "wealth": 2,
+      "family": "Road",
+      "era": "founders"
+    },
+    {
+      "materialId": "concrete",
+      "wealth": 2,
+      "family": "Walk",
+      "era": "victorian"
+    }
+  ],
+  "ground": [
+    {
+      "textureId": "patchy-grass",
+      "overlay": false,
+      "wealth": 1
+    },
+    {
+      "textureId": "low-wealth-4x4",
+      "overlay": false,
+      "wealth": 1
+    },
+    {
+      "textureId": "residential-worn-grass",
+      "overlay": false,
+      "wealth": 1
+    },
+    {
+      "textureId": "residential-mixed-earth",
+      "overlay": false,
+      "wealth": 1
+    },
+    {
+      "textureId": "packed-earth",
+      "overlay": false,
+      "wealth": 1
+    },
+    {
+      "textureId": "lush-grass",
+      "overlay": false,
+      "wealth": 2
+    },
+    {
+      "textureId": "residential-maintained-grass",
+      "overlay": false,
+      "wealth": 2
+    },
+    {
+      "textureId": "tileable-grass",
+      "overlay": true,
+      "wealth": 2
+    },
+    {
+      "textureId": "worn-sidewalk",
+      "overlay": true,
+      "wealth": 2
+    },
+    {
+      "textureId": "brick-walkway",
+      "overlay": true,
+      "wealth": 2
+    },
+    {
+      "textureId": "weathered-red-brick-herringbone",
+      "overlay": true,
+      "wealth": 3
+    },
+    {
+      "textureId": "english-garden-flagstones",
+      "overlay": true,
+      "wealth": 3
+    },
+    {
+      "textureId": "english-garden-brick-medallion",
+      "overlay": true,
+      "wealth": 3
+    },
+    {
+      "textureId": "gray-diamond-stonework",
+      "overlay": true,
+      "wealth": 3
+    },
+    {
+      "textureId": "interlocking-brick-and-stone",
+      "overlay": true,
+      "wealth": 3
+    },
+    {
+      "textureId": "weathered-brick-and-stone-mosaic",
+      "overlay": true,
+      "wealth": 3
+    }
+  ]
+}

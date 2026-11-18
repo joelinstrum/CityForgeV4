@@ -11,5 +11,7 @@
   "trafficGroup": "wagon",
   "spawnEvery": 4,
   "speed": 2.25,
-  "speedVariation": 0.17
+  "speedVariation": 0.17,
+  "supportsResourceFreight": true,
+  "enclosedCargo": true
 }
