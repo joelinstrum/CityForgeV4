@@ -351,7 +351,7 @@ namespace CityForge.World
                 {
                     if (wealth == LotWealth.High && foundersHigh.Length > 0) pool = foundersHigh;
                     if (wealth == LotWealth.Low && foundersLow.Length > 0 &&
-                        lot.definition.zoningLayout.zone is TownZone.Residential1 or TownZone.Commercial1)
+                        (IsResidentialZone(zone) || zone == TownZone.Commercial1))
                         pool = foundersLow;
                 }
                 if (pool.Length == 0) pool = pools.Values.SelectMany(entries => entries).ToArray();

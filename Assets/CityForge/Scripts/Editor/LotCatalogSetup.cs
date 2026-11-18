@@ -1100,23 +1100,34 @@ internal static class LotCatalogSetup
         var controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(root + "Idle.controller");
         if (!controller) return;
         var machine = controller.layers[0].stateMachine;
-        if (machine.states.Any(state => state.state.name == stateName)) return;
+        var state = machine.states.FirstOrDefault(entry => entry.state.name == stateName).state;
+        var motion = state ? state.motion as AnimationClip : null;
+        motion ??= AssetDatabase.LoadAllAssetsAtPath(modelPath).OfType<AnimationClip>()
+            .Where(clip => !clip.name.StartsWith("__") &&
+                clip.name.IndexOf(stateName, System.StringComparison.OrdinalIgnoreCase) >= 0)
+            .OrderBy(clip => clip.name.Equals(stateName, System.StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+            .ThenBy(clip => clip.name, System.StringComparer.Ordinal).FirstOrDefault();
+        if (!motion) return;
         if (!(AssetImporter.GetAtPath(modelPath) is ModelImporter importer)) return;
         var clips = importer.clipAnimations;
-        var importedClip = clips.FirstOrDefault(clip =>
-            clip.name.IndexOf(stateName, System.StringComparison.OrdinalIgnoreCase) >= 0);
+        // Repair the clip actually bound to the state, including existing controllers.
+        // Sources can contain multiple walk takes; looping a different take leaves the
+        // active walk frozen at its final frame while navigation keeps moving.
+        string motionName = motion.name;
+        var importedClip = clips.FirstOrDefault(clip => clip.name == motionName);
         if (importedClip != null && !importedClip.loopTime)
         {
             importedClip.loopTime = true;
             importedClip.loopPose = true;
             importer.clipAnimations = clips;
             importer.SaveAndReimport();
+            motion = AssetDatabase.LoadAllAssetsAtPath(modelPath).OfType<AnimationClip>()
+                .FirstOrDefault(clip => clip.name == motionName);
         }
-        var motion = AssetDatabase.LoadAllAssetsAtPath(modelPath).OfType<AnimationClip>()
-            .FirstOrDefault(clip => !clip.name.StartsWith("__") &&
-                clip.name.IndexOf(stateName, System.StringComparison.OrdinalIgnoreCase) >= 0);
-        if (!motion) return;
-        machine.AddState(stateName).motion = motion;
+        if (!state) state = machine.AddState(stateName);
+        if (state.motion == motion) return;
+        state.motion = motion;
+        EditorUtility.SetDirty(state);
         EditorUtility.SetDirty(controller);
         AssetDatabase.SaveAssets();
     }

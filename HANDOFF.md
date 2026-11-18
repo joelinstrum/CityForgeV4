@@ -1,3 +1,23 @@
+# CityForge V4 handoff · November 18, 2026 · Founders pedestrians and looping walks
+
+The four low-wealth Founders pedestrians are present in the private catalog:
+Cook, Stout Townsperson, Townsperson, Privateer. Their ambient pool had been limited
+to R1/C1; R2/R3 now use it too. Wealth and era matching remain unchanged. Existing
+established actors still keep their routes on unrelated lot edits; reopen the district
+to rebuild an already populated neighborhood with the corrected pool.
+
+Street Hooligan's Walk state referenced `Armature|preset:biped:walk` with loopTime=0,
+while another walk take had looping enabled. `AddCharacterModelState` now repairs the
+actual bound clip even when a Walk state already exists; it does not simply select
+the first matching take. Generated prefab/controller/FBX import settings remain private.
+`PedestrianTrafficChecks.Run` verifies all four characters spawn for low-wealth
+Founders R1/R2/R3/C1, preserves traffic identities on unrelated refreshes, and checks
+physical skeletal motion after multiple walk cycles for those four plus Hooligan.
+Isolated preview captures and verification live in the current chat's outputs/Pedestrians.
+No original region or lot library was saved by these checks.
+
+---
+
 # CityForge V4 handoff · November 18, 2026 · Residential density growth
 
 R1, R2 and R3 now enter the same Founders-era town-growth pipeline with no density
