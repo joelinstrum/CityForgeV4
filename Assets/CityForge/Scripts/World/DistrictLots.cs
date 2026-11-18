@@ -383,11 +383,11 @@ namespace CityForge.World
         private WildlifeWaterAccess DistrictLotWater() => ApprovedDistrict && ApprovedDistrict.DisplayTerrain
             ? new WildlifeWaterAccess(ApprovedDistrict) : null;
 
-        private string LotSiteProblem(DistrictLotRecord record, WildlifeWaterAccess water, bool editing = false, bool growing = false)
+        private string LotSiteProblem(DistrictLotRecord record, WildlifeWaterAccess water, bool editing = false, bool growing = false, bool replacing = false)
         {
             var footprint = new DistrictLotFootprint(record);
             foreach (var other in PlacedLots)
-                if ((record.id == null || record.id != other.id) && footprint.Overlaps(new DistrictLotFootprint(other)))
+                if (!replacing && (record.id == null || record.id != other.id) && footprint.Overlaps(new DistrictLotFootprint(other)))
                     return "That lot overlaps another lot.";
 
             if (LotOverlapsDistrictRoad(record, growing ? ResidentialRoadCornerInset : 0f)) return "Keep lots clear of roads.";
@@ -654,6 +654,7 @@ namespace CityForge.World
                 var root = new GameObject(record.definition.name).transform;
                 root.SetParent(lotInstances, false);
                 districtLotRoots.Add(record, root);
+                if (revealingLots.Contains(record)) root.gameObject.SetActive(false);
                 var definition = record.definition;
                 LotGrowableBuildings.CorrectLegacyCabinFacing(definition);
                 if (catalog && record.customization != null)

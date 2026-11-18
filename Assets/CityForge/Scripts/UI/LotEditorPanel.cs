@@ -91,7 +91,7 @@ namespace CityForge.UI
             new System.Collections.Generic.Dictionary<string, Button>();
         private InputField nameField, costField, monthlyCostField;
         private Button saveLot;
-        private Button lotCategory, lotSubcategory, lotWealth, lotEra;
+        private Button lotCategory, lotSubcategory, lotWealth, lotEra, growableLayoutButton;
         private Text lotCategoryLabel, lotSubcategoryLabel, lotWealthLabel, lotEraLabel;
         private Button undo, redo, scriptButton;
         private readonly HashSet<string> selectedGroup = new();
@@ -391,6 +391,12 @@ namespace CityForge.UI
                         if (LotClassification.FindCategory(lot.category)?.id == value || lot.category == value) return;
                         lot.category = value;
                         lot.subcategory = "";
+                        if (value == "industrial")
+                        {
+                            lot.zoningLayout = default;
+                            lot.wealth = LotWealth.None;
+                            if (lot.type == LotType.Zoning) lot.type = LotType.Playable;
+                        }
                     }), out lotCategoryLabel);
             lotSubcategory = LotChoice("Subcategory", 212, () =>
                 ShowLotChoices("Subcategory", 248, LotClassification.ForCategory(session.Lot.category).Select(item => (item.id, item.name)),
@@ -432,7 +438,7 @@ namespace CityForge.UI
                 Control(inspector, "Street frontage…", 177, 655, 150, OpenStreetFrontage,
                     description: "Choose the front and any side street for this lot");
             if (!PlayerMode)
-                Control(inspector, "Growable layout…", 15, 697, 150, OpenZoningLayout,
+                growableLayoutButton = Control(inspector, "Growable layout…", 15, 697, 150, OpenZoningLayout,
                     description: "Set zone, density, wealth, building slot and entrances");
             if (!PlayerMode)
                 Control(inspector, "Lot ground…", 177, 697, 150, OpenLotGround);
@@ -1791,9 +1797,9 @@ namespace CityForge.UI
             }
             var kiln = Checkbox(frame, "Kiln access", "Kiln access", 284, 258, 256, lot.requiresKiln);
 
-            Label(frame, "Capital bonus", 20, 292, 520, 18);
+            Label(frame, "Lot bonus", 20, 292, 520, 18);
             var menu = DefaultControls.CreateDropdown(new DefaultControls.Resources());
-            menu.name = "Capital bonus type";
+            menu.name = "Lot bonus type";
             menu.transform.SetParent(frame, false);
             At((RectTransform)menu.transform, 20, 329, 520, 33);
             foreach (var label in menu.GetComponentsInChildren<Text>(true)) label.font = font;
@@ -1803,7 +1809,8 @@ namespace CityForge.UI
             {
                 "None", "Early Works · public construction discount", "Local Justice · crime reduction",
                 "Public Confidence · civic prestige", "Sturdy Foundations · public repair discount",
-                "Port Administration · port fee revenue", "Population Growth · faster population growth"
+                "Port Administration · port fee revenue", "Population Growth · faster population growth",
+                "Resource cost savings"
             });
             effect.SetValueWithoutNotify((int)lot.capitalBonus.effect);
 
@@ -1816,6 +1823,15 @@ namespace CityForge.UI
             uses.characterLimit = 2;
             percent.SetTextWithoutNotify(lot.capitalBonus.percent.ToString());
             uses.SetTextWithoutNotify(lot.capitalBonus.eligibleBuildings.ToString());
+            var resourceMenu = DefaultControls.CreateDropdown(new DefaultControls.Resources());
+            resourceMenu.name = "Discounted resource";
+            resourceMenu.transform.SetParent(frame, false);
+            At((RectTransform)resourceMenu.transform, 195, 369, 345, 33);
+            foreach (var label in resourceMenu.GetComponentsInChildren<Text>(true)) label.font = font;
+            var resource = resourceMenu.GetComponent<Dropdown>();
+            resource.ClearOptions();
+            resource.AddOptions(Enum.GetNames(typeof(LotCostResource)).ToList());
+            resource.SetValueWithoutNotify((int)lot.capitalBonus.resource);
             var port = Checkbox(frame, "Operating port", "Bonus requires an operating port", 20, 416, 520,
                 lot.capitalBonus.requiresOperatingPort);
             var status = Label(frame, "Saved as lot settings for future gameplay.", 20, 479, 314, 14);
@@ -1824,7 +1840,7 @@ namespace CityForge.UI
 
             effect.onValueChanged.AddListener(value =>
             {
-                int[] defaults = { 0, 15, 25, 10, 20, 15, 10 };
+                int[] defaults = { 0, 15, 25, 10, 20, 15, 10, 50 };
                 percent.SetTextWithoutNotify(defaults[value].ToString());
                 uses.SetTextWithoutNotify(value == (int)LotCapitalEffect.PublicBuildingCostReduction ? "3" : "0");
                 port.SetIsOnWithoutNotify(value == (int)LotCapitalEffect.PortFeeRevenueIncrease);
@@ -1837,7 +1853,10 @@ namespace CityForge.UI
                 bool enabled = effect.value != (int)LotCapitalEffect.None;
                 percent.gameObject.SetActive(enabled);
                 percentLabel.gameObject.SetActive(enabled);
-                port.gameObject.SetActive(enabled);
+                bool resourceSavings = effect.value == (int)LotCapitalEffect.ResourceCostReduction;
+                resourceMenu.SetActive(resourceSavings);
+                percentLabel.text = resourceSavings ? "Saved (%)" : "Bonus (%)";
+                port.gameObject.SetActive(enabled && !resourceSavings);
                 bool limited = effect.value == (int)LotCapitalEffect.PublicBuildingCostReduction;
                 uses.gameObject.SetActive(limited);
                 usesLabel.gameObject.SetActive(limited);
@@ -1846,12 +1865,14 @@ namespace CityForge.UI
             void ApplySettings()
             {
                 var bonus = new LotCapitalBonus { effect = (LotCapitalEffect)effect.value };
+                if (bonus.effect == LotCapitalEffect.ResourceCostReduction)
+                    bonus.resource = (LotCostResource)resource.value;
                 if (bonus.effect != LotCapitalEffect.None)
                 {
                     bool validPercent = int.TryParse(percent.text, out bonus.percent);
                     bool validUses = bonus.effect != LotCapitalEffect.PublicBuildingCostReduction ||
                         int.TryParse(uses.text, out bonus.eligibleBuildings);
-                    bonus.requiresOperatingPort = port.isOn;
+                    bonus.requiresOperatingPort = bonus.effect != LotCapitalEffect.ResourceCostReduction && port.isOn;
                     if (!validPercent || !validUses || !bonus.IsValid)
                     {
                         status.text = "Use 1–100% and 0–99 buildings.";
@@ -3389,6 +3410,16 @@ namespace CityForge.UI
 
         private void Save(LotType type)
         {
+            if (!PlayerMode && LotClassification.FindCategory(session.Lot.category)?.id == "industrial")
+            {
+                if (type == LotType.Zoning) type = LotType.Playable;
+                if (session.Lot.zoningLayout.Configured || session.Lot.wealth != LotWealth.None)
+                    session.Edit(lot =>
+                    {
+                        lot.zoningLayout = default;
+                        lot.wealth = LotWealth.None;
+                    });
+            }
             var problem = Validate();
             if (problem != null)
             {
@@ -3469,8 +3500,11 @@ namespace CityForge.UI
             bool growable = lot.zoningLayout.Configured;
             var inspectorWealth = growable ? lot.zoningLayout.wealth : lot.wealth;
             string wealthIndicator = inspectorWealth == LotWealth.None ? "Unspecified" : new string('$', (int)inspectorWealth);
-            lotWealthLabel.text = growable || PlayerMode ? wealthIndicator : ChoiceLabel(wealthIndicator);
-            lotWealth.interactable = !PlayerMode && !growable;
+            bool industrial = LotClassification.FindCategory(lot.category)?.id == "industrial";
+            lotWealthLabel.text = industrial ? "Not applicable" :
+                growable || PlayerMode ? wealthIndicator : ChoiceLabel(wealthIndicator);
+            lotWealth.interactable = !PlayerMode && !growable && !industrial;
+            if (growableLayoutButton) growableLayoutButton.interactable = !industrial;
             lotEraLabel.text = ChoiceLabel(LotClassification.Era(lot)?.Name ??
                 (lot.firstEraYear > 0 ? lot.firstEraYear.ToString() : lot.firstEraId));
             lotCategory.interactable = lotEra.interactable = !PlayerMode;

@@ -14,6 +14,17 @@ namespace CityForge.Lots
         internal sealed class Subcategory
         {
             public string id, name, legacyName;
+            public string industryTab, industryCardTitle;
+            public int industryTabOrder, industryArtwork;
+            public string[] industryLotNames, industryAssetIds;
+            public IndustryMessage[] industryMessages;
+        }
+
+        [Serializable]
+        internal sealed class IndustryMessage
+        {
+            public int firstYear;
+            public string text;
         }
 
         [Serializable]
@@ -86,14 +97,26 @@ namespace CityForge.Lots
                 schema = 1,
                 eras = MergeById(source.eras, patch.eras, item => item.id, (a, b) => new CityForgeTimeline.Era
                 {
-                    id = a.id, name = b.name ?? a.name, periods = b.periods ?? a.periods
+                    id = a.id, name = b.name ?? a.name, periods = b.periods ?? a.periods,
+                    summary = b.summary ?? a.summary, suggestions = b.suggestions ?? a.suggestions,
+                    messageIllustration = b.messageIllustration ?? a.messageIllustration
                 }),
                 categories = MergeById(source.categories, patch.categories, item => item.id, (a, b) => new Category
                 {
                     id = a.id, name = b.name ?? a.name, legacyName = b.legacyName ?? a.legacyName,
                     categoryType = b.categoryType ?? a.categoryType,
                     subcategories = MergeById(a.subcategories, b.subcategories, item => item.id, (old, edit) =>
-                        new Subcategory { id = old.id, name = edit.name ?? old.name, legacyName = edit.legacyName ?? old.legacyName })
+                        new Subcategory
+                        {
+                            id = old.id, name = edit.name ?? old.name, legacyName = edit.legacyName ?? old.legacyName,
+                            industryTab = edit.industryTab ?? old.industryTab,
+                            industryCardTitle = edit.industryCardTitle ?? old.industryCardTitle,
+                            industryTabOrder = edit.industryTabOrder != 0 ? edit.industryTabOrder : old.industryTabOrder,
+                            industryArtwork = edit.industryArtwork != 0 ? edit.industryArtwork : old.industryArtwork,
+                            industryLotNames = edit.industryLotNames ?? old.industryLotNames,
+                            industryAssetIds = edit.industryAssetIds ?? old.industryAssetIds,
+                            industryMessages = edit.industryMessages ?? old.industryMessages
+                        })
                 }),
                 categoryTypes = MergeById(source.categoryTypes, patch.categoryTypes, item => item.id, (a, b) =>
                     new CategoryType { id = a.id, conditions = b.conditions ?? a.conditions })

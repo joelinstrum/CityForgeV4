@@ -10,6 +10,8 @@ namespace CityForge.UI
         public sealed class Period
         {
             public string name;
+            public string summary;
+            public string[] suggestions;
             public int firstYear;
             public int lastYear;
 
@@ -23,6 +25,9 @@ namespace CityForge.UI
         {
             public string id;
             public string name;
+            public string summary;
+            public string messageIllustration;
+            public string[] suggestions;
             public Period[] periods;
 
             public string Name => name;

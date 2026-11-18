@@ -274,6 +274,7 @@ namespace CityForge.World
             if (grownNames.Count > 0)
             {
                 PresentDistrictLots(grownLots);
+                foreach (var grown in grownLots) StartCoroutine(ConstructZonedLot(grown));
                 RefreshZoneOverlay();
                 RefreshDirtRoadEndFades();
                 if (ApprovedDistrict)
@@ -285,6 +286,167 @@ namespace CityForge.World
             }
             else if (hasGrowableZoning)
                 ShowGrowthStatus(blocked ?? GrowthSpaceHint(options[^1].Layout));
+        }
+
+        private System.Collections.IEnumerator ConstructZonedLot(DistrictLotRecord record)
+        {
+            if (!districtLotRoots.TryGetValue(record, out var finished) || !finished) yield break;
+            var catalog = LotAssetCatalog.Load();
+            var building = record.definition.objects.FirstOrDefault(item => item.id == record.growthBuildingId)
+                ?? record.definition.objects.FirstOrDefault(item => catalog?.Find(item.assetId)?.category == "Buildings");
+            if (building == null) yield break;
+            var asset = catalog.Find(building.assetId);
+            if (asset == null || !asset.prefab) yield break;
+
+            var site = new GameObject("Lot under construction").transform;
+            site.SetParent(lotInstances, false);
+            site.SetPositionAndRotation(finished.position, finished.rotation);
+            var wood = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+            wood.SetColor("_BaseColor", new Color(.47f, .29f, .13f));
+            var dirt = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+            dirt.SetColor("_BaseColor", new Color(.66f, .50f, .33f));
+            dirt.SetTexture("_BaseMap", Resources.Load<Texture2D>("Lots/PathMaterials/DirtRoadEarth"));
+            var frame = new GameObject("Rising timber frame").transform;
+            frame.SetParent(site, false);
+
+            // Read the already-instantiated building, including its final fit, scale and LOD.
+            var model = finished.Cast<Transform>().FirstOrDefault(child => child.name == asset.label &&
+                Vector2.Distance(new Vector2(child.localPosition.x, child.localPosition.z), building.position) < .01f);
+            var renderers = model ? model.GetComponentsInChildren<MeshRenderer>() : Array.Empty<MeshRenderer>();
+            var visible = renderers.Where(renderer => renderer.enabled).ToArray();
+            if (visible.Length == 0) visible = renderers;
+            if (visible.Length == 0)
+            {
+                Destroy(site.gameObject);
+                Destroy(wood);
+                Destroy(dirt);
+                yield break;
+            }
+            float baseY = float.PositiveInfinity;
+            float roofY = float.NegativeInfinity;
+            foreach (var renderer in visible)
+            {
+                baseY = Mathf.Min(baseY, renderer.bounds.min.y);
+                roofY = Mathf.Max(roofY, renderer.bounds.max.y);
+            }
+            float measuredHeight = roofY - baseY;
+            var min = Vector3.zero;
+            var max = Vector3.zero;
+            var footprint = LotRuntimeLoader.Footprint(building, asset);
+            min.x = footprint.xMin;
+            min.z = footprint.yMin;
+            max.x = footprint.xMax;
+            max.z = footprint.yMax;
+            float height = measuredHeight;
+            frame.localPosition = new Vector3(0f, baseY, 0f);
+            var pieces = new List<Transform>();
+            var groundMeshes = new List<Mesh>();
+            try
+            {
+                revealingLots.Add(record);
+                finished.gameObject.SetActive(false);
+                var size = record.definition.Size;
+                for (int z = 0; z < record.definition.length; z++)
+                for (int x = 0; x < record.definition.width; x++)
+                {
+                    var vertices = new List<Vector3>();
+                    var uv = new List<Vector2>();
+                    var triangles = new List<int>();
+                    const int divisions = 4;
+                    for (int tz = 0; tz <= divisions; tz++)
+                    for (int tx = 0; tx <= divisions; tx++)
+                    {
+                        var local = new Vector3((x + (float)tx / divisions) * 4f - size.x * .5f,
+                            0f, (z + (float)tz / divisions) * 4f - size.y * .5f);
+                        var world = site.TransformPoint(local);
+                        local.y = LotHeight(new Vector2(world.x, world.z)) + .12f;
+                        vertices.Add(local);
+                        uv.Add(new Vector2((float)tx / divisions, (float)tz / divisions));
+                        if (tx == divisions || tz == divisions) continue;
+                        int v = tz * (divisions + 1) + tx;
+                        triangles.AddRange(new[] { v, v + divisions + 1, v + 1,
+                            v + 1, v + divisions + 1, v + divisions + 2 });
+                    }
+                    var tile = new GameObject("Construction dirt tile", typeof(MeshFilter), typeof(MeshRenderer));
+                    tile.transform.SetParent(site, false);
+                    var mesh = new Mesh();
+                    mesh.SetVertices(vertices);
+                    mesh.SetUVs(0, uv);
+                    mesh.SetTriangles(triangles, 0);
+                    mesh.RecalculateNormals();
+                    tile.GetComponent<MeshFilter>().sharedMesh = mesh;
+                    tile.GetComponent<Renderer>().sharedMaterial = dirt;
+                    groundMeshes.Add(mesh);
+                }
+
+                int levels = Mathf.Max(1, Mathf.CeilToInt(height / 2.7f));
+                int across = Mathf.Max(1, Mathf.CeilToInt(footprint.width / 2f));
+                int deep = Mathf.Max(1, Mathf.CeilToInt(footprint.height / 2f));
+                for (int level = 0; level < levels; level++)
+                {
+                    float bottom = height * level / levels;
+                    float top = height * (level + 1) / levels;
+                    for (int x = 0; x <= across; x++)
+                    {
+                        float at = Mathf.Lerp(min.x, max.x, (float)x / across);
+                        Post(at, min.z, bottom, top);
+                        Post(at, max.z, bottom, top);
+                    }
+                    for (int z = 1; z < deep; z++)
+                    {
+                        float at = Mathf.Lerp(min.z, max.z, (float)z / deep);
+                        Post(min.x, at, bottom, top);
+                        Post(max.x, at, bottom, top);
+                    }
+                    AddFrame(new Vector3((min.x + max.x) * .5f, top, min.z), new Vector3(footprint.width, .18f, .18f));
+                    AddFrame(new Vector3((min.x + max.x) * .5f, top, max.z), new Vector3(footprint.width, .18f, .18f));
+                    AddFrame(new Vector3(min.x, top, (min.z + max.z) * .5f), new Vector3(.18f, .18f, footprint.height));
+                    AddFrame(new Vector3(max.x, top, (min.z + max.z) * .5f), new Vector3(.18f, .18f, footprint.height));
+                }
+
+                yield return new WaitForSeconds(.6f);
+                float delay = 7f / pieces.Count;
+                foreach (var piece in pieces)
+                {
+                    if (!site || !PlacedLots.Contains(record)) yield break;
+                    piece.gameObject.SetActive(true);
+                    yield return new WaitForSeconds(delay);
+                }
+                yield return new WaitForSeconds(.5f);
+            }
+            finally
+            {
+                revealingLots.Remove(record);
+                if (districtLotRoots.TryGetValue(record, out var reveal) && reveal) reveal.gameObject.SetActive(true);
+                if (site) Destroy(site.gameObject);
+                Destroy(wood);
+                Destroy(dirt);
+                foreach (var mesh in groundMeshes) Destroy(mesh);
+            }
+
+            void Post(float x, float z, float bottom, float top) =>
+                AddFrame(new Vector3(x, (bottom + top) * .5f, z), new Vector3(.16f, top - bottom, .16f));
+
+            void AddFrame(Vector3 position, Vector3 size)
+            {
+                var beam = Beam(frame, "Timber", position, size, wood);
+                beam.gameObject.SetActive(false);
+                pieces.Add(beam);
+            }
+        }
+
+        private Transform Beam(Transform parent, string name, Vector3 position, Vector3 size, Material material)
+        {
+            var beam = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            beam.name = name;
+            beam.transform.SetParent(parent, false);
+            beam.transform.localPosition = position;
+            beam.transform.localScale = size;
+            var collider = beam.GetComponent<Collider>();
+            collider.enabled = false;
+            Destroy(collider);
+            beam.GetComponent<Renderer>().sharedMaterial = material;
+            return beam.transform;
         }
 
         private LotObjectDefinition ChooseGrowthBuilding(DistrictLotRecord site, TownZoneFacing facing,

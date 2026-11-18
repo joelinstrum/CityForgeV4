@@ -108,7 +108,9 @@ internal static class LotCatalogSetup
             FoundersShop("founders-shop-right-corner-dry-goods", "Right Corner · Dry Goods", "FoundersRightCornerDryGoods", 7.8836f),
             FoundersShop("founders-shop-right-corner-inn", "Right Corner · Inn", "FoundersRightCornerInn", 8.6f),
             V3Building("small-school", "Small School", "SmallSchool", "civics", "founders", 9f, ".jpg", ".png"),
-            V3Building("lumber-mill", "Lumber Mill", "LumberMill", "industrial", "industrial", 11.95f),
+            V3Building("lumber-mill", "Lumber Mill", "LumberMill", "industrial", "founders", 11.95f),
+            V3Building("work-tent", "Lumber Camp Work Tent", "WorkTent", "industrial", "founders", 5f),
+            V3Building("stone-quarry", "Stone Quarry", "StoneQuarry", "industrial", "founders", 16f),
             V3Building("queen-anne-house", "Queen Anne House", "QueenAnneHouse", "residential", "victorian", 12f),
             V3Fence("v3-white-picket", "White picket fence", "PicketFenceV01",
                 "CF_Prop_PicketFence_Straight_v01", "", 2.4f, repeatable: true, iron: false),
@@ -926,7 +928,8 @@ internal static class LotCatalogSetup
         var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(root + "Character.prefab");
         if (prefab)
         {
-            AddCharacterWalk(root, modelPath);
+            AddCharacterModelState(root, modelPath, "Walk");
+            if (folder == "Axeman") AddCharacterModelState(root, modelPath, "Chop");
             AddCharacterFoldArms(root);
             return prefab;
         }
@@ -983,7 +986,8 @@ internal static class LotCatalogSetup
                 animator.applyRootMotion = false;
             }
             var result = PrefabUtility.SaveAsPrefabAsset(wrapper, root + "Character.prefab");
-            AddCharacterWalk(root, modelPath);
+            AddCharacterModelState(root, modelPath, "Walk");
+            if (folder == "Axeman") AddCharacterModelState(root, modelPath, "Chop");
             AddCharacterFoldArms(root);
             return result;
         }
@@ -1005,27 +1009,28 @@ internal static class LotCatalogSetup
         AssetDatabase.SaveAssets();
     }
 
-    private static void AddCharacterWalk(string root, string modelPath)
+    private static void AddCharacterModelState(string root, string modelPath, string stateName)
     {
         var controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(root + "Idle.controller");
         if (!controller) return;
         var machine = controller.layers[0].stateMachine;
-        if (machine.states.Any(state => state.state.name == "Walk")) return;
+        if (machine.states.Any(state => state.state.name == stateName)) return;
         if (!(AssetImporter.GetAtPath(modelPath) is ModelImporter importer)) return;
         var clips = importer.clipAnimations;
-        var walk = clips.FirstOrDefault(clip => clip.name.IndexOf("walk", System.StringComparison.OrdinalIgnoreCase) >= 0);
-        if (walk != null && !walk.loopTime)
+        var importedClip = clips.FirstOrDefault(clip =>
+            clip.name.IndexOf(stateName, System.StringComparison.OrdinalIgnoreCase) >= 0);
+        if (importedClip != null && !importedClip.loopTime)
         {
-            walk.loopTime = true;
-            walk.loopPose = true;
+            importedClip.loopTime = true;
+            importedClip.loopPose = true;
             importer.clipAnimations = clips;
             importer.SaveAndReimport();
         }
         var motion = AssetDatabase.LoadAllAssetsAtPath(modelPath).OfType<AnimationClip>()
             .FirstOrDefault(clip => !clip.name.StartsWith("__") &&
-                clip.name.IndexOf("walk", System.StringComparison.OrdinalIgnoreCase) >= 0);
+                clip.name.IndexOf(stateName, System.StringComparison.OrdinalIgnoreCase) >= 0);
         if (!motion) return;
-        machine.AddState("Walk").motion = motion;
+        machine.AddState(stateName).motion = motion;
         EditorUtility.SetDirty(controller);
         AssetDatabase.SaveAssets();
     }

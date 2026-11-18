@@ -164,6 +164,7 @@ namespace CityForge.World
                 LotCapitalEffect.PublicBuildingRepairCostReduction => "lower public building repair costs",
                 LotCapitalEffect.PortFeeRevenueIncrease => "higher port fee revenue",
                 LotCapitalEffect.PopulationGrowthIncrease => "faster population growth",
+                LotCapitalEffect.ResourceCostReduction => $"lower {bonus.resource.ToString().ToLowerInvariant()} costs",
                 _ => null
             };
             if (effect == null) return "None";
@@ -523,7 +524,7 @@ namespace CityForge.World
             if (founder && (bounds.xMin < districtBounds.xMin || bounds.xMax > districtBounds.xMax ||
                 bounds.yMin < districtBounds.yMin || bounds.yMax > districtBounds.yMax))
                 return "Stay inside the capital’s district.";
-            return LotSiteProblem(record, lotPlacementWater, editing: movingDistrictLot != null);
+            return LotSiteProblem(record, lotPlacementWater, editing: movingDistrictLot != null, replacing: true);
         }
 
         private string OrientWaterfrontPlacement(DistrictLotRecord record, bool founder, Rect districtBounds)
@@ -570,13 +571,14 @@ namespace CityForge.World
 
         private void CommitLotPlacement(RegionTown capital, DistrictLotRecord record)
         {
-            var problem = LotSiteProblem(record, DistrictLotWater(), editing: movingDistrictLot != null);
+            var problem = LotSiteProblem(record, DistrictLotWater(), editing: movingDistrictLot != null, replacing: true);
             if (problem != null)
             {
                 lotPlacementWater = DistrictLotWater();
                 lotPlacementEvaluated = false;
                 return;
             }
+            ClearLotStructures(record);
             if (movingDistrictLot != null)
             {
                 movingDistrictLot.center = record.center;
@@ -585,8 +587,10 @@ namespace CityForge.World
                 movingDistrictLot.waterfrontDeckHeight = record.waterfrontDeckHeight;
                 ClearLotVegetation(movingDistrictLot);
                 if (movingDistrictLot.definition.type == LotType.Zoning) QueueLotGrowth();
+                var movedLot = movingDistrictLot;
                 CancelLotPlacement();
                 RebuildDistrictLots();
+                StartCoroutine(LotPlacementDust(movedLot));
                 selectedLotFeedback.text = "Lot moved. Save the region to keep it.";
                 return;
             }
@@ -601,6 +605,7 @@ namespace CityForge.World
             else
                 CancelLotPlacement();
             RebuildDistrictLots();
+            StartCoroutine(LotPlacementDust(record));
             lotFeedback.text = capital != null ? "Founder’s Building placed. Save the region to keep it." :
                 "Lot placed. Save the region to keep it.";
         }

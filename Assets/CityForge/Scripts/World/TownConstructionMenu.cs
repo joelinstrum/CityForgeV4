@@ -5,6 +5,7 @@ using CityForge.Lots;
 using CityForge.UI;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
 
 namespace CityForge.World
 {
@@ -15,9 +16,10 @@ namespace CityForge.World
         private RectTransform townModeSwitch, townToolbar, townPanel;
         private Button natureModeButton, townModeButton;
         private RectTransform transportModal;
-        private readonly Button[] townCategories = new Button[7];
+        private readonly Button[] townCategories = new Button[8];
         private TownSection townSection;
         private Texture2D darkTownButtons, goldTownButtons, transportButtonArtwork;
+        private Texture2D darkIndustryButtons, goldIndustryButtons;
         private Material townButtonArtwork;
         private static readonly Color TownPanelColor = new(.09f, .10f, .10f, .98f);
         private static readonly Color TownGold = new(.98f, .86f, .63f);
@@ -32,8 +34,10 @@ namespace CityForge.World
             darkTownButtons = Resources.Load<Texture2D>("UI/TownConstruction/Dark");
             goldTownButtons = Resources.Load<Texture2D>("UI/TownConstruction/Gold");
             transportButtonArtwork = Resources.Load<Texture2D>("UI/TownConstruction/Transport");
+            darkIndustryButtons = Resources.Load<Texture2D>("UI/TownConstruction/IndustryStreetscapeDark");
+            goldIndustryButtons = Resources.Load<Texture2D>("UI/TownConstruction/IndustryStreetscapeGold");
             var artworkShader = Resources.Load<Shader>("UI/TownButtonArtwork");
-            if (artworkShader && ((darkTownButtons && goldTownButtons) || transportButtonArtwork))
+            if (artworkShader && ((darkTownButtons && goldTownButtons) || transportButtonArtwork || darkIndustryButtons))
                 townButtonArtwork = Own(new Material(artworkShader));
             townModeSwitch = BottomPanel(hud, "District tool modes", 64, 310, 44);
             natureModeButton = TownButton(townModeSwitch, font, "Nature", 0, 0, 154, () => SetTownConstruction(false));
@@ -42,7 +46,7 @@ namespace CityForge.World
             SkinTownButton(natureModeButton, new Rect(740, 462, 347, 112), 44);
             SkinTownButton(townModeButton, new Rect(1087, 462, 349, 112), 44);
 
-            townToolbar = BottomPanel(hud, "Town construction toolbar", 117, 1034, 82);
+            townToolbar = BottomPanel(hud, "Town construction toolbar", 117, 1264, 82);
             string[] labels = { "Transport", "Zones", "Civic Lots", "Utilities", "Parks", "Town Info" };
             int[] edges = { 409, 752, 1090, 1435, 1778, 2121 };
             for (int i = 0; i < labels.Length; i++)
@@ -56,13 +60,12 @@ namespace CityForge.World
                     SkinTownButton(townCategories[i], new Rect(edges[i - 1], 236, edges[i] - edges[i - 1], 206), 82);
             }
             var streetscape = TownButton(townToolbar, font, "Streetscape", 888, 0, 146, OpenStreetscape);
-            townCategories[6] = streetscape;
-            ((RectTransform)streetscape.transform).sizeDelta = new Vector2(146, 82);
-            var caption = streetscape.GetComponentInChildren<Text>();
-            caption.rectTransform.offsetMax = new Vector2(0, -49);
-            caption.color = TownGold;
-            LotEditorPanel.AddGlyph(streetscape.transform, LotGlyph.StreetFurniture, 43, 7, 43);
-            LotEditorPanel.AddGlyph(streetscape.transform, LotGlyph.Fence, 76, 20, 30);
+            townCategories[7] = streetscape;
+            SkinTownButton(streetscape, new Rect(1101, 100, 1005, 512), 82, darkIndustryButtons, preserveAspect: true);
+            var industry = TownButton(townToolbar, font, "Industry", 1036, 0, 146,
+                OpenIndustry);
+            townCategories[6] = industry;
+            SkinTownButton(industry, new Rect(72, 100, 1007, 512), 82, darkIndustryButtons, preserveAspect: true);
             BuildDetonateButton(font);
             RefreshTownConstruction();
 
@@ -89,7 +92,7 @@ namespace CityForge.World
         private void SkinTownButton(Button button, Rect crop, float height) =>
             SkinTownButton(button, crop, height, darkTownButtons && goldTownButtons ? darkTownButtons : null);
 
-        private void SkinTownButton(Button button, Rect crop, float height, Texture2D artwork)
+        private void SkinTownButton(Button button, Rect crop, float height, Texture2D artwork, bool preserveAspect = false)
         {
             var rect = (RectTransform)button.transform;
             rect.sizeDelta = new Vector2(rect.sizeDelta.x, height);
@@ -97,7 +100,10 @@ namespace CityForge.World
 
             button.image.color = Color.clear;
             button.GetComponentInChildren<Text>(includeInactive: true).enabled = false;
-            var face = TownArtwork(rect, "Button artwork", artwork, crop, Vector2.zero, rect.sizeDelta);
+            var artworkSize = rect.sizeDelta;
+            if (preserveAspect)
+                artworkSize = crop.size * Mathf.Min(artworkSize.x / crop.width, artworkSize.y / crop.height);
+            var face = TownArtwork(rect, "Button artwork", artwork, crop, Vector2.zero, artworkSize);
             face.material = townButtonArtwork;
             button.targetGraphic = face;
             var colors = button.colors;
@@ -194,7 +200,10 @@ namespace CityForge.World
                     face.uvRect = TownArtworkUV(transportButtonArtwork, TransportCrop(active));
                     return;
                 }
-                var texture = active ? goldTownButtons : darkTownButtons;
+                bool industrySheet = face.texture == darkIndustryButtons || face.texture == goldIndustryButtons;
+                var texture = industrySheet
+                    ? (active ? goldIndustryButtons : darkIndustryButtons)
+                    : (active ? goldTownButtons : darkTownButtons);
                 if (face.texture != texture) face.texture = texture;
                 return;
             }
@@ -312,7 +321,9 @@ namespace CityForge.World
             }
         }
 
-        private void OpenStreetscape()
+        private LotAssetThumbnails industryThumbnails;
+
+        private void OpenIndustry()
         {
             if (!TownConstructionVisible || !CanBuildTown || IsSaving) return;
             CancelRoadPlacement();
@@ -320,6 +331,356 @@ namespace CityForge.World
             CloseTownSection();
             lastRepaveSurface = null;
             MarkTownButton(townCategories[6], true);
+
+            transportModal = FounderRect(townToolbar.parent, "Industry modal", Vector2.zero, Vector2.zero);
+            transportModal.anchorMin = Vector2.zero;
+            transportModal.anchorMax = Vector2.one;
+            transportModal.offsetMin = transportModal.offsetMax = Vector2.zero;
+            transportModal.gameObject.AddComponent<Image>().color = new Color(0, 0, 0, .66f);
+            var panel = FounderRect(transportModal, "Industry", Vector2.zero, new Vector2(1740, 900));
+            StyleTownPanel(panel, new Color(.045f, .085f, .10f));
+            var brass = new Color(.63f, .45f, .25f);
+            var border = panel.GetComponent<Outline>();
+            border.effectColor = brass;
+            border.effectDistance = Vector2.one * 2f;
+            Label(panel, "Industry", new Vector2(-560, 396), new Vector2(510, 72), 50);
+            TownButton(panel, lotFont, "×", 1667, -29, 45, CloseTransportModal);
+            Rule(new Vector2(0, 345), new Vector2(1736, 2));
+            Rule(new Vector2(-511, -30), new Vector2(2, 726));
+            Rule(new Vector2(425, -30), new Vector2(2, 726));
+            Rule(new Vector2(0, -403), new Vector2(1736, 2));
+            Label(panel, "Hover for details  •  Click a lot to place it", new Vector2(-43, -426),
+                new Vector2(870, 34), 19).alignment = TextAnchor.MiddleCenter;
+            Label(panel, "Tile grid snapping", new Vector2(-689, -426), new Vector2(296, 34), 18);
+
+            LotDefinition[] lots;
+            try
+            {
+                lots = LotLibrary.Local.List().Select(entry => entry.Lot)
+                    .Where(lot => LotClassification.FindCategory(lot.category)?.id == "industrial" && !IsFoundersLot(lot))
+                    .OrderBy(lot => lot.name).ToArray();
+            }
+            catch (Exception error) when (error is IOException || error is UnauthorizedAccessException)
+            {
+                Label(panel, "Could not read the saved lot library.", new Vector2(-43, 0), new Vector2(820, 70), 21);
+                return;
+            }
+
+            var catalog = LotAssetCatalog.Load();
+            var tabs = Resources.Load<Texture2D>("UI/TownConstruction/IndustryTabs");
+            var buildings = Resources.Load<Texture2D>("UI/TownConstruction/IndustryBuildings");
+            industryThumbnails = new LotAssetThumbnails();
+            var subcategories = LotClassification.ForCategory("industrial");
+            var industryTabs = subcategories.Where(item => item.industryTabOrder > 0)
+                .OrderBy(item => item.industryTabOrder).ToArray();
+            var featured = subcategories.Where(item => !string.IsNullOrEmpty(item.industryCardTitle))
+                .OrderBy(item => item.industryArtwork).ToArray();
+            var labels = new[] { "All Industries" }.Concat(industryTabs.Select(item => item.name)).ToArray();
+            int[] edges = { 18, 372, 728, 1086, 1444, 1802, 2157 };
+            var buttons = new Button[labels.Length];
+            var eras = CityForgeTimeline.Eras;
+            int era = Mathf.Max(0, Array.FindLastIndex(eras, item => item.FirstYear <= TownYear(SelectedDistrict)));
+            int period = Mathf.Max(0, Array.FindLastIndex(eras[era].Periods,
+                item => item.FirstYear <= TownYear(SelectedDistrict)));
+            int selectedTab = 0;
+            RectTransform results = null;
+            RectTransform details = null;
+            var eraLabel = Label(panel, "", new Vector2(546, 397), new Vector2(295, 45), 26);
+            eraLabel.alignment = TextAnchor.MiddleCenter;
+            var previous = TownButton(panel, lotFont, "‹", 1220, -33, 46, null);
+            var next = TownButton(panel, lotFont, "›", 1566, -33, 46, null);
+
+            var periodLabel = Label(panel, "", new Vector2(57, 397), new Vector2(320, 56), 21);
+            periodLabel.alignment = TextAnchor.MiddleCenter;
+            var previousPeriod = TownButton(panel, lotFont, "‹", 734, -33, 42, null);
+            var nextPeriod = TownButton(panel, lotFont, "›", 1082, -33, 42, null);
+            bool showTimeline = false;
+            var timeline = TownButton(panel, lotFont, "Timeline overview", 488, -33, 215, null);
+            previousPeriod.onClick.AddListener(() => ChangePeriod(-1));
+            nextPeriod.onClick.AddListener(() => ChangePeriod(1));
+
+            previous.onClick.AddListener(() => ChangeEra(-1));
+            next.onClick.AddListener(() => ChangeEra(1));
+
+            timeline.onClick.AddListener(() =>
+            {
+                showTimeline = !showTimeline;
+                RefreshIndustry();
+            });
+
+            for (int i = 0; i < labels.Length; i++)
+            {
+                int index = i;
+                buttons[i] = TownButton(panel, lotFont, labels[i], 48, -133 - i * 94, 260, () =>
+                {
+                    selectedTab = index;
+                    showTimeline = false;
+                    RefreshIndustry();
+                });
+                SkinTownButton(buttons[i], HasTabArtwork(i) ? TabCrop(i - 1, false) : default, 90, HasTabArtwork(i) ? tabs : null, preserveAspect: true);
+            }
+            RefreshIndustry();
+
+            void ChangeEra(int direction)
+            {
+                era = Mathf.Clamp(era + direction, 0, eras.Length - 1);
+                period = 0;
+                RefreshIndustry();
+            }
+
+            void ChangePeriod(int direction)
+            {
+                period = Mathf.Clamp(period + direction, 0, eras[era].Periods.Length - 1);
+                RefreshIndustry();
+            }
+
+            bool HasTabArtwork(int index) => index > 0 && index < edges.Length;
+
+            Rect TabCrop(int index, bool active) =>
+                new Rect(edges[index], active ? 359 : 231, edges[index + 1] - edges[index], 122);
+
+            void RefreshIndustry()
+            {
+                var selectedPeriod = eras[era].Periods[period];
+                eraLabel.text = eras[era].Name;
+                periodLabel.text = $"{selectedPeriod.Name}\n{selectedPeriod.FirstYear}–{selectedPeriod.LastYear}";
+                previousPeriod.interactable = period > 0;
+                nextPeriod.interactable = period < eras[era].Periods.Length - 1;
+                previous.interactable = era > 0;
+                next.interactable = era < eras.Length - 1;
+                for (int i = 0; i < buttons.Length; i++)
+                {
+                    if (HasTabArtwork(i) && tabs && buttons[i].targetGraphic is RawImage face)
+                        face.uvRect = TownArtworkUV(tabs, TabCrop(i - 1, i == selectedTab));
+                    else MarkTownButton(buttons[i], i == selectedTab);
+                }
+
+                MarkTownButton(timeline, showTimeline);
+                if (showTimeline)
+                {
+                    Replace(ref results, "Timeline overview", new Vector2(178, -29), new Vector2(1332, 722));
+                    results.gameObject.AddComponent<Image>().color = new Color(.045f, .085f, .10f);
+                    if (details) details.gameObject.SetActive(false);
+                    ShowTimelineColumn(eras[era].Name, eras[era].summary, eras[era].suggestions, -333);
+                    ShowTimelineColumn(selectedPeriod.Name, selectedPeriod.summary, selectedPeriod.suggestions, 333);
+                    return;
+                }
+
+                Replace(ref results, "Industry catalog", new Vector2(-43, -29), new Vector2(908, 722));
+                Label(results, labels[selectedTab], new Vector2(0, 328), new Vector2(880, 50), 31);
+                var availableLots = lots.Where(lot => (selectedTab == 0 || IndustryTab(lot) == industryTabs[selectedTab - 1].id) &&
+                    (LotClassification.Era(lot)?.FirstYear ?? lot.firstEraYear) <= selectedPeriod.LastYear).ToArray();
+                var choices = new System.Collections.Generic.List<(string Name, LotDefinition Lot, int Artwork)>();
+                var featuredLots = new System.Collections.Generic.HashSet<LotDefinition>();
+                foreach (var facility in featured)
+                {
+                    if (selectedTab != 0 && facility.industryTab != industryTabs[selectedTab - 1].id) continue;
+                    var lot = availableLots.FirstOrDefault(candidate =>
+                        string.Equals(candidate.subcategory, facility.id, StringComparison.OrdinalIgnoreCase))
+                        ?? availableLots.FirstOrDefault(candidate => IndustryAssignment(candidate) == facility);
+                    choices.Add((facility.industryCardTitle, lot, facility.industryArtwork - 1));
+                    if (lot != null) featuredLots.Add(lot);
+                }
+                choices.AddRange(availableLots.Where(lot => !featuredLots.Contains(lot))
+                    .Select(lot => (lot.name, lot, (IndustryAssignment(lot)?.industryArtwork ?? 0) - 1)));
+                if (choices.Count > 0)
+                {
+                    var first = choices[0];
+                    ShowDetails(first.Name, first.Lot, first.Artwork);
+                }
+                else if (details)
+                {
+                    details.gameObject.SetActive(false);
+                }
+                if (choices.Count == 0)
+                {
+                    Label(results, "No saved lots in this category for the selected period.", new Vector2(0, 175),
+                        new Vector2(880, 50), 23);
+                    return;
+                }
+
+                var viewport = FounderRect(results, "Industry cards", new Vector2(0, -27), new Vector2(888, 646));
+                viewport.gameObject.AddComponent<Image>().color = Color.clear;
+                viewport.gameObject.AddComponent<RectMask2D>();
+                var scroll = viewport.gameObject.AddComponent<ScrollRect>();
+                scroll.horizontal = false;
+                scroll.movementType = ScrollRect.MovementType.Clamped;
+                scroll.viewport = viewport;
+                var grid = FounderRect(viewport, "Lot choices", Vector2.zero, new Vector2(0, ((choices.Count + 2) / 3) * 272));
+                grid.anchorMin = new Vector2(0, 1);
+                grid.anchorMax = Vector2.one;
+                grid.pivot = new Vector2(.5f, 1);
+                scroll.content = grid;
+
+                for (int i = 0; i < choices.Count; i++)
+                {
+                    var (title, lot, artwork) = choices[i];
+                    var card = FounderRect(grid, title, new Vector2(-296 + i % 3 * 296, -130 - i / 3 * 272),
+                        new Vector2(282, 256));
+                    card.anchorMin = card.anchorMax = new Vector2(.5f, 1);
+                    StyleTownPanel(card, new Color(.06f, .11f, .13f));
+                    var outline = card.GetComponent<Outline>();
+                    outline.effectColor = brass;
+                    var background = card.GetComponent<Image>();
+                    var button = card.gameObject.AddComponent<IndustryLotButton>();
+                    button.targetGraphic = background;
+                    button.onClick.AddListener(() =>
+                    {
+                        if (lot == null || !CanBuildTown || !TownConstructionVisible || IsSaving || PlacementBlock(lot) != null) return;
+                        CloseTransportModal();
+                        BeginLotPlacement(lot);
+                    });
+                    DrawLot(card, lot, artwork, Vector2.up * 20f, new Vector2(258, 178));
+                    var name = Label(card, title, new Vector2(0, -97), new Vector2(254, 49), 23);
+                    name.alignment = TextAnchor.MiddleCenter;
+                    button.ShowDetails = () => ShowDetails(title, lot, artwork);
+                }
+            }
+
+            void ShowTimelineColumn(string title, string summary, string[] suggestions, float x)
+            {
+                Label(results, title, new Vector2(x, 275), new Vector2(595, 55), 32);
+                Label(results, summary ?? "", new Vector2(x, 160), new Vector2(595, 155), 25)
+                    .alignment = TextAnchor.UpperLeft;
+                if (suggestions == null || suggestions.Length == 0) return;
+                Label(results, "Suggested priorities", new Vector2(x, 35), new Vector2(595, 40), 24);
+                Label(results, string.Join("\n\n", suggestions.Select(item => "•  " + item)),
+                    new Vector2(x, -122), new Vector2(595, 250), 22).alignment = TextAnchor.UpperLeft;
+            }
+
+            string PlacementBlock(LotDefinition lot)
+            {
+                if (lot.objects.Count == 0) return "This lot has no placed assets.";
+                var firstYear = LotClassification.Era(lot)?.FirstYear ?? lot.firstEraYear;
+                return firstYear > TownYear(SelectedDistrict) ? $"Available from {firstYear}." : LotAssetProblem(lot, catalog);
+            }
+
+            void ShowDetails(string title, LotDefinition lot, int artwork)
+            {
+                Replace(ref details, "Industry details", new Vector2(648, -28), new Vector2(406, 722));
+                Label(details, title, new Vector2(0, 326), new Vector2(378, 54), 29);
+                DrawLot(details, lot, artwork, new Vector2(0, 215), new Vector2(372, 174));
+                var facility = artwork >= 0
+                    ? Array.Find(featured, item => item.industryArtwork == artwork + 1)
+                    : lot == null ? null : IndustryAssignment(lot);
+                var messages = facility?.industryMessages;
+                int firstYear = eras[era].Periods[period].FirstYear;
+                var message = messages == null ? null : Array.Find(messages, entry => entry != null && entry.firstYear == firstYear);
+                if (!string.IsNullOrEmpty(message?.text))
+                    Label(details, message.text, new Vector2(0, 84), new Vector2(378, 76), 21);
+                if (lot == null)
+                {
+                    Label(details, "Save an Industrial lot for this facility in the Lot Editor to place it.",
+                        new Vector2(0, -5), new Vector2(378, 90), 21);
+                    return;
+                }
+                Label(details, $"{lot.width} × {lot.length} tiles  •  Cost {lot.cost:N0}",
+                    new Vector2(0, 37), new Vector2(378, 36), 21);
+                Label(details, "Requirements", new Vector2(0, -19), new Vector2(378, 36), 24);
+                var requirements = lot.requiredResources.Select(FounderResourceName).ToList();
+                if (lot.requiresKiln) requirements.Add("Kiln access");
+                if (lot.IsWaterfront) requirements.Add("Water access");
+                Label(details, requirements.Count == 0 ? "None" : string.Join(", ", requirements),
+                    new Vector2(0, -83), new Vector2(378, 80), 19);
+                Label(details, "Lot effects", new Vector2(0, -147), new Vector2(378, 36), 24);
+                Label(details, FounderBonus(lot.capitalBonus), new Vector2(0, -197), new Vector2(378, 65), 19);
+                Label(details, PlacementBlock(lot) ?? "Click the lot to place it.", new Vector2(0, -305),
+                    new Vector2(378, 68), 19);
+            }
+
+            void DrawLot(Transform parent, LotDefinition lot, int illustration, Vector2 position, Vector2 size)
+            {
+                if (buildings && illustration >= 0 && illustration < 6)
+                {
+                    var crop = new Rect(illustration % 3 * (buildings.width / 3f),
+                        illustration / 3 * (buildings.height / 2f), buildings.width / 3f, buildings.height / 2f);
+                    TownArtwork(parent, "Industry illustration", buildings, crop, position,
+                        new Vector2(size.y, size.y));
+                    return;
+                }
+                if (lot == null) return;
+                var preview = FounderRect(parent, "Lot preview", position, new Vector2(size.y, size.y))
+                    .gameObject.AddComponent<RawImage>();
+                preview.texture = industryThumbnails.GetLot(lot, catalog);
+                preview.enabled = preview.texture;
+                preview.raycastTarget = false;
+            }
+
+            void Replace(ref RectTransform pane, string title, Vector2 position, Vector2 size)
+            {
+                if (pane)
+                {
+                    pane.gameObject.SetActive(false);
+                    Destroy(pane.gameObject);
+                }
+                pane = FounderRect(panel, title, position, size);
+            }
+
+            Text Label(Transform parent, string caption, Vector2 position, Vector2 size, int fontSize)
+            {
+                var label = FounderText(parent, caption, position, size, fontSize);
+                label.color = TownGold;
+                label.alignment = TextAnchor.MiddleLeft;
+                label.raycastTarget = false;
+                return label;
+            }
+
+            void Rule(Vector2 position, Vector2 size)
+            {
+                var line = FounderRect(panel, "Divider", position, size).gameObject.AddComponent<Image>();
+                line.color = brass;
+                line.raycastTarget = false;
+            }
+        }
+
+        private sealed class IndustryLotButton : Button
+        {
+            public Action ShowDetails;
+
+            public override void OnPointerEnter(PointerEventData eventData)
+            {
+                base.OnPointerEnter(eventData);
+                ShowDetails?.Invoke();
+            }
+
+            public override void OnSelect(BaseEventData eventData)
+            {
+                base.OnSelect(eventData);
+                ShowDetails?.Invoke();
+            }
+        }
+
+        private static LotContentCatalog.Subcategory IndustryAssignment(LotDefinition lot)
+        {
+            var choices = LotClassification.ForCategory("industrial");
+            var assigned = Array.Find(choices, item => string.Equals(lot.subcategory, item.id, StringComparison.OrdinalIgnoreCase));
+            if (assigned != null && !string.IsNullOrEmpty(assigned.industryCardTitle)) return assigned;
+
+            var byAsset = Array.Find(choices, item => item.industryAssetIds != null &&
+                lot.objects.Any(obj => item.industryAssetIds.Contains(obj.assetId)));
+            if (byAsset != null) return byAsset;
+
+            var words = System.Text.RegularExpressions.Regex.Replace(lot.name.ToLowerInvariant(), @"[^a-z0-9]+", " ");
+            words = " " + words.Trim() + " ";
+            var byName = Array.Find(choices, item => item.industryLotNames != null &&
+                item.industryLotNames.Any(name => words.Contains(" " + name.ToLowerInvariant() + " ", StringComparison.Ordinal)));
+            return byName ?? assigned;
+        }
+
+        private static string IndustryTab(LotDefinition lot)
+        {
+            var assignment = IndustryAssignment(lot);
+            return assignment?.industryTab ?? (assignment?.industryTabOrder > 0 ? assignment.id : "specialized");
+        }
+
+        private void OpenStreetscape()
+        {
+            if (!TownConstructionVisible || !CanBuildTown || IsSaving) return;
+            CancelRoadPlacement();
+            CancelLotPlacement();
+            CloseTownSection();
+            lastRepaveSurface = null;
+            MarkTownButton(townCategories[7], true);
 
             transportModal = FounderRect(townToolbar.parent, "Streetscape modal", Vector2.zero, Vector2.zero);
             transportModal.anchorMin = Vector2.zero;
@@ -445,8 +806,11 @@ namespace CityForge.World
 
         private void CloseTransportModal()
         {
+            industryThumbnails?.Dispose();
+            industryThumbnails = null;
             repaveTarget = null;
             MarkTownButton(townCategories[6], false);
+            MarkTownButton(townCategories[7], false);
             if (!transportModal) return;
             transportModal.gameObject.SetActive(false);
             Destroy(transportModal.gameObject);

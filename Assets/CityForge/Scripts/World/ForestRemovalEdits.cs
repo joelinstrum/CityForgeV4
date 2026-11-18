@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
@@ -68,6 +69,66 @@ namespace CityForge.World
             if (kept.Count == source.Length && removed == 0) return;
             fullTreeInstances = kept.ToArray();
             RefreshEditedForest();
+        }
+
+        internal bool TryFellCilicianFir(Vector2 origin, float range)
+        {
+            if (!TreesEnabled || IsRegionOverview || View.DistrictLoading || View.IsSaving || !DisplayTerrain)
+                return false;
+
+            var prototypes = terrainData.treePrototypes;
+            int firIndex = Array.FindIndex(prototypes, prototype => prototype.prefab &&
+                prototype.prefab.name == "CilicianFir");
+            if (firIndex < 0) return false;
+
+            TreeInstance? nearest = null;
+            Vector2 basePoint = default;
+            float nearestDistance = range * range;
+            foreach (var tree in CanonicalTreeInstances)
+            {
+                if (tree.prototypeIndex != firIndex) continue;
+                var point = Origin + new Vector2(tree.position.x, tree.position.z) * Side;
+                float distance = (point - origin).sqrMagnitude;
+                if (distance > nearestDistance || !Contains(point)) continue;
+                nearest = tree;
+                basePoint = point;
+                nearestDistance = distance;
+            }
+
+            if (nearest is not { } fir) return false;
+
+            // Swap the terrain instance for a temporary copy at the same trunk base.
+            var position = new Vector3(basePoint.x, DisplayTerrain.transform.position.y +
+                fir.position.y * terrainData.size.y, basePoint.y);
+            if (RemoveForest(basePoint, .05f) == 0) return false;
+
+            var treeView = Instantiate(prototypes[firIndex].prefab, position,
+                Quaternion.Euler(0f, fir.rotation * Mathf.Rad2Deg, 0f), transform);
+            treeView.name = "Falling Cilician Fir";
+            treeView.transform.localScale = Vector3.Scale(treeView.transform.localScale,
+                new Vector3(fir.widthScale, fir.heightScale, fir.widthScale));
+            foreach (var collider in treeView.GetComponentsInChildren<Collider>()) collider.enabled = false;
+
+            var away = basePoint - origin;
+            if (away.sqrMagnitude < .01f) away = Vector2.right;
+            var axis = Vector3.Cross(Vector3.up, new Vector3(away.x, 0f, away.y).normalized);
+            StartCoroutine(AnimateFirFall(treeView.transform, axis));
+            return true;
+        }
+
+        private IEnumerator AnimateFirFall(Transform tree, Vector3 axis)
+        {
+            const float duration = 1.5f;
+            var upright = tree.rotation;
+            for (float elapsed = 0f; elapsed < duration; elapsed += Time.deltaTime)
+            {
+                float progress = elapsed / duration;
+                tree.rotation = Quaternion.AngleAxis(90f * progress * progress, axis) * upright;
+                yield return null;
+            }
+            tree.rotation = Quaternion.AngleAxis(90f, axis) * upright;
+            yield return new WaitForSeconds(1f);
+            Destroy(tree.gameObject);
         }
 
         public int RemoveForest(Vector2 center,float radius)=>RemoveForest(new[]{center},radius);
