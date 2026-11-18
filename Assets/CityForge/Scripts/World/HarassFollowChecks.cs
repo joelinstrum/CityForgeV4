@@ -93,8 +93,12 @@ namespace CityForge.Editor
                 Require(camera.FollowDistrictActor(view) && camera.ZoomLevel == 0 && camera.CaptureRegionState().focus == test.transform.position,
                     "Camera did not follow the Hooligan at close zoom");
                 test.transform.position += Vector3.right;
-                camera.FollowDistrictActor(view);
-                Require(camera.CaptureRegionState().focus == test.transform.position, "Follow camera lost moving target");
+                var previousFocus = camera.CaptureRegionState().focus;
+                camera.FollowDistrictActor(view, 1f / 60f);
+                Require(camera.CaptureRegionState().focus.x > previousFocus.x && camera.CaptureRegionState().focus.x < test.transform.position.x,
+                    "Follow camera snapped instead of smoothing a movement step");
+                for (int i = 0; i < 120; i++) camera.FollowDistrictActor(view, 1f / 60f);
+                Require(Vector3.Distance(camera.CaptureRegionState().focus, test.transform.position) < .001f, "Smooth follow failed to converge");
                 var cameraAtEnd = camera.CaptureRegionState().focus;
                 Require(view.EndHarassTest(showMessage: false) && !view.HarassCameraTarget && view.SelectedDistrict == 3 && target.HarassTestUntil == 0,
                     "Cancel failed to clear the test or changed districts");
@@ -103,6 +107,19 @@ namespace CityForge.Editor
                 Require(view.TryStartHarassTest(out problem), "Could not restart test for expiry check: " + problem);
                 view.HarassTest.Step(.1f, view.HarassTest.TestEnds, true);
                 Require(!view.HarassCameraTarget && view.SelectedDistrict == 3, "Expiry did not release camera or changed districts");
+                Set(view, "<TimeOfDay>k__BackingField", RegionTimeOfDay.Evening);
+                actor.transform.position = new Vector3(10, 20, 20); person.transform.position = new Vector3(16, 20, 20);
+                runner.Step(.1f, 250, true);
+                float startX = actor.transform.position.x; int movingFrames = 0;
+                for (int i = 0; i < 60; i++)
+                {
+                    person.transform.position += Vector3.right * (1.15f * 1.6f / 60f);
+                    float previousX = actor.transform.position.x;
+                    runner.Step(1f / 60f, 250.1f + i / 60f, true);
+                    if (actor.transform.position.x > previousX) movingFrames++;
+                }
+                Require(actor.transform.position.x - startX > 2.1f && movingFrames > 55,
+                    "Harasser did not move continuously faster than a frightened pedestrian");
                 Debug.Log("HARASS FOLLOW CHECKS PASS: evening-only following, personal space, pedestrian turns away on retained route, bounded searches/probes, offscreen pause, vehicle exclusion, new blockers, 10000 active and inactive updates without allocations; daytime command, moving camera follow, cancellation and expiry without district navigation.");
             }
             finally { UnityEngine.Object.DestroyImmediate(root); UnityEngine.Object.DestroyImmediate(td); }

@@ -32,16 +32,21 @@ namespace CityForge.Editor
                 var origin = view.transform.position;
                 var min = new Vector3(float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity);
                 var max = new Vector3(float.NegativeInfinity, float.NegativeInfinity, float.NegativeInfinity);
+                int raised = 0, lowered = 0;
                 for (int i = 0; i < 600; i++)
                 {
                     animator.Update(1f / 30f); behavior.Tick(1f / 30f);
-                    if (left.position.y < head.position.y || right.position.y < head.position.y)
-                        throw new Exception("Harass hands did not stay raised");
+                    float weight = LotHarass.GestureWeight((i + 1) / 30f);
+                    if (weight == 0 && (left.position.y > head.position.y || right.position.y > head.position.y))
+                        throw new Exception("Raised pose leaked into normal walking interval");
+                    if (left.position.y > head.position.y && right.position.y > head.position.y) raised++;
+                    if (left.position.y < head.position.y && right.position.y < head.position.y) lowered++;
                     min = Vector3.Min(min, left.position); max = Vector3.Max(max, left.position);
                     if (Vector3.Distance(origin, view.transform.position) > .001f) throw new Exception("Harass wandered from its assigned spot");
                 }
+                if (raised < 50 || lowered < 250) throw new Exception("Harass did not alternate brief raised-arm gestures with normal walking");
                 if ((max - min).magnitude < .1f) throw new Exception("Harass pose did not dance");
-                Debug.Log("HARASS CHECKS PASS: saved enum compatibility and script roundtrip; Hooligan supports rig; raised hands, varied dance motion and stationary origin across 20 seconds.");
+                Debug.Log("HARASS CHECKS PASS: saved enum compatibility and script roundtrip; Hooligan supports rig; intermittent raised hands, lowered walking arms and varied gesture motion and stationary origin across 20 seconds.");
             }
             finally { UnityEngine.Object.DestroyImmediate(view); }
         }

@@ -1,3 +1,25 @@
+# CityForge V4 handoff · November 18, 2026 · Smooth pursuit and intermittent gestures
+
+The Hooligan follow jitter came from snapping the camera to movement occurring at
+10Hz. Pursuit now advances continuously along previously cleared segments while
+keeping target decisions infrequent. DistrictHarass runs before the camera's LateUpdate.
+The Hooligan camera uses a 0.16-second SmoothDamp; Eagle follow remains direct and
+unchanged. New follow targets snap once to frame the encounter, then follow smoothly.
+
+Chase speed is 2.4m/s (ordinary ambient walkers approximately 1m/s; frightened walkers
+use 1.6× their own speed). Walk playback is faster. Raised-arm gestures blend up/down
+for about two seconds in each eight-second cycle, leaving normal walking arms between
+bursts. Raised-arm pose calculations are skipped during the lowered interval. Evening
+restrictions, temporary Cmd+S test bypass, Esc cancellation and scene collision
+certificates remain intact. No additional geometry probes occur during interpolation.
+
+HarassChecks verifies repeated raised/lowered periods. HarassFollowChecks verifies
+smooth camera convergence, continuous movement faster than a frightened pedestrian,
+existing scheduling/collision/cancellation rules and steady allocation checks.
+The validation is isolated; the user's live town remains the visual acceptance target.
+
+---
+
 # CityForge V4 handoff · November 18, 2026 · Follow camera and Escape
 
 The temporary `Hooligan harass` command now follows its Hooligan at close Zoom 0.

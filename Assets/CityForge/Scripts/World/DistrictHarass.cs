@@ -3,6 +3,7 @@ using UnityEngine;
 
 namespace CityForge.World
 {
+    [DefaultExecutionOrder(-50)]
     internal sealed class DistrictHarass : MonoBehaviour
     {
         internal LotHarass behavior;
@@ -12,6 +13,7 @@ namespace CityForge.World
         internal bool TestMode;
         internal float TestEnds;
         internal int TestDistrict;
+        internal const float ChaseSpeed = 2.4f;
         private uint random;
         private float nextSearch, chaseEnds, nextScare, pending;
         private Vector2 segmentEnd;
@@ -41,8 +43,9 @@ namespace CityForge.World
             if (!visible || !gameObject.activeInHierarchy || !view.HarassCloseView) return;
             behavior.Tick(delta);
             pending += delta;
-            if (pending < .1f) return;
-            float elapsed = Mathf.Min(pending, .2f); pending = 0;
+            if (pending < .1f && (!hasSegment || (segmentEnd - Point).sqrMagnitude >= .0001f))
+            { Advance(delta); return; }
+            pending = 0;
             if (!PrototypeRegionView.HarassTargetAvailable(target) || now >= chaseEnds ||
                 (target.Body.position - transform.position).sqrMagnitude > 32f * 32f)
             {
@@ -76,7 +79,15 @@ namespace CityForge.World
                 { target = null; hasSegment = false; nextSearch = now + 4f; return; }
                 segmentState = state; hasSegment = true;
             }
-            var next = Vector2.MoveTowards(point, segmentEnd, 1.2f * elapsed);
+            Advance(delta);
+        }
+
+        private void Advance(float delta)
+        {
+            if (!hasSegment) return;
+            // Cheap per-frame interpolation over a certified segment. Geometry is not probed here.
+            if (!segmentState.Equals(new NavigationState(view))) { hasSegment = false; return; }
+            var next = Vector2.MoveTowards(Point, segmentEnd, ChaseSpeed * delta);
             transform.position = new Vector3(next.x, view.HarassGroundHeight(next), next.y);
         }
     }

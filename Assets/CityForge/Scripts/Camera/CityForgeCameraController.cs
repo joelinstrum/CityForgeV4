@@ -110,13 +110,21 @@ namespace CityForge.CameraSystem
             }
         }
         public void StepZoom(bool closer)=>SetZoomLevel(ZoomLevel+(closer?-1:1));
-        internal bool FollowDistrictActor(World.PrototypeRegionView region)
+        private Transform followedActor;
+        private Vector3 actorFollowVelocity;
+        internal bool FollowDistrictActor(World.PrototypeRegionView region, float delta = -1f)
         {
             if (!region) return false;
             var target = region.HarassCameraTarget;
+            bool smooth = target;
             if (!target) target = region.EagleCameraTarget;
-            if (!target) return false;
-            focus = target.position;
+            if (!target) { followedActor = null; actorFollowVelocity = Vector3.zero; return false; }
+            if (!smooth || followedActor != target)
+            { focus = target.position; actorFollowVelocity = Vector3.zero; }
+            else
+                focus = Vector3.SmoothDamp(focus, target.position, ref actorFollowVelocity, .16f,
+                    Mathf.Infinity, Mathf.Clamp(delta < 0 ? Time.unscaledDeltaTime : delta, 0, .1f));
+            followedActor = target;
             if (ZoomLevel != 0 || flyingIntoDistrict) SetZoomLevel(0);
             ApplyPose();
             return true;
