@@ -53,7 +53,7 @@ namespace CityForge.World
             public string IdleState, WalkState, AssetId;
             public int IdleHash, WalkHash;
             public float Speed, CornerSpeed;
-            public float ScaredUntil;
+            public float ScaredUntil, HarassTestUntil;
             public Vector2[] Route;
             public EstablishedRoute Clearance;
             public RouteRoad[] Roads, Sidewalks;
@@ -875,7 +875,7 @@ namespace CityForge.World
                 if (walker.Vehicle)
                     walker.CornerSpeed = VehicleCornering.Speed(walker.Route, current, walker.Next, walker.Direction,
                         walker.Closed, walker.Speed, walker.CornerSpeed, simulationTime);
-                bool frightened = !walker.Vehicle && TimeOfDay == RegionTimeOfDay.Evening && Time.time < walker.ScaredUntil;
+                bool frightened = !walker.Vehicle && (TimeOfDay == RegionTimeOfDay.Evening || Time.time < walker.HarassTestUntil) && Time.time < walker.ScaredUntil;
                 if (!walker.Vehicle && walker.Animator) walker.Animator.speed = frightened ? 1.6f : 1f;
                 float budget = simulationTime * (walker.Vehicle ? walker.CornerSpeed : walker.Speed * (frightened ? 1.6f : 1f));
                 if (walker.Vehicle && !walker.Carriage)

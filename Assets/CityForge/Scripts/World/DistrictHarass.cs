@@ -9,6 +9,9 @@ namespace CityForge.World
         internal Camera districtCamera;
         internal PrototypeRegionView view;
         internal PrototypeRegionView.Pedestrian target;
+        internal bool TestMode;
+        internal float TestEnds;
+        internal int TestDistrict;
         private uint random;
         private float nextSearch, chaseEnds, nextScare, pending;
         private Vector2 segmentEnd;
@@ -23,7 +26,8 @@ namespace CityForge.World
         internal void Step(float delta, float now, bool visible)
         {
             if (behavior == null || !view) return;
-            if (view.TimeOfDay != RegionTimeOfDay.Evening)
+            if (TestMode && (now >= TestEnds || view.SelectedDistrict != TestDistrict)) { Destroy(gameObject); return; }
+            if (!TestMode && view.TimeOfDay != RegionTimeOfDay.Evening)
             {
                 behavior.Stop(); target = null; hasSegment = false; pending = 0; nextSearch = 0;
                 return;
@@ -40,7 +44,7 @@ namespace CityForge.World
                 target = null; hasSegment = false;
                 if (now < nextSearch) return;
                 if (random == 0) random = (uint)GetInstanceID();
-                target = view.ChooseHarassTarget(Point, ref random);
+                target = view.ChooseHarassTarget(Point, ref random, TestMode);
                 nextSearch = now + 4f;
                 chaseEnds = now + 12f;
                 if (target == null) return;
@@ -54,7 +58,7 @@ namespace CityForge.World
             {
                 nextScare = now + 1.5f;
                 MovementProbes++;
-                if (view.FreightClear(point, destination, .15f)) view.ScarePedestrian(target, point, now);
+                if (view.FreightClear(point, destination, .15f)) view.ScarePedestrian(target, point, now, TestMode);
             }
             if (direction.sqrMagnitude <= 2f * 2f) { hasSegment = false; return; }
             var state = new NavigationState(view);

@@ -205,6 +205,18 @@ namespace CityForge.World
                 return;
             }
 
+            if (string.Equals(command?.Trim(), "Hooligan harass", StringComparison.OrdinalIgnoreCase))
+            {
+                if (TryStartHarassTest(out var problem))
+                {
+                    CloseDistrictScripts();
+                    ShowDistrictMessage("Hooligan harass test started · 60 seconds.");
+                    return;
+                }
+                districtScriptFeedback.text = problem;
+                districtScriptInput.ActivateInputField();
+                return;
+            }
             bool perch = string.Equals(command?.Trim(), "Eagle perch", StringComparison.OrdinalIgnoreCase);
             if (string.Equals(command?.Trim(), "Fell fir", StringComparison.OrdinalIgnoreCase))
             {
@@ -218,7 +230,7 @@ namespace CityForge.World
                 districtScriptFeedback.text = "No harvestable Cilician fir within 40 m of the camera focus.";
             }
             else if (!perch && !IsEagleCommand(command))
-                districtScriptFeedback.text = "Try Fell fir, Eagle perch, or The eagle has landed.";
+                districtScriptFeedback.text = "Try Hooligan harass, Fell fir, or Eagle perch.";
             else if (!eagle)
                 districtScriptFeedback.text = "Requires daylight, Animals enabled, and a built-up district.";
             else if (perch)

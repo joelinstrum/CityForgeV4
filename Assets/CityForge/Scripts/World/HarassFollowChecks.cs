@@ -72,6 +72,20 @@ namespace CityForge.Editor
                 long before = GC.GetAllocatedBytesForCurrentThread();
                 for (int i = 0; i < 10000; i++) runner.Step(.1f, 160, true);
                 Require(GC.GetAllocatedBytesForCurrentThread() - before < 128, "Inactive Harass allocates per tick");
+                view.PlacedLots.Clear();
+                person.transform.position = new Vector3(16, 20, 20);
+                target.Next = 0; target.Direction = -1; target.ScaredUntil = target.HarassTestUntil = 0;
+                Set(view, "<TimeOfDay>k__BackingField", RegionTimeOfDay.Noon);
+                int savedActors = view.PlacedActors.Count;
+                Require(view.TryStartHarassTest(out var problem), "District test command failed: " + problem);
+                var test = view.HarassTest;
+                var testStart = test.transform.position;
+                float now = Time.time;
+                for (int i = 0; i < 40; i++) test.Step(.1f, now + i * .1f, true);
+                Require(view.TimeOfDay == RegionTimeOfDay.Noon && test.transform.position != testStart && target.HarassTestUntil > 0,
+                    "Test command did not bypass evening for pursuit and fright while preserving the clock");
+                Require(view.PlacedActors.Count == savedActors && view.PlacedLots.Count == 0 && test.TestEnds >= now + 59,
+                    "Test command persisted a character or lost its cleanup deadline");
                 Debug.Log("HARASS FOLLOW CHECKS PASS: evening-only following, personal space, pedestrian turns away on retained route, bounded searches/probes, offscreen pause, vehicle exclusion, new blockers, 10000 active and inactive updates without allocations.");
             }
             finally { UnityEngine.Object.DestroyImmediate(root); UnityEngine.Object.DestroyImmediate(td); }

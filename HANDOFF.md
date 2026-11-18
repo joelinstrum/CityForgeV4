@@ -1,3 +1,19 @@
+# CityForge V4 handoff · November 18, 2026 · Hooligan district test command
+
+Cmd+S > `Hooligan harass` starts one temporary unarmed Hooligan encounter for 60
+seconds near a visible walking pedestrian, bypassing the evening restriction for
+that test only. The district clock is unchanged. The victim's hurry response also
+honors the short test override. Normal authored Harass scripts remain evening-only.
+The command requires an open district, a close view and a suitable clear approach to
+a walking pedestrian near the camera. Feedback explains missing prerequisites.
+Repeated runs replace the previous temporary Hooligan; expiry or leaving the district
+removes it. The actor is not added to PlacedActors/PlacedLots and cannot enter a save.
+
+HarassFollowChecks also verifies the Noon test follows/scares without changing the
+clock, has a cleanup deadline and leaves saved population/lot collections untouched.
+
+---
+
 # CityForge V4 handoff · November 18, 2026 · Evening Harass pursuit
 
 Harass now performs its raised-arm dance and bounded random pedestrian following
