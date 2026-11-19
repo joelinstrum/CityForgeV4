@@ -1,3 +1,32 @@
+# CityForge V4 handoff · November 18, 2026 · Zones modal visual redesign
+
+The user explicitly requested an appearance-first redesign from Downloads/Dark Zones
+Selection Panel.png, with utility wiring deferred. Zones now opens a large rounded
+dark/gold panel above the existing toolbar, with serif headings, Residential/Commercial/
+Industrial icons, Auto/2×2/3×3/4×4 footprint cards, Low/Medium/High density cards,
+Erase and Select & Place footer buttons and a live visual selection summary.
+Footprint counts say tiles rather than lots to match the game's one-lot footprint model.
+
+Type/size/density callbacks only update local UI highlights and summary. Select & Place
+and Erase are deliberately unconnected in this visual pass; the former compact zoning
+picker is replaced. No new zoning utility, growth rule, erase behavior or saved-map
+mutation was introduced. Hook the new controls to the existing zoning methods in a
+later user-authorized utility pass. The close action still closes the town panel.
+
+TownZoneModal.cs holds the layout. ZoneModalArtwork.cs provides cached native rounded
+skins and gold code-drawn icons, without new licensed/raster art dependencies. Existing
+bottom toolbar assets remain unchanged. A single owned serif font is reused per view.
+The Zones panel has its own size/position and title/close button; other town sections
+retain their existing layout.
+
+Isolated Unity QA at the 1920×1080 game reference verifies all icon meshes render,
+13 controls exist, selection highlights/footer update, and Place/Erase do not arm
+zoning. Two selection-state renders were visually reviewed and are in this chat's
+outputs/Zones-Modal. The main editor compiled; original region/lot libraries were not
+saved. The user should review the appearance before the utility pass.
+
+---
+
 # CityForge V4 handoff · November 18, 2026 · Founders street surfaces
 
 The Transport/Roads popup's Streets category now offers Dirt Street, Cobblestone

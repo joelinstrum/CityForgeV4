@@ -168,46 +168,7 @@ namespace CityForge.World
                     throw new InvalidDataException("Invalid town zone cell.");
         }
 
-        private void ShowZoning()
-        {
-            string[] names = { "Residential", "Commercial", "Industrial" };
-            var concept = Resources.Load<Texture2D>("UI/TownConstruction/ZoneConcept");
-            var artwork = new[]
-            {
-                new Rect(550, 560, 186, 105), new Rect(791, 560, 186, 105), new Rect(1031, 560, 186, 105)
-            };
-            for (int use = 0; use < names.Length; use++)
-            {
-                var card = FounderRect(townPanel, names[use] + " zoning", new Vector2(-178 + use * 231, -5),
-                    new Vector2(219, 174));
-                StyleTownPanel(card, new Color(.14f, .15f, .15f));
-                if (concept)
-                    TownArtwork(card, names[use] + " illustration", concept, artwork[use],
-                        new Vector2(0, 28), new Vector2(186, 105));
-                FounderText(card, names[use], new Vector2(0, -28), new Vector2(203, 26), 20).color = TownGold;
-                for (int density = 1; density <= 3; density++)
-                {
-                    var zone = (TownZone)(use * 3 + density);
-                    zoneButtons[(int)zone] = TownButton(card, lotFont, density.ToString(),
-                        17 + (density - 1) * 63, -131, 58, () => ArmZone(zone));
-                }
-            }
-
-            var sizePicker = zoneLotSizePicker = DefaultControls.CreateDropdown(new DefaultControls.Resources()).GetComponent<Dropdown>();
-            var sizeRect = (RectTransform)sizePicker.transform;
-            sizeRect.SetParent(townPanel, false);
-            Position(sizeRect, new Vector2(17, -157), new Vector2(174, 30));
-            sizePicker.captionText.font = sizePicker.itemText.font = lotFont;
-            sizePicker.onValueChanged.AddListener(index => selectedZoneLotSize = zoneLotSizesForWealth[index]);
-            RefreshZoneLotSizes();
-
-            zoneButtons[0] = TownButton(townPanel, lotFont, "Erase zoning", 18, -113, 108, () => ArmZone(TownZone.None));
-            zoneStatus = FounderText(townPanel, "Choose a zone and density, then drag on the map.",
-                new Vector2(0, -112), new Vector2(800, 28), 16);
-            zoneStatus.color = TownGold;
-            EnsureZoneSurfaces();
-            RefreshZoneOverlay();
-        }
+        private void ShowZoning() => BuildZoneSelectionModal();
 
         private const int ResidentialDefaultDepth = 6;
         private Vector2Int[] zoneLotSizesForWealth = { Vector2Int.zero };
