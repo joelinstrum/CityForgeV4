@@ -1,3 +1,91 @@
+# CityForge V4 session wrap · November 18, 2026
+
+Read AGENTS.md, then this summary before using the historical entries below. This
+summary is authoritative where earlier step-by-step notes describe superseded behavior.
+
+## Repository and delivery
+
+- Project: /Users/joelinstrum/dev/CityForge - V4
+- Unity:6000.1.12f1. Branch:feature/r2-low-wealth-import.
+- Base:main at98c8ec7 (merged PR25). Session changes are being delivered as one PR;
+  consult GitHub for its current merge status rather than assuming it was merged.
+- Public repository is source-only. All prepared/licensed models, masks, textures,
+  catalogs, generated animation assets and saved maps remain in the private workflow.
+- Original player maps and lot libraries were not modified for QA. Unity was stopped
+  at MainMenu for the final source refresh. Do not automatically regenerate a region.
+
+## Completed and current behavior
+
+1. Ten R2 low-wealth Founders buildings imported locally, with reduced LODs, window
+   emission and width/height/depth in meters. Six had removable detached artifacts.
+   Low Wealth Res Trio2 is now25% larger:16.719m wide ×7.991m deep ×11.250m high.
+2. R1/R2/R3 growth has no progression/population/service unlock requirements. Matching
+   saved layout, wealth/density, frontage, dry ground and physical fit still apply.
+3. Four Founders low-wealth pedestrians now serve R2/R3 too. Hooligan walking loops
+   are repaired. Harass is an assignable nonviolent script: intermittent raised arms,
+   evening-only bounded pursuit, faster walking, frightened pedestrians and cheap
+   visibility/target checks. Cmd+S → Hooligan harass is a60-second camera-follow test
+   that bypasses evening. Esc ends it; Esc no longer navigates back to the region.
+4. Low-wealth R2/R3 frontage gets2m soft dirt walking paths. Founders streets have
+   one-tile4m roadways, using Dirt, Cobblestone or Weathered Brick.
+5. Zones uses the dark/gold modal. Fixed sizes create12-tile frontages in two outward
+   back-to-back rows:2×2=12lots,3×3=8lots,4×4=6lots. Outside dirt streets are automatic.
+   Overlapping stamps preserve old parcels/buildings/roads and add only complete free
+   lots. Corner joins now retain the full road width. Auto and Erase remain available.
+6. Tab cycles45-degree steps. Cardinal angles use normal persistent zoning; diagonal
+   angles directly place matching saved growable layouts as native rotated lot records.
+   The user confirmed diagonal appearance AND connections to manual roads work well.
+7. A lot entrance marker is a placement guide. Authored door metadata is used when
+   present; otherwise the front-edge midpoint is inferred. Missing doors no longer
+   disqualify the entire growable building list. Physical fit remains enforced.
+8. Texturize is available in Parks and Lot Editor → Textures → Texturize · Polygon
+   brush. Click an outline, click its first marker to close, then spray/erase within
+   the hard mask with a soft brush. New boundary keeps the paint; Done/Esc hides guides.
+   Paint is stored in sparse compressed32m weight tiles at25cm resolution, up to8
+   materials per tile. It is not a mesh per polygon/stroke. Persisted instances share
+   weight textures. District paint is world-XZ; lot paint is local and follows45° lots.
+   The user confirmed painting works nicely. The last fix replaces hidden six-item
+   pages with an All-default scrolling palette, All/Natural/Paving filters, a scrollbar
+   and total count. All22 currently available Lot Editor path textures are accessible.
+   See Documentation/03_Technical/Texture_Paint.md for limits and render/data details.
+
+## Explicit remaining work / next-session candidates
+
+- Persistent DIAGONAL EMPTY ZONING / REGROWTH is not implemented. Diagonal stamps use
+  matching built lot records and construction animation; demolition does not leave a
+  diagonal growable parcel. Preserve this distinction; do not claim it is finished.
+- Police dispatch / offender disappearance is a future design. Harass currently has
+  no violence, damage, police arrival, arrest, crime economy or off-district simulation.
+- User feedback on the new full scrolling Texturize palette is pending. There is no
+  reported outstanding paint bug. Keep its polygon hard and brush soft as requested.
+- Old already-saved clipped street segments are not retroactively repaired.
+- R3 growth support does not invent production R3 models. Other C2/C3/industrial
+  growth was not enabled by this residential work.
+
+## Validation and how to resume
+
+- Isolated project:/Users/joelinstrum/Documents/Codex/2026-11-15/we/work/gazebos/CityForgeQA
+  ProductName:CityForge Holly Brook QA. Do not substitute the normal player data path.
+- Scratch/logs:/Users/joelinstrum/Documents/Codex/2026-11-18/ple/work
+  Visuals:/Users/joelinstrum/Documents/Codex/2026-11-18/ple/outputs
+- Source is synced to QA with rsync -a Assets/CityForge/Scripts/ <QA>/Assets/CityForge/Scripts/
+  Do not delete its disposable diagnostic wrappers. Several wrappers are intentionally
+  QA-only, not public source. Resource shader:UI/TexturePaintGround must be copied too.
+- Batch editor:/Applications/Unity/Hub/Editor/6000.1.12f1/Unity.app/Contents/MacOS/Unity
+  Use -batchmode -projectPath <QA> -executeMethod <Class>.Run -quit -logFile <scratchlog>.
+- Passed:residential growth, pedestrian loops/pools, Harass scheduling and follow,
+  Founders streets/footpaths,108 block geometry combinations,12 overlap/corner cases,
+  twelve diagonal size/angle cases and native rotation save roundtrip,192 entrance
+  guide alignments, and instantiated Trio2 size/LOD/emission checks.
+- Latest TexturePaintQA.Run passes concave masks, blend/erase, eligibility, layer cap,
+  corrupt-data rejection, compression,4rotations, undo/redo, actual .cflot/.cfregion
+  file roundtrips, both menus, lot tool arm/close, exact full palette count, scrolling,
+  fixed mesh counts, shader/render review and paint persistence without the outline.
+- These are targeted isolated checks plus the user's in-game feedback, not a full
+  packaged-player build or live-town performance benchmark. No GitHub CI is configured.
+
+--- Historical implementation notes follow; newer summary above takes precedence ---
+
 # CityForge V4 handoff · November 18, 2026 · Full Texturize palette browsing
 
 User could not find many Lot Editor path textures in Texturize. Both pickers already
