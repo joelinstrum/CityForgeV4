@@ -706,6 +706,15 @@ namespace CityForge.World
                 }
                 root.SetPositionAndRotation(new Vector3(record.center.x, 0, record.center.y),
                     Quaternion.Euler(0, record.FacingDegrees, 0));
+                if (definition.groundPaint != null && definition.groundPaint.tiles.Count > 0)
+                {
+                    var paintRoot = new GameObject("Lot texture paint"); paintRoot.transform.SetParent(root, false);
+                    paintRoot.AddComponent<GroundPaintRenderer>().Initialize(definition.groundPaint, point =>
+                    {
+                        var world = root.TransformPoint(new Vector3(point.x, 0, point.y));
+                        return LotHeight(new Vector2(world.x, world.z)) - root.position.y;
+                    }, definition.LandBounds);
+                }
                 Transform harborPorch = null;
                 var porches = new List<(LotObjectDefinition item, Transform view)>();
                 var characters = new List<(LotObjectDefinition item, Transform view)>();
@@ -757,6 +766,16 @@ namespace CityForge.World
                         if (LotCharacterDeck.TryHeight(building, item.position, out float deck))
                             point.y = Mathf.Max(point.y, porch.position.y + deck);
                     character.position = point;
+                    if (item.characterScript.configured && item.characterScript.scriptedBehavior == LotScriptedBehavior.Harass &&
+                        LotHarass.Supports(character.gameObject))
+                    {
+                        var harass = character.gameObject.AddComponent<DistrictHarass>();
+                        harass.districtCamera = camera;
+                        harass.behavior = new LotHarass(character, startAnimation: false);
+                        harass.view = this;
+                        foreach (var animator in character.GetComponentsInChildren<Animator>())
+                            animator.cullingMode = AnimatorCullingMode.CullCompletely;
+                    }
                     if (item.characterScript.configured && item.characterScript.scriptedBehavior == LotScriptedBehavior.Lumberjack && ApprovedDistrict)
                         character.gameObject.AddComponent<DistrictLumberjack>().Initialize(ApprovedDistrict, camera, record);
                     if (item.characterScript.configured && item.characterScript.scriptedBehavior == LotScriptedBehavior.Shopkeeper &&

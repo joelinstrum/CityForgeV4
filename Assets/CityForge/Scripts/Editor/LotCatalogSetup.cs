@@ -81,6 +81,16 @@ internal static class LotCatalogSetup
                 "HighWealthMediterraneanVilla", 14f, LotWealth.High),
             FoundersResidentialHome("high-wealth-georgian-three-dormers", "Georgian Colonial Three Dormers",
                 "HighWealthGeorgianThreeDormers", 12f, LotWealth.High),
+            R2LowWealthHome("r2-four-story-low-wealth-stone-base", "Four Story Low Wealth Stone Base", "R2FourStoryLowWealthStoneBase", 10.818288f),
+            R2LowWealthHome("r2-four-story-shanty", "Four Story Shanty", "R2FourStoryShanty", 12.607938f),
+            R2LowWealthHome("r2-low-wealth-brick-apartment", "Low Wealth Brick Apartment", "R2LowWealthBrickApartment", 13.325564f),
+            R2LowWealthHome("r2-low-wealth-double-entry", "Low Wealth Double Entry", "R2LowWealthDoubleEntry", 11.602993f),
+            R2LowWealthHome("r2-low-wealth-duplex", "Low Wealth Duplex", "R2LowWealthDuplex", 13.081451f),
+            R2LowWealthHome("r2-low-wealth-res-stone-apartment", "Low Wealth Res Stone Apartment", "R2LowWealthResStoneApartment", 11.640968f),
+            R2LowWealthHome("r2-low-wealth-res-trio-2", "Low Wealth Res Trio 2", "R2LowWealthResTrio2", 16.719370f),
+            R2LowWealthHome("r2-low-wealth-stone-house-2", "Low Wealth Stone House 2", "R2LowWealthStoneHouse2", 12.289818f),
+            R2LowWealthHome("r2-low-wealth-trio", "Low Wealth Trio", "R2LowWealthTrio", 15.387814f),
+            R2LowWealthHome("r2-low-wealth-apartment-collapse", "Low Wealth Apartment Collapse", "R2LowWealthApartmentCollapse", 14.357811f),
             FrontierLogCabin(),
             SmallColonialCabin(),
             FoundersHome("low-wealth-front-gable", "Front Gable House", "LowWealthFrontGable"),
@@ -219,7 +229,8 @@ internal static class LotCatalogSetup
             else if (((entry.category == "Landscaping" && (entry.group == "Agriculture" || entry.id == "boxwood-curved-02")) ||
                       (entry.category == LotAssetCatalog.StreetFurniture && entry.group == "Lighting") ||
                       entry.id.StartsWith("v3-building-medium-wealth-home-", System.StringComparison.Ordinal) ||
-                      entry.id is "v3-building-low-wealth-vertical-siding-front-gable" or
+                      entry.id is "v3-building-r2-low-wealth-res-trio-2" or
+                          "v3-building-low-wealth-vertical-siding-front-gable" or
                           "v3-building-low-wealth-front-gable-cottage" or
                           "v3-building-founders-shop-right-corner-cooperage" or
                           "v3-building-founders-shop-right-corner-dry-goods") &&
@@ -596,6 +607,13 @@ internal static class LotCatalogSetup
         float span, string normalExtension = ".jpg") =>
         FoundersResidentialHome(id, label, folder, span, LotWealth.Medium, normalExtension);
 
+    private static LotAssetCatalogEntry R2LowWealthHome(string id, string label, string folder, float span)
+    {
+        var home = FoundersResidentialHome(id, label, folder, span, LotWealth.Low);
+        home.growableZone = TownZone.Residential2;
+        return home;
+    }
+
     private static LotAssetCatalogEntry FoundersShop(string id, string label, string folder,
         float span, string extension = ".jpg")
     {
@@ -654,7 +672,11 @@ internal static class LotCatalogSetup
 
         var bounds = FenceBounds(model).size;
         float widest = Mathf.Max(bounds.x, bounds.z);
-        if (widest > .001f) entry.footprint = new Vector2(bounds.x, bounds.z) * (span / widest);
+        if (widest > .001f)
+        {
+            entry.footprint = new Vector2(bounds.x, bounds.z) * (span / widest);
+            entry.buildingDimensionsMeters = bounds * (span / widest);
+        }
         string normalPath = root + "Normal" + normalExtension;
         if (AssetImporter.GetAtPath(normalPath) is TextureImporter importer &&
             importer.textureType != TextureImporterType.NormalMap)
@@ -990,6 +1012,7 @@ internal static class LotCatalogSetup
     {
         string root = DirectoryPath + "/V3Characters/" + folder + "/";
         string modelPath = root + "Model.fbx";
+        if (folder == "Hooligan") HooliganHarassSetup.Prepare();
         var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(root + "Character.prefab");
         if (prefab)
         {
@@ -1079,23 +1102,34 @@ internal static class LotCatalogSetup
         var controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(root + "Idle.controller");
         if (!controller) return;
         var machine = controller.layers[0].stateMachine;
-        if (machine.states.Any(state => state.state.name == stateName)) return;
+        var state = machine.states.FirstOrDefault(entry => entry.state.name == stateName).state;
+        var motion = state ? state.motion as AnimationClip : null;
+        motion ??= AssetDatabase.LoadAllAssetsAtPath(modelPath).OfType<AnimationClip>()
+            .Where(clip => !clip.name.StartsWith("__") &&
+                clip.name.IndexOf(stateName, System.StringComparison.OrdinalIgnoreCase) >= 0)
+            .OrderBy(clip => clip.name.Equals(stateName, System.StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+            .ThenBy(clip => clip.name, System.StringComparer.Ordinal).FirstOrDefault();
+        if (!motion) return;
         if (!(AssetImporter.GetAtPath(modelPath) is ModelImporter importer)) return;
         var clips = importer.clipAnimations;
-        var importedClip = clips.FirstOrDefault(clip =>
-            clip.name.IndexOf(stateName, System.StringComparison.OrdinalIgnoreCase) >= 0);
+        // Repair the clip actually bound to the state, including existing controllers.
+        // Sources can contain multiple walk takes; looping a different take leaves the
+        // active walk frozen at its final frame while navigation keeps moving.
+        string motionName = motion.name;
+        var importedClip = clips.FirstOrDefault(clip => clip.name == motionName);
         if (importedClip != null && !importedClip.loopTime)
         {
             importedClip.loopTime = true;
             importedClip.loopPose = true;
             importer.clipAnimations = clips;
             importer.SaveAndReimport();
+            motion = AssetDatabase.LoadAllAssetsAtPath(modelPath).OfType<AnimationClip>()
+                .FirstOrDefault(clip => clip.name == motionName);
         }
-        var motion = AssetDatabase.LoadAllAssetsAtPath(modelPath).OfType<AnimationClip>()
-            .FirstOrDefault(clip => !clip.name.StartsWith("__") &&
-                clip.name.IndexOf(stateName, System.StringComparison.OrdinalIgnoreCase) >= 0);
-        if (!motion) return;
-        machine.AddState(stateName).motion = motion;
+        if (!state) state = machine.AddState(stateName);
+        if (state.motion == motion) return;
+        state.motion = motion;
+        EditorUtility.SetDirty(state);
         EditorUtility.SetDirty(controller);
         AssetDatabase.SaveAssets();
     }

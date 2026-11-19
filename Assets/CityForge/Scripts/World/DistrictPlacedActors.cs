@@ -46,13 +46,14 @@ namespace CityForge.World
         private readonly Dictionary<DistrictPlacedActor, GameObject> placedTreeViews = new();
         private int armedActorCount;
 
-        private sealed class Pedestrian
+        internal sealed class Pedestrian
         {
             public Transform Body;
             public Animator Animator;
             public string IdleState, WalkState, AssetId;
             public int IdleHash, WalkHash;
             public float Speed, CornerSpeed;
+            public float ScaredUntil, HarassTestUntil;
             public Vector2[] Route;
             public EstablishedRoute Clearance;
             public RouteRoad[] Roads, Sidewalks;
@@ -351,7 +352,7 @@ namespace CityForge.World
                 {
                     if (wealth == LotWealth.High && foundersHigh.Length > 0) pool = foundersHigh;
                     if (wealth == LotWealth.Low && foundersLow.Length > 0 &&
-                        lot.definition.zoningLayout.zone is TownZone.Residential1 or TownZone.Commercial1)
+                        (IsResidentialZone(zone) || zone == TownZone.Commercial1))
                         pool = foundersLow;
                 }
                 if (pool.Length == 0) pool = pools.Values.SelectMany(entries => entries).ToArray();
@@ -874,7 +875,9 @@ namespace CityForge.World
                 if (walker.Vehicle)
                     walker.CornerSpeed = VehicleCornering.Speed(walker.Route, current, walker.Next, walker.Direction,
                         walker.Closed, walker.Speed, walker.CornerSpeed, simulationTime);
-                float budget = simulationTime * (walker.Vehicle ? walker.CornerSpeed : walker.Speed);
+                bool frightened = !walker.Vehicle && (TimeOfDay == RegionTimeOfDay.Evening || Time.time < walker.HarassTestUntil) && Time.time < walker.ScaredUntil;
+                if (!walker.Vehicle && walker.Animator) walker.Animator.speed = frightened ? 1.6f : 1f;
+                float budget = simulationTime * (walker.Vehicle ? walker.CornerSpeed : walker.Speed * (frightened ? 1.6f : 1f));
                 if (walker.Vehicle && !walker.Carriage)
                     budget = SteerAroundWagons(walker, current, simulationTime, budget);
                 var heading = Vector2.zero;

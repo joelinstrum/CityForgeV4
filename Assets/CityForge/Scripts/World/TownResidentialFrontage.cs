@@ -124,7 +124,7 @@ namespace CityForge.World
                 }
             }
 
-            const string commercialFrontageProblem = "Commercial I needs street frontage along the full edge. Use a Dirt Street.";
+            const string commercialFrontageProblem = "Commercial I needs street frontage along the full edge. Use a street surface.";
             bool Covers(List<(float start, float end)> spans, TownZoneFacing side)
             {
                 bool eastOrWest = side is TownZoneFacing.East or TownZoneFacing.West;

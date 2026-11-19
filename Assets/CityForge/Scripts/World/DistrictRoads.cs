@@ -35,13 +35,23 @@ namespace CityForge.World
             ("brick", "Brick Road", "damaged-brick", "A one-tile road paved with weathered brick and soft shoulders."),
             ("blacktop", "Blacktop Road", "concrete", "An asphalt surface for motor traffic."),
             ("paved-street", "Paved Street", "concrete", "A paved street for built-up districts."),
-            (FoundersStreetId, "Dirt Street", "packed-earth", "A one-tile dirt street with plank sidewalks. Supports Commercial I zoning.")
+            (FoundersStreetId, "Dirt Street", "packed-earth", "A one-tile (4 m) street using worn wagon-trail dirt. Supports commercial frontage."),
+            (FoundersCobblestoneStreetId, "Cobblestone Street", "cobblestone-road-9", "A one-tile (4 m) street paved with rounded cobblestone. Supports commercial frontage."),
+            (FoundersBrickStreetId, "Weathered Brick Street", "damaged-brick", "A one-tile (4 m) street paved with weathered brick. Supports commercial frontage.")
         };
 
         private const int HistoricalRoadSurfaceCount = 6;
         private const int PavedStreetIndex = HistoricalRoadSurfaceCount + 1;
         private const int FoundersStreetIndex = PavedStreetIndex + 1;
         private const string FoundersStreetId = "founders-dirt-street";
+        private const string FoundersCobblestoneStreetId = "founders-cobblestone-street";
+        private const string FoundersBrickStreetId = "founders-brick-street";
+
+        private static bool IsFoundersStreet(string id) => id is FoundersStreetId or FoundersCobblestoneStreetId or FoundersBrickStreetId;
+        private static int FoundersStreetSlot(string id) => id switch
+        {
+            FoundersStreetId => 0, FoundersCobblestoneStreetId => 1, FoundersBrickStreetId => 2, _ => -1
+        };
         private const int RoadWidth = 3;
         private const int OneTileRoadWidth = (int)DistrictGridCellMeters;
         private static readonly int DirtEndFadeProperty = Shader.PropertyToID("_DirtEndFade");
@@ -104,11 +114,11 @@ namespace CityForge.World
 
         private static int FindRoadSurface(string id) => Array.FindIndex(RoadSurfaces, surface => surface.Id == id);
 
-        private static bool IsMasonryRoad(string id) => id is "brick" or "cobblestone";
+        private static bool IsMasonryRoad(string id) => id is "brick" or "cobblestone" or FoundersCobblestoneStreetId or FoundersBrickStreetId;
 
         private static bool HasSidewalks(string id) => IsMasonryRoad(id) || id == FoundersStreetId;
 
-        private static bool SupportsCommercialFrontage(string id) => id is FoundersStreetId or "paved-street";
+        private static bool SupportsCommercialFrontage(string id) => IsFoundersStreet(id) || id == "paved-street";
 
         private static int DefaultRoadWidth(string id) => HasSidewalks(id) ? OneTileRoadWidth : RoadWidth;
 
@@ -116,7 +126,7 @@ namespace CityForge.World
         {
             var style = LotPathMaterial.Find(RoadSurfaces[FindRoadSurface(id)].Material);
             // Source-only checkouts can still render these roads with the simpler surface.
-            return IsMasonryRoad(id) && !style.IsAvailable ? LotPathMaterial.Find(id) : style;
+            return IsMasonryRoad(id) && !style.IsAvailable ? LotPathMaterial.Find(id is "brick" or FoundersBrickStreetId ? "brick" : "cobblestone") : style;
         }
 
         private static string RoadGuideProblem(IReadOnlyList<Vector2> points, bool closed, float halfMap)
@@ -722,46 +732,88 @@ namespace CityForge.World
         {
             ClearDistrictSidewalks();
             if (!districtRoadRoot) return;
-            var roads = districtRoadMeshes.Keys.Where(road => HasSidewalks(road.surfaceId)).ToArray();
+            var frontages = NeighborhoodFootpaths.Collect(districtLotRoots.Keys);
+            var roads = districtRoadMeshes.Keys.Where(road => HasSidewalks(road.surfaceId) || frontages.Count > 0).ToArray();
             if (roads.Length == 0) return;
             districtSidewalkRoot = new GameObject("District sidewalks").transform;
             districtSidewalkRoot.SetParent(districtRoadRoot, false);
             var materials = new Dictionary<string, Material>();
+            const int width = LotPathSurface.ResidentialSidewalkWidth;
             foreach (var road in roads)
             {
+                bool paved = HasSidewalks(road.surfaceId);
                 bool plank = road.surfaceId == FoundersStreetId;
                 string styleId = plank ? LotPathMaterial.Plankboard : LotPathMaterial.Bluestone;
                 var style = LotPathMaterial.Find(styleId);
-                if (!materials.TryGetValue(styleId, out var material))
-                {
-                    material = style.CreateMaterial();
-                    materials.Add(styleId, material);
-                    sidewalkAssets.Add(material);
-                }
-                const int width = LotPathSurface.ResidentialSidewalkWidth;
+                var path = new LotPathDefinition { points = road.points, width = road.width, closed = road.closed, curved = road.curved };
+                var line = RoadCenterline(road).ToList();
+                if (line.Count < 2) continue;
+                if (road.closed && line[0] != line[^1]) line.Add(line[0]);
+                var minimum = line[0]; var maximum = line[0];
+                foreach (var point in line) { minimum = Vector2.Min(minimum, point); maximum = Vector2.Max(maximum, point); }
+                var reach = Vector2.one * (road.width * .5f + 6f);
+                var search = Rect.MinMaxRect(minimum.x - reach.x, minimum.y - reach.y, maximum.x + reach.x, maximum.y + reach.y);
+                var nearby = frontages.FindAll(edge => search.Overlaps(Rect.MinMaxRect(Mathf.Min(edge.A.x, edge.B.x),
+                    Mathf.Min(edge.A.y, edge.B.y), Mathf.Max(edge.A.x, edge.B.x), Mathf.Max(edge.A.y, edge.B.y))));
+                if (!paved && nearby.Count == 0) continue;
                 for (int side = -1; side <= 1; side += 2)
                 {
-                    var path = new LotPathDefinition { points = road.points, width = road.width, closed = road.closed, curved = road.curved };
-                    // Use the same cross sections as the pavement so the inner sidewalk edge cannot curl over it.
-                    var mesh = LotPathSurface.BuildMesh(path, style.TileSize, SidewalkLift, LotHeight,
+                    bool dirt = false;
+                    if (nearby.Count > 0)
+                    {
+                        var earth = LotPathMaterial.Find(LotPathMaterial.ResidentialFootpath);
+                        var mesh = LotPathSurface.BuildMesh(path, earth.TileSize, SidewalkLift + .002f, LotHeight,
+                            shoulderSide: side, shoulderWidth: NeighborhoodFootpaths.Width);
+                        NeighborhoodFootpaths.ApplyCoverage(mesh, line, nearby, inverse: false);
+                        dirt = mesh.colors.Any(color => color.a > .001f);
+                        if (dirt)
+                        {
+                            var ribbon = new List<Vector4>(); mesh.GetUVs(1, ribbon);
+                            mesh.SetUVs(1, ribbon.ConvertAll(uv => new Vector4(uv.x / uv.y * NeighborhoodFootpaths.Width, NeighborhoodFootpaths.Width, uv.z, uv.w)));
+                            var material = Material(earth.Id + "-neighborhood", earth, soft: true);
+                            Add("Soft dirt walking path", mesh, material);
+                        }
+                        else Destroy(mesh);
+                    }
+                    if (!paved) continue;
+                    // Preserve the street's authored cross sections and alignment.
+                    var paving = LotPathSurface.BuildMesh(path, style.TileSize, SidewalkLift, LotHeight,
                         shoulderSide: side, shoulderWidth: width);
                     if (plank)
                     {
-                        var ribbon = new List<Vector4>();
-                        mesh.GetUVs(1, ribbon);
-                        mesh.SetUVs(0, ribbon.ConvertAll(uv => new Vector2(uv.x / uv.y, uv.z / style.TileSize.y)));
-                        mesh.RecalculateTangents();
+                        var ribbon = new List<Vector4>(); paving.GetUVs(1, ribbon);
+                        paving.SetUVs(0, ribbon.ConvertAll(uv => new Vector2(uv.x / uv.y, uv.z / style.TileSize.y)));
+                        paving.RecalculateTangents();
                     }
-                    var walk = new GameObject(plank ? "Plank sidewalk" : "Bluestone sidewalk", typeof(MeshFilter), typeof(MeshRenderer));
-                    walk.transform.SetParent(districtSidewalkRoot, false);
-                    walk.GetComponent<MeshFilter>().sharedMesh = mesh;
-                    var renderer = walk.GetComponent<MeshRenderer>();
-                    renderer.sharedMaterial = material;
-                    renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-                    sidewalkAssets.Add(mesh);
+                    if (dirt) NeighborhoodFootpaths.ApplyCoverage(paving, line, nearby, inverse: true);
+                    Add(plank ? "Plank sidewalk" : "Bluestone sidewalk", paving,
+                        Material(styleId + (dirt ? "-transition" : ""), style, soft: false, masked: dirt));
                 }
             }
 
+            Material Material(string key, LotPathMaterial style, bool soft, bool masked = false)
+            {
+                if (materials.TryGetValue(key, out var existing)) return existing;
+                var material = style.CreateMaterial();
+                if (soft || masked)
+                {
+                    var treatment = new LotPathDefinition { width = soft ? NeighborhoodFootpaths.Width : width, materialId = style.Id };
+                    LotPathMaterial.ApplyEdgeTreatment(material, treatment, soft ? 40 : 0, 0);
+                    material.SetFloat("_VertexOpacity", 1);
+                    material.SetFloat("_NaturalFootpath", soft ? 1 : 0);
+                }
+                materials.Add(key, material); sidewalkAssets.Add(material);
+                return material;
+            }
+            void Add(string label, Mesh mesh, Material material)
+            {
+                var walk = new GameObject(label, typeof(MeshFilter), typeof(MeshRenderer));
+                walk.transform.SetParent(districtSidewalkRoot, false);
+                walk.GetComponent<MeshFilter>().sharedMesh = mesh;
+                var renderer = walk.GetComponent<MeshRenderer>(); renderer.sharedMaterial = material;
+                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                sidewalkAssets.Add(mesh);
+            }
         }
 
         private void ClearDistrictSidewalks()

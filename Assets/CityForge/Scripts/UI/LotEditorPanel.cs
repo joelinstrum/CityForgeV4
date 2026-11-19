@@ -588,6 +588,7 @@ namespace CityForge.UI
 
         private void Update()
         {
+            if (viewport && viewport.TexturePainting) return;
             var active = EventSystem.current ? EventSystem.current.currentSelectedGameObject : null;
             if (Input.GetKeyDown(KeyCode.Tab) && EventSystem.current)
             {
@@ -1080,7 +1081,7 @@ namespace CityForge.UI
             bool autoPaths = layout.autoPaths;
             Choices("Auto Paths", new[] { "Off", "On" }, 485,
                 autoPaths ? 1 : 0, value => autoPaths = value == 1);
-            Label(frame, "Entrance coordinates", 20, 533, 260, 16);
+            Label(frame, "Entrance guide coordinates", 20, 533, 260, 16);
             var entranceX = SlotField("House X", 20, 565, layout.hasEntrance ? layout.entrance.x : (float?)null);
             var entranceZ = SlotField("House Z", 285, 565, layout.hasEntrance ? layout.entrance.y : (float?)null);
             var drivewayX = SlotField("Driveway X", 20, 608, layout.hasDriveway ? layout.driveway.x : (float?)null);
@@ -1230,14 +1231,14 @@ namespace CityForge.UI
                 : Array.Empty<LotAssetCatalogEntry>();
             var fit = eligible.ToDictionary(asset => asset.id,
                 asset => LotGrowableBuildings.PlacementProblem(lot, asset, catalog, out _, enforceFit: true));
-            bool CanSelect(string problem) => problem == null || (overrideFit.isOn && problem != "Missing entry point");
+            bool CanSelect(string problem) => problem == null || overrideFit.isOn;
             var selectedIds = new HashSet<string>(eligible.Where(asset => CanSelect(fit[asset.id]) &&
                 layout.AllowsGrowthBuilding(asset.id)).Select(asset => asset.id));
             int y = 6;
             foreach (var asset in eligible)
             {
                 string problem = fit[asset.id];
-                string label = problem == null ? asset.label : $"{asset.label} · {(problem == "Missing entry point" ? problem : "Does not fit")}";
+                string label = problem == null ? asset.label : $"{asset.label} · Does not fit";
                 var row = Checkbox(assetList, asset.id, label, 6, y, rowWidth, selectedIds.Contains(asset.id),
                     rowHeight: rowHeight, trailingWidth: previewSize + 16);
                 row.interactable = CanSelect(problem);
@@ -1336,6 +1337,7 @@ namespace CityForge.UI
 
         private void CloseChoices()
         {
+            if (viewport) viewport.EndTexturePaint();
             if (!choices) return;
             choices.SetActive(false);
             Destroy(choices);
@@ -1681,6 +1683,9 @@ namespace CityForge.UI
 
         private static Vector3 ApproximateBuildingDimensions(LotAssetCatalogEntry asset)
         {
+            var prepared = asset.buildingDimensionsMeters;
+            if (LotBuildingInfo.Positive(prepared.x) && LotBuildingInfo.Positive(prepared.y) &&
+                LotBuildingInfo.Positive(prepared.z)) return prepared;
             var model = LotRuntimeLoader.InstantiateObject(new LotObjectDefinition { assetId = asset.id, scale = 1f },
                 asset, null);
             var renderers = model.GetComponentsInChildren<Renderer>();
@@ -1970,21 +1975,24 @@ namespace CityForge.UI
             var randomized = AddImage("Randomized settings", frame, PanelColor).rectTransform;
             At(randomized, 20, 146, 520, 316);
             var scripted = AddImage("Scripted settings", frame, PanelColor).rectTransform;
-            At(scripted, 20, 146, 520, 250);
+            At(scripted, 20, 146, 520, 316);
             var behavior = settings.scriptedBehavior;
             var dockWorker = Control(scripted, "Dock Worker", 0, 0, 166, () => { });
             var shopkeeper = Control(scripted, "Shopkeeper", 177, 0, 166, () => { });
             var lumberjack = Control(scripted, "Lumberjack", 354, 0, 166, () => { });
+            var harass = Control(scripted, "Harass", 0, 44, 166, () => { });
+            var harassNote = Label(scripted, "Evening only: raises both arms and follows nearby pedestrians, who hurry away.", 8, 94, 495, 16);
+            At(harassNote.rectTransform, 8, 94, 495, 78);
             var lumberNote = Label(scripted, "Claims a nearby forest tree within 80m, walks over, chops it down, then returns home. Requires Walk and Chop animations. Harvesting runs in the district.", 8, 47, 495, 16);
-            At(lumberNote.rectTransform, 8, 47, 495, 100);
+            At(lumberNote.rectTransform, 8, 94, 495, 100);
             var shopNote = Label(scripted, "Steps outside the nearest marked pedestrian entrance, looks for customers, then returns inside.",
                 8, 47, 495, 16);
-            At(shopNote.rectTransform, 8, 47, 495, 54);
+            At(shopNote.rectTransform, 8, 94, 495, 54);
             var dockNote = Label(scripted, "Starts when a visiting ship is berthed at this harbor lot.",
                 8, 47, 495, 16);
-            At(dockNote.rectTransform, 8, 47, 495, 30);
+            At(dockNote.rectTransform, 8, 94, 495, 30);
             var dockOptions = AddImage("Dock worker options", scripted, PanelColor).rectTransform;
-            At(dockOptions, 0, 80, 520, 182);
+            At(dockOptions, 0, 130, 520, 182);
             var delay = NumberField(dockOptions, "Arrival delay (seconds)", settings.dockArrivalDelay, 8);
             var duration = NumberField(dockOptions, "Work time (seconds)", settings.DockWorkSeconds, 50);
             var cargo = Checkbox(dockOptions, "Move cargo", "Move cargo on deck", 14, 92, 492, !settings.dockIdleOnly);
@@ -1993,6 +2001,7 @@ namespace CityForge.UI
             dockWorker.onClick.AddListener(() => SelectBehavior(LotScriptedBehavior.DockWorker));
             shopkeeper.onClick.AddListener(() => SelectBehavior(LotScriptedBehavior.Shopkeeper));
             lumberjack.onClick.AddListener(() => SelectBehavior(LotScriptedBehavior.Lumberjack));
+            harass.onClick.AddListener(() => SelectBehavior(LotScriptedBehavior.Harass));
             SelectBehavior(behavior);
 
             void SelectBehavior(LotScriptedBehavior selected)
@@ -2003,6 +2012,8 @@ namespace CityForge.UI
                 MarkActive(dockWorker, isDock);
                 MarkActive(shopkeeper, isShop);
                 MarkActive(lumberjack, selected == LotScriptedBehavior.Lumberjack);
+                MarkActive(harass, selected == LotScriptedBehavior.Harass);
+                harassNote.gameObject.SetActive(selected == LotScriptedBehavior.Harass);
                 lumberNote.gameObject.SetActive(selected == LotScriptedBehavior.Lumberjack);
                 dockNote.gameObject.SetActive(isDock);
                 dockOptions.gameObject.SetActive(isDock);
@@ -2079,6 +2090,12 @@ namespace CityForge.UI
                         return;
                     }
                 }
+                if (!randomizedSelected && behavior == LotScriptedBehavior.Harass &&
+                    !LotHarass.Supports(catalog.Find(character.assetId)?.prefab))
+                {
+                    error.text = "Choose Street Hooligan or a compatible character.";
+                    return;
+                }
                 if (!session.Lot.objects.Contains(character)) return;
                 settings.scriptedBehavior = randomizedSelected ? LotScriptedBehavior.None : behavior;
                 if (settings.scriptedBehavior == LotScriptedBehavior.DockWorker)
@@ -2100,7 +2117,9 @@ namespace CityForge.UI
                 session.Edit(_ => character.characterScript = settings);
                 CloseAssetPopup();
                 viewport.RestartCharacterPreview(character.id);
-                Refresh(settings.scriptedBehavior == LotScriptedBehavior.Shopkeeper
+                Refresh(settings.scriptedBehavior == LotScriptedBehavior.Harass
+                    ? "Harass assigned · follows and scares pedestrians in the evening."
+                    : settings.scriptedBehavior == LotScriptedBehavior.Shopkeeper
                     ? "Shopkeeper assigned · uses the nearest marked pedestrian entrance."
                     : "Character behavior applied.");
             }
@@ -2127,7 +2146,8 @@ namespace CityForge.UI
             if (drawingPath) FinishGroundPath(false);
             if (drawingFence) FinishFencePath(false);
             var frame = CreatePicker("Lot Textures", "Search textures", out var search);
-            CreatePickerResults(frame, 235);
+            Control(frame, "Texturize · Polygon brush", 20, 236, 520, OpenTexturePaint);
+            CreatePickerResults(frame, 282);
             bool overlay = overlayBrush != null;
             var textureWealth = LotWealth.None;
             Button baseTab = null, overlayTab = null, one = null, four = null;
@@ -3491,6 +3511,7 @@ namespace CityForge.UI
 
         private void Save(LotType type)
         {
+            if (viewport) viewport.EndTexturePaint();
             if (!PlayerMode && LotClassification.FindCategory(session.Lot.category)?.id == "industrial")
             {
                 if (type == LotType.Zoning) type = LotType.Playable;
@@ -3562,6 +3583,7 @@ namespace CityForge.UI
 
         private void Refresh(string message = null, bool rebuildPreview = true)
         {
+            if (rebuildPreview && viewport && viewport.TexturePainting) viewport.EndTexturePaint();
             confirmDiscard = false;
             if (!lotOpen) return;
             if (rebuildPreview) ClearRepeat();

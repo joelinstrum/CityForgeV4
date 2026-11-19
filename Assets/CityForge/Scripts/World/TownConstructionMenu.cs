@@ -166,6 +166,7 @@ namespace CityForge.World
 
         private void CloseTownSection()
         {
+            CancelTexturePaint();
             CancelParkTreeBrush();
             CancelStreetscape();
             SetDetonate(false);
@@ -217,6 +218,7 @@ namespace CityForge.World
             if (section != TownSection.Transport) lastRepaveSurface = null;
             if (section == TownSection.Zones && townSection == section && townPanel && !townPanel.gameObject.activeSelf)
             {
+                CancelZonedBlock(false); zoneToolArmed = false;
                 CancelZoneDrag();
                 townPanel.gameObject.SetActive(true);
                 return;
@@ -232,16 +234,16 @@ namespace CityForge.World
             float width = section switch
             {
                 TownSection.Transport => 1120,
-                TownSection.Zones => 850,
+                TownSection.Zones => 1460,
                 TownSection.Parks => 820,
                 _ => 560
             };
-            townPanel = FounderRect(townToolbar, "Town tool panel", new Vector2(0, 92), new Vector2(width, section == TownSection.Parks ? 376 : 276));
+            townPanel = FounderRect(townToolbar, "Town tool panel", new Vector2(0, section == TownSection.Zones ? 120 : 92), new Vector2(width, section == TownSection.Zones ? 684 : section == TownSection.Parks ? 376 : 276));
             townPanel.anchorMin = townPanel.anchorMax = townPanel.pivot = new Vector2(.5f, 0);
-            StyleTownPanel(townPanel, TownPanelColor);
-            if (section != TownSection.Transport)
+            if (section != TownSection.Zones) StyleTownPanel(townPanel, TownPanelColor);
+            if (section != TownSection.Transport && section != TownSection.Zones)
                 FounderText(townPanel, category.name, new Vector2(0, section == TownSection.Parks ? 163 : 113), new Vector2(440, 34), 25).color = TownGold;
-            TownButton(townPanel, lotFont, "×", (int)width - 47, -9, 36, CloseTownSection);
+            if (section != TownSection.Zones) TownButton(townPanel, lotFont, "×", (int)width - 47, -9, 36, CloseTownSection);
 
             switch (section)
             {
@@ -824,6 +826,10 @@ namespace CityForge.World
                 ParkTreeCard("Add Trees", "Scatter random trees", -266, () => ArmParkTreeBrush(false));
                 ParkTreeCard("Place a Tree", "Choose a tree to plant", 0, OpenParkTreePicker, single: true);
                 ParkTreeCard("Remove Trees", "Brush away individual trees", 266, () => ArmParkTreeBrush(true), remove: true);
+            }
+            if (parks && !agriculture)
+            {
+                var paint = TownButton(townPanel, lotFont, "▧ Texturize", 610, -9, 145, OpenTexturize);
             }
             if (parks)
                 TownButton(townPanel, lotFont, agriculture ? "‹ Parks" : "Agriculture", 18, -9, 146, () =>

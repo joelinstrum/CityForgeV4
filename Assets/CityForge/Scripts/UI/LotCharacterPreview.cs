@@ -18,6 +18,7 @@ namespace CityForge.UI
             public string assetId, idle;
             public Actor partner;
             public LotShopkeeper shopkeeper;
+            public LotHarass harass;
             public bool talking, onDeck;
             public readonly Queue<Vector2> route = new Queue<Vector2>();
 
@@ -113,6 +114,8 @@ namespace CityForge.UI
             actor.animator = view.GetComponentInChildren<Animator>();
             actor.requestedAnimation = null;
             actor.shopkeeper = null;
+            actor.harass = actor.settings.scriptedBehavior == LotScriptedBehavior.Harass && LotHarass.Supports(view.gameObject)
+                ? new LotHarass(view, item.yaw, false) : null;
             if (actor.settings.scriptedBehavior == LotScriptedBehavior.Shopkeeper &&
                 LotShopkeeper.TryEntrance(lot, catalog, item.position, growablePreview, out var door, out var forward))
                 actor.shopkeeper = new LotShopkeeper(view, asset, door, forward, _ => 0f, preview: true);
@@ -121,7 +124,7 @@ namespace CityForge.UI
                 actor.route.Clear();
                 actor.wait = 0;
             }
-            if (!paused && actor.settings.configured)
+            if (!paused && actor.settings.configured && actor.harass == null)
                 actor.Animate(actor.talking ? "FoldArms" : actor.idle);
         }
 
@@ -171,7 +174,7 @@ namespace CityForge.UI
             actor.talking = false;
         }
 
-        public void Tick(float delta, ICollection<string> dragged)
+        public void Tick(float delta, ICollection<string> dragged, bool evening = true)
         {
             if (delta <= 0) return;
             previewTime += delta;
@@ -179,6 +182,12 @@ namespace CityForge.UI
             {
                 var actor = pair.Value;
                 if (!actor.settings.configured) continue;
+                if (actor.harass != null)
+                {
+                    if (!evening) actor.harass.Stop();
+                    else if (dragged?.Contains(pair.Key) != true) actor.harass.Tick(delta);
+                    continue;
+                }
                 if (actor.shopkeeper != null)
                 {
                     if (dragged?.Contains(pair.Key) == true) actor.shopkeeper.ShowForEditing();

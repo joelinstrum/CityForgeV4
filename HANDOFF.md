@@ -1,3 +1,531 @@
+# CityForge V4 session wrap · November 18, 2026
+
+Read AGENTS.md, then this summary before using the historical entries below. This
+summary is authoritative where earlier step-by-step notes describe superseded behavior.
+
+## Repository and delivery
+
+- Project: /Users/joelinstrum/dev/CityForge - V4
+- Unity:6000.1.12f1. Branch:feature/r2-low-wealth-import.
+- Base:main at98c8ec7 (merged PR25). Session changes are being delivered as one PR;
+  consult GitHub for its current merge status rather than assuming it was merged.
+- Public repository is source-only. All prepared/licensed models, masks, textures,
+  catalogs, generated animation assets and saved maps remain in the private workflow.
+- Original player maps and lot libraries were not modified for QA. Unity was stopped
+  at MainMenu for the final source refresh. Do not automatically regenerate a region.
+
+## Completed and current behavior
+
+1. Ten R2 low-wealth Founders buildings imported locally, with reduced LODs, window
+   emission and width/height/depth in meters. Six had removable detached artifacts.
+   Low Wealth Res Trio2 is now25% larger:16.719m wide ×7.991m deep ×11.250m high.
+2. R1/R2/R3 growth has no progression/population/service unlock requirements. Matching
+   saved layout, wealth/density, frontage, dry ground and physical fit still apply.
+3. Four Founders low-wealth pedestrians now serve R2/R3 too. Hooligan walking loops
+   are repaired. Harass is an assignable nonviolent script: intermittent raised arms,
+   evening-only bounded pursuit, faster walking, frightened pedestrians and cheap
+   visibility/target checks. Cmd+S → Hooligan harass is a60-second camera-follow test
+   that bypasses evening. Esc ends it; Esc no longer navigates back to the region.
+4. Low-wealth R2/R3 frontage gets2m soft dirt walking paths. Founders streets have
+   one-tile4m roadways, using Dirt, Cobblestone or Weathered Brick.
+5. Zones uses the dark/gold modal. Fixed sizes create12-tile frontages in two outward
+   back-to-back rows:2×2=12lots,3×3=8lots,4×4=6lots. Outside dirt streets are automatic.
+   Overlapping stamps preserve old parcels/buildings/roads and add only complete free
+   lots. Corner joins now retain the full road width. Auto and Erase remain available.
+6. Tab cycles45-degree steps. Cardinal angles use normal persistent zoning; diagonal
+   angles directly place matching saved growable layouts as native rotated lot records.
+   The user confirmed diagonal appearance AND connections to manual roads work well.
+7. A lot entrance marker is a placement guide. Authored door metadata is used when
+   present; otherwise the front-edge midpoint is inferred. Missing doors no longer
+   disqualify the entire growable building list. Physical fit remains enforced.
+8. Texturize is available in Parks and Lot Editor → Textures → Texturize · Polygon
+   brush. Click an outline, click its first marker to close, then spray/erase within
+   the hard mask with a soft brush. New boundary keeps the paint; Done/Esc hides guides.
+   Paint is stored in sparse compressed32m weight tiles at25cm resolution, up to8
+   materials per tile. It is not a mesh per polygon/stroke. Persisted instances share
+   weight textures. District paint is world-XZ; lot paint is local and follows45° lots.
+   The user confirmed painting works nicely. The last fix replaces hidden six-item
+   pages with an All-default scrolling palette, All/Natural/Paving filters, a scrollbar
+   and total count. All22 currently available Lot Editor path textures are accessible.
+   See Documentation/03_Technical/Texture_Paint.md for limits and render/data details.
+
+## Explicit remaining work / next-session candidates
+
+- Persistent DIAGONAL EMPTY ZONING / REGROWTH is not implemented. Diagonal stamps use
+  matching built lot records and construction animation; demolition does not leave a
+  diagonal growable parcel. Preserve this distinction; do not claim it is finished.
+- Police dispatch / offender disappearance is a future design. Harass currently has
+  no violence, damage, police arrival, arrest, crime economy or off-district simulation.
+- User feedback on the new full scrolling Texturize palette is pending. There is no
+  reported outstanding paint bug. Keep its polygon hard and brush soft as requested.
+- Old already-saved clipped street segments are not retroactively repaired.
+- R3 growth support does not invent production R3 models. Other C2/C3/industrial
+  growth was not enabled by this residential work.
+
+## Validation and how to resume
+
+- Isolated project:/Users/joelinstrum/Documents/Codex/2026-11-15/we/work/gazebos/CityForgeQA
+  ProductName:CityForge Holly Brook QA. Do not substitute the normal player data path.
+- Scratch/logs:/Users/joelinstrum/Documents/Codex/2026-11-18/ple/work
+  Visuals:/Users/joelinstrum/Documents/Codex/2026-11-18/ple/outputs
+- Source is synced to QA with rsync -a Assets/CityForge/Scripts/ <QA>/Assets/CityForge/Scripts/
+  Do not delete its disposable diagnostic wrappers. Several wrappers are intentionally
+  QA-only, not public source. Resource shader:UI/TexturePaintGround must be copied too.
+- Batch editor:/Applications/Unity/Hub/Editor/6000.1.12f1/Unity.app/Contents/MacOS/Unity
+  Use -batchmode -projectPath <QA> -executeMethod <Class>.Run -quit -logFile <scratchlog>.
+- Passed:residential growth, pedestrian loops/pools, Harass scheduling and follow,
+  Founders streets/footpaths,108 block geometry combinations,12 overlap/corner cases,
+  twelve diagonal size/angle cases and native rotation save roundtrip,192 entrance
+  guide alignments, and instantiated Trio2 size/LOD/emission checks.
+- Latest TexturePaintQA.Run passes concave masks, blend/erase, eligibility, layer cap,
+  corrupt-data rejection, compression,4rotations, undo/redo, actual .cflot/.cfregion
+  file roundtrips, both menus, lot tool arm/close, exact full palette count, scrolling,
+  fixed mesh counts, shader/render review and paint persistence without the outline.
+- These are targeted isolated checks plus the user's in-game feedback, not a full
+  packaged-player build or live-town performance benchmark. No GitHub CI is configured.
+
+--- Historical implementation notes follow; newer summary above takes precedence ---
+
+# CityForge V4 handoff · November 18, 2026 · Full Texturize palette browsing
+
+User could not find many Lot Editor path textures in Texturize. Both pickers already
+used LotPathMaterial.All/IsAvailable; the first version hid most materials behind
+Natural/Paving tabs and six-item pages. TexturePaintTool now opens on All, has All/
+Natural/Paving filters, and shows every eligible material in a scrolling thumbnail
+grid with an explicit scrollbar and total count. No page truncation. Current private
+library has22 available materials. Paint data/material behavior is unchanged.
+
+Isolated QA checks exact palette count against the Lot Editor source collection,
+scrollable content, existing paint/save/rotate/menu checks and a rendered review.
+Main Unity was stopped at the menu before source editing; no live map was changed.
+
+--- Previous polygon-paint implementation ---
+
+# CityForge V4 handoff · November 18, 2026 · Texturize polygon painting
+
+Implemented the user's polygon-mask texture painting idea with existing path textures.
+Parks → Texturize; Lot Editor → Textures → Texturize · Polygon brush. Click marker
+points, click the first to close, then hold to spray. Natural/Paving swatches, brush
+diameter/falloff, Paint/Erase, New boundary, Undo stroke and Done controls share a
+single dark/gold panel. Done/Esc hides all editing guides while preserving paint.
+PointWirePath/PointWireGeometry supply closed guide state and polygon validation.
+
+GroundPaintData/Renderer store compressed sparse tile weight maps, eight materials
+per32m tile at25cm resolution. One terrain mesh per tile, no polygon/stroke meshes.
+Identical persisted weight textures are shared across repeated lot instances. District
+paint is world-local in SavedRegionInfo.groundPaint; lot paint is local in LotDefinition.
+groundPaint, rotates with lot edits and with native45-degree placement. Water/camp/
+district eligibility applies to district brush samples. Existing terrain baselines,
+private art/catalogs and player saves were preserved. Live Unity was already stopped
+at the main menu before source edits, so no transient map checkpoint was needed.
+
+QA: isolated Unity checks pass for hard concave masks, soft blending/erase, multiple
+textures, palette limit, data validation, compression, four rotations, undo/redo,
+actual region and lot-library file roundtrips, both menu entries, lot-tool arm/close,
+shader rendering, fixed tile mesh counts and paint visible after the boundary closes.
+Rendered review images are under the current chat's outputs/Texturize. Test-only lots
+and region snapshots were deleted after checks. See Documentation/03_Technical/
+Texture_Paint.md for architecture/limits. This is a first version for user testing.
+
+--- Previous experimental diagonal neighborhoods ---
+
+# CityForge V4 handoff · November 18, 2026 · Experimental 45-degree blocks
+
+User requested trying45-degree pre-built neighborhood rotation. Tab now cycles eight
+angles. Even steps retain the existing square-grid zoning implementation. Odd steps
+use TownDiagonalBlocks: rotate parcel centers and the street loop45 degrees around
+the quarter-turned plan center, preview actual rotated lot footprints, validate actual
+oriented lots, clip occupied streets, join their corners, and place native DistrictLotRecord
+objects with diagonalRotation=true. Existing save support already preserves these
+records and their diagonal angles; no schema or old save conversion was needed.
+
+EXPERIMENT LIMIT: diagonal stamps materialize matching authored growable layouts
+and buildings directly, then play the normal construction animation. They do not leave
+persistent diagonal empty zoning and will not automatically regrow after demolition.
+They require an eligible ordinary (non-corner) growable layout of the selected size,
+zone and wealth. Unsupported combinations show a matching-layout hint. The user
+was told this limitation before completion. Grid-aligned stamps still behave as before.
+No existing region or lot library was modified. Growth templates are cached while the
+tool is armed, invalidated on its next activation. Both roads and lots validate before
+mutation, with native road/lot collision, water, grade, camp and district checks.
+
+Isolated Unity QA passes all twelve size/diagonal-angle combinations: exact lot counts,
+45-degree street geometry, rotated preview coverage, partial overlap, and native lot
+rotation JSON roundtrip. Existing corner and overlap regressions also pass. QA used
+temporary uniquely identified layouts in its isolated library and removed them after.
+Interactive appearance and diagonal pedestrian routing still need an in-game check.
+
+--- Previous growable entrance guides ---
+
+# CityForge V4 handoff · November 18, 2026 · Growable entrance guides
+
+The user clarified that a growable layout entrance is a general guide and should not
+require pre-authored per-building doors. Removed the Missing entry point rejection
+from LotGrowableBuildings.PlacementProblem. Authored doors still align precisely;
+missing/dimensions-only metadata now infers the midpoint of the model's front footprint
+edge using FrontageOffset, then rotates/translates it onto the layout entrance guide.
+No-guide layouts retain buildingCenter placement. Physical fit/collision checks remain.
+The building picker no longer treats missing door metadata as a special exclusion;
+the coordinate heading now says Entrance guide coordinates. Reopen the picker to
+recalculate eligibility. No player lot or building-info records were changed.
+
+Isolated Unity checks passed192 combinations across frontage, quarter-turn, reverse
+facing, absent/dimensions-only/exact metadata, guide alignment, no-guide placement,
+and rejection of actual out-of-lot fits. Temporary metadata used unique IDs in QA's
+isolated persistent data and was cleaned up.
+
+--- Previous Res Trio 2 enlargement ---
+
+# CityForge V4 handoff · November 18, 2026 · Res Trio 2 enlargement
+
+User requested Low Wealth Res Trio 2 enlarged uniformly by25%. Catalog span is now
+16.719370m (previously13.375496m). Prepared placement dimensions are width16.719m,
+height11.250m, depth7.991m. Updated the local ignored catalog and its ImportInfo.json;
+near/distant meshes, UVs and window masks stay the same, with runtime fit scaling
+handling both LODs. LotCatalogSetup now refreshes this existing entry when its footprint
+changes, so future catalog preparation retains the enlargement. No lot definitions or
+player saves were rewritten. Reselect/reopen a preview to rebuild an already instantiated
+model at the new size.
+
+Isolated Unity verification passed: actual instantiated model bounds match all three
+new dimensions within1cm; catalog measurements, distant prefab and emission map
+remain connected. Main Unity scripts refreshed and compilation completed.
+
+--- Previous street corner completion ---
+
+# CityForge V4 handoff · November 18, 2026 · Street corner completion
+
+New neighborhood extensions now join touching proposed street runs into continuous
+polylines before meshing, preserving mitered outside corners. The previous overlap
+implementation split every side into a separate flat-ended ribbon, leaving half-width
+squares of grass exposed at turns. Open endpoints meeting an existing perpendicular
+street now reach its far edge by half that street's width, closing shared-road corners.
+These changes affect newly prepared/committed stamps; existing saved road records are
+not retroactively rewritten. Normal final road clearance still validates the completed
+geometry. Building triangle clearance uses the same physical 1mm tolerance as other
+road/lot checks to avoid false wall collisions from floating-point miter arithmetic.
+
+Isolated Unity checks pass for all endpoint orientations, outer-corner mesh coverage,
+closed-loop seams, preservation of intentional gaps, shared-road endpoint completion,
+and all twelve overlap size/rotation fixtures (including building overhangs).
+No player save was edited. Work remains local on feature/r2-low-wealth-import.
+
+--- Previous overlap implementation ---
+
+# CityForge V4 handoff · November 18, 2026 · Overlapping neighborhood extensions
+
+The user confirmed block zoning works but requested overlapping extensions after a
+street/building clearance rejection beside an existing neighborhood. PrepareZonedBlock
+now keeps complete free parcels from a stamp, skipping candidate parcels that overlap
+existing zoning, developed lots, or roads. Existing cells, anchors, facing, wealth and
+buildings are untouched. Automatic streets are tested in one-tile spans and omit spans
+crossing old zoning/lot footprints or actual building geometry. Clear spans merge before
+normal road reuse; entirely clear blocks retain the original closed street ring.
+The preview shows only new complete parcels and new street pieces, with the actual
+new-lot count. Click repeats the same preparation and atomically validates the road
+batch before adding cells. Fully occupied stamps give a no-room message. Dry-ground,
+district, camp and capacity restrictions still apply to added infrastructure.
+
+Isolated QA exercises all 2×2/3×3/4×4 rotations: clear rings, partial zoning overlap,
+developed-lot overlap, zoning in the street margin, building overhang clearance,
+existing street reuse, occupied-stamp rejection and no existing-state mutation.
+No player map or library is saved. Changes remain local on the feature branch.
+
+--- Previous complete-block implementation (overlap rejection superseded above) ---
+
+# CityForge V4 handoff · November 18, 2026 · Back-to-back zoning blocks
+
+Fixed Zones sizes now place complete blocks, following the user's clarification that
+12 means tiles along each street frontage: 2×2 has six lots per row (12 total),
+3×3 has four per row (8 total), and 4×4 has three per row (6 total). Two adjacent
+rows face outward, with no street between their backs. Each block creates a closed
+one-tile Founders dirt street ring outside the zoning. Existing road spans are reused
+through the normal road clipping/commit path. Auto retains legacy drag zoning; Erase
+arms the existing erase tool. Tab rotates the preview; Esc returns to the Zones panel.
+
+ZonedBlockPlan builds exact parcel anchors and facing metadata for every rotation.
+TownZonedBlocks validates zoning, terrain, lot conflicts, district boundaries and the
+street proposal before committing the road batch and cells. Existing zoning in the
+block or street margin is rejected. Preview rebuilds only on hovered-cell, rotation or
+navigation-state changes. Save validation now accepts exact footprints and facing for
+commercial/industrial cells too. Growth still requires a matching authored zoning
+layout; this does not invent templates for unsupported sizes or unlock C2/C3/industry.
+No player map or lot library was edited. Work remains local on feature/r2-low-wealth-import.
+
+Verification: isolated Unity QA geometry checks cover 108 size/rotation/zone combinations,
+parcel counts, complete coverage, outward facings, save validation and street ring geometry.
+Modal controls are checked in the isolated QA project. Full interactive placement and
+subsequent building growth should also be checked in-game.
+
+--- Previous appearance-only implementation (superseded by utility wiring above) ---
+
+# CityForge V4 handoff · November 18, 2026 · Zones modal visual redesign
+
+The user explicitly requested an appearance-first redesign from Downloads/Dark Zones
+Selection Panel.png, with utility wiring deferred. Zones now opens a large rounded
+dark/gold panel above the existing toolbar, with serif headings, Residential/Commercial/
+Industrial icons, Auto/2×2/3×3/4×4 footprint cards, Low/Medium/High density cards,
+Erase and Select & Place footer buttons and a live visual selection summary.
+Footprint counts say tiles rather than lots to match the game's one-lot footprint model.
+
+Type/size/density callbacks only update local UI highlights and summary. Select & Place
+and Erase are deliberately unconnected in this visual pass; the former compact zoning
+picker is replaced. No new zoning utility, growth rule, erase behavior or saved-map
+mutation was introduced. Hook the new controls to the existing zoning methods in a
+later user-authorized utility pass. The close action still closes the town panel.
+
+TownZoneModal.cs holds the layout. ZoneModalArtwork.cs provides cached native rounded
+skins and gold code-drawn icons, without new licensed/raster art dependencies. Existing
+bottom toolbar assets remain unchanged. A single owned serif font is reused per view.
+The Zones panel has its own size/position and title/close button; other town sections
+retain their existing layout.
+
+Isolated Unity QA at the 1920×1080 game reference verifies all icon meshes render,
+13 controls exist, selection highlights/footer update, and Place/Erase do not arm
+zoning. Two selection-state renders were visually reviewed and are in this chat's
+outputs/Zones-Modal. The main editor compiled; original region/lot libraries were not
+saved. The user should review the appearance before the utility pass.
+
+---
+
+# CityForge V4 handoff · November 18, 2026 · Founders street surfaces
+
+The Transport/Roads popup's Streets category now offers Dirt Street, Cobblestone
+Street and Weathered Brick Street in the Founders era. Each carriageway is one tile
+(4m) wide; sidewalks remain additional roadside space and honor the low-wealth
+R2/R3 dirt-footpath treatment. Dirt Street retains its existing stable ID and
+WagonRoadAlbedo texture/along-road mapping. New IDs are founders-cobblestone-street
+and founders-brick-street, appended without changing older road indices or IDs.
+They reuse cobblestone-road-9 and damaged-brick materials, with source-only fallbacks.
+
+All three support commercial frontage, normal road tools, extensions, repaving,
+sidewalk generation, saved-record validation and loading. The popup uses actual
+material swatches, and later-era Paved Street remains available in its existing eras.
+The commercial frontage hint now asks for a street rather than specifically dirt.
+
+FoundersStreetChecks verifies width, IDs/indices, frontage, classification and save
+roundtrip. Isolated QA uses the actual road builder/materials and menu callbacks,
+verifies Founders and later-era choices, and renders the surfaces and menu. Outputs:
+this chat's outputs/Founders-Streets. No player maps or lot libraries were saved.
+
+---
+
+# CityForge V4 handoff · November 18, 2026 · Wider neighborhood footpaths
+
+At the user's request, low-wealth R2/R3 dirt walking strips are now 2m wide.
+The edge feather remains approximately 0.36m, leaving about 1.3m of worn center.
+Existing plank/bluestone widths remain unchanged. Frontage coverage admits the outer
+2m lot band so the widened strip does not disappear at a flush road frontage.
+Width/ribbon, blending, adjacency and street-replacement QA passed and previews were
+regenerated in outputs/Neighborhood-Footpaths. No player saves were written.
+
+---
+
+# CityForge V4 handoff · November 18, 2026 · R2/R3 low-wealth walking paths
+
+Roadside sidewalk space beside low-wealth R2/R3 lots now displays a softly blended dirt
+walking path using the existing ResidentialFootpath/packed-earth palette. Other density,
+wealth and opposite-side sidewalk defaults remain unchanged. Corner lots contribute
+both street frontages; lot rotations and curved road cross sections remain supported.
+The band uses the existing 1m shoulder next to the pedestrian route rather than painting
+terrain or editing authored lot paths. Existing towns acquire it on district load.
+
+`NeighborhoodFootpaths` derives frontage coverage from presented lots. Coverage feathers
+at outer frontage ends and sums adjoining lots to avoid seams. `RefreshDistrictSidewalks`
+filters nearby frontages, reuses district materials, prunes transparent-only triangles,
+and inversely masks existing planks/bluestone where the dirt band replaces them.
+`LotPathBlend` has opt-in vertex opacity and lightly varied feather width; default
+properties preserve existing road/lot path appearance. Dirt remains partially transparent
+to reveal the real ground. No per-frame path rebuilding, save schema, terrain repaint,
+forest change or finish reroll is introduced.
+
+`NeighborhoodFootpathChecks.Run` verifies density/wealth, all four frontages/eight lot
+rotations, road side, feathered ends, adjoining lots and corner frontages. Isolated QA
+uses the real sidewalk builder and R2 models, verifies 1m ribbon coordinates and shader
+compilation, and checks partial plank-sidewalk replacement on the correct side.
+Preview outputs: this chat's outputs/Neighborhood-Footpaths. No original map or lot
+library was saved. Live player-town visual acceptance remains with the user.
+
+---
+
+# CityForge V4 handoff · November 18, 2026 · Smooth pursuit and intermittent gestures
+
+The Hooligan follow jitter came from snapping the camera to movement occurring at
+10Hz. Pursuit now advances continuously along previously cleared segments while
+keeping target decisions infrequent. DistrictHarass runs before the camera's LateUpdate.
+The Hooligan camera uses a 0.16-second SmoothDamp; Eagle follow remains direct and
+unchanged. New follow targets snap once to frame the encounter, then follow smoothly.
+
+Chase speed is 2.4m/s (ordinary ambient walkers approximately 1m/s; frightened walkers
+use 1.6× their own speed). Walk playback is faster. Raised-arm gestures blend up/down
+for about two seconds in each eight-second cycle, leaving normal walking arms between
+bursts. Raised-arm pose calculations are skipped during the lowered interval. Evening
+restrictions, temporary Cmd+S test bypass, Esc cancellation and scene collision
+certificates remain intact. No additional geometry probes occur during interpolation.
+
+HarassChecks verifies repeated raised/lowered periods. HarassFollowChecks verifies
+smooth camera convergence, continuous movement faster than a frightened pedestrian,
+existing scheduling/collision/cancellation rules and steady allocation checks.
+The validation is isolated; the user's live town remains the visual acceptance target.
+
+---
+
+# CityForge V4 handoff · November 18, 2026 · Follow camera and Escape
+
+The temporary `Hooligan harass` command now follows its Hooligan at close Zoom 0.
+Escape cancels this test before other modal/tool handlers run, clears its test-only
+pedestrian fright, closes any district-script dialog, and releases the camera where
+it stopped. Timeout/replacement/district departure also release the camera target.
+No camera restoration teleport or district navigation occurs on test cancellation.
+
+Escape no longer implicitly calls ShowOverview or ReturnToMenu from the main view.
+It still dismisses dialogs, selections and active tools. Use the explicit navigation
+buttons to leave a district or return to the menu. Eagle follow remains available
+when no Hooligan test is active.
+
+Isolated HarassFollowChecks verifies a moving target updates camera focus, follow
+forces close zoom, cancellation is idempotent and preserves SelectedDistrict, test
+fright is cleared, and natural expiry releases the camera without navigation.
+
+---
+
+# CityForge V4 handoff · November 18, 2026 · Hooligan district test command
+
+Cmd+S > `Hooligan harass` starts one temporary unarmed Hooligan encounter for 60
+seconds near a visible walking pedestrian, bypassing the evening restriction for
+that test only. The district clock is unchanged. The victim's hurry response also
+honors the short test override. Normal authored Harass scripts remain evening-only.
+The command requires an open district, a close view and a suitable clear approach to
+a walking pedestrian near the camera. Feedback explains missing prerequisites.
+Repeated runs replace the previous temporary Hooligan; expiry or leaving the district
+removes it. The actor is not added to PlacedActors/PlacedLots and cannot enter a save.
+
+HarassFollowChecks also verifies the Noon test follows/scares without changing the
+clock, has a cleanup deadline and leaves saved population/lot collections untouched.
+
+---
+
+# CityForge V4 handoff · November 18, 2026 · Evening Harass pursuit
+
+Harass now performs its raised-arm dance and bounded random pedestrian following
+only during Evening. Other phases lower the arms and idle at the current position.
+The Lot Editor preview also gates its dance on the Evening preset. Targets are active,
+walking, non-vehicle pedestrians within 24m; encounters are transient and not saved.
+A chase lasts at most 12 seconds before choosing again, stops 2m away, and uses short
+0.5m collision-certified segments. New lot/road/forest/water changes invalidate the
+current movement certificate; blocked approaches wait rather than find global detours.
+Nearby victims turn away along their retained circuit and hurry for three seconds at
+1.6× walking speed, without damage, combat, route rebuilding or police response.
+
+Performance policy: target searches occur no more often than every four seconds,
+inspect at most eight randomly sampled entries, and allocate no candidate lists.
+Movement runs at 10Hz; short segment certificates are reused between checks. Scare
+line-of-sight checks are limited to once per 1.5 seconds. Visual harassment pauses
+outside the close camera view/Zoom 0–2; authored character animators use visibility
+culling. There is no background/off-district crime simulation.
+
+`HarassFollowChecks.Run` passes isolated evening-only pursuit, standoff, retained-route
+flight direction, capped sampling/probes, offscreen pause, vehicle exclusion, new
+blocker rejection and 10,000 steady active/inactive updates without managed allocation.
+These checks are not a live-town FPS benchmark. The original saves/libraries were
+not written. Police arrival and disappearing offenders remain future work.
+
+---
+
+# CityForge V4 handoff · November 18, 2026 · Harass character script
+
+`LotScriptedBehavior.Harass` appends saved enum value 4; previous values remain intact.
+Assign through Character Script > Scripted > Harass. The Hooligan uses a looping
+in-place shuffle with raised arms, wrist/arm waves and torso/heading sway. The behavior
+is stationary and nonviolent; it does not chase, attack or move through other lots.
+No crime economy, police dispatch, arrest or disappearance system is implemented yet.
+
+`LotHarass` shares the pose behavior between `LotCharacterPreview` and placed-lot
+`DistrictHarass`. Preview refreshes use authored yaw rather than accumulating sway;
+paused previews defer animation startup. Selection rejects unsupported arm skeletons.
+`HooliganHarassSetup` prepares a private unarmed mesh for this behavior, preserving
+source skinning, UVs, bones and animation data. The source character and other behaviors
+retain their original art. The generated HarassUnarmed.asset remains under ignored
+Resources/Lots/V3Characters/Hooligan. Prepare local catalog rebuilds it if missing.
+
+`HarassChecks.Run` checks enum compatibility, save roundtrip, unarmed mesh assignment,
+raised hands and varied motion over 20 seconds without moving the authored origin.
+Isolated preview renders are in this chat's outputs/Harass. Police arriving and making
+the character disappear is the user's intended later design, not a completed feature.
+
+---
+
+# CityForge V4 handoff · November 18, 2026 · Founders pedestrians and looping walks
+
+The four low-wealth Founders pedestrians are present in the private catalog:
+Cook, Stout Townsperson, Townsperson, Privateer. Their ambient pool had been limited
+to R1/C1; R2/R3 now use it too. Wealth and era matching remain unchanged. Existing
+established actors still keep their routes on unrelated lot edits; reopen the district
+to rebuild an already populated neighborhood with the corrected pool.
+
+Street Hooligan's Walk state referenced `Armature|preset:biped:walk` with loopTime=0,
+while another walk take had looping enabled. `AddCharacterModelState` now repairs the
+actual bound clip even when a Walk state already exists; it does not simply select
+the first matching take. Generated prefab/controller/FBX import settings remain private.
+`PedestrianTrafficChecks.Run` verifies all four characters spawn for low-wealth
+Founders R1/R2/R3/C1, preserves traffic identities on unrelated refreshes, and checks
+physical skeletal motion after multiple walk cycles for those four plus Hooligan.
+Isolated preview captures and verification live in the current chat's outputs/Pedestrians.
+No original region or lot library was saved by these checks.
+
+---
+
+# CityForge V4 handoff · November 18, 2026 · Residential density growth
+
+R1, R2 and R3 now enter the same Founders-era town-growth pipeline with no density
+progression, population, demand or service unlock. Matching saved zoning layouts and
+building density/wealth, dry usable space, street frontage and existing building-fit
+rules still apply. C1 behavior is preserved; other commercial/industrial growth is
+unchanged. R2/R3 now share residential exact-size parcels, authored-depth selection,
+wealth-boundary enforcement and automatic entry paths. Existing saved zoning is
+checked when reopening the district; no repaint or save migration is required.
+
+`ResidentialGrowthChecks.Run` verifies all residential densities, scheduling,
+parcel/wealth/density boundaries, exact-parcel save restoration and candidate selection.
+R3 candidate checks use a transient test tag because no production R3 models were
+supplied. The isolated QA library check copies ShantyTown I and verifies all five
+allowed R2 buildings plus the authored 3×3 parcel option. Original player lots and
+regions are untouched. See the local R2-Residential/Growth-Verification.txt output.
+
+---
+
+# CityForge V4 handoff · November 18, 2026 · R2 low-wealth residential imports
+
+Branch: `feature/r2-low-wealth-import`, based on merged PR #25 (`origin/main`).
+Ten private building imports from `/Users/joelinstrum/Downloads/low-wealth-residential-II`
+are registered as Founders-era Residential2 / Low wealth. Original archives are untouched.
+Private prepared assets live in `Resources/Lots/V3Buildings/R2*` with `Model.fbx`,
+`Distant.fbx`, `Color.jpg`, `Normal.jpg`, `Windows.png`, and `ImportInfo.json`.
+Detached artifact components were removed from six buildings; attached lean-tos,
+barrels, woodpiles and the collapsed façade remain. The misspelled source archive
+`low-welath-apartment-collapse` has a correctly spelled catalog ID.
+
+`LotAssetCatalogEntry.buildingDimensionsMeters` persists width X, height Y and depth Z
+at placement scale. The building-info editor uses these prepared defaults, retaining
+user overrides and its feet display. Sizes are architectural estimates because the
+source meshes are normalized, not survey measurements. Per-model private ImportInfo
+also records dimensions, triangle counts and removed artifact vertex counts.
+
+R2 uses the existing window-light behavior at evening/night, with daytime emission off.
+Selected front panes have UV masks retaining sash detail. Original color/normal maps
+remain intact. Near/distant tiers retain the same UVs and physical coordinates; the
+reductions retain 65% of source triangles after visual review, preserving
+roof/chimney and façade detail. Existing Zoom 0–2 / 3–5 switching applies. R2 zoning growth/tool availability
+is separate from importing these eligible catalog buildings; no zoning simulation
+expansion was introduced.
+
+Isolated QA and review outputs:
+`/Users/joelinstrum/Documents/Codex/2026-11-18/ple/outputs/R2-Residential`.
+No player region was loaded or saved. All model assets and the generated local catalog
+remain private/ignored; source changes only belong in Git.
+
+---
+
 # CityForge V4 handoff · November 18, 2026 · Extraction, deliveries and route caching
 
 Work on `feature/extraction-deliveries-and-route-caching`, based on `main` after merged PR #24.

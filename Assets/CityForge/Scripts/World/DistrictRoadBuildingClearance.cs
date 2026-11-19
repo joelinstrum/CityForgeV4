@@ -49,8 +49,11 @@ namespace CityForge.World
                     if (axis.sqrMagnitude < .0000001f) return true;
                     var projected = new Vector3(Vector2.Dot(a, axis), Vector2.Dot(b, axis), Vector2.Dot(c, axis));
                     float radius = Mathf.Abs(axis.x) * extent.x + Mathf.Abs(axis.y) * extent.y;
-                    return Mathf.Min(projected.x, Mathf.Min(projected.y, projected.z)) < radius &&
-                        Mathf.Max(projected.x, Mathf.Max(projected.y, projected.z)) > -radius;
+                    // Millimeter tolerance, as in lot/road clearance: miter arithmetic can
+                    // otherwise report a collision when a trimmed edge only touches a wall.
+                    float tolerance = .001f * axis.magnitude;
+                    return Mathf.Min(projected.x, Mathf.Min(projected.y, projected.z)) < radius - tolerance &&
+                        Mathf.Max(projected.x, Mathf.Max(projected.y, projected.z)) > -radius + tolerance;
                 }
             }
 
