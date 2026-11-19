@@ -1,3 +1,24 @@
+# CityForge V4 handoff · November 18, 2026 · Overlapping neighborhood extensions
+
+The user confirmed block zoning works but requested overlapping extensions after a
+street/building clearance rejection beside an existing neighborhood. PrepareZonedBlock
+now keeps complete free parcels from a stamp, skipping candidate parcels that overlap
+existing zoning, developed lots, or roads. Existing cells, anchors, facing, wealth and
+buildings are untouched. Automatic streets are tested in one-tile spans and omit spans
+crossing old zoning/lot footprints or actual building geometry. Clear spans merge before
+normal road reuse; entirely clear blocks retain the original closed street ring.
+The preview shows only new complete parcels and new street pieces, with the actual
+new-lot count. Click repeats the same preparation and atomically validates the road
+batch before adding cells. Fully occupied stamps give a no-room message. Dry-ground,
+district, camp and capacity restrictions still apply to added infrastructure.
+
+Isolated QA exercises all 2×2/3×3/4×4 rotations: clear rings, partial zoning overlap,
+developed-lot overlap, zoning in the street margin, building overhang clearance,
+existing street reuse, occupied-stamp rejection and no existing-state mutation.
+No player map or library is saved. Changes remain local on the feature branch.
+
+--- Previous complete-block implementation (overlap rejection superseded above) ---
+
 # CityForge V4 handoff · November 18, 2026 · Back-to-back zoning blocks
 
 Fixed Zones sizes now place complete blocks, following the user's clarification that
