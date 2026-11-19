@@ -171,6 +171,8 @@ namespace CityForge.World
                     width = ring.width, gridAligned = true, points = points };
             }
             streets.AddRange(clipped ? streetsLocal : UnpavedRoadPieces(ring));
+            JoinZonedStreetRuns(streets);
+            CompleteZonedStreetJunctions(streets);
             foreach (var street in streets)
             {
                 street.gridAligned = true;
@@ -180,6 +182,63 @@ namespace CityForge.World
                 if (problem != null) return problem;
             }
             return districtRoads.Count + streets.Count > MaxDistrictRoads ? "This region has reached its road limit." : null;
+        }
+
+        // Keep turns in one ribbon so its miter fills the outside corner. Splitting each
+        // side at the centerline leaves a half-width square missing at every turn.
+        internal static void JoinZonedStreetRuns(List<DistrictRoadRecord> streets)
+        {
+            bool changed;
+            do
+            {
+                changed = false;
+                for (int i = 0; i < streets.Count && !changed; i++)
+                for (int j = i + 1; j < streets.Count && !changed; j++)
+                {
+                    var a = streets[i]; var b = streets[j];
+                    if (a.closed || b.closed || a.width != b.width || a.surfaceId != b.surfaceId || a.district != b.district) continue;
+                    var first = a.points; var second = b.points;
+                    if (Near(first[^1], second[0])) { }
+                    else if (Near(first[^1], second[^1])) second = second.Reverse().ToArray();
+                    else if (Near(first[0], second[0])) first = first.Reverse().ToArray();
+                    else if (Near(first[0], second[^1])) { first = first.Reverse().ToArray(); second = second.Reverse().ToArray(); }
+                    else continue;
+                    a.points = first.Concat(second.Skip(1)).ToArray();
+                    if (Near(a.points[0], a.points[^1]))
+                    { a.closed = true; a.points = a.points.Take(a.points.Length - 1).ToArray(); }
+                    streets.RemoveAt(j); changed = true;
+                }
+            } while (changed);
+            static bool Near(Vector2 a, Vector2 b) => (a - b).sqrMagnitude < .0001f;
+        }
+
+        private void CompleteZonedStreetJunctions(List<DistrictRoadRecord> streets)
+        {
+            var existing = districtRoadMeshes.Keys.Select(road => (Road: road, Line: RoadCenterline(road))).ToArray();
+            foreach (var street in streets)
+            {
+                if (street.closed) continue;
+                var points = (Vector2[])street.points.Clone();
+                Complete(0, 1); Complete(points.Length - 1, points.Length - 2);
+                street.points = points;
+                void Complete(int end, int neighbor)
+                {
+                    var point = street.points[end];
+                    var outward = (point - street.points[neighbor]).normalized;
+                    float reach = 0;
+                    foreach (var (road, line) in existing)
+                    for (int segment = 0; segment < (road.closed ? line.Count : line.Count - 1); segment++)
+                    {
+                        var a = line[segment]; var b = line[(segment + 1) % line.Count];
+                        var direction = b - a;
+                        if (direction.sqrMagnitude < .0001f || Mathf.Abs(Vector2.Dot(direction.normalized, outward)) > .01f) continue;
+                        float t = Vector2.Dot(point - a, direction) / direction.sqrMagnitude;
+                        if (t < -.001f || t > 1.001f || (point - Vector2.Lerp(a, b, t)).sqrMagnitude > .0001f) continue;
+                        reach = Mathf.Max(reach, road.width * .5f);
+                    }
+                    points[end] = point + outward * reach;
+                }
+            }
         }
 
         internal string CommitZonedBlock(ZonedBlockPlan plan)

@@ -1,3 +1,22 @@
+# CityForge V4 handoff · November 18, 2026 · Street corner completion
+
+New neighborhood extensions now join touching proposed street runs into continuous
+polylines before meshing, preserving mitered outside corners. The previous overlap
+implementation split every side into a separate flat-ended ribbon, leaving half-width
+squares of grass exposed at turns. Open endpoints meeting an existing perpendicular
+street now reach its far edge by half that street's width, closing shared-road corners.
+These changes affect newly prepared/committed stamps; existing saved road records are
+not retroactively rewritten. Normal final road clearance still validates the completed
+geometry. Building triangle clearance uses the same physical 1mm tolerance as other
+road/lot checks to avoid false wall collisions from floating-point miter arithmetic.
+
+Isolated Unity checks pass for all endpoint orientations, outer-corner mesh coverage,
+closed-loop seams, preservation of intentional gaps, shared-road endpoint completion,
+and all twelve overlap size/rotation fixtures (including building overhangs).
+No player save was edited. Work remains local on feature/r2-low-wealth-import.
+
+--- Previous overlap implementation ---
+
 # CityForge V4 handoff · November 18, 2026 · Overlapping neighborhood extensions
 
 The user confirmed block zoning works but requested overlapping extensions after a
