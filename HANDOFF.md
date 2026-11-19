@@ -1,3 +1,22 @@
+# CityForge V4 handoff · November 18, 2026 · Growable entrance guides
+
+The user clarified that a growable layout entrance is a general guide and should not
+require pre-authored per-building doors. Removed the Missing entry point rejection
+from LotGrowableBuildings.PlacementProblem. Authored doors still align precisely;
+missing/dimensions-only metadata now infers the midpoint of the model's front footprint
+edge using FrontageOffset, then rotates/translates it onto the layout entrance guide.
+No-guide layouts retain buildingCenter placement. Physical fit/collision checks remain.
+The building picker no longer treats missing door metadata as a special exclusion;
+the coordinate heading now says Entrance guide coordinates. Reopen the picker to
+recalculate eligibility. No player lot or building-info records were changed.
+
+Isolated Unity checks passed192 combinations across frontage, quarter-turn, reverse
+facing, absent/dimensions-only/exact metadata, guide alignment, no-guide placement,
+and rejection of actual out-of-lot fits. Temporary metadata used unique IDs in QA's
+isolated persistent data and was cleaned up.
+
+--- Previous Res Trio 2 enlargement ---
+
 # CityForge V4 handoff · November 18, 2026 · Res Trio 2 enlargement
 
 User requested Low Wealth Res Trio 2 enlarged uniformly by25%. Catalog span is now

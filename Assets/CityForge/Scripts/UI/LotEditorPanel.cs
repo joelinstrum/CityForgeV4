@@ -1080,7 +1080,7 @@ namespace CityForge.UI
             bool autoPaths = layout.autoPaths;
             Choices("Auto Paths", new[] { "Off", "On" }, 485,
                 autoPaths ? 1 : 0, value => autoPaths = value == 1);
-            Label(frame, "Entrance coordinates", 20, 533, 260, 16);
+            Label(frame, "Entrance guide coordinates", 20, 533, 260, 16);
             var entranceX = SlotField("House X", 20, 565, layout.hasEntrance ? layout.entrance.x : (float?)null);
             var entranceZ = SlotField("House Z", 285, 565, layout.hasEntrance ? layout.entrance.y : (float?)null);
             var drivewayX = SlotField("Driveway X", 20, 608, layout.hasDriveway ? layout.driveway.x : (float?)null);
@@ -1230,14 +1230,14 @@ namespace CityForge.UI
                 : Array.Empty<LotAssetCatalogEntry>();
             var fit = eligible.ToDictionary(asset => asset.id,
                 asset => LotGrowableBuildings.PlacementProblem(lot, asset, catalog, out _, enforceFit: true));
-            bool CanSelect(string problem) => problem == null || (overrideFit.isOn && problem != "Missing entry point");
+            bool CanSelect(string problem) => problem == null || overrideFit.isOn;
             var selectedIds = new HashSet<string>(eligible.Where(asset => CanSelect(fit[asset.id]) &&
                 layout.AllowsGrowthBuilding(asset.id)).Select(asset => asset.id));
             int y = 6;
             foreach (var asset in eligible)
             {
                 string problem = fit[asset.id];
-                string label = problem == null ? asset.label : $"{asset.label} · {(problem == "Missing entry point" ? problem : "Does not fit")}";
+                string label = problem == null ? asset.label : $"{asset.label} · Does not fit";
                 var row = Checkbox(assetList, asset.id, label, 6, y, rowWidth, selectedIds.Contains(asset.id),
                     rowHeight: rowHeight, trailingWidth: previewSize + 16);
                 row.interactable = CanSelect(problem);

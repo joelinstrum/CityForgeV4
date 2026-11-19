@@ -54,14 +54,17 @@ namespace CityForge.Lots
             var info = LotBuildingInfo.Load(asset.id);
             var entry = info != null && !info.dimensionsOnly ? info : null;
             building = null;
-            if (layout.hasEntrance && entry == null) return "Missing entry point";
 
             float offset = entry == null ? FrontageOffset(asset.id) : -90f * (int)entry.facing;
             float yaw = Mathf.Repeat(90f * (int)layout.frontage + offset + 90f * layout.buildingQuarterTurns + (layout.faceAwayFromRoad ? 180f : 0f), 360f);
-            var anchor = layout.hasEntrance
-                ? LotGroundOverlay.QuarterTurn(entry.entrance, Mathf.RoundToInt(yaw / 90f)) : Vector2.zero;
             var footprint = info != null && info.HasDimensions
                 ? new Vector2(info.dimensions.x, info.dimensions.z) : asset.footprint;
+            // The lot marker is a placement guide, not a requirement for authored door metadata.
+            // Infer the front-edge midpoint in model space when no precise door was saved.
+            var front = LotGroundOverlay.QuarterTurn(Vector2.down, -Mathf.RoundToInt(offset / 90f));
+            var entrance = entry != null ? entry.entrance : Vector2.Scale(front, Vector2.Max(asset.footprint, footprint)) * .5f;
+            var anchor = layout.hasEntrance
+                ? LotGroundOverlay.QuarterTurn(entrance, Mathf.RoundToInt(yaw / 90f)) : Vector2.zero;
             var placement = new LotObjectDefinition
             {
                 assetId = asset.id,
