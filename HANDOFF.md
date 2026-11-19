@@ -1,3 +1,18 @@
+# CityForge V4 handoff · November 18, 2026 · Full Texturize palette browsing
+
+User could not find many Lot Editor path textures in Texturize. Both pickers already
+used LotPathMaterial.All/IsAvailable; the first version hid most materials behind
+Natural/Paving tabs and six-item pages. TexturePaintTool now opens on All, has All/
+Natural/Paving filters, and shows every eligible material in a scrolling thumbnail
+grid with an explicit scrollbar and total count. No page truncation. Current private
+library has22 available materials. Paint data/material behavior is unchanged.
+
+Isolated QA checks exact palette count against the Lot Editor source collection,
+scrollable content, existing paint/save/rotate/menu checks and a rendered review.
+Main Unity was stopped at the menu before source editing; no live map was changed.
+
+--- Previous polygon-paint implementation ---
+
 # CityForge V4 handoff · November 18, 2026 · Texturize polygon painting
 
 Implemented the user's polygon-mask texture painting idea with existing path textures.

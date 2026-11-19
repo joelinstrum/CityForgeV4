@@ -26,8 +26,10 @@ namespace CityForge.UI
         private bool erase, waiting = true, stroke, closing;
         private Vector2 last;
         private GroundPaintData before;
-        private string texture = "packed-earth", group = "Natural";
-        private int page;
+        private string texture = "packed-earth", group = "All";
+        private ScrollRect paletteScroll;
+        private Text paletteCount;
+        private readonly Dictionary<string, Button> groupButtons = new();
         private RectTransform palette;
         private Button paintButton, eraseButton;
         private Font paintHeadingFont;
@@ -55,11 +57,21 @@ namespace CityForge.UI
             var skin=panel.gameObject.AddComponent<Image>();skin.sprite=ZoneModalArtwork.Panel;skin.type=Image.Type.Sliced;
             var title=Label(panel,"Paint Textures",new Vector2(16,-18),new Vector2(340,40),29);
             title.font=paintHeadingFont=Font.CreateDynamicFontFromOSFont(new[]{"Georgia","Times New Roman","Liberation Serif"},29);
-            Button(panel,"Natural",new Vector2(18,-62),new Vector2(160,34),()=>{group="Natural";page=0;Populate();});
-            Button(panel,"Paving",new Vector2(194,-62),new Vector2(160,34),()=>{group="Paving";page=0;Populate();});
-            palette=Rect(panel,"Path textures",new Vector2(18,-108),new Vector2(338,222)); Populate();
-            Button(panel,"‹ Previous",new Vector2(18,-338),new Vector2(160,30),()=>{page=Mathf.Max(0,page-1);Populate();});
-            Button(panel,"Next ›",new Vector2(194,-338),new Vector2(160,30),()=>{page++;Populate();});
+            foreach(var pair in new[]{("All",18f),("Natural",132f),("Paving",246f)})
+            {
+                string name=pair.Item1;
+                groupButtons[name]=Button(panel,name,new Vector2(pair.Item2,-62),new Vector2(108,34),()=>{group=name;Populate();paletteScroll.verticalNormalizedPosition=1;});
+            }
+            var window=Rect(panel,"Scroll path textures",new Vector2(18,-108),new Vector2(338,222));
+            window.gameObject.AddComponent<Image>().color=new Color(.02f,.03f,.04f,.7f);
+            window.gameObject.AddComponent<RectMask2D>();
+            paletteScroll=window.gameObject.AddComponent<ScrollRect>();paletteScroll.viewport=window;
+            paletteScroll.horizontal=false;paletteScroll.scrollSensitivity=28;paletteScroll.movementType=ScrollRect.MovementType.Clamped;
+            palette=Rect(window,"All available path textures",Vector2.zero,new Vector2(324,222));paletteScroll.content=palette;
+            var bar=Rect(window,"Texture scrollbar",new Vector2(328,0),new Vector2(10,222));bar.gameObject.AddComponent<Image>().color=new Color(.19f,.23f,.25f);
+            var scrollbar=bar.gameObject.AddComponent<Scrollbar>();var handle=Rect(bar,"Handle",Vector2.zero,Vector2.zero);handle.anchorMin=Vector2.zero;handle.anchorMax=Vector2.one;handle.pivot=new Vector2(.5f,.5f);var grip=handle.gameObject.AddComponent<Image>();grip.sprite=ZoneModalArtwork.Gold;grip.type=Image.Type.Sliced;
+            scrollbar.handleRect=handle;scrollbar.targetGraphic=grip;scrollbar.direction=Scrollbar.Direction.BottomToTop;paletteScroll.verticalScrollbar=scrollbar;
+            paletteCount=Label(panel,"",new Vector2(18,-338),new Vector2(338,30),16);Populate();
             sizeText=Label(panel,"Brush size: 6 m",new Vector2(18,-378),new Vector2(338,26),19);
             Slider(panel,new Vector2(22,-416),1,32,6,v=>{radius=v*.5f;sizeText.text=$"Brush size: {v:0.0} m";});
             falloffText=Label(panel,"Falloff: 65%",new Vector2(18,-440),new Vector2(338,26),19);
@@ -76,13 +88,15 @@ namespace CityForge.UI
         private void Populate()
         {
             foreach(Transform child in palette){child.gameObject.SetActive(false);Destroy(child.gameObject);}
-            var styles=LotPathMaterial.All.Where(s=>s.Group==group&&s.IsAvailable).ToArray();
-            page=Mathf.Clamp(page,0,Mathf.Max(0,(styles.Length-1)/6));
-            foreach(var pair in styles.Skip(page*6).Take(6).Select((style,index)=>(style,index)))
+            var styles=LotPathMaterial.All.Where(s=>s.IsAvailable&&(group=="All"||s.Group==group)).ToArray();
+            palette.sizeDelta=new Vector2(324,Mathf.Max(222,Mathf.CeilToInt(styles.Length/3f)*112));
+            foreach(var button in groupButtons)button.Value.image.sprite=button.Key==group?ZoneModalArtwork.Gold:ZoneModalArtwork.Dark;
+            if(paletteCount)paletteCount.text=$"{styles.Length} path textures · Scroll to browse";
+            foreach(var pair in styles.Select((style,index)=>(style,index)))
             {
                 var style=pair.style;int i=pair.index;
-                var button=Button(palette,style.Label,new Vector2(i%3*114,-(i/3)*112),new Vector2(106,102),()=>{texture=style.Id;erase=false;Populate();Mode();});
-                var photo=Rect(button.transform,"Texture thumbnail",new Vector2(4,-4),new Vector2(98,94));
+                var button=Button(palette,style.Label,new Vector2(i%3*108,-(i/3)*112),new Vector2(102,102),()=>{texture=style.Id;erase=false;Populate();Mode();});
+                var photo=Rect(button.transform,"Texture thumbnail",new Vector2(4,-4),new Vector2(94,94));
                 var image=photo.gameObject.AddComponent<RawImage>(); image.texture=style.Texture; image.color=style.Texture?Color.white:style.Fallback; image.raycastTarget=false;
                 var text=button.GetComponentInChildren<Text>();text.transform.SetAsLastSibling();text.rectTransform.anchoredPosition=new Vector2(0,-32);text.rectTransform.sizeDelta=new Vector2(102,38);text.fontSize=12;
                 var backing=text.gameObject.AddComponent<Outline>();backing.effectColor=Color.black;backing.effectDistance=Vector2.one;

@@ -1,7 +1,8 @@
 # Polygon-constrained texture paint
 
 Texturize is available from Parks and from the Lot Editor's Textures picker. It uses
-existing LotPathMaterial textures. Click markers around an area and close by clicking
+existing LotPathMaterial textures. The All tab shows every available path texture in
+a scrolling thumbnail grid; Natural/Paving filter that same collection. Click markers around an area and close by clicking
 within24 screen pixels of the first marker. PointWirePath owns marker/closure state;
 PointWireGeometry rejects intersecting outlines and supplies concave containment.
 The first marker is larger. Backspace removes an unclosed marker. Hold the left mouse
