@@ -1,3 +1,31 @@
+# CityForge V4 handoff · November 18, 2026 · Experimental 45-degree blocks
+
+User requested trying45-degree pre-built neighborhood rotation. Tab now cycles eight
+angles. Even steps retain the existing square-grid zoning implementation. Odd steps
+use TownDiagonalBlocks: rotate parcel centers and the street loop45 degrees around
+the quarter-turned plan center, preview actual rotated lot footprints, validate actual
+oriented lots, clip occupied streets, join their corners, and place native DistrictLotRecord
+objects with diagonalRotation=true. Existing save support already preserves these
+records and their diagonal angles; no schema or old save conversion was needed.
+
+EXPERIMENT LIMIT: diagonal stamps materialize matching authored growable layouts
+and buildings directly, then play the normal construction animation. They do not leave
+persistent diagonal empty zoning and will not automatically regrow after demolition.
+They require an eligible ordinary (non-corner) growable layout of the selected size,
+zone and wealth. Unsupported combinations show a matching-layout hint. The user
+was told this limitation before completion. Grid-aligned stamps still behave as before.
+No existing region or lot library was modified. Growth templates are cached while the
+tool is armed, invalidated on its next activation. Both roads and lots validate before
+mutation, with native road/lot collision, water, grade, camp and district checks.
+
+Isolated Unity QA passes all twelve size/diagonal-angle combinations: exact lot counts,
+45-degree street geometry, rotated preview coverage, partial overlap, and native lot
+rotation JSON roundtrip. Existing corner and overlap regressions also pass. QA used
+temporary uniquely identified layouts in its isolated library and removed them after.
+Interactive appearance and diagonal pedestrian routing still need an in-game check.
+
+--- Previous growable entrance guides ---
+
 # CityForge V4 handoff · November 18, 2026 · Growable entrance guides
 
 The user clarified that a growable layout entrance is a general guide and should not

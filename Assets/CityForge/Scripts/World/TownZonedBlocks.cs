@@ -22,6 +22,7 @@ namespace CityForge.World
         private void ArmZonedBlock(TownZone zone, int size)
         {
             CancelRoadPlacement(); CancelLotPlacement(); CancelZoneDrag(); CancelZonedBlock(false);
+            diagonalGrowthOptions = null;
             zoneToolArmed = false; activeZone = zone; zonedBlockSize = size; zonedBlockTurns = 0; zonedBlockArmed = true;
             SelectDistrictLot(null); EnsureZoneSurfaces();
             if (townPanel) townPanel.gameObject.SetActive(false);
@@ -50,7 +51,7 @@ namespace CityForge.World
             if (Input.GetKeyDown(KeyCode.Escape))
             { CancelZonedBlock(true); ShowDistrictMessage(""); return true; }
             bool rotated = Input.GetKeyDown(KeyCode.Tab);
-            if (rotated) zonedBlockTurns = (zonedBlockTurns + 1) % 4;
+            if (rotated) zonedBlockTurns = (zonedBlockTurns + 1) % 8;
             if (EventSystem.current && EventSystem.current.IsPointerOverGameObject())
             {
                 zonePreviewRenderer.enabled = false;
@@ -67,16 +68,26 @@ namespace CityForge.World
             if (zonedBlockHover != cell || rotated || !navigation.Equals(zonedBlockNavigation))
             {
                 zonedBlockHover = cell; zonedBlockNavigation = navigation;
-                var dimensions = zonedBlockTurns % 2 == 0 ? new Vector2Int(ZonedBlockPlan.RowTiles, zonedBlockSize * 2)
+                var dimensions = (zonedBlockTurns / 2) % 2 == 0 ? new Vector2Int(ZonedBlockPlan.RowTiles, zonedBlockSize * 2)
                     : new Vector2Int(zonedBlockSize * 2, ZonedBlockPlan.RowTiles);
-                zonedBlockPreview = new ZonedBlockPlan(cell - dimensions / 2, zonedBlockSize, zonedBlockTurns, activeZone, selectedZoneWealth);
-                zonedBlockProblem = PrepareZonedBlock(zonedBlockPreview, out var cells, out var streets);
+                zonedBlockPreview = new ZonedBlockPlan(cell - dimensions / 2, zonedBlockSize, zonedBlockTurns / 2, activeZone, selectedZoneWealth);
+                TownZoneCell[] cells;
+                List<DistrictRoadRecord> streets;
+                List<DistrictLotRecord> diagonalLots = null;
+                bool diagonal = zonedBlockTurns % 2 != 0;
+                if (diagonal)
+                {
+                    zonedBlockProblem = PrepareDiagonalBlock(zonedBlockPreview, out diagonalLots, out streets);
+                    cells = System.Array.Empty<TownZoneCell>();
+                }
+                else zonedBlockProblem = PrepareZonedBlock(zonedBlockPreview, out cells, out streets);
                 if (zonedBlockRoadMesh) Destroy(zonedBlockRoadMesh);
                 zonedBlockRoadMesh = new Mesh { name = "Available automatic streets" };
                 var meshes = streets.Select(BuildDistrictRoadMesh).ToArray();
                 if (meshes.Length > 0) zonedBlockRoadMesh.CombineMeshes(meshes.Select(mesh => new CombineInstance { mesh = mesh, transform = Matrix4x4.identity }).ToArray());
                 foreach (var mesh in meshes) Destroy(mesh);
-                FillZoneMesh(zonePreviewMesh, (zonedBlockProblem == null ? cells : zonedBlockPreview.Cells).Select(item => new KeyValuePair<Vector2Int, TownZone>(new Vector2Int(item.x, item.z),
+                if (diagonal) FillDiagonalBlockPreview(zonedBlockPreview, diagonalLots, zonedBlockProblem == null);
+                else FillZoneMesh(zonePreviewMesh, (zonedBlockProblem == null ? cells : zonedBlockPreview.Cells).Select(item => new KeyValuePair<Vector2Int, TownZone>(new Vector2Int(item.x, item.z),
                     zonedBlockProblem == null ? item.zone : TownZone.None)), .27f, overrideFacing: zonedBlockPreview.Facings);
                 if (!zonedBlockRoadPreview)
                 {
@@ -89,12 +100,14 @@ namespace CityForge.World
                 }
                 zonedBlockRoadPreview.GetComponent<MeshFilter>().sharedMesh = zonedBlockRoadMesh;
                 zonedBlockRoadMaterial.SetColor("_BaseColor", zonedBlockProblem == null ? new Color(.88f, .72f, .38f, .5f) : new Color(.92f, .15f, .12f, .6f));
-                ShowDistrictMessage(zonedBlockProblem ?? $"{cells.Length / (zonedBlockSize * zonedBlockSize)} new lots · Existing neighborhood preserved\nClick to place · Tab to rotate · Esc to cancel");
+                int lotCount = diagonal ? diagonalLots.Count : cells.Length / (zonedBlockSize * zonedBlockSize);
+                ShowDistrictMessage(zonedBlockProblem ?? $"{lotCount} new lots · {zonedBlockTurns * 45}°\nClick to place · Tab rotates 45° · Esc to cancel");
             }
             zonePreviewRenderer.enabled = true;
             if (zonedBlockRoadPreview) zonedBlockRoadPreview.gameObject.SetActive(true);
             if (!Input.GetMouseButtonDown(0)) return false;
-            if (zonedBlockProblem == null) zonedBlockProblem = CommitZonedBlock(zonedBlockPreview);
+            if (zonedBlockProblem == null) zonedBlockProblem = zonedBlockTurns % 2 != 0
+                ? CommitDiagonalBlock(zonedBlockPreview) : CommitZonedBlock(zonedBlockPreview);
             ShowDistrictMessage(zonedBlockProblem ?? "Block zoned with streets · Move to place another · Esc to finish");
             zonedBlockHover = null;
             return true;
