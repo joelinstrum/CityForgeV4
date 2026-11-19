@@ -1,3 +1,20 @@
+# CityForge V4 handoff · November 18, 2026 · Res Trio 2 enlargement
+
+User requested Low Wealth Res Trio 2 enlarged uniformly by25%. Catalog span is now
+16.719370m (previously13.375496m). Prepared placement dimensions are width16.719m,
+height11.250m, depth7.991m. Updated the local ignored catalog and its ImportInfo.json;
+near/distant meshes, UVs and window masks stay the same, with runtime fit scaling
+handling both LODs. LotCatalogSetup now refreshes this existing entry when its footprint
+changes, so future catalog preparation retains the enlargement. No lot definitions or
+player saves were rewritten. Reselect/reopen a preview to rebuild an already instantiated
+model at the new size.
+
+Isolated Unity verification passed: actual instantiated model bounds match all three
+new dimensions within1cm; catalog measurements, distant prefab and emission map
+remain connected. Main Unity scripts refreshed and compilation completed.
+
+--- Previous street corner completion ---
+
 # CityForge V4 handoff · November 18, 2026 · Street corner completion
 
 New neighborhood extensions now join touching proposed street runs into continuous

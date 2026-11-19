@@ -87,7 +87,7 @@ internal static class LotCatalogSetup
             R2LowWealthHome("r2-low-wealth-double-entry", "Low Wealth Double Entry", "R2LowWealthDoubleEntry", 11.602993f),
             R2LowWealthHome("r2-low-wealth-duplex", "Low Wealth Duplex", "R2LowWealthDuplex", 13.081451f),
             R2LowWealthHome("r2-low-wealth-res-stone-apartment", "Low Wealth Res Stone Apartment", "R2LowWealthResStoneApartment", 11.640968f),
-            R2LowWealthHome("r2-low-wealth-res-trio-2", "Low Wealth Res Trio 2", "R2LowWealthResTrio2", 13.375496f),
+            R2LowWealthHome("r2-low-wealth-res-trio-2", "Low Wealth Res Trio 2", "R2LowWealthResTrio2", 16.719370f),
             R2LowWealthHome("r2-low-wealth-stone-house-2", "Low Wealth Stone House 2", "R2LowWealthStoneHouse2", 12.289818f),
             R2LowWealthHome("r2-low-wealth-trio", "Low Wealth Trio", "R2LowWealthTrio", 15.387814f),
             R2LowWealthHome("r2-low-wealth-apartment-collapse", "Low Wealth Apartment Collapse", "R2LowWealthApartmentCollapse", 14.357811f),
@@ -229,7 +229,8 @@ internal static class LotCatalogSetup
             else if (((entry.category == "Landscaping" && (entry.group == "Agriculture" || entry.id == "boxwood-curved-02")) ||
                       (entry.category == LotAssetCatalog.StreetFurniture && entry.group == "Lighting") ||
                       entry.id.StartsWith("v3-building-medium-wealth-home-", System.StringComparison.Ordinal) ||
-                      entry.id is "v3-building-low-wealth-vertical-siding-front-gable" or
+                      entry.id is "v3-building-r2-low-wealth-res-trio-2" or
+                          "v3-building-low-wealth-vertical-siding-front-gable" or
                           "v3-building-low-wealth-front-gable-cottage" or
                           "v3-building-founders-shop-right-corner-cooperage" or
                           "v3-building-founders-shop-right-corner-dry-goods") &&
