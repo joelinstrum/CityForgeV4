@@ -154,9 +154,8 @@ namespace CityForge.World
                     cell.zone < TownZone.Residential1 || cell.zone > TownZone.Industrial3 ||
                     cell.wealth < LotWealth.None || cell.wealth > LotWealth.High ||
                     cell.facing < TownZoneFacing.None || cell.facing > TownZoneFacing.South ||
-                    (cell.facing != TownZoneFacing.None && ResidentialDepth(cell.zone) == 0) ||
                     (cell.lotWidth != 0 || cell.lotDepth != 0) &&
-                        (!IsResidentialZone(cell.zone) || cell.lotWidth < 1 || cell.lotWidth > LotDefinition.MaxTiles ||
+                        (cell.lotWidth < 1 || cell.lotWidth > LotDefinition.MaxTiles ||
                          cell.lotDepth < 1 || cell.lotDepth > LotDefinition.MaxTiles) ||
                     cell.hasLotAnchor &&
                         (legacy || cell.lotWidth == 0 || cell.lotDepth == 0 ||
@@ -226,6 +225,7 @@ namespace CityForge.World
 
         private void CloseZoning()
         {
+            CancelZonedBlock(false);
             CancelZoneDrag();
             zoneToolArmed = false;
             zoneStatus = null;
@@ -246,6 +246,7 @@ namespace CityForge.World
 
         private bool UpdateZoning()
         {
+            if (zonedBlockArmed) return UpdateZonedBlock();
             if (!Application.isFocused || !zoneToolArmed || !TownConstructionVisible || !CanBuildTown || IsSaving)
             {
                 if (zoneDragStart.HasValue || zoneHoverCell.HasValue) CancelZoneDrag();
@@ -357,7 +358,7 @@ namespace CityForge.World
         }
 
         private string ZoneSiteProblem(RectInt bounds, TownZone zone, WildlifeWaterAccess water, out TownZoneFacing frontage,
-            Dictionary<Vector2Int, bool> dryCells = null)
+            Dictionary<Vector2Int, bool> dryCells = null, bool requireFrontage = true)
         {
             frontage = TownZoneFacing.None;
             if (bounds.width < 1 || bounds.height < 1) return "Select at least one cell.";
@@ -365,9 +366,12 @@ namespace CityForge.World
             if (maxDepth > 0)
             {
                 if ((long)bounds.width * bounds.height > MaxZonedCells) return "This region has reached its zoning limit.";
-                var problem = ResidentialFrontageProblem(bounds, maxDepth, out frontage, allowEnclosedBlock: true,
-                    commercial: zone == TownZone.Commercial1);
-                if (problem != null) return problem;
+                if (requireFrontage)
+                {
+                    var problem = ResidentialFrontageProblem(bounds, maxDepth, out frontage, allowEnclosedBlock: true,
+                        commercial: zone == TownZone.Commercial1);
+                    if (problem != null) return problem;
+                }
             }
             else if (bounds.width > MaxZoneDragSide || bounds.height > MaxZoneDragSide)
                 return $"Zone up to {MaxZoneDragSide} × {MaxZoneDragSide} cells at once.";
@@ -532,7 +536,8 @@ namespace CityForge.World
         }
 
         private void FillZoneMesh(Mesh mesh, IEnumerable<KeyValuePair<Vector2Int, TownZone>> cells, float lift,
-            TownZoneFacing previewFacing = TownZoneFacing.None, RectInt? enclosedBlock = null)
+            TownZoneFacing previewFacing = TownZoneFacing.None, RectInt? enclosedBlock = null,
+            IReadOnlyDictionary<Vector2Int, TownZoneFacing> overrideFacing = null)
         {
             var vertices = new List<Vector3>();
             var triangles = new List<int>[ZoneColors.Length + 1];
@@ -556,9 +561,9 @@ namespace CityForge.World
                     indices.Add(first + 4);
                 }
 
-                if (ResidentialDepth(cell.Value) > 0)
+                if (ResidentialDepth(cell.Value) > 0 || overrideFacing != null)
                 {
-                    var facing = enclosedBlock is RectInt block ? EnclosedBlockFacing(block, cell.Key) :
+                    var facing = overrideFacing != null ? overrideFacing.GetValueOrDefault(cell.Key) : enclosedBlock is RectInt block ? EnclosedBlockFacing(block, cell.Key) :
                         mesh == zonePreviewMesh ? previewFacing : residentialFacing.GetValueOrDefault(cell.Key);
                     if (facing != TownZoneFacing.None)
                         AddResidentialArrow(vertices, triangles[^1], corner + Vector2.one * (DistrictGridCellMeters * .5f),

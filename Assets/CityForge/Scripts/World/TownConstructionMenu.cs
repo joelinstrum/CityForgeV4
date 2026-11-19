@@ -217,6 +217,7 @@ namespace CityForge.World
             if (section != TownSection.Transport) lastRepaveSurface = null;
             if (section == TownSection.Zones && townSection == section && townPanel && !townPanel.gameObject.activeSelf)
             {
+                CancelZonedBlock(false); zoneToolArmed = false;
                 CancelZoneDrag();
                 townPanel.gameObject.SetActive(true);
                 return;

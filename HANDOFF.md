@@ -1,3 +1,29 @@
+# CityForge V4 handoff · November 18, 2026 · Back-to-back zoning blocks
+
+Fixed Zones sizes now place complete blocks, following the user's clarification that
+12 means tiles along each street frontage: 2×2 has six lots per row (12 total),
+3×3 has four per row (8 total), and 4×4 has three per row (6 total). Two adjacent
+rows face outward, with no street between their backs. Each block creates a closed
+one-tile Founders dirt street ring outside the zoning. Existing road spans are reused
+through the normal road clipping/commit path. Auto retains legacy drag zoning; Erase
+arms the existing erase tool. Tab rotates the preview; Esc returns to the Zones panel.
+
+ZonedBlockPlan builds exact parcel anchors and facing metadata for every rotation.
+TownZonedBlocks validates zoning, terrain, lot conflicts, district boundaries and the
+street proposal before committing the road batch and cells. Existing zoning in the
+block or street margin is rejected. Preview rebuilds only on hovered-cell, rotation or
+navigation-state changes. Save validation now accepts exact footprints and facing for
+commercial/industrial cells too. Growth still requires a matching authored zoning
+layout; this does not invent templates for unsupported sizes or unlock C2/C3/industry.
+No player map or lot library was edited. Work remains local on feature/r2-low-wealth-import.
+
+Verification: isolated Unity QA geometry checks cover 108 size/rotation/zone combinations,
+parcel counts, complete coverage, outward facings, save validation and street ring geometry.
+Modal controls are checked in the isolated QA project. Full interactive placement and
+subsequent building growth should also be checked in-game.
+
+--- Previous appearance-only implementation (superseded by utility wiring above) ---
+
 # CityForge V4 handoff · November 18, 2026 · Zones modal visual redesign
 
 The user explicitly requested an appearance-first redesign from Downloads/Dark Zones

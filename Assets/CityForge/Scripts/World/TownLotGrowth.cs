@@ -498,7 +498,7 @@ namespace CityForge.World
 
         private void ShowGrowthStatus(string message)
         {
-            if (zoneStatus && SupportsLotGrowth(activeZone) && !zoneDragStart.HasValue)
+            if (zoneStatus && zoneToolArmed && SupportsLotGrowth(activeZone) && !zoneDragStart.HasValue)
                 zoneStatus.text = message;
         }
 
