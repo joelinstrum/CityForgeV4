@@ -393,6 +393,11 @@ namespace CityForge.UI
                 DrawGroundOverlay(overlay.texture, overlay.span, overlay.Bounds, i + 1, overlay.TextureCenter, overlay.rotation, lot.IsWaterfront ? lot.LandBounds : null);
             }
 
+            if (lot.groundPaint != null && lot.groundPaint.tiles.Count > 0)
+            {
+                var paintRoot = new GameObject("Lot texture paint"); paintRoot.layer = PreviewLayer; paintRoot.transform.SetParent(content, false);
+                paintRoot.AddComponent<GroundPaintRenderer>().Initialize(lot.groundPaint, _ => 0, lot.LandBounds);
+            }
             if (grid)
             {
                 var sidewalkGuide = Material(new Color32(183, 202, 217, 125), unlit: true);
@@ -1084,6 +1089,7 @@ namespace CityForge.UI
 
         public void OnBeginDrag(PointerEventData eventData)
         {
+            if (texturePaintTool) return;
             if (PickingEntryMarker || eventData.button != PointerEventData.InputButton.Left ||
                 !TryRay(eventData.pressPosition, eventData.pressEventCamera, out var ray)) return;
             if (TryBeginPathWidthDrag(eventData)) return;
@@ -1192,6 +1198,7 @@ namespace CityForge.UI
 
         public void OnDrag(PointerEventData eventData)
         {
+            if (texturePaintTool && eventData.button == PointerEventData.InputButton.Left) return;
             if (eventData.button == PointerEventData.InputButton.Left)
             {
                 if (draggingPathWidth)
@@ -1423,6 +1430,7 @@ namespace CityForge.UI
 
         public void OnPointerClick(PointerEventData eventData)
         {
+            if (texturePaintTool) return;
             if (scaleFigure && scaleFigure.gameObject.activeSelf && eventData.button == PointerEventData.InputButton.Left)
             {
                 if (TryRay(eventData.position, eventData.pressEventCamera, out var figureRay) &&

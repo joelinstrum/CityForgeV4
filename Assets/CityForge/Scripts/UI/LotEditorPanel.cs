@@ -588,6 +588,7 @@ namespace CityForge.UI
 
         private void Update()
         {
+            if (viewport && viewport.TexturePainting) return;
             var active = EventSystem.current ? EventSystem.current.currentSelectedGameObject : null;
             if (Input.GetKeyDown(KeyCode.Tab) && EventSystem.current)
             {
@@ -1336,6 +1337,7 @@ namespace CityForge.UI
 
         private void CloseChoices()
         {
+            if (viewport) viewport.EndTexturePaint();
             if (!choices) return;
             choices.SetActive(false);
             Destroy(choices);
@@ -2144,7 +2146,8 @@ namespace CityForge.UI
             if (drawingPath) FinishGroundPath(false);
             if (drawingFence) FinishFencePath(false);
             var frame = CreatePicker("Lot Textures", "Search textures", out var search);
-            CreatePickerResults(frame, 235);
+            Control(frame, "Texturize · Polygon brush", 20, 236, 520, OpenTexturePaint);
+            CreatePickerResults(frame, 282);
             bool overlay = overlayBrush != null;
             var textureWealth = LotWealth.None;
             Button baseTab = null, overlayTab = null, one = null, four = null;
@@ -3508,6 +3511,7 @@ namespace CityForge.UI
 
         private void Save(LotType type)
         {
+            if (viewport) viewport.EndTexturePaint();
             if (!PlayerMode && LotClassification.FindCategory(session.Lot.category)?.id == "industrial")
             {
                 if (type == LotType.Zoning) type = LotType.Playable;
@@ -3579,6 +3583,7 @@ namespace CityForge.UI
 
         private void Refresh(string message = null, bool rebuildPreview = true)
         {
+            if (rebuildPreview && viewport && viewport.TexturePainting) viewport.EndTexturePaint();
             confirmDiscard = false;
             if (!lotOpen) return;
             if (rebuildPreview) ClearRepeat();

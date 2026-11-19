@@ -67,6 +67,7 @@ namespace CityForge.Lots
         public int baseTextureRotation;
         public int overlayTextureSpan = 1;
         public int overlayTextureRotation;
+        public GroundPaintData groundPaint;
         public List<LotGroundOverlay> overlays = new List<LotGroundOverlay>();
 
         public Vector2 Size => new Vector2(width, length) * TileMeters;
@@ -105,6 +106,7 @@ namespace CityForge.Lots
         internal void RotateClockwise()
         {
             (width, length) = (length, width);
+            groundPaint?.RotateClockwise();
             if (zoningLayout.Configured)
             {
                 zoningLayout.buildingCenter = LotGroundOverlay.QuarterTurn(zoningLayout.buildingCenter, 1);
@@ -215,6 +217,7 @@ namespace CityForge.Lots
                 (lot.overlayTextureSpan != 1 && lot.overlayTextureSpan != 2))
                 throw new InvalidDataException("Invalid lot ground textures.");
             if (!lot.residentialGround.Valid) throw new InvalidDataException("Invalid residential ground settings.");
+            GroundPaintData.Validate(lot.groundPaint, 64);
             lot.overlays ??= new List<LotGroundOverlay>();
             if (lot.overlays.Count > LotGroundOverlay.MaxCount)
                 throw new InvalidDataException("Too many lot overlays.");

@@ -166,6 +166,7 @@ namespace CityForge.World
 
         private void CloseTownSection()
         {
+            CancelTexturePaint();
             CancelParkTreeBrush();
             CancelStreetscape();
             SetDetonate(false);
@@ -825,6 +826,10 @@ namespace CityForge.World
                 ParkTreeCard("Add Trees", "Scatter random trees", -266, () => ArmParkTreeBrush(false));
                 ParkTreeCard("Place a Tree", "Choose a tree to plant", 0, OpenParkTreePicker, single: true);
                 ParkTreeCard("Remove Trees", "Brush away individual trees", 266, () => ArmParkTreeBrush(true), remove: true);
+            }
+            if (parks && !agriculture)
+            {
+                var paint = TownButton(townPanel, lotFont, "▧ Texturize", 610, -9, 145, OpenTexturize);
             }
             if (parks)
                 TownButton(townPanel, lotFont, agriculture ? "‹ Parks" : "Agriculture", 18, -9, 146, () =>

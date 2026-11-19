@@ -1,3 +1,31 @@
+# CityForge V4 handoff · November 18, 2026 · Texturize polygon painting
+
+Implemented the user's polygon-mask texture painting idea with existing path textures.
+Parks → Texturize; Lot Editor → Textures → Texturize · Polygon brush. Click marker
+points, click the first to close, then hold to spray. Natural/Paving swatches, brush
+diameter/falloff, Paint/Erase, New boundary, Undo stroke and Done controls share a
+single dark/gold panel. Done/Esc hides all editing guides while preserving paint.
+PointWirePath/PointWireGeometry supply closed guide state and polygon validation.
+
+GroundPaintData/Renderer store compressed sparse tile weight maps, eight materials
+per32m tile at25cm resolution. One terrain mesh per tile, no polygon/stroke meshes.
+Identical persisted weight textures are shared across repeated lot instances. District
+paint is world-local in SavedRegionInfo.groundPaint; lot paint is local in LotDefinition.
+groundPaint, rotates with lot edits and with native45-degree placement. Water/camp/
+district eligibility applies to district brush samples. Existing terrain baselines,
+private art/catalogs and player saves were preserved. Live Unity was already stopped
+at the main menu before source edits, so no transient map checkpoint was needed.
+
+QA: isolated Unity checks pass for hard concave masks, soft blending/erase, multiple
+textures, palette limit, data validation, compression, four rotations, undo/redo,
+actual region and lot-library file roundtrips, both menu entries, lot-tool arm/close,
+shader rendering, fixed tile mesh counts and paint visible after the boundary closes.
+Rendered review images are under the current chat's outputs/Texturize. Test-only lots
+and region snapshots were deleted after checks. See Documentation/03_Technical/
+Texture_Paint.md for architecture/limits. This is a first version for user testing.
+
+--- Previous experimental diagonal neighborhoods ---
+
 # CityForge V4 handoff · November 18, 2026 · Experimental 45-degree blocks
 
 User requested trying45-degree pre-built neighborhood rotation. Tab now cycles eight

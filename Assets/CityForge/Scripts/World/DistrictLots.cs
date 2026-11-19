@@ -706,6 +706,15 @@ namespace CityForge.World
                 }
                 root.SetPositionAndRotation(new Vector3(record.center.x, 0, record.center.y),
                     Quaternion.Euler(0, record.FacingDegrees, 0));
+                if (definition.groundPaint != null && definition.groundPaint.tiles.Count > 0)
+                {
+                    var paintRoot = new GameObject("Lot texture paint"); paintRoot.transform.SetParent(root, false);
+                    paintRoot.AddComponent<GroundPaintRenderer>().Initialize(definition.groundPaint, point =>
+                    {
+                        var world = root.TransformPoint(new Vector3(point.x, 0, point.y));
+                        return LotHeight(new Vector2(world.x, world.z)) - root.position.y;
+                    }, definition.LandBounds);
+                }
                 Transform harborPorch = null;
                 var porches = new List<(LotObjectDefinition item, Transform view)>();
                 var characters = new List<(LotObjectDefinition item, Transform view)>();

@@ -336,6 +336,7 @@ namespace CityForge.World
                 view.RestoreReadRegionMessages(snapshot?.info.readMessages);
                 view.RestoreTownZones(snapshot?.info.townZones, snapshot?.info.townZoneGridVersion ?? 0);
                 view.RestoreDistrictRoads(snapshot?.info.districtRoads);
+                view.RestoreGroundPaint(snapshot?.info.groundPaint);
                 if (snapshot?.info.placedActors != null) view.PlacedActors.AddRange(snapshot.info.placedActors);
                 if(snapshot!=null){view.TimeOfDay=snapshot.info.timeOfDay;view.RestoreSettlementData(snapshot.info);view.ForestAdditions=snapshot.info.forestAdditions??System.Array.Empty<ForestAdditionRecord>();view.ForestRemovals=snapshot.info.forestRemovals??System.Array.Empty<ForestRemovalStroke>();view.NativeCamps=snapshot.info.nativeCamps??System.Array.Empty<NativeCampRecord>();view.CombinedDistricts=snapshot.info.combinedDistricts??System.Array.Empty<CombinedDistrictGroup>();view.CreationSettings=snapshot.info.creation;view.legacyClimate=snapshot.info.climate;view.AnimalsEnabled=snapshot.info.animals;size=(RegionSize)snapshot.info.size;seed=snapshot.info.seed;regionName=snapshot.info.name;view.SavedRegionId=snapshot.info.id;view.Season=(RegionSeason)snapshot.info.season;view.TerrainHeightRange=snapshot.info.terrainHeightRange;view.LoadedMeadow=snapshot.meadow;view.LoadedMeadowDistrict=snapshot.info.meadowCacheDistrict;view.LoadedFromSnapshot=true;view.wantsMeadow=snapshot.info.meadow;view.Waterless=snapshot.info.waterless;view.Coastline=snapshot.info.coastline;view.CoastVersion=snapshot.info.coastVersion;view.MinimalRiverCrest=snapshot.info.minimalRiverCrest;view.StillWater=snapshot.info.stillWater;view.LakeWaterVersion=snapshot.info.lakeWaterVersion<0?-1:1;view.RiverBedVersion=snapshot.info.riverBedVersion;}
                 if (snapshot != null) view.RestoreDistrictCoastlines(snapshot.info.deepHarborDistricts);
@@ -864,6 +865,7 @@ namespace CityForge.World
                 return;
             }
             UpdateLotGrowth();
+            if (districtTexturePaint) return;
             if (regionHudVisibility && regionHudVisibility.alpha == 0f) return;
             if (UpdateDetonate() || UpdateParkTreeBrush() || UpdateStreetscape()) return;
             if (UpdateRoadPlacement() || UpdateRoadContext() || UpdateRoadPaths()) return;
@@ -1101,6 +1103,7 @@ namespace CityForge.World
             yield return UpdateLandscapeModeStages();
             RefreshDistrictGrid();
             RebuildDistrictRoads();
+            RebuildGroundPaint();
             RebuildDistrictLots();
             RebuildPlacedPedestrians();
             if(NaturalLandscape&&IsCombinedDistrict){
@@ -1138,7 +1141,7 @@ namespace CityForge.World
             CloseRoadContext();
             GetComponent<RegionPreviewDiagnostics>().SetDiagnostic(false,1);
             float returnHeading=GetComponentInChildren<CityForgeCameraController>().CaptureRegionState().yaw;
-            SelectedDistrict=-1;RefreshDistrictGrid();RebuildDistrictRoads();RebuildDistrictLots();RebuildPlacedPedestrians();if(districtSelection)districtSelection.SetActive(true);
+            SelectedDistrict=-1;RefreshDistrictGrid();RebuildGroundPaint();RebuildDistrictRoads();RebuildDistrictLots();RebuildPlacedPedestrians();if(districtSelection)districtSelection.SetActive(true);
             SetDistrictInfoVisible(true);
             navigationHint.text = OverviewNavigationHint;
             transform.Find("RegionLandCover").GetComponent<MeshFilter>().sharedMesh=wholeRegionMesh;
@@ -1251,6 +1254,8 @@ namespace CityForge.World
         }
         private void OnDestroy()
         {
+            tearingDownPaint = true;
+            CancelTexturePaint();
             CancelParkTreeBrush();
             ClearDistrictRoadPresentation();
             ClosePlayerLot();
