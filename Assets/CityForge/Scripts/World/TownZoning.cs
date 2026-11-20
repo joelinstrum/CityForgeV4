@@ -55,8 +55,10 @@ namespace CityForge.World
         private static bool IsResidentialZone(TownZone zone) =>
             zone is TownZone.Residential1 or TownZone.Residential2 or TownZone.Residential3;
 
+        private static bool IsCommercialZone(TownZone zone) => zone is TownZone.Commercial1 or TownZone.Commercial2 or TownZone.Commercial3;
+
         private static bool SupportsLotGrowth(TownZone zone) =>
-            IsResidentialZone(zone) || zone == TownZone.Commercial1;
+            IsResidentialZone(zone) || IsCommercialZone(zone);
 
         private Vector2Int ZonedLotSize(Vector2Int cell) => zoneLotSizes.GetValueOrDefault(cell);
 
@@ -137,6 +139,20 @@ namespace CityForge.World
                             zoneLotAnchors.Add(key, new Vector2Int(cell.lotAnchorX, cell.lotAnchorZ));
                         if (cell.facing != TownZoneFacing.None) residentialFacing.Add(key, cell.facing);
                     }
+            RepairParcelDimensions();
+        }
+
+        // Earlier rectangular stamps persisted world dimensions instead of frontage dimensions.
+        private void RepairParcelDimensions()
+        {
+            foreach(var group in zoneLotAnchors.GroupBy(p=>p.Value))
+            {
+                var keys=group.Select(p=>p.Key).ToArray();var anchor=group.Key;
+                int width=keys.Max(p=>p.x)-anchor.x+1,depth=keys.Max(p=>p.y)-anchor.y+1;
+                if(width*depth!=keys.Length||keys.Any(p=>p.x<anchor.x||p.y<anchor.y))continue;
+                var size=ParcelWorldSize(new Vector2Int(width,depth),residentialFacing.GetValueOrDefault(anchor));
+                foreach(var key in keys)zoneLotSizes[key]=size;
+            }
         }
 
         internal static void ValidateTownZones(TownZoneCell[] cells, float mapSide, int gridVersion)
@@ -210,6 +226,7 @@ namespace CityForge.World
 
         private void ArmZone(TownZone zone)
         {
+            if(!ResidentialWealthPolicy.Allows(zone, selectedZoneWealth, "founders"))selectedZoneWealth=LotWealth.Medium;
             CancelZoneDrag();
             SelectDistrictLot(null);
             activeZone = zone;
@@ -307,7 +324,7 @@ namespace CityForge.World
             var min = Vector2Int.Min(start, cell);
             var max = Vector2Int.Max(start, cell) + Vector2Int.one;
             var bounds = new RectInt(min, max - min);
-            if (zoneDragBounds != bounds || (rotated && activeZone == TownZone.Commercial1))
+            if (zoneDragBounds != bounds || (rotated && IsCommercialZone(activeZone)))
             {
                 zoneDragBounds = bounds;
                 zoneProblem = ZoneSiteProblem(bounds, activeZone, zoneWater, out zoneDragFrontage, zoneDragDryCells);
@@ -341,7 +358,7 @@ namespace CityForge.World
                 : bounds.width <= MaxZoneDragSide && bounds.height <= MaxZoneDragSide;
             if (zonePreviewRenderer.enabled)
                 FillZoneMesh(zonePreviewMesh, PreviewZoneCells(bounds, zoneProblem == null ? activeZone : TownZone.None),
-                    .27f, zoneProblem == null ? (activeZone == TownZone.Commercial1 ? zoneDragFrontage : ResidentialFacing(zoneDragFrontage)) : TownZoneFacing.None,
+                    .27f, zoneProblem == null ? (IsCommercialZone(activeZone) ? zoneDragFrontage : ResidentialFacing(zoneDragFrontage)) : TownZoneFacing.None,
                     enclosed ? bounds : (RectInt?)null);
         }
 
@@ -369,7 +386,7 @@ namespace CityForge.World
                 if (requireFrontage)
                 {
                     var problem = ResidentialFrontageProblem(bounds, maxDepth, out frontage, allowEnclosedBlock: true,
-                        commercial: zone == TownZone.Commercial1);
+                        commercial: IsCommercialZone(zone));
                     if (problem != null) return problem;
                 }
             }
@@ -418,7 +435,7 @@ namespace CityForge.World
             if (!CanBuildTown || IsSaving) return "Establish the town center before zoning.";
             var problem = ZoneSiteProblem(bounds, zone, DistrictLotWater(), out var frontage);
             if (problem != null) return problem;
-            var facing = zone == TownZone.Commercial1 ? frontage : ResidentialFacing(frontage);
+            var facing = IsCommercialZone(zone) ? frontage : ResidentialFacing(frontage);
             bool enclosed = ResidentialDepth(zone) > 0 && frontage == TownZoneFacing.None;
             bool affectsGrowth = SupportsLotGrowth(zone);
             var requestedSize = IsResidentialZone(zone) ? selectedZoneLotSize : Vector2Int.zero;
@@ -439,13 +456,14 @@ namespace CityForge.World
                 else
                 {
                     townZones[cell] = zone;
-                    zoneWealth[cell] = zone == TownZone.Commercial1 ? LotWealth.Low : selectedZoneWealth;
+                    zoneWealth[cell] = selectedZoneWealth;
                 }
                 var cellFacing = enclosed ? EnclosedBlockFacing(bounds, cell) : facing;
                 SetZonedLotSize(cell, bounds.min, cellFacing, requestedSize);
                 if (cellFacing != TownZoneFacing.None) residentialFacing[cell] = cellFacing;
                 else residentialFacing.Remove(cell);
             }
+            AddZoningStreetlamps();
             if (affectsGrowth) QueueZoningGrowth(bounds);
             RefreshZoneOverlay();
             return null;
@@ -520,6 +538,7 @@ namespace CityForge.World
 
         private void RefreshZoneOverlay()
         {
+            RefreshDistrictGrid();
             if (!zoneRenderer && (SelectedDistrict < 0 || townZones.Count == 0)) return;
             EnsureZoneSurfaces();
             zoneRenderer.enabled = SelectedDistrict >= 0;
@@ -543,15 +562,26 @@ namespace CityForge.World
             var triangles = new List<int>[ZoneColors.Length + 1];
             for (int i = 0; i < triangles.Length; i++) triangles[i] = new List<int>();
             const float inset = .09f;
-            float edge = DistrictGridCellMeters - inset;
-            foreach (var cell in cells)
+            var visibleCells = cells.ToArray();
+            var visible = new HashSet<Vector2Int>(visibleCells.Select(cell => cell.Key));
+            var owners = overrideFacing != null && zonedBlockPreview != null
+                ? zonedBlockPreview.Cells.ToDictionary(cell => new Vector2Int(cell.x, cell.z), cell => new Vector2Int(cell.lotAnchorX, cell.lotAnchorZ))
+                : zoneLotAnchors;
+            foreach (var cell in visibleCells)
             {
                 var corner = ZoneCorner(cell.Key);
                 int first = vertices.Count;
-                Add(inset, inset);
-                Add(inset, edge);
-                Add(edge, edge);
-                Add(edge, inset);
+                bool reserved = owners.TryGetValue(cell.Key, out var anchor);
+                bool Joined(Vector2Int offset) => reserved && visible.Contains(cell.Key + offset) &&
+                    owners.TryGetValue(cell.Key + offset, out var neighbor) && neighbor == anchor;
+                float left = Joined(Vector2Int.left) ? 0 : inset;
+                float right = DistrictGridCellMeters - (Joined(Vector2Int.right) ? 0 : inset);
+                float bottom = Joined(Vector2Int.down) ? 0 : inset;
+                float top = DistrictGridCellMeters - (Joined(Vector2Int.up) ? 0 : inset);
+                Add(left, bottom);
+                Add(left, top);
+                Add(right, top);
+                Add(right, bottom);
                 Add(DistrictGridCellMeters * .5f, DistrictGridCellMeters * .5f);
                 var indices = triangles[(int)cell.Value];
                 for (int side = 0; side < 4; side++)
@@ -565,9 +595,14 @@ namespace CityForge.World
                 {
                     var facing = overrideFacing != null ? overrideFacing.GetValueOrDefault(cell.Key) : enclosedBlock is RectInt block ? EnclosedBlockFacing(block, cell.Key) :
                         mesh == zonePreviewMesh ? previewFacing : residentialFacing.GetValueOrDefault(cell.Key);
-                    if (facing != TownZoneFacing.None)
-                        AddResidentialArrow(vertices, triangles[^1], corner + Vector2.one * (DistrictGridCellMeters * .5f),
-                            facing, lift + .045f);
+                    if (facing != TownZoneFacing.None && (!reserved || cell.Key == anchor))
+                    {
+                        var size = overrideFacing != null && zonedBlockPreview != null
+                            ? Vector2Int.one * zonedBlockPreview.LotSize : ZonedLotSize(cell.Key);
+                        var center = reserved ? corner + (Vector2)ParcelWorldSize(size, facing) * (DistrictGridCellMeters * .5f)
+                            : corner + Vector2.one * (DistrictGridCellMeters * .5f);
+                        AddResidentialArrow(vertices, triangles[^1], center, facing, lift + .045f);
+                    }
                 }
 
                 void Add(float x, float z)

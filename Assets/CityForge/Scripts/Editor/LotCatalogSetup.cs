@@ -81,6 +81,22 @@ internal static class LotCatalogSetup
                 "HighWealthMediterraneanVilla", 14f, LotWealth.High),
             FoundersResidentialHome("high-wealth-georgian-three-dormers", "Georgian Colonial Three Dormers",
                 "HighWealthGeorgianThreeDormers", 12f, LotWealth.High),
+            R3MediumWealthHome("r3-mid-wealth-barn-roof", "Barn Roof", "R3MidWealthBarnRoof", 7.399569f),
+            R3MediumWealthHome("r3-mid-wealth-blue-townhouse", "Blue Townhouse", "R3MidWealthBlueTownhouse", 6.819484f),
+            R3MediumWealthHome("r3-mid-wealth-dutch-roof", "Dutch Roof", "R3MidWealthDutchRoof", 8.043133f),
+            R3MediumWealthHome("r3-mid-wealth-mansard-roof", "Mansard Roof", "R3MidWealthMansardRoof", 7.116240f),
+            R3MediumWealthHome("r3-mid-wealth-stone-dutch", "Stone Dutch", "R3MidWealthStoneDutch", 6.912975f),
+            R3MediumWealthHome("r3-mid-wealth-stone-house", "Stone House", "R3MidWealthStoneHouse", 7.001306f),
+            R3MediumWealthHome("r3-mid-wealth-3-window-brick-dormers", "3 Window Brick Dormers", "R3MidWealth3WindowBrickDormers", 7.277107f),
+            R3MediumWealthHome("r3-mid-wealth-3-window-brick", "3 Window Brick", "R3MidWealth3WindowBrick", 7.206851f),
+            R3MediumWealthHome("r3-mid-wealth-painted-white-brick", "Painted White Brick", "R3MidWealthPaintedWhiteBrick", 6.700951f),
+            R3MediumWealthHome("r3-mid-wealth-3-story-brick-2", "Three Story Brick 2", "R3MidWealth3StoryBrick2", 6.243569f),
+            R3MediumWealthHome("r3-mid-wealth-3-story-yellow", "Three Story Yellow", "R3MidWealth3StoryYellow", 7.142250f),
+            R3MediumWealthHome("r3-mid-wealth-3-story-brick", "Three Story Brick", "R3MidWealth3StoryBrick", 7.050409f),
+            R3MediumWealthHome("r3-mid-wealth-3-story-yellow-stucco", "Three Story Yellow Stucco", "R3MidWealth3StoryYellowStucco", 6.923958f),
+            R3MediumWealthHome("r3-mid-wealth-2-story-brick", "Two Story Brick", "R3MidWealth2StoryBrick", 6.562879f),
+            R3MediumWealthHome("r3-mid-wealth-2-story-tan-wood", "Two Story Tan Wood", "R3MidWealth2StoryTanWood", 6.335295f),
+            R3MediumWealthHome("r3-mid-wealth-2-story-yellow-house", "Two Story Yellow House", "R3MidWealth2StoryYellowHouse", 5.978082f),
             R2LowWealthHome("r2-four-story-low-wealth-stone-base", "Four Story Low Wealth Stone Base", "R2FourStoryLowWealthStoneBase", 10.818288f),
             R2LowWealthHome("r2-four-story-shanty", "Four Story Shanty", "R2FourStoryShanty", 12.607938f),
             R2LowWealthHome("r2-low-wealth-brick-apartment", "Low Wealth Brick Apartment", "R2LowWealthBrickApartment", 13.325564f),
@@ -100,6 +116,18 @@ internal static class LotCatalogSetup
                 "LowWealthFrontGableCottage", span: 7.5f, normalExtension: ".jpg"),
             FoundersHome("low-wealth-side-gable", "Side Gable House", "LowWealthSideGable"),
             V3Building("wooden-cottage", "Wooden Cottage", "WoodenCottage", "residential", "founders", 8f),
+            C2MediumWealthShop("c2-mid-wealth-ye-olde-inn", "Ye Olde Inn", "C2MidWealthYeOldeInn", 10.195834f),
+            C2MediumWealthShop("c2-mid-wealth-kings-arms", "King’s Arms", "C2MidWealthKingsArms", 8.646178f),
+            C2MediumWealthShop("c2-mid-wealth-apothecary-3-stories", "Apothecary · Three Stories", "C2MidWealthApothecary3Stories", 8.489448f),
+            C2MediumWealthShop("c2-mid-wealth-apothecary", "Apothecary", "C2MidWealthApothecary", 11.888233f),
+            C2MediumWealthShop("c2-mid-wealth-books", "Bookshop", "C2MidWealthBooks", 11.543073f),
+            C2MediumWealthShop("c2-mid-wealth-ceramics", "Ceramics", "C2MidWealthCeramics", 7.510434f),
+            C2MediumWealthShop("c2-mid-wealth-chevron-store", "Chevron Store", "C2MidWealthChevronStore", 6.717772f),
+            C2MediumWealthShop("c2-mid-wealth-coffee", "Coffee Shop", "C2MidWealthCoffee", 7.340046f),
+            C2MediumWealthShop("c2-mid-wealth-commerican-merchants-shop", "Merchants Shop", "C2MidWealthCommericanMerchantsShop", 13.357366f),
+            C2MediumWealthShop("c2-mid-wealth-dry-goods", "Dry Goods", "C2MidWealthDryGoods", 10.986853f),
+            C2MediumWealthShop("c2-mid-wealth-pottery-barn", "Pottery Barn", "C2MidWealthPotteryBarn", 6.146081f),
+            C2MediumWealthShop("c2-mid-wealth-sea-urchin", "Sea Urchin", "C2MidWealthSeaUrchin", 7.075263f),
             FoundersShop("plymouth-store", "Plymouth Store", "PlymouthStore", 9.26f, ".jpeg"),
             FoundersShop("founders-bakery", "Bakery", "FoundersBakery", 8f),
             FoundersShop("founders-blacksmith", "Blacksmith", "FoundersBlacksmith", 8f),
@@ -117,6 +145,8 @@ internal static class LotCatalogSetup
             FoundersShop("founders-shop-right-corner-cooperage", "Right Corner · Cooperage", "FoundersRightCornerCooperage", 7.3323f),
             FoundersShop("founders-shop-right-corner-dry-goods", "Right Corner · Dry Goods", "FoundersRightCornerDryGoods", 7.8836f),
             FoundersShop("founders-shop-right-corner-inn", "Right Corner · Inn", "FoundersRightCornerInn", 8.6f),
+            FoundersCivic("chapel", "Chapel", "FoundersChapel", 13.479562f),
+            FoundersCivic("constable-station", "Constable Station", "FoundersConstableStation", 13.100854f * 1.18f),
             V3Building("small-school", "Small School", "SmallSchool", "civics", "founders", 9f, ".jpg", ".png"),
             V3Building("lumber-mill", "Lumber Mill", "LumberMill", "industrial", "founders", 11.95f),
             V3Building("work-tent", "Lumber Camp Work Tent", "WorkTent", "industrial", "founders", 5f),
@@ -210,6 +240,17 @@ internal static class LotCatalogSetup
                 entries.Add(entry);
                 changed = true;
                 continue;
+            }
+            if(entry.rowGeometry!=null&&JsonUtility.ToJson(existing.rowGeometry)!=JsonUtility.ToJson(entry.rowGeometry))
+            {
+                existing.rowGeometry=entry.rowGeometry;changed=true;
+            }
+            if (entry.id == "v3-building-constable-station" &&
+                (existing.footprint != entry.footprint || existing.buildingDimensionsMeters != entry.buildingDimensionsMeters))
+            {
+                existing.footprint = entry.footprint;
+                existing.buildingDimensionsMeters = entry.buildingDimensionsMeters;
+                changed = true;
             }
             if (existing.distantPrefab != entry.distantPrefab)
             {
@@ -607,11 +648,69 @@ internal static class LotCatalogSetup
         float span, string normalExtension = ".jpg") =>
         FoundersResidentialHome(id, label, folder, span, LotWealth.Medium, normalExtension);
 
+    private static LotAssetCatalogEntry R3MediumWealthHome(string id, string label, string folder, float span)
+    {
+        var home = FoundersResidentialHome(id, label, folder, span, LotWealth.Medium);
+        home.growableZone = TownZone.Residential3;
+        home.rowGeometry = id switch
+        {
+            "r3-mid-wealth-barn-roof" => new LotRowGeometry {leftWall=-2.95274f,rightWall=2.99400f,frontStep=-3.67522f},
+            "r3-mid-wealth-blue-townhouse" => new LotRowGeometry {leftWall=-2.71537f,rightWall=2.73299f,frontStep=-3.39141f},
+            "r3-mid-wealth-dutch-roof" => new LotRowGeometry {leftWall=-2.42541f,rightWall=2.39480f,frontStep=-4.00116f},
+            "r3-mid-wealth-mansard-roof" => new LotRowGeometry {leftWall=-2.76323f,rightWall=2.75494f,frontStep=-3.53494f},
+            "r3-mid-wealth-stone-dutch" => new LotRowGeometry {leftWall=-2.70670f,rightWall=2.67975f,frontStep=-3.43065f},
+            "r3-mid-wealth-stone-house" => new LotRowGeometry {leftWall=-2.54080f,rightWall=2.61172f,frontStep=-3.48247f},
+            "r3-mid-wealth-3-window-brick-dormers" => new LotRowGeometry {leftWall=-2.86458f,rightWall=2.88997f,frontStep=-3.61563f},
+            "r3-mid-wealth-3-window-brick" => new LotRowGeometry {leftWall=-2.69101f,rightWall=2.63932f,frontStep=-3.58508f},
+            "r3-mid-wealth-painted-white-brick" => new LotRowGeometry {leftWall=-2.41166f,rightWall=2.46760f,frontStep=-3.33648f},
+            "r3-mid-wealth-3-story-brick-2" => new LotRowGeometry {leftWall=-2.02353f,rightWall=2.10623f,frontStep=-3.10862f},
+            "r3-mid-wealth-3-story-yellow" => new LotRowGeometry {leftWall=-2.57612f,rightWall=2.70351f,frontStep=-3.55775f},
+            "r3-mid-wealth-3-story-brick" => new LotRowGeometry {leftWall=-3.11843f,rightWall=3.12660f,frontStep=-3.50779f},
+            "r3-mid-wealth-3-story-yellow-stucco" => new LotRowGeometry {leftWall=-3.03225f,rightWall=3.12142f,frontStep=-3.44952f},
+            "r3-mid-wealth-2-story-brick" => new LotRowGeometry {leftWall=-3.15382f,rightWall=3.13296f,frontStep=-2.93022f},
+            "r3-mid-wealth-2-story-tan-wood" => new LotRowGeometry {leftWall=-2.68913f,rightWall=2.69194f,frontStep=-3.14983f},
+            "r3-mid-wealth-2-story-yellow-house" => new LotRowGeometry {leftWall=-2.62055f,rightWall=2.62106f,frontStep=-2.97729f},
+            _ => null
+        };
+        return home;
+    }
+
     private static LotAssetCatalogEntry R2LowWealthHome(string id, string label, string folder, float span)
     {
         var home = FoundersResidentialHome(id, label, folder, span, LotWealth.Low);
         home.growableZone = TownZone.Residential2;
         return home;
+    }
+
+    private static LotAssetCatalogEntry FoundersCivic(string id, string label, string folder, float span)
+    {
+        var civic = V3Building(id, label, folder, "civics", "founders", span);
+        ConfigureBuildingWindowMask(civic, $"{DirectoryPath}/V3Buildings/{folder}/Windows.png");
+        return civic;
+    }
+
+    private static LotAssetCatalogEntry C2MediumWealthShop(string id,string label,string folder,float span)
+    {
+        var shop=FoundersShop(id,label,folder,span);
+        shop.growableZone=TownZone.Commercial2;
+        shop.growableWealth=LotWealth.Medium;
+        shop.rowGeometry=id switch
+        {
+            "c2-mid-wealth-ye-olde-inn" => new LotRowGeometry {leftWall=-4.88359f,rightWall=4.23539f,frontStep=-4.18531f},
+            "c2-mid-wealth-kings-arms" => new LotRowGeometry {leftWall=-3.96520f,rightWall=3.96688f,frontStep=-3.20125f},
+            "c2-mid-wealth-apothecary-3-stories" => new LotRowGeometry {leftWall=-2.27996f,rightWall=2.32612f,frontStep=-3.29143f},
+            "c2-mid-wealth-apothecary" => new LotRowGeometry {leftWall=-2.87519f,rightWall=2.87519f,frontStep=-4.85184f},
+            "c2-mid-wealth-books" => new LotRowGeometry {leftWall=-4.47501f,rightWall=4.45703f,frontStep=-3.86112f},
+            "c2-mid-wealth-ceramics" => new LotRowGeometry {leftWall=-2.83764f,rightWall=2.81378f,frontStep=-2.45122f},
+            "c2-mid-wealth-chevron-store" => new LotRowGeometry {leftWall=-3.09095f,rightWall=3.08898f,frontStep=-2.44835f},
+            "c2-mid-wealth-coffee" => new LotRowGeometry {leftWall=-1.93372f,rightWall=1.93610f,frontStep=-2.98350f},
+            "c2-mid-wealth-commerican-merchants-shop" => new LotRowGeometry {leftWall=-3.16776f,rightWall=3.14923f,frontStep=-5.19055f},
+            "c2-mid-wealth-dry-goods" => new LotRowGeometry {leftWall=-3.03168f,rightWall=3.03168f,frontStep=-4.18795f},
+            "c2-mid-wealth-pottery-barn" => new LotRowGeometry {leftWall=-2.87763f,rightWall=2.87089f,frontStep=-2.07684f},
+            "c2-mid-wealth-sea-urchin" => new LotRowGeometry {leftWall=-2.75282f,rightWall=2.73371f,frontStep=-2.73563f},
+            _=>null
+        };
+        return shop;
     }
 
     private static LotAssetCatalogEntry FoundersShop(string id, string label, string folder,
@@ -855,10 +954,13 @@ internal static class LotCatalogSetup
                 }
                 var glow = AssetDatabase.LoadAssetAtPath<Texture2D>(glowPath);
                 if (glow && (entry.materialOverride.GetTexture("_EmissionMap") != glow ||
-                    !entry.materialOverride.IsKeywordEnabled("_EMISSION")))
+                    !entry.materialOverride.IsKeywordEnabled("_EMISSION") ||
+                    entry.materialOverride.GetColor("_EmissionColor").maxColorComponent < .5f))
                 {
                     entry.materialOverride.SetTexture("_EmissionMap", glow);
-                    entry.materialOverride.SetColor("_EmissionColor", new Color(.001f, .001f, .001f, 1f));
+                    // Runtime LamppostLight supplies day/night color; keep the authored
+                    // keyword alive through URP material validation and player builds.
+                    entry.materialOverride.SetColor("_EmissionColor", Color.white);
                     entry.materialOverride.EnableKeyword("_EMISSION");
                     EditorUtility.SetDirty(entry.materialOverride);
                     AssetDatabase.SaveAssetIfDirty(entry.materialOverride);
@@ -970,6 +1072,7 @@ internal static class LotCatalogSetup
             V3("founders-cook", "Founders Cook", "FoundersCook", "founders"),
             V3("founders-stout-townsperson", "Founders Stout Townsperson", "FoundersStoutTownsperson", "founders"),
             V3("founders-townsperson", "Founders Townsperson", "FoundersTownsperson", "founders"),
+            V3("founders-constable", "Constable", "FoundersConstable", "founders"),
             V3("founders-privateer", "Founders Privateer", "FoundersPrivateer", "founders"),
             V3("farmer", "Farmer", "Farmer", "founders"),
             V3("axeman", "Axeman (Lumberjack)", "Axeman", "founders"),
@@ -1017,7 +1120,13 @@ internal static class LotCatalogSetup
         if (prefab)
         {
             AddCharacterModelState(root, modelPath, "Walk");
+            if (folder == "FoundersConstable")
+            {
+                AddCharacterModelState(root, modelPath, "Run");
+                AddCharacterModelState(root, modelPath, "FoldArms");
+            }
             if (folder == "Axeman") AddCharacterModelState(root, modelPath, "Chop");
+            if (folder == "Farmer") AddCharacterModelState(root, modelPath, "Hoe");
             AddCharacterFoldArms(root);
             return prefab;
         }
@@ -1075,7 +1184,13 @@ internal static class LotCatalogSetup
             }
             var result = PrefabUtility.SaveAsPrefabAsset(wrapper, root + "Character.prefab");
             AddCharacterModelState(root, modelPath, "Walk");
+            if (folder == "FoundersConstable")
+            {
+                AddCharacterModelState(root, modelPath, "Run");
+                AddCharacterModelState(root, modelPath, "FoldArms");
+            }
             if (folder == "Axeman") AddCharacterModelState(root, modelPath, "Chop");
+            if (folder == "Farmer") AddCharacterModelState(root, modelPath, "Hoe");
             AddCharacterFoldArms(root);
             return result;
         }

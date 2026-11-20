@@ -6,12 +6,32 @@ namespace CityForge.World
 {
     public sealed partial class PrototypeRegionView
     {
+        private readonly struct WorkObstaclePiece
+        {
+            internal readonly Rect bounds;
+            internal readonly Vector2 center, halfSize;
+            internal readonly Quaternion inverseYaw;
+            internal WorkObstaclePiece(LotObjectDefinition item, LotAssetCatalogEntry asset)
+            {
+                bounds = LotRuntimeLoader.Footprint(item, asset);
+                center = item.position;
+                halfSize = LotRuntimeLoader.ObjectFootprintSize(item, asset) * .5f;
+                inverseYaw = Quaternion.Euler(0, -item.yaw, 0);
+            }
+            internal bool Contains(Vector2 point, float clearance, bool oriented)
+            {
+                if (!oriented) return ExpandedContains(bounds, point, clearance);
+                var delta = point - center;
+                var local = inverseYaw * new Vector3(delta.x, 0, delta.y);
+                return Mathf.Abs(local.x) <= halfSize.x + clearance && Mathf.Abs(local.z) <= halfSize.y + clearance;
+            }
+        }
         private sealed class WorkObstacleLot
         {
             internal Vector2 center;
             internal Quaternion rotation;
             internal Rect bounds;
-            internal Rect[] pieces;
+            internal WorkObstaclePiece[] pieces;
         }
         private readonly List<WorkObstacleLot> workObstacleLots = new();
         private int workObstacleRevision = -1, workObstacleCount = -1;
@@ -31,7 +51,7 @@ namespace CityForge.World
             if (!catalog) return;
             foreach (var lot in PlacedLots)
             {
-                var pieces = new List<Rect>(); var bounds = new Rect();
+                var pieces = new List<WorkObstaclePiece>(); var bounds = new Rect();
                 foreach (var item in lot.definition.objects)
                 {
                     var asset = catalog.Find(item.assetId);
@@ -39,14 +59,16 @@ namespace CityForge.World
                     var piece = LotRuntimeLoader.Footprint(item, asset);
                     bounds = pieces.Count == 0 ? piece : Rect.MinMaxRect(Mathf.Min(bounds.xMin, piece.xMin),
                         Mathf.Min(bounds.yMin, piece.yMin), Mathf.Max(bounds.xMax, piece.xMax), Mathf.Max(bounds.yMax, piece.yMax));
-                    pieces.Add(piece);
+                    pieces.Add(new WorkObstaclePiece(item, asset));
                 }
                 if (pieces.Count > 0) workObstacleLots.Add(new WorkObstacleLot { center = lot.center,
                     rotation = Quaternion.Euler(0, -lot.FacingDegrees, 0), bounds = bounds, pieces = pieces.ToArray() });
             }
         }
 
-        internal bool LumberjackObstacle(Vector2 point, float clearance = .4f)
+        internal bool LumberjackObstacle(Vector2 point, float clearance = .4f) => WorkObstacle(point, clearance, false);
+        private bool OrientedWorkObstacle(Vector2 point, float clearance) => WorkObstacle(point, clearance, true);
+        private bool WorkObstacle(Vector2 point, float clearance, bool oriented)
         {
             EnsureWorkObstacles();
             foreach (var lot in workObstacleLots)
@@ -54,8 +76,8 @@ namespace CityForge.World
                 var delta = point - lot.center;
                 var local3 = lot.rotation * new Vector3(delta.x, 0, delta.y);
                 var local = new Vector2(local3.x, local3.z);
-                if (!ExpandedContains(lot.bounds, local, clearance)) continue;
-                foreach (var piece in lot.pieces) if (ExpandedContains(piece, local, clearance)) return true;
+                if (!ExpandedContains(lot.bounds, local, oriented ? clearance * 1.414214f : clearance)) continue;
+                foreach (var piece in lot.pieces) if (piece.Contains(local, clearance, oriented)) return true;
             }
             return false;
         }

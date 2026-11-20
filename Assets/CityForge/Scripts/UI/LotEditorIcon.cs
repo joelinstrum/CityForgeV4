@@ -7,7 +7,7 @@ namespace CityForge.UI
     internal enum LotGlyph
     {
         None, House, Tree, Fence, Select, Move, Rotate, Shrink, Grow, Copy, Trash,
-        Grid, Snap, View, Undo, Redo, Save, Check, Catalog, Back, Edit, Path, Lighting, Textures, Character, Landscaping, StreetFurniture, RotateLot, Open, Transport
+        Grid, Snap, View, Undo, Redo, Save, Check, Catalog, Back, Edit, Path, Lighting, Textures, Character, Landscaping, StreetFurniture, RotateLot, Open, Transport, Shop, Industry, BuildingRow, ChevronDown
     }
 
     [RequireComponent(typeof(CanvasRenderer))]
@@ -29,6 +29,17 @@ namespace CityForge.UI
                 case LotGlyph.House:
                     Line(2, 11, 12, 21, 22, 11); Line(5, 12, 5, 3, 19, 3, 19, 12);
                     Line(10, 3, 10, 9, 14, 9, 14, 3); break;
+                case LotGlyph.ChevronDown:
+                    Line(5,15,12,8,19,15);break;
+                case LotGlyph.Shop:
+                    Line(4,13,4,3,20,3,20,13);Line(2,14,5,21,19,21,22,14,2,14);
+                    for(int x=5;x<=19;x+=4)Line(x,14,x,19);Line(10,3,10,10,15,10,15,3);break;
+                case LotGlyph.Industry:
+                    Line(3,3,3,13,9,17,9,13,15,17,15,3,3,3);Line(18,3,18,21,21,21,21,3,15,3);
+                    Line(6,6,7,6);Line(11,6,12,6);break;
+                case LotGlyph.BuildingRow:
+                    Line(1,11,6,17,11,11);Line(2,11,2,3,10,3,10,11);Line(13,11,18,17,23,11);Line(14,11,14,3,22,3,22,11);
+                    Line(5,3,5,8,7,8,7,3);Line(17,3,17,8,19,8,19,3);break;
                 case LotGlyph.Tree:
                     Line(12, 3, 12, 9); Line(8, 3, 16, 3);
                     Line(6, 9, 3, 11, 3, 15, 7, 17, 8, 20, 14, 21, 17, 18, 21, 16, 21, 12, 18, 9, 6, 9); break;

@@ -98,3 +98,13 @@ Closed/live-string and filled lake renders inspected. Test source/report under
 Library/ and the task work directory; no normal player saves written. Mixed
 chestnut/locust/larch map qualified; tropical/coastal presentation not separately
 visually qualified in this pass.
+
+
+## Marsh creation · November19
+
+Water Features > Marsh > Draw Feature reuses closed LakeOutlineTool. Marsh=true
+creates player-marsh-v1 with0.55m depth,8m banks/10m outer banks and a2m maximum
+bank height variation. Existing basin/forest/paint replay and removal are retained.
+Marsh water is greener and LakeShoreRenderer adds bounded interior native reed
+batches in shallow patches, respecting SmallPlantsEnabled. Existing lakes retain
+their approved profile. No new persistent fields or save-version migration.

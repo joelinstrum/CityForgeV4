@@ -23,8 +23,9 @@ namespace CityForge.World
         private const float DaylightMenuAnchor = .10f;
         private float daylightPhaseElapsed;
         private bool clockPaused;
-        private Toggle clockPauseToggle;
         private RectTransform clockFace, clockHand;
+        private Button clockPauseButton;
+        private Text clockTimeLabel;
         private static readonly float[] ClockHours = { 6f, 12f, 15f, 20f, 22f };
         private Transform clockRegionSun;
         private Dropdown daylightPicker;
@@ -73,31 +74,22 @@ namespace CityForge.World
             label.rectTransform.sizeDelta = new Vector2(205, 24);
             label.alignment = TextAnchor.MiddleCenter;
             label.text = "TIME OF DAY";
-            var pause = DefaultControls.CreateToggle(new DefaultControls.Resources());
-            pause.name = "Pause clock";
-            var pauseRect = (RectTransform)pause.transform;
-            pauseRect.SetParent(hud, false);
-            pauseRect.anchorMin = pauseRect.anchorMax = rect.anchorMin;
-            pauseRect.pivot = rect.pivot;
-            pauseRect.anchoredPosition = new Vector2(-25, 143);
-            pauseRect.sizeDelta = new Vector2(205, 28);
-            var pauseLabel = pause.GetComponentInChildren<Text>();
-            pauseLabel.font = font;
-            pauseLabel.text = "Pause clock";
-            pauseLabel.color = Color.white;
-            clockPauseToggle = pause.GetComponent<Toggle>();
-            clockPauseToggle.targetGraphic.color = new Color(.16f, .20f, .24f);
-            clockPauseToggle.graphic.color = new Color(.93f, .80f, .55f);
-            clockPauseToggle.SetIsOnWithoutNotify(clockPaused);
-            clockPauseToggle.onValueChanged.AddListener(value => clockPaused = value);
             clockFace = new GameObject("District clock", typeof(RectTransform), typeof(CanvasRenderer),
                 typeof(DistrictClockFace)).GetComponent<RectTransform>();
             clockFace.SetParent(hud, false);
-            clockFace.anchorMin = clockFace.anchorMax = rect.anchorMin;
+            clockFace.anchorMin = clockFace.anchorMax = Vector2.one;
             clockFace.pivot = new Vector2(.5f, .5f);
-            clockFace.anchoredPosition = new Vector2(-268, 157);
+            clockFace.anchoredPosition = new Vector2(-51, -46);
             clockFace.sizeDelta = new Vector2(52, 52);
-            clockFace.GetComponent<DistrictClockFace>().raycastTarget = false;
+            var face = clockFace.GetComponent<DistrictClockFace>();
+            face.raycastTarget = true;
+            var input=clockFace.gameObject.AddComponent<DistrictClockInput>();
+            input.Hour=()=>CurrentClockHour;input.SetHour=SetClockHour;
+            var pauseHost=new GameObject("Pause clock",typeof(RectTransform),typeof(Image),typeof(Button));
+            var pauseRect=(RectTransform)pauseHost.transform;pauseRect.SetParent(hud,false);pauseRect.anchorMin=pauseRect.anchorMax=Vector2.one;pauseRect.pivot=new Vector2(.5f,.5f);pauseRect.anchoredPosition=new Vector2(-51,-90);pauseRect.sizeDelta=new Vector2(76,28);
+            pauseHost.GetComponent<Image>().sprite=CityForge.UI.ZoneModalArtwork.Dark;pauseHost.GetComponent<Image>().type=Image.Type.Sliced;clockPauseButton=pauseHost.GetComponent<Button>();clockPauseButton.onClick.AddListener(ToggleClockPause);
+            var caption=HudText(pauseHost.transform,"Pause caption",font,14);caption.rectTransform.anchorMin=Vector2.zero;caption.rectTransform.anchorMax=Vector2.one;caption.rectTransform.offsetMin=caption.rectTransform.offsetMax=Vector2.zero;caption.alignment=TextAnchor.MiddleCenter;caption.text="Pause";
+            clockTimeLabel=HudText(hud,"Clock time",font,13);clockTimeLabel.rectTransform.anchorMin=clockTimeLabel.rectTransform.anchorMax=Vector2.one;clockTimeLabel.rectTransform.pivot=new Vector2(.5f,.5f);clockTimeLabel.rectTransform.anchoredPosition=new Vector2(-51,-117);clockTimeLabel.rectTransform.sizeDelta=new Vector2(90,22);clockTimeLabel.alignment=TextAnchor.MiddleCenter;
             var hand = new GameObject("Hour hand", typeof(RectTransform), typeof(Image));
             clockHand = (RectTransform)hand.transform;
             clockHand.SetParent(clockFace, false);
@@ -236,6 +228,33 @@ namespace CityForge.World
             ApplyTimeOfDay(time, resetHistory: true);
         }
 
+        internal bool ClockPaused=>clockPaused;
+        internal void RestoreClock(SavedRegionInfo info)
+        {
+            if(!info.hasClockHour)return;clockPaused=info.clockPaused;
+            float hour=info.clockHour<6?info.clockHour+24:info.clockHour;int phase=ClockHours.Length-1;
+            for(int i=0;i<ClockHours.Length-1;i++)if(hour>=ClockHours[i]&&hour<ClockHours[i+1]){phase=i;break;}
+            TimeOfDay=DaylightChoices[phase];float end=phase+1<ClockHours.Length?ClockHours[phase+1]:30;
+            daylightPhaseElapsed=Mathf.InverseLerp(ClockHours[phase],end,hour)*DaylightPhaseSeconds;
+        }
+        internal float CurrentClockHour
+        {
+            get {int phase=Array.IndexOf(DaylightChoices,TimeOfDay);if(phase<0)return 15;
+                float end=phase+1<ClockHours.Length?ClockHours[phase+1]:30;
+                return Mathf.Repeat(Mathf.Lerp(ClockHours[phase],end,daylightPhaseElapsed/DaylightPhaseSeconds),24);}
+        }
+        private void ToggleClockPause(){clockPaused=!clockPaused;if(clockHand)clockHand.GetComponent<Image>().color=clockPaused?new Color(1,.5f,.16f):new Color(.93f,.8f,.55f);RefreshDaylightPicker();}
+        internal void SetClockHour(float hour)
+        {
+            hour=Mathf.Repeat(hour,24);float unwrapped=hour<6?hour+24:hour;int phase=ClockHours.Length-1;
+            for(int i=0;i<ClockHours.Length-1;i++)if(unwrapped>=ClockHours[i]&&unwrapped<ClockHours[i+1]){phase=i;break;}
+            float end=phase+1<ClockHours.Length?ClockHours[phase+1]:30;
+            daylightPhaseElapsed=Mathf.InverseLerp(ClockHours[phase],end,unwrapped)*DaylightPhaseSeconds;
+            ApplyTimeOfDay(DaylightChoices[phase],resetHistory:true);
+            if(ApprovedDistrict)ApprovedDistrict.InterpolateDistrictSun(TimeOfDay,DaylightChoices[(phase+1)%DaylightChoices.Length],daylightPhaseElapsed/DaylightPhaseSeconds);
+            UpdateClockHand(phase,daylightPhaseElapsed/DaylightPhaseSeconds);
+        }
+
         private void TickDistrictClock()
         {
             if (clockPaused || SelectedDistrict < 0 || DistrictLoading || IsSaving) return;
@@ -283,10 +302,13 @@ namespace CityForge.World
 
         private void UpdateClockHand(int phase, float blend)
         {
+            if(clockPauseButton)clockPauseButton.GetComponentInChildren<Text>().text=clockPaused?"Resume":"Pause";
+            if(clockTimeLabel){int h=Mathf.RoundToInt(CurrentClockHour)%24;clockTimeLabel.text=$"{(h%12==0?12:h%12)} {(h<12?"AM":"PM")}";}
             if (!clockHand || phase < 0) return;
             float nextHour = phase + 1 < ClockHours.Length ? ClockHours[phase + 1] : ClockHours[0] + 24f;
             float hour = Mathf.Lerp(ClockHours[phase], nextHour, blend);
             clockHand.localRotation = Quaternion.Euler(0f, 0f, -hour * 30f);
+            clockHand.GetComponent<Image>().color=clockPaused?new Color(1,.5f,.16f):new Color(.93f,.8f,.55f);
         }
 
         private void ApplyTimeOfDay(RegionTimeOfDay time, bool resetHistory)
@@ -303,6 +325,7 @@ namespace CityForge.World
                 LamppostLight.ApplyTime(lotInstances, time);
                 LamppostLight.ApplyTime(streetscapeRoot, time);
             }
+            RefreshTrafficVisibility();
             ApplyDistrictDaylight();
             // A daylight preset is a lighting cut. Drop history from the previous sun/exposure.
             if (resetHistory && changed && SelectedDistrict >= 0 && GetComponentInChildren<CityForge.CameraSystem.CityForgeCameraController>() is { } rig &&
@@ -315,17 +338,17 @@ namespace CityForge.World
         private void RefreshDaylightPicker()
         {
             if (!daylightPicker) return;
-            daylightPicker.gameObject.SetActive(SelectedDistrict >= 0);
-            clockPauseToggle.gameObject.SetActive(SelectedDistrict >= 0);
+            daylightPicker.gameObject.SetActive(false);
             clockFace.gameObject.SetActive(SelectedDistrict >= 0);
+            if(clockPauseButton)clockPauseButton.gameObject.SetActive(SelectedDistrict>=0);
+            if(clockTimeLabel)clockTimeLabel.gameObject.SetActive(SelectedDistrict>=0);
             UpdateClockHand(Array.IndexOf(DaylightChoices, TimeOfDay),
                 daylightPhaseElapsed / DaylightPhaseSeconds);
-            if (zoneWealthPicker) zoneWealthPicker.gameObject.SetActive(SelectedDistrict >= 0);
+            if (zoneWealthPicker) zoneWealthPicker.gameObject.SetActive(false);
             daylightPicker.SetValueWithoutNotify(Array.IndexOf(DaylightChoices, TimeOfDay));
-            bool showAfternoon = SelectedDistrict >= 0 && ApprovedDistrict && TimeOfDay == RegionTimeOfDay.Afternoon;
-            afternoonShadowPicker.gameObject.SetActive(showAfternoon);
-            afternoonLightingButton.SetActive(showAfternoon);
-            if (!showAfternoon) afternoonLightingPanel.SetActive(false);
+            afternoonShadowPicker.gameObject.SetActive(false);
+            afternoonLightingButton.SetActive(false);
+            afternoonLightingPanel.SetActive(false);
             afternoonShadowPicker.SetValueWithoutNotify((int)AfternoonShadows);
         }
 

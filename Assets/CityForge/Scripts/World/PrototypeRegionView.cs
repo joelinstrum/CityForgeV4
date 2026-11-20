@@ -85,8 +85,8 @@ namespace CityForge.World
             if (hudDistrictMode != district)
             {
                 hudDistrictMode = district;
-                LayoutHudAction(districtSaveIcon, district, district ? -77f : -86f, "SAVE REGION", "save");
-                LayoutHudAction(districtBackIcon, district, -25f, "RETURN TO MENU", "back");
+                LayoutHudAction(districtSaveIcon, district, district ? -151f : -86f, "SAVE REGION", "save");
+                LayoutHudAction(districtBackIcon, district, district ? -89f : -25f, "RETURN TO MENU", "back");
                 LayoutRegionHeading(district);
                 ShowDistrictMessage("");
             }
@@ -236,6 +236,7 @@ namespace CityForge.World
             var fill=progress.transform.Find("Fill").GetComponent<RectTransform>();
             button.interactable = false;
             back.interactable = false;
+            progress.SetActive(true);
             if (district)
                 ShowDistrictMessage("Saving district...");
             else
@@ -259,7 +260,6 @@ namespace CityForge.World
                 }
                 catch(System.Exception error){failure=error;}
                 while(write!=null&&!write.IsCompleted){
-                    if (!district)
                     {
                         float position=Mathf.PingPong(Time.unscaledTime*.8f,.75f);
                         fill.anchorMin=new Vector2(position,0);fill.anchorMax=new Vector2(position+.25f,1);
@@ -337,8 +337,9 @@ namespace CityForge.World
                 view.RestoreTownZones(snapshot?.info.townZones, snapshot?.info.townZoneGridVersion ?? 0);
                 view.RestoreDistrictRoads(snapshot?.info.districtRoads);
                 view.RestoreGroundPaint(snapshot?.info.groundPaint);
+                view.RestoreParkPaths(snapshot?.info.parkPaths);
                 if (snapshot?.info.placedActors != null) view.PlacedActors.AddRange(snapshot.info.placedActors);
-                if(snapshot!=null){view.TimeOfDay=snapshot.info.timeOfDay;view.RestoreSettlementData(snapshot.info);view.ForestAdditions=snapshot.info.forestAdditions??System.Array.Empty<ForestAdditionRecord>();view.ForestRemovals=snapshot.info.forestRemovals??System.Array.Empty<ForestRemovalStroke>();view.NativeCamps=snapshot.info.nativeCamps??System.Array.Empty<NativeCampRecord>();view.CombinedDistricts=snapshot.info.combinedDistricts??System.Array.Empty<CombinedDistrictGroup>();view.CreationSettings=snapshot.info.creation;view.legacyClimate=snapshot.info.climate;view.AnimalsEnabled=snapshot.info.animals;size=(RegionSize)snapshot.info.size;seed=snapshot.info.seed;regionName=snapshot.info.name;view.SavedRegionId=snapshot.info.id;view.Season=(RegionSeason)snapshot.info.season;view.TerrainHeightRange=snapshot.info.terrainHeightRange;view.LoadedMeadow=snapshot.meadow;view.LoadedMeadowDistrict=snapshot.info.meadowCacheDistrict;view.LoadedFromSnapshot=true;view.wantsMeadow=snapshot.info.meadow;view.Waterless=snapshot.info.waterless;view.Coastline=snapshot.info.coastline;view.CoastVersion=snapshot.info.coastVersion;view.MinimalRiverCrest=snapshot.info.minimalRiverCrest;view.StillWater=snapshot.info.stillWater;view.LakeWaterVersion=snapshot.info.lakeWaterVersion<0?-1:1;view.RiverBedVersion=snapshot.info.riverBedVersion;}
+                if(snapshot!=null){view.TimeOfDay=snapshot.info.timeOfDay;view.RestoreClock(snapshot.info);view.RestoreSettlementData(snapshot.info);view.ForestAdditions=snapshot.info.forestAdditions??System.Array.Empty<ForestAdditionRecord>();view.ForestRemovals=snapshot.info.forestRemovals??System.Array.Empty<ForestRemovalStroke>();view.NativeCamps=snapshot.info.nativeCamps??System.Array.Empty<NativeCampRecord>();view.CombinedDistricts=snapshot.info.combinedDistricts??System.Array.Empty<CombinedDistrictGroup>();view.CreationSettings=snapshot.info.creation;view.legacyClimate=snapshot.info.climate;view.AnimalsEnabled=snapshot.info.animals;size=(RegionSize)snapshot.info.size;seed=snapshot.info.seed;regionName=snapshot.info.name;view.SavedRegionId=snapshot.info.id;view.Season=(RegionSeason)snapshot.info.season;view.TerrainHeightRange=snapshot.info.terrainHeightRange;view.LoadedMeadow=snapshot.meadow;view.LoadedMeadowDistrict=snapshot.info.meadowCacheDistrict;view.LoadedFromSnapshot=true;view.wantsMeadow=snapshot.info.meadow;view.Waterless=snapshot.info.waterless;view.Coastline=snapshot.info.coastline;view.CoastVersion=snapshot.info.coastVersion;view.MinimalRiverCrest=snapshot.info.minimalRiverCrest;view.StillWater=snapshot.info.stillWater;view.LakeWaterVersion=snapshot.info.lakeWaterVersion<0?-1:1;view.RiverBedVersion=snapshot.info.riverBedVersion;}
                 if (snapshot != null) view.RestoreDistrictCoastlines(snapshot.info.deepHarborDistricts);
                 if(view.LoadedMeadow!=null&&view.LoadedMeadowDistrict>=0)view.sessionMeadows[view.LoadedMeadowDistrict]=view.LoadedMeadow;
                 view.Size = size;
@@ -628,8 +629,9 @@ namespace CityForge.World
             var rig = GetComponentInChildren<CityForgeCameraController>();
             CityForge.UI.RegionOverviewPresentation.Create(this, rig, root.transform, font);
             var zoomLabel = HudText(root.transform, "ZoomLabel", font, 16);
-            zoomLabel.rectTransform.anchorMin = zoomLabel.rectTransform.anchorMax = zoomLabel.rectTransform.pivot = new Vector2(1,1);
-            zoomLabel.rectTransform.anchoredPosition = new Vector2(-25,-87);
+            zoomLabel.rectTransform.anchorMin = zoomLabel.rectTransform.anchorMax = zoomLabel.rectTransform.pivot = new Vector2(1,0);
+            zoomLabel.rectTransform.anchorMin=zoomLabel.rectTransform.anchorMax=new Vector2(1,0);
+            zoomLabel.rectTransform.anchoredPosition = new Vector2(-25,76);
             zoomLabel.rectTransform.sizeDelta = new Vector2(205,28);
             zoomLabel.alignment = TextAnchor.MiddleRight;
             System.Action<int> refreshZoom = level => zoomLabel.text = "ZOOM " + level + " / 5";
@@ -664,7 +666,7 @@ namespace CityForge.World
                 seasonCaption.rectTransform.offsetMin=seasonCaption.rectTransform.offsetMax=Vector2.zero;
             }
             CameraTiltControls.Build(this,root.transform,font);
-            StreamFishControls.Build(this,root.transform,font);
+
             gameObject.AddComponent<CityForge.UI.NatureToolbar>().Initialize(this,root.transform);
             BuildTownConstructionMenu(root.transform, font);
             RefreshSeasonButtons();
@@ -746,7 +748,7 @@ namespace CityForge.World
             var rect = (RectTransform)icon.transform.parent;
             var image = rect.GetComponent<Image>();
             var button = rect.GetComponent<Button>();
-            bool styled = !district && CityForge.UI.RegionBrassArtwork.SetImage(image, artwork);
+            bool styled = CityForge.UI.RegionBrassArtwork.SetImage(image, artwork);
             if (!styled)
             {
                 image.sprite = null;
@@ -754,16 +756,28 @@ namespace CityForge.World
             }
             if (!district && !styled && artwork == "save") right = -245f;
             rect.anchoredPosition = new Vector2(right, -25f);
-            rect.sizeDelta = district ? Vector2.one * DistrictActionSize : styled ? Vector2.one * 53f : new Vector2(205f, 48f);
+            rect.sizeDelta = styled ? Vector2.one * 53f : district ? Vector2.one * DistrictActionSize : new Vector2(205f, 48f);
             var caption = rect.Find("Caption").GetComponent<Text>();
             caption.gameObject.SetActive(!district && !styled);
             caption.text = overviewCaption;
-            icon.gameObject.SetActive(district);
-            button.targetGraphic = district ? icon : image;
+            icon.gameObject.SetActive(district && !styled);
+            button.targetGraphic = image;
+            button.transition = Selectable.Transition.ColorTint;
+            var colors = button.colors;
+            colors.normalColor = Color.white;
+            colors.highlightedColor = new Color(1.8f, 1.65f, 1.25f, 1f);
+            colors.selectedColor = colors.normalColor;
+            colors.pressedColor = new Color(.72f, .64f, .42f, 1f);
+            colors.disabledColor = new Color(.45f, .45f, .45f, .65f);
+            colors.colorMultiplier = 1f;
+            colors.fadeDuration = .08f;
+            button.colors = colors;
+            if (styled && !button.GetComponent<CityForge.UI.BrassHudHover>()) button.gameObject.AddComponent<CityForge.UI.BrassHudHover>();
         }
 
         void ShowDistrictMessage(string message)
         {
+            if (!districtMessage) return;
             districtMessage.text = message;
             districtMessage.transform.parent.gameObject.SetActive(message.Length > 0);
         }
@@ -866,6 +880,7 @@ namespace CityForge.World
             }
             UpdateLotGrowth();
             if (districtTexturePaint) return;
+            if(ParkPathArmed){UpdateParkPathPreset();return;}
             if (regionHudVisibility && regionHudVisibility.alpha == 0f) return;
             if (UpdateDetonate() || UpdateParkTreeBrush() || UpdateStreetscape()) return;
             if (UpdateRoadPlacement() || UpdateRoadContext() || UpdateRoadPaths()) return;
@@ -908,7 +923,7 @@ namespace CityForge.World
         private bool orbitingSlab;
         private void OnGUI()
         {
-            if(DistrictScriptDialogOpen||RemakeBlocksInput||DistrictLoading||IsSaving||playerLotWorkspace||lotPlacementDraft!=null||founderPicker||savedLotPicker||transportModal||ParkTreeBrushArmed||streetscapeAsset != null){
+            if(districtTexturePaint||ParkPathArmed||parkPathOptions||DistrictScriptDialogOpen||RemakeBlocksInput||DistrictLoading||IsSaving||playerLotWorkspace||lotPlacementDraft!=null||founderPicker||savedLotPicker||transportModal||ParkTreeBrushArmed||streetscapeAsset != null){
                 orbitingSlab=false;
                 return;
             }
@@ -1104,6 +1119,7 @@ namespace CityForge.World
             RefreshDistrictGrid();
             RebuildDistrictRoads();
             RebuildGroundPaint();
+            RebuildParkPaths();
             RebuildDistrictLots();
             RebuildPlacedPedestrians();
             if(NaturalLandscape&&IsCombinedDistrict){
@@ -1254,8 +1270,11 @@ namespace CityForge.World
         }
         private void OnDestroy()
         {
+            CloseTransportModal();
             tearingDownPaint = true;
             CancelTexturePaint();
+            CancelParkPath();
+            foreach(var asset in parkPathAssets)if(asset)Destroy(asset);
             CancelParkTreeBrush();
             ClearDistrictRoadPresentation();
             ClosePlayerLot();

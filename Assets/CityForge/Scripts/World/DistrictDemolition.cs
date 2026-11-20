@@ -13,6 +13,9 @@ namespace CityForge.World
         private bool detonateArmed;
         private bool detonateHovered;
         private Vector2? detonateLastPoint;
+        private Vector2? detonateAreaStart;
+        private Rect? detonateArea;
+        private LineRenderer detonateAreaOutline;
         private DistrictLotRecord detonateHoverLot;
         private DistrictRoadRecord detonateHoverRoad;
         private readonly HashSet<DistrictLotRecord> detonateLots = new();
@@ -83,8 +86,9 @@ namespace CityForge.World
             if (!detonateHint) return;
             int count = detonateLots.Count + detonateRoads.Count;
             detonateHint.text = !detonateArmed ? (detonateHovered ? "Detonate" : "")
+                : detonateArea.HasValue ? "Release to clear the outlined area · Esc to cancel"
                 : count > 0 ? $"Release to remove {count} · Esc to cancel"
-                : "Detonate · Click or drag over lots and road runs · Esc to exit";
+                : "Detonate · Click an item or drag a rectangle to clear everything · Esc to exit";
         }
 
         private bool UpdateDetonate()
@@ -112,23 +116,30 @@ namespace CityForge.World
             switch (pointer.type)
             {
                 case EventType.MouseDown:
-                    if (RoadContextOverUi(screen)) return;
+                    if (RoadContextOverUi(screen) || !TryRoadGround(screen, out var start)) return;
                     ClearDetonateStroke();
-                    detonateLastPoint = screen;
+                    detonateLastPoint = screen; detonateAreaStart = start;
                     CollectDetonateTarget(screen);
                     RefreshDetonatePreview();
                     break;
                 case EventType.MouseDrag:
                 case EventType.MouseUp:
                     if (!detonateLastPoint.HasValue) return;
-                    var previous = detonateLastPoint.Value;
-                    int steps = Mathf.Max(1, Mathf.CeilToInt(Vector2.Distance(previous, screen) / 6f));
-                    int previousCount = detonateLots.Count + detonateRoads.Count;
-                    for (int i = 1; i <= steps; i++)
-                        CollectDetonateTarget(Vector2.Lerp(previous, screen, (float)i / steps));
-                    detonateLastPoint = screen;
-                    if (pointer.type == EventType.MouseUp) CommitDetonateStroke();
-                    else if (previousCount != detonateLots.Count + detonateRoads.Count) RefreshDetonatePreview();
+                    if (detonateAreaStart.HasValue && (detonateArea.HasValue || Vector2.Distance(detonateLastPoint.Value, screen) > 6f) &&
+                        !RoadContextOverUi(screen) && TryRoadGround(screen, out var end))
+                    {
+                        var a = detonateAreaStart.Value;
+                        detonateArea = Rect.MinMaxRect(Mathf.Min(a.x, end.x), Mathf.Min(a.y, end.y), Mathf.Max(a.x, end.x), Mathf.Max(a.y, end.y));
+                        RefreshDetonateAreaOutline();
+                        if (zonePreviewRenderer) zonePreviewRenderer.enabled = false;
+                    }
+                    if (pointer.type == EventType.MouseUp)
+                    {
+                        if (RoadContextOverUi(screen)) ClearDetonateStroke();
+                        else if (detonateArea is Rect area)
+                        { if (area.width > .1f && area.height > .1f) CommitDetonateArea(area); else ClearDetonateStroke(); }
+                        else CommitDetonateStroke();
+                    }
                     break;
                 default:
                     return;
@@ -359,7 +370,8 @@ namespace CityForge.World
 
         private void ClearDetonateStroke()
         {
-            detonateLastPoint = null;
+            detonateLastPoint = null; detonateAreaStart = null; detonateArea = null;
+            if (detonateAreaOutline) detonateAreaOutline.enabled = false;
             detonateLots.Clear();
             detonateRoads.Clear();
             detonateHoverLot = null;

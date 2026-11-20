@@ -11,7 +11,7 @@ namespace CityForge.World
 
         internal static void Attach(GameObject instance, CityForge.Lots.LotAssetCatalogEntry asset, RegionTimeOfDay time)
         {
-            if (asset.growableZone is not (TownZone.Residential1 or TownZone.Residential2 or TownZone.Residential3 or TownZone.Commercial1) || !asset.materialOverride ||
+            if (asset.category != "Buildings" || !asset.materialOverride ||
                 !asset.materialOverride.IsKeywordEnabled("_EMISSION")) return;
             var lights = instance.AddComponent<ResidentialWindowLights>();
             lights.highWealth = asset.growableWealth == CityForge.Lots.LotWealth.High;
@@ -29,6 +29,7 @@ namespace CityForge.World
             if (highWealth && time is RegionTimeOfDay.Night or RegionTimeOfDay.Evening)
                 emission = time == RegionTimeOfDay.Night ? new Color(1.8f, 1.05f, .49f, 1f)
                     : new Color(1.08f, .64f, .31f, 1f);
+            emission.r *= .72f; emission.g *= .72f; emission.b *= .72f;
             renderers ??= GetComponentsInChildren<Renderer>(true);
             var properties = new MaterialPropertyBlock();
             foreach (var renderer in renderers)

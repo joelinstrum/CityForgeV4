@@ -4,6 +4,9 @@ Shader "CityForge/District Horizon"
     {
         _ClearColor ("District clear color", Color) = (.075, .105, .12, 1)
         _Visibility ("Backdrop visibility", Range(0, 1)) = 0
+        _Night ("Night darkness", Range(0,1)) = 0
+        _StarVisibility ("Stars and moon", Range(0,1)) = 0
+        _Hour ("Hour", Float) = 15
         _Skyline ("Regional skyline", 2D) = "black" {}
     }
 
@@ -22,7 +25,7 @@ Shader "CityForge/District Horizon"
 
             CBUFFER_START(UnityPerMaterial)
                 half4 _ClearColor;
-                half _Visibility;
+                half _Visibility, _Night, _StarVisibility, _Hour;
             CBUFFER_END
             TEXTURE2D(_Skyline);
             SAMPLER(sampler_Skyline);
@@ -66,16 +69,18 @@ Shader "CityForge/District Horizon"
             {
                 float3 direction = normalize(input.direction);
                 float elevation = direction.y;
-                half3 haze = half3(.43, .59, .73);
-                half3 zenith = half3(.09, .29, .63);
-                half3 sky = lerp(haze, zenith, smoothstep(-.02, .43, elevation));
+                half3 haze = half3(.25, .44, .64);
+                half3 zenith = half3(.14, .32, .57);
+                half3 sky = lerp(haze, zenith, smoothstep(-.15, .36, elevation));
 
+                float cloudOpacity=0;
                 UNITY_BRANCH
                 if (elevation > .055)
                 {
                     float2 cloudUV = direction.xz * (1.4 / (elevation + .12)) + float2(_Time.y * .012, 0);
                     float cloud = Noise(cloudUV) * .65 + Noise(cloudUV * 2.1) * .25 + Noise(cloudUV * 4.3) * .10;
                     float opacity = smoothstep(.55, .76, cloud) * smoothstep(.055, .20, elevation);
+                    cloudOpacity=opacity;
                     sky = lerp(sky, half3(.84, .87, .88), opacity * .72);
                 }
 
@@ -84,9 +89,29 @@ Shader "CityForge/District Horizon"
                 {
                     float bearing = atan2(direction.x, direction.z) / TWO_PI + .5;
                     half2 profile = SAMPLE_TEXTURE2D(_Skyline, sampler_Skyline, float2(bearing, .5)).rg;
-                    sky = lerp(sky, half3(.44, .54, .58), Ridge(elevation, profile.g, -.005, .14) * .78);
-                    sky = lerp(sky, half3(.34, .45, .49), Ridge(elevation, profile.r, -.028, .15) * .82);
+                    sky = lerp(sky, half3(.18, .31, .43), Ridge(elevation, profile.g, -.005, .14) * .78);
+                    sky = lerp(sky, half3(.14, .26, .36), Ridge(elevation, profile.r, -.028, .15) * .82);
                 }
+
+                sky=lerp(sky,sky*half3(.035,.055,.11),_Night);
+                float sunset = smoothstep(17.5,19.0,_Hour)*(1-smoothstep(19.25,20.25,_Hour));
+                float westGlow=pow(saturate(dot(normalize(direction.xz),normalize(float2(-1,.3)))*.5+.5),3);
+                float lowSky=exp(-max(0,elevation)*4);
+                sky=lerp(sky,lerp(half3(.55,.24,.25),half3(.95,.32,.10),westGlow),sunset*lowSky*(.45+.5*westGlow));
+                if(_StarVisibility>0&&elevation>0){
+                    float2 starUV=float2(atan2(direction.x,direction.z)/TWO_PI+.5,asin(clamp(direction.y,-1,1))/PI+.5)*float2(420,210);
+                    float2 cell=floor(starUV);float random=Hash(cell);float2 center=float2(Hash(cell+19.3),Hash(cell+43.7))*.7+.15;
+                    float radius=length(frac(starUV)-center);float aa=max(fwidth(starUV.x),fwidth(starUV.y));
+                    float stars=(1-smoothstep(.065,.065+aa*.65,radius))*step(.985,random);
+                    stars*=lerp(.55,1,Hash(cell+77))*(.87+.13*sin(_Time.y*1.2+random*100));
+                    sky+=stars*half3(1.8,2.0,2.4)*_StarVisibility*(1-cloudOpacity*.9)*smoothstep(0,.12,elevation);
+                    float phase=frac((_Hour-20+24)/24)*TWO_PI;
+                    float3 moonDirection=normalize(float3(-.48*cos(phase),.12+.7*sin(phase),.65));
+                    float disc=dot(direction,moonDirection);float moon=smoothstep(cos(.025),cos(.022),disc);
+                    float glow=pow(saturate(disc),650)*.055;
+                    sky+=(moon*half3(.72,.76,.68)*(.72+.28*Noise((direction.xz-moonDirection.xz)*900))+glow*half3(.38,.47,.65))*_StarVisibility*(1-cloudOpacity*.75);
+                }
+
 
                 // Fade below the horizon into the dark space surrounding the slab.
                 sky = lerp(_ClearColor.rgb, sky, smoothstep(-.29, -.06, elevation));

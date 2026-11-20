@@ -25,6 +25,13 @@ namespace CityForge.UI
         RegionLoadingOverlay completionOverlay;bool acceptingCompletion;
         public Func<Vector2,Vector2> SnapPoint;
         public Func<Vector2,bool> FinishOpenAtMarker;
+        // Optional consumer gesture: place its endpoint on release, allowing drag-through joins.
+        public bool PlaceOnRelease;
+        public Func<IReadOnlyList<Vector2>, Vector2?> ConnectionPreview;
+        PointWireGraphic connectionOverlay;
+        Vector2? connectionPoint;
+        bool pointerPressed;
+        Vector2 pointerDown;
         internal event Action<Vector2?> StartPointHovered;
         public Func<IReadOnlyList<Vector2>, bool, IReadOnlyList<Vector2>> ProjectGuide;
         public string DrawingHint;
@@ -36,7 +43,7 @@ namespace CityForge.UI
         IReadOnlyList<Vector2> points=>path.Points;
         readonly List<LineRenderer> markers=new();
         readonly List<RaycastResult> hits=new();
-        PointWireSurface surface;Camera cameraView;
+        PointWireSurface surface;Camera cameraView,overlayCamera;
         RectTransform canvasRect;Text cursor,hint;Material material;PointWireGraphic overlay;
         readonly List<Vector3> boundary=new(),preview=new();
         Collider terrainCollider;bool colliderWasEnabled,savedCursor,waitRelease;
@@ -45,6 +52,8 @@ namespace CityForge.UI
         public void Initialize(Camera camera,Transform hud,PointWireSurface target,Color color)
         {
             Blue=color;surface=target;cameraView=camera;canvasRect=hud.GetComponent<RectTransform>();
+            var canvas=hud.GetComponentInParent<Canvas>();
+            overlayCamera=canvas&&canvas.renderMode!=RenderMode.ScreenSpaceOverlay?canvas.worldCamera:null;
             Text Text(string name,string value,Vector2 size){var go=new GameObject(name,typeof(RectTransform),typeof(Text),typeof(Shadow));go.transform.SetParent(hud,false);var t=go.GetComponent<Text>();t.font=Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");t.text=value;t.color=Blue;t.fontSize=24;t.raycastTarget=false;t.rectTransform.sizeDelta=size;return t;}
             cursor=Text("PointWireCursor","↖",new Vector2(45,48));cursor.fontSize=40;cursor.fontStyle=FontStyle.Bold;cursor.rectTransform.pivot=new Vector2(0,1);
             hint=Text("PointWireHint","",new Vector2(900,65));hint.fontSize=19;hint.alignment=TextAnchor.MiddleCenter;hint.rectTransform.anchorMin=hint.rectTransform.anchorMax=new Vector2(.5f,1);hint.rectTransform.pivot=new Vector2(.5f,1);hint.rectTransform.anchoredPosition=new Vector2(0,-85);
@@ -52,6 +61,15 @@ namespace CityForge.UI
             var drawing=new GameObject("PointWireOverlay",typeof(RectTransform),typeof(CanvasRenderer),typeof(PointWireGraphic));drawing.transform.SetParent(hud,false);overlay=drawing.GetComponent<PointWireGraphic>();overlay.raycastTarget=false;overlay.color=Blue;overlay.rectTransform.sizeDelta=canvasRect.rect.size;drawing.transform.SetSiblingIndex(cursor.transform.GetSiblingIndex());cursor.gameObject.SetActive(false);hint.gameObject.SetActive(false);
         }
         LineRenderer Line(string name){var go=new GameObject(name,typeof(LineRenderer));go.transform.SetParent(transform,false);go.layer=2;var line=go.GetComponent<LineRenderer>();line.sharedMaterial=material;line.useWorldSpace=true;line.positionCount=0;line.shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off;line.receiveShadows=false;line.numCapVertices=4;return line;}
+        void EnsureConnectionOverlay()
+        {
+            if (connectionOverlay) return;
+            var go = new GameObject("PointWireConnection", typeof(RectTransform), typeof(CanvasRenderer), typeof(PointWireGraphic));
+            go.transform.SetParent(canvasRect, false);
+            connectionOverlay = go.GetComponent<PointWireGraphic>();
+            connectionOverlay.raycastTarget = false;
+            connectionOverlay.color = new Color(.15f, 1f, .35f, 1f);
+        }
         public void Arm()
         {
             Cancel();if(surface==null||!surface.Available)return;
@@ -143,6 +161,7 @@ namespace CityForge.UI
             if(!acceptingCompletion&&Processing){Processing=false;ProcessingChanged?.Invoke(false);}
             if(Armed){Cursor.visible=savedCursor;if(terrainCollider)terrainCollider.enabled=colliderWasEnabled;}
             StartPointHovered?.Invoke(null);
+            pointerPressed=false;connectionPoint=null;if(connectionOverlay)connectionOverlay.Clear();
             Armed=false;terrainCollider=null;path.Clear();foreach(var marker in markers)if(marker)Destroy(marker.gameObject);markers.Clear();
             boundary.Clear();preview.Clear();if(overlay)overlay.Clear();if(cursor)cursor.gameObject.SetActive(false);if(hint)hint.gameObject.SetActive(false);
         }
@@ -169,8 +188,8 @@ namespace CityForge.UI
             if(waitRelease&&!Input.GetMouseButton(0))waitRelease=false;
             UpdateWidths();preview.Clear();
             if (!valid || Finished) StartPointHovered?.Invoke(null);
-            if (!valid) return;
-            RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect,Input.mousePosition,null,out var local);cursor.rectTransform.anchoredPosition=local;if(Finished)return;
+            if (!valid) { connectionPoint=null; if(!Input.GetMouseButton(0)||!Application.isFocused)pointerPressed=false; return; }
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect,Input.mousePosition,overlayCamera,out var local);cursor.rectTransform.anchoredPosition=local;if(Finished)return;
             bool snap=false;if((!OpenPath || LoopCompletionRequested != null)&&points.Count>=3){var first=cameraView.WorldToScreenPoint(Ground((ProjectGuide?.Invoke(points, false) ?? points)[0]));snap=first.z>0&&Vector2.Distance(new Vector2(first.x,first.y),Input.mousePosition)<=24;}
             var rawPoint = snap ? points[0] : new Vector2(hit.point.x, hit.point.z);
             var p = SnapPoint?.Invoke(rawPoint) ?? rawPoint;
@@ -181,20 +200,50 @@ namespace CityForge.UI
                 BuildGuide(preview, ProjectGuide(guide, snap), snap);
             }
             else if(points.Count>0){Segment(preview,points[points.Count-1],p);preview.Add(Ground(p));}
-            if (!waitRelease && Input.GetMouseButtonDown(0) && AddMarker(p, snap) &&
-                !snap && OpenPath && points.Count >= 2 && FinishOpenAtMarker?.Invoke(p) == true)
-                CompletePath();
+            if(ConnectionPreview != null)
+            {
+                var proposal = new List<Vector2>(points);
+                proposal.Add(p);
+                connectionPoint = ConnectionPreview(ProjectGuide?.Invoke(proposal,false) ?? proposal);
+            }
+            if(!waitRelease) HandlePlacementPointer(p,snap,Input.GetMouseButtonDown(0),Input.GetMouseButtonUp(0),Input.mousePosition);
             if (StartPointHovered != null)
                 StartPointHovered(points.Count == 0 && surface.Contains(p) ? p : (Vector2?)null);
+        }
+        internal void HandlePlacementPointer(Vector2 p,bool snap,bool down,bool up,Vector2 screen)
+        {
+            bool place=down,dragged=false;
+            if(PlaceOnRelease)
+            {
+                if(down){pointerPressed=true;pointerDown=screen;if(points.Count==0)AddMarker(p,false);}
+                place=pointerPressed&&up;
+                dragged=place&&Vector2.Distance(pointerDown,screen)>8f;
+                if(place)pointerPressed=false;
+            }
+            if(place&&AddMarker(p,snap)&&!snap&&OpenPath&&points.Count>=2&&
+                (FinishOpenAtMarker?.Invoke(p)==true||PlaceOnRelease&&dragged))CompletePath();
         }
         void LateUpdate()
         {
             if(!Armed||Processing||!overlay)return;
             overlay.rectTransform.sizeDelta=canvasRect.rect.size;overlay.Clear();
+            if(ConnectionPreview != null)
+            {
+                EnsureConnectionOverlay();connectionOverlay.rectTransform.sizeDelta=canvasRect.rect.size;connectionOverlay.Clear();
+                if(connectionPoint is Vector2 join)
+                {
+                    float h=Mathf.Max(2f,RibbonWidth*.5f);
+                    var corners=new[]{join+new Vector2(-h,-h),join+new Vector2(h,-h),join+new Vector2(h,h),join+new Vector2(-h,h)};
+                    var local=new Vector2[4];bool visible=true;
+                    for(int i=0;i<4;i++){var screen=cameraView.WorldToScreenPoint(Ground(corners[i]));visible &= screen.z>0;RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect,screen,overlayCamera,out local[i]);}
+                    if(visible){connectionOverlay.AddFill(local[0],local[1],local[2],local[3]);for(int i=0;i<4;i++)connectionOverlay.Add(local[i],local[(i+1)%4]);}
+                }
+                connectionOverlay.SetVerticesDirty();
+            }
             void DrawSegment(Vector3 worldA,Vector3 worldB){
                 var a=cameraView.WorldToScreenPoint(worldA);var b=cameraView.WorldToScreenPoint(worldB);if(a.z<=0||b.z<=0)return;
-                RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect,a,null,out var start);
-                RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect,b,null,out var end);overlay.Add(start,end);
+                RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect,a,overlayCamera,out var start);
+                RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect,b,overlayCamera,out var end);overlay.Add(start,end);
             }
             void Draw(List<Vector3> line){for(int i=1;i<line.Count;i++)DrawSegment(line[i-1],line[i]);}
             bool replaceBoundary = ProjectGuide != null && preview.Count > 0;
@@ -249,7 +298,7 @@ namespace CityForge.UI
         }
 
         void OnDisable(){Cancel();}
-        void OnDestroy(){Cancel();if(material)Destroy(material);if(cursor)Destroy(cursor.gameObject);if(hint)Destroy(hint.gameObject);if(overlay)Destroy(overlay.gameObject);}
+        void OnDestroy(){Cancel();if(material)Destroy(material);if(cursor)Destroy(cursor.gameObject);if(hint)Destroy(hint.gameObject);if(overlay)Destroy(overlay.gameObject);if(connectionOverlay)Destroy(connectionOverlay.gameObject);}
     }
     public sealed class PointWireGraphic : MaskableGraphic
     {

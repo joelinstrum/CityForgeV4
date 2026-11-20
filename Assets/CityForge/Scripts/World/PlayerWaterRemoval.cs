@@ -21,14 +21,17 @@ namespace CityForge.World
                 if (body.playerChannel)
                 {
                     var grades = body.playerChannelLevels;
-                    float near = Mathf.Max(0, (grades[0] - ray.origin.y) / ray.direction.y);
-                    float far = Mathf.Min(closest, (grades[grades.Length - 1] - ray.origin.y) / ray.direction.y);
+                    float low=float.PositiveInfinity,high=float.NegativeInfinity;
+                    foreach(float grade in grades){low=Mathf.Min(low,grade);high=Mathf.Max(high,grade);}
+                    float fill=body.isStream?.15f:0;low+=fill;high+=fill;
+                    float near = Mathf.Max(0, (high - ray.origin.y) / ray.direction.y);
+                    float far = Mathf.Min(closest, (low - ray.origin.y) / ray.direction.y);
                     if (far < near) continue;
                     var bounds = body.Bounds;
                     var center = (bounds.center - Vector2.one * .5f) * View.MapSide;
                     var size = bounds.size * View.MapSide;
-                    var box = new Bounds(new Vector3(center.x, (grades[0] + grades[grades.Length - 1]) * .5f, center.y),
-                        new Vector3(size.x, Mathf.Max(.01f, grades[0] - grades[grades.Length - 1]), size.y));
+                    var box = new Bounds(new Vector3(center.x, (high + low) * .5f, center.y),
+                        new Vector3(size.x, Mathf.Max(.01f, high - low), size.y));
                     if (!box.IntersectRay(ray, out float entry) || entry > far) continue;
                     float AboveWater(float at)
                     {

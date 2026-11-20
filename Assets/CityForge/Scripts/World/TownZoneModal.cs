@@ -1,4 +1,6 @@
 using CityForge.UI;
+using CityForge.Lots;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -16,32 +18,45 @@ namespace CityForge.World
             }
             var serif = zoneModalFont ? zoneModalFont : lotFont;
             var cream = new Color(1, .91f, .72f);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            const float extra = 200f;
+#else
+            const float extra = 80f;
+            selectedZoneWealth = LotWealth.Low;
+#endif
+            float upper = extra * .5f;
             var face = townPanel.gameObject.AddComponent<Image>(); face.sprite = ZoneModalArtwork.Panel; face.type = Image.Type.Sliced;
             var shadow = townPanel.gameObject.AddComponent<Shadow>(); shadow.effectColor = new Color(0, 0, 0, .45f); shadow.effectDistance = new Vector2(0, -5);
-            var layout = FounderRect(townPanel, "Zone modal layout", Vector2.zero, new Vector2(1320, 600));
+            var layout = FounderRect(townPanel, "Zone modal layout", Vector2.zero, new Vector2(1320, 600 + extra));
             layout.localScale = Vector3.one * 1.1f;
-            Label(layout, "Zones", new Vector2(0, 258), new Vector2(900, 58), 45, true);
-            Label(layout, "Choose a zone type, lot size, and density, then place a back-to-back block.", new Vector2(0, 212), new Vector2(1120, 34), 23);
-            Rule(new Vector2(0, 180), new Vector2(1310, 1));
-            Button(layout, "Close zones", new Vector2(604, 258), new Vector2(46, 46), "×", 25, CloseTownSection);
-            var types = Section("Zone Type", new Vector2(-433, -18), new Vector2(370, 354));
-            var sizes = Section("Lot Size  (12-tile rows)", new Vector2(200, 60), new Vector2(850, 198));
-            var densities = Section("Density", new Vector2(200, -123), new Vector2(850, 144));
-            Rule(new Vector2(-236, -18), new Vector2(1, 354));
-            var footer = FounderRect(layout, "Zone selection footer", new Vector2(0, -245), new Vector2(1272, 76));
+            Label(layout, "Zones", new Vector2(0, 258 + upper), new Vector2(900, 58), 45, true);
+            Label(layout, "Choose a zone type, lot size, and density, then place a back-to-back block.", new Vector2(0, 212 + upper), new Vector2(1120, 34), 23);
+            Rule(new Vector2(0, 180 + upper), new Vector2(1310, 1));
+            Button(layout, "Close zones", new Vector2(604, 258 + upper), new Vector2(46, 46), "×", 25, CloseTownSection);
+            var types = Section("Zone Type", new Vector2(-433, -18 + upper), new Vector2(370, 354));
+            var sizes = Section("Lot Size  (12-tile rows)", new Vector2(200, 60 + upper), new Vector2(850, 198));
+            var densities = Section("Density", new Vector2(200, -203 + upper), new Vector2(850, 144));
+            Rule(new Vector2(-236, -18 + upper), new Vector2(1, 354));
+            var footer = FounderRect(layout, "Zone selection footer", new Vector2(0, -245 - upper), new Vector2(1272, 76));
             var footerImage = footer.gameObject.AddComponent<Image>(); footerImage.sprite = ZoneModalArtwork.Section; footerImage.type = Image.Type.Sliced;
-            Rule(new Vector2(-344, -245), new Vector2(1, 44)); Rule(new Vector2(344, -245), new Vector2(1, 44));
-            var erase = Button(layout, "Erase Zoning", new Vector2(-491, -245), new Vector2(258, 56), "Erase Zoning", 24, () => { });
+            Rule(new Vector2(-344, -245 - upper), new Vector2(1, 44)); Rule(new Vector2(344, -245 - upper), new Vector2(1, 44));
+            var erase = Button(layout, "Erase Zoning", new Vector2(-491, -245 - upper), new Vector2(258, 56), "Erase Zoning", 24, () => { });
             erase.image.color = new Color(1, .88f, .86f);
             ShiftCaption(erase, 22); Icon(erase.transform, ZoneModalGlyph.Trash, new Vector2(-98, 0), new Vector2(30, 34), new Color(.88f, .28f, .22f));
-            var place = Button(layout, "Select & Place", new Vector2(492, -245), new Vector2(270, 56), "Select & Place", 24, () => { });
+            var place = Button(layout, "Select & Place", new Vector2(492, -245 - upper), new Vector2(270, 56), "Select & Place", 24, () => { });
             place.image.sprite = ZoneModalArtwork.Gold; ShiftCaption(place, 17);
             Icon(place.transform, ZoneModalGlyph.Place, new Vector2(-105, 0), Vector2.one * 28, cream);
-            var summary = Label(layout, "", new Vector2(0, -245), new Vector2(665, 50), 21);
+            var summary = Label(layout, "", new Vector2(0, -245 - upper), new Vector2(665, 50), 21);
             summary.color = new Color(1, .78f, .36f);
             int selectedType = 0, selectedSize = 3, selectedDensity = 2;
+            int customWidth=8,customDepth=3;Text widthCaption=null,depthCaption=null;RectTransform custom=null;
             string[] typeNames = { "Residential", "Commercial", "Industrial" };
             string[] densityNames = { "Low", "Medium", "High" };
+            var availableLayouts = FoundersGrowthLayouts(out _);
+            var sizeCounts = new Text[4];
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            var wealthChoices = new Toggle[3];
+#endif
             var typeButtons = new Button[3]; var sizeButtons = new Button[4]; var densityButtons = new Button[3];
             for (int i = 0; i < 3; i++)
             {
@@ -60,8 +75,16 @@ namespace CityForge.World
                 Icon(button.transform, size == 0 ? ZoneModalGlyph.Auto : ZoneModalGlyph.Footprint, new Vector2(0, 25), Vector2.one * 55,
                     size == 0 ? new Color(.81f, .89f, .12f) : cream, size);
                 Label(button.transform, size == 0 ? "Auto" : $"{size} × {size}", new Vector2(0, -22), new Vector2(170, 31), 27);
-                Label(button.transform, size == 0 ? "(Drag)" : $"({ZonedBlockPlan.RowTiles / size * 2} lots total)", new Vector2(0, -49), new Vector2(170, 27), 19);
+                sizeCounts[i] = Label(button.transform, "", new Vector2(0, -49), new Vector2(180, 30), 16);
             }
+            custom=FounderRect(layout,"Custom rectangular lot",new Vector2(200,-85+upper),new Vector2(850,44));
+            widthCaption=Label(custom,"Width 8",new Vector2(-275,0),new Vector2(130,36),20);
+            depthCaption=Label(custom,"Depth 3",new Vector2(-50,0),new Vector2(130,36),20);
+            Button(custom,"Less width",new Vector2(-370,0),new Vector2(44,36),"‹",24,()=>{customWidth=Mathf.Max(2,customWidth-1);selectedSize=-1;Refresh();});
+            Button(custom,"More width",new Vector2(-185,0),new Vector2(44,36),"›",24,()=>{customWidth=Mathf.Min(LotDefinition.MaxTiles,customWidth+1);selectedSize=-1;Refresh();});
+            Button(custom,"Less depth",new Vector2(-145,0),new Vector2(44,36),"‹",24,()=>{customDepth=Mathf.Max(2,customDepth-1);selectedSize=-1;Refresh();});
+            Button(custom,"More depth",new Vector2(45,0),new Vector2(44,36),"›",24,()=>{customDepth=Mathf.Min(LotDefinition.MaxTiles,customDepth+1);selectedSize=-1;Refresh();});
+            Button(custom,"Use custom size",new Vector2(320,0),new Vector2(200,36),"Use 8 × 3",20,()=>{selectedSize=-1;Refresh();});
             for (int i = 0; i < 3; i++)
             {
                 int density = i + 1;
@@ -70,11 +93,34 @@ namespace CityForge.World
                 Icon(button.transform, ZoneModalGlyph.Density, new Vector2(0, 16), new Vector2(88, 36), cream, density);
                 Label(button.transform, densityNames[i], new Vector2(0, -20), new Vector2(230, 30), 25);
             }
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            var wealthPanel = Section("Wealth · Developer", new Vector2(0, -250), new Vector2(1272, 110));
+            var wealthGroup = wealthPanel.gameObject.AddComponent<ToggleGroup>();
+            wealthGroup.allowSwitchOff = false;
+            for (int i = 0; i < 3; i++)
+            {
+                var choice = (LotWealth)(i + 1);
+                var host = FounderRect(wealthPanel, densityNames[i] + " wealth", new Vector2(-400 + i * 400, -17), new Vector2(350, 44));
+                var background = host.gameObject.AddComponent<Image>(); background.color = new Color(.13f, .16f, .17f);
+                var toggle = wealthChoices[i] = host.gameObject.AddComponent<Toggle>(); toggle.targetGraphic = background;
+                var ring = FounderRect(host, "Radio ring", new Vector2(-137, 0), new Vector2(25, 25));
+                ring.gameObject.AddComponent<WealthRadioDisc>().color = cream;
+                var well = FounderRect(ring, "Well", Vector2.zero, new Vector2(19, 19));
+                well.gameObject.AddComponent<WealthRadioDisc>().color = new Color(.10f, .12f, .13f);
+                var dot = FounderRect(ring, "Selected", Vector2.zero, new Vector2(13, 13));
+                var mark = dot.gameObject.AddComponent<WealthRadioDisc>(); mark.color = new Color(1, .72f, .23f);
+                toggle.graphic = mark; toggle.group = wealthGroup;
+                toggle.SetIsOnWithoutNotify(selectedZoneWealth == choice);
+                Label(host, densityNames[i], new Vector2(10, 0), new Vector2(280, 36), 24);
+                toggle.onValueChanged.AddListener(value => { if (value) { selectedZoneWealth = choice; Refresh(); } });
+            }
+#endif
             zoneStatus = summary;
             place.onClick.AddListener(() =>
             {
                 var zone = (TownZone)(selectedType * 3 + selectedDensity);
                 if (selectedSize == 0) { selectedZoneLotSize = Vector2Int.zero; ArmZone(zone); }
+                else if(selectedSize<0)ArmRectangularZonedBlock(zone,new Vector2Int(customWidth,customDepth));
                 else ArmZonedBlock(zone, selectedSize);
             });
             erase.onClick.AddListener(() => { CancelZonedBlock(false); ArmZone(TownZone.None); });
@@ -85,8 +131,30 @@ namespace CityForge.World
                 for (int i = 0; i < 3; i++) typeButtons[i].image.sprite = i == selectedType ? ZoneModalArtwork.Gold : ZoneModalArtwork.Dark;
                 for (int i = 0; i < 4; i++) sizeButtons[i].image.sprite = (i == 0 ? 0 : i + 1) == selectedSize ? ZoneModalArtwork.Gold : ZoneModalArtwork.Dark;
                 for (int i = 0; i < 3; i++) densityButtons[i].image.sprite = i + 1 == selectedDensity ? ZoneModalArtwork.Gold : ZoneModalArtwork.Dark;
+                var zone = (TownZone)(selectedType * 3 + selectedDensity);
+                if(!ResidentialWealthPolicy.Allows(zone,selectedZoneWealth,"founders"))selectedZoneWealth=LotWealth.Medium;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                for(int i=0;i<wealthChoices.Length;i++){
+                    wealthChoices[i].interactable=ResidentialWealthPolicy.Allows(zone,(LotWealth)(i+1),"founders");
+                    wealthChoices[i].SetIsOnWithoutNotify(selectedZoneWealth==(LotWealth)(i+1));
+                }
+#endif
+                widthCaption.text=$"Width {customWidth}";depthCaption.text=$"Depth {customDepth}";
+                var customButton=custom.GetComponentsInChildren<Button>().First(b=>b.name=="Use custom size");
+                int customCount=availableLayouts.Count(option=>option.Layout.zoningLayout.zone==zone&&option.Layout.zoningLayout.wealth==selectedZoneWealth&&GrowthFrontageSize(option.Layout)==new Vector2Int(customWidth,customDepth));
+                customButton.GetComponentInChildren<Text>().text=$"{customWidth} × {customDepth} · {customCount} layouts";
+                customButton.image.sprite=selectedSize<0?ZoneModalArtwork.Gold:ZoneModalArtwork.Dark;
+                for (int i = 0; i < sizeCounts.Length; i++)
+                {
+                    int size = i == 0 ? 0 : i + 1;
+                    int count = availableLayouts.Count(option => option.Layout.zoningLayout.zone == zone &&
+                        option.Layout.zoningLayout.wealth == selectedZoneWealth &&
+                        (size == 0 || GrowthFrontageSize(option.Layout) == Vector2Int.one * size));
+                    string layouts = count == 1 ? "1 layout" : $"{count} layouts";
+                    sizeCounts[i].text = size == 0 ? layouts + " · Drag" : $"{ZonedBlockPlan.RowTiles / size * 2} spaces · " + layouts;
+                }
                 summary.text = $"{typeNames[selectedType]} · {densityNames[selectedDensity - 1]} Density · " +
-                    (selectedSize == 0 ? "Auto (Drag)" : $"{ZonedBlockPlan.RowTiles / selectedSize * 2} lots · Streets included");
+                    (selectedSize == 0 ? "Auto (Drag)" : selectedSize<0?$"{customWidth} × {customDepth} · {Mathf.CeilToInt(ZonedBlockPlan.RowTiles/(float)customWidth)*2} lots · Streets included":$"{ZonedBlockPlan.RowTiles / selectedSize * 2} lots · Streets included");
             }
             RectTransform Section(string title, Vector2 position, Vector2 size)
             {
@@ -125,6 +193,21 @@ namespace CityForge.World
             {
                 var rect = FounderRect(layout, "Panel rule", position, size); rect.gameObject.AddComponent<Image>().color = new Color(.44f, .48f, .44f, .55f);
             }
+        }
+    }
+    [RequireComponent(typeof(CanvasRenderer))]
+    internal sealed class WealthRadioDisc : MaskableGraphic
+    {
+        protected override void OnPopulateMesh(VertexHelper mesh)
+        {
+            mesh.Clear(); mesh.AddVert(Vector3.zero, color, Vector2.zero);
+            float radius = Mathf.Min(rectTransform.rect.width, rectTransform.rect.height) * .5f;
+            for (int i = 0; i < 32; i++)
+            {
+                float angle = i * Mathf.PI * 2 / 32;
+                mesh.AddVert(new Vector3(Mathf.Cos(angle), Mathf.Sin(angle)) * radius, color, Vector2.zero);
+            }
+            for (int i = 0; i < 32; i++) mesh.AddTriangle(0, 1 + i, 1 + (i + 1) % 32);
         }
     }
 }

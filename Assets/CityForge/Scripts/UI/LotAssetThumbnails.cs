@@ -11,6 +11,14 @@ namespace CityForge.UI
     {
         private const int PreviewLayer = 31;
         private readonly Dictionary<string, RenderTexture> cache = new Dictionary<string, RenderTexture>();
+        private readonly int thumbnailResolution;
+        private readonly bool transparent, frontView;
+        public LotAssetThumbnails(int resolution = 96, bool transparent = false, bool frontView = false)
+        {
+            thumbnailResolution = Mathf.Clamp(resolution, 64, 512);
+            this.transparent = transparent;
+            this.frontView = frontView;
+        }
         private GameObject stage;
         private Camera camera;
         private Light light;
@@ -22,7 +30,8 @@ namespace CityForge.UI
             Render($"plan:{asset.id}:{halfSpan:R}", asset.label, parent => LotRuntimeLoader.InstantiateObject(
                 new LotObjectDefinition { assetId = asset.id, scale = 1f }, asset, parent), halfSpan);
 
-        public Texture GetLot(LotDefinition lot, LotAssetCatalog catalog) => Render(lot.id, lot.name, parent =>
+        public Texture GetLot(LotDefinition lot, LotAssetCatalog catalog, int rotationSteps = 0) =>
+            Render(rotationSteps == 0 ? lot.id : $"{lot.id}:rotation:{rotationSteps % 8}", lot.name, parent =>
         {
             var instance = new GameObject(lot.name);
             instance.transform.SetParent(parent, false);
@@ -31,6 +40,7 @@ namespace CityForge.UI
                 var asset = catalog ? catalog.Find(item.assetId) : null;
                 if (asset != null && asset.prefab) LotRuntimeLoader.InstantiateObject(item, asset, instance.transform);
             }
+            instance.transform.localRotation = Quaternion.Euler(0, rotationSteps * 45, 0);
             return instance;
         });
 
@@ -47,11 +57,19 @@ namespace CityForge.UI
                 foreach (var lod in instance.GetComponentsInChildren<LODGroup>()) lod.ForceLOD(0);
 
                 var renderers = instance.GetComponentsInChildren<Renderer>();
+                if (transparent)
+                    foreach (var renderer in renderers)
+                    {
+                        var properties = new MaterialPropertyBlock();
+                        renderer.GetPropertyBlock(properties);
+                        properties.SetColor("_EmissionColor", Color.black);
+                        renderer.SetPropertyBlock(properties);
+                    }
                 if (renderers.Length == 0) return null;
                 var bounds = renderers[0].bounds;
                 foreach (var renderer in renderers) bounds.Encapsulate(renderer.bounds);
                 float radius = Mathf.Max(.1f, bounds.extents.magnitude);
-                var rotation = Quaternion.Euler(22, 330, 0);
+                var rotation = Quaternion.Euler(22, frontView ? 150 : 330, 0);
                 camera.transform.SetPositionAndRotation(bounds.center - rotation * Vector3.forward * (radius * 3), rotation);
                 camera.orthographicSize = radius * 1.1f;
                 camera.nearClipPlane = radius;
@@ -65,7 +83,7 @@ namespace CityForge.UI
                     camera.nearClipPlane = .1f;
                     camera.farClipPlane = bounds.size.y + 20f;
                 }
-                int resolution = planHalfSpan > 0f ? 640 : 96;
+                int resolution = planHalfSpan > 0f ? 640 : thumbnailResolution;
                 target = new RenderTexture(resolution, resolution, 24) { name = label + " thumbnail" };
                 var request = new UniversalRenderPipeline.SingleCameraRequest { destination = target };
                 if (!RenderPipeline.SupportsRenderRequest(camera, request)) return null;
@@ -94,7 +112,7 @@ namespace CityForge.UI
             camera.orthographic = true;
             camera.aspect = 1;
             camera.clearFlags = CameraClearFlags.SolidColor;
-            camera.backgroundColor = new Color32(30, 43, 54, 255);
+            camera.backgroundColor = transparent ? Color.clear : new Color32(30, 43, 54, 255);
             camera.cullingMask = 1 << PreviewLayer;
             camera.allowHDR = false;
 

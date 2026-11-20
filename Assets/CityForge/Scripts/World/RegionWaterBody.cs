@@ -25,6 +25,9 @@ namespace CityForge.World
         public bool hasSurfaceLevel;public float surfaceLevelNormalized;
         public string appearanceProfile;
         public bool playerChannel;public float[] playerChannelLevels;public Vector2[] playerChannelGuides;public float playerChannelDepth;
+        public int playerStreamWidthVersion, playerStreamWidthVariation;
+        [NonSerialized] internal bool streamWidthPhaseReady;
+        [NonSerialized] internal float streamWidthPhase;
         public bool playerCreated;public float playerDepth,playerBankWidth,playerOuterBankWidth;
         public float DistanceToCenterline(Vector2 point,out Vector2 downstream)
         {
@@ -146,6 +149,12 @@ namespace CityForge.World
                 if(index==null||index.Outline!=outline||index.Holes!=holes)
                     oceanIndex=index=new OceanContourIndex(outline,holes);
                 return index.Contains(point);
+            }
+            if (playerChannel && isStream && playerStreamWidthVersion == 1)
+            {
+                float best = float.PositiveInfinity;
+                IndexedCurrentCoordinates(point, 1f, ref best, out var current);
+                return Mathf.Sqrt(best) <= PlayerStreamWidth.AtStation(this, -current.x);
             }
             if(centerline!=null&&(playerChannel?IndexedCenterlineDistance(point):DistanceToCenterline(point,out _))<=halfWidthNormalized)return true;
             if(!PolygonContains(outline,point))return false;

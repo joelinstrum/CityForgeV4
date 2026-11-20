@@ -135,14 +135,11 @@ namespace CityForge.World
             {
                 if (DistrictLoading || IsSaving || Input.GetKeyDown(KeyCode.Escape))
                     CloseDistrictScripts();
-                else if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
+                else if (districtScriptInput && (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter)))
                     RunDistrictScript();
                 return true;
             }
 
-#if !UNITY_EDITOR && !DEVELOPMENT_BUILD
-            if (SelectedDistrict < 0) return false;
-#endif
             if (DistrictLoading || IsSaving || RemakeBlocksInput ||
                 playerLotWorkspace || founderPicker || savedLotPicker || transportModal || !townToolbar) return false;
             if (!Input.GetKeyDown(KeyCode.S) || !(Input.GetKey(KeyCode.LeftCommand) || Input.GetKey(KeyCode.RightCommand)))
@@ -162,13 +159,13 @@ namespace CityForge.World
             if (districtScriptInput.placeholder is Text placeholder)
             {
                 placeholder.font = lotFont;
-                placeholder.text = SelectedDistrict < 0 ? "Display message: Founder’s Era" : "The eagle has landed";
+                placeholder.text = "Help";
             }
             districtScriptInput.characterLimit = 96;
             districtScriptFeedback = FounderText(panel, "", new Vector2(0, -43), new Vector2(520, 32), 16);
             districtScriptFeedback.color = TownGold;
-            districtScriptInput.Select();
-            districtScriptInput.ActivateInputField();
+            districtScriptInput?.Select();
+            districtScriptInput?.ActivateInputField();
             return true;
         }
 
@@ -177,11 +174,40 @@ namespace CityForge.World
 
         private void RunDistrictScript()
         {
-            if (!districtScriptDialog) return;
-            string command = districtScriptInput.text;
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if (!districtScriptDialog || !districtScriptInput) return;
+            RunNamedScript(districtScriptInput.text);
+        }
+
+        private void RunNamedScript(string command)
+        {
+            command = command?.Trim() ?? "";
+            if (string.Equals(command, "Help", StringComparison.OrdinalIgnoreCase))
+            { OpenScriptHelp(); return; }
+            if (command.StartsWith("Season:", StringComparison.OrdinalIgnoreCase) &&
+                Enum.TryParse<RegionSeason>(command.Substring(7).Trim(), true, out var season) &&
+                Enum.IsDefined(typeof(RegionSeason), season))
+            { SetSeason(season); CloseDistrictScripts(); return; }
+            if (SelectedDistrict >= 0 && string.Equals(command, "Place lot", StringComparison.OrdinalIgnoreCase))
+            {
+                CloseDistrictScripts(); CloseTownSection(); CancelLotPlacement();
+                CancelRoadPlacement(); GetComponent<NatureToolbar>()?.Dismiss();
+                OpenSavedLotPicker();
+                return;
+            }
+            bool rain = string.Equals(command, "Let it rain", StringComparison.OrdinalIgnoreCase);
+            bool snow = string.Equals(command, "Let it snow", StringComparison.OrdinalIgnoreCase);
+            if (SelectedDistrict >= 0 && (rain || snow))
+            {
+                var weather = ApprovedDistrict ? ApprovedDistrict.GetComponent<DistrictWeather>() : null;
+                if (!weather) { districtScriptFeedback.text = "Weather is not ready yet."; return; }
+                SetSeason(snow ? RegionSeason.Winter : Season == RegionSeason.Winter ? RegionSeason.Summer : Season);
+                if (snow && VisualSeason != RegionSeason.Winter)
+                { districtScriptFeedback.text = "Snow requires a temperate district."; return; }
+                weather.SetWeather(snow ? DistrictWeather.WeatherKind.Snow : DistrictWeather.WeatherKind.Rain);
+                CloseDistrictScripts(); return;
+            }
             const string displayMessage = "Display message:";
-            if (command.TrimStart().StartsWith(displayMessage, StringComparison.OrdinalIgnoreCase))
+            if (SelectedDistrict < 0 && command.TrimStart().StartsWith(displayMessage, StringComparison.OrdinalIgnoreCase))
             {
                 var name = command.TrimStart().Substring(displayMessage.Length).Trim(' ', '\t', '"', '“', '”');
                 var era = Array.Find(CityForgeTimeline.Eras, item =>
@@ -194,14 +220,13 @@ namespace CityForge.World
                     return;
                 }
                 districtScriptFeedback.text = "Try Display message: Founder’s Era.";
-                districtScriptInput.ActivateInputField();
+                districtScriptInput?.ActivateInputField();
                 return;
             }
-#endif
             if (SelectedDistrict < 0)
             {
                 districtScriptFeedback.text = "Try Display message: Founder’s Era. District scripts require an open district.";
-                districtScriptInput.ActivateInputField();
+                districtScriptInput?.ActivateInputField();
                 return;
             }
 
@@ -210,11 +235,11 @@ namespace CityForge.World
                 if (TryStartHarassTest(out var problem))
                 {
                     CloseDistrictScripts();
-                    ShowDistrictMessage("Following Hooligan · Esc to end · 60 seconds.");
+                    ShowDistrictMessage("Following Hooligan · Patrol constables respond · Esc to end.");
                     return;
                 }
                 districtScriptFeedback.text = problem;
-                districtScriptInput.ActivateInputField();
+                districtScriptInput?.ActivateInputField();
                 return;
             }
             bool perch = string.Equals(command?.Trim(), "Eagle perch", StringComparison.OrdinalIgnoreCase);
@@ -230,7 +255,7 @@ namespace CityForge.World
                 districtScriptFeedback.text = "No harvestable Cilician fir within 40 m of the camera focus.";
             }
             else if (!perch && !IsEagleCommand(command))
-                districtScriptFeedback.text = "Try Hooligan harass, Fell fir, or Eagle perch.";
+                districtScriptFeedback.text = "Type Help to see available scripts.";
             else if (!eagle)
                 districtScriptFeedback.text = "Requires daylight, Animals enabled, and a built-up district.";
             else if (perch)
@@ -245,7 +270,7 @@ namespace CityForge.World
             else if (eaglePhase is EaglePhase.SearchClimb or EaglePhase.Search or EaglePhase.StreetApproach or EaglePhase.Reach or EaglePhase.Carry or EaglePhase.DropRun or EaglePhase.Release or EaglePhase.Splash)
                 districtScriptFeedback.text = "The eagle encounter is already running.";
             else if (!StartEagleSearch(command: true))
-                districtScriptFeedback.text = "Requires a walking pedestrian and a district with water.";
+                districtScriptFeedback.text = "Requires a walking pedestrian and water or trees for a landing.";
             else
             {
                 eagleCameraFollow = true;
@@ -253,8 +278,47 @@ namespace CityForge.World
                 ShowDistrictMessage("Eagle is searching.");
                 return;
             }
-            districtScriptInput.Select();
-            districtScriptInput.ActivateInputField();
+            districtScriptInput?.Select();
+            districtScriptInput?.ActivateInputField();
+        }
+
+        private void OpenScriptHelp()
+        {
+            CloseDistrictScripts();
+            districtScriptDialog = FounderRect(townToolbar.parent, "Script help", Vector2.zero, Vector2.zero);
+            districtScriptDialog.anchorMin = Vector2.zero; districtScriptDialog.anchorMax = Vector2.one;
+            districtScriptDialog.offsetMin = districtScriptDialog.offsetMax = Vector2.zero;
+            districtScriptDialog.gameObject.AddComponent<Image>().color = new Color(0, 0, 0, .65f);
+            var panel = FounderRect(districtScriptDialog, "Available scripts", Vector2.zero, new Vector2(700, 560));
+            StyleTownPanel(panel, TownPanelColor);
+            FounderText(panel, SelectedDistrict < 0 ? "Region scripts" : "District scripts",
+                new Vector2(0, 242), new Vector2(610, 40), 28);
+            var close = TownButton(panel, lotFont, "×", 650, -15, 36, CloseDistrictScripts);
+            var viewport = FounderRect(panel, "Script viewport", new Vector2(0, 3), new Vector2(650, 425));
+            viewport.gameObject.AddComponent<Image>().color = new Color(.08f, .09f, .10f);
+            viewport.gameObject.AddComponent<Mask>().showMaskGraphic = true;
+            var scroll = viewport.gameObject.AddComponent<ScrollRect>();
+            var content = FounderRect(viewport, "Scripts", Vector2.zero, new Vector2(650, 0));
+            content.anchorMin = content.anchorMax = content.pivot = new Vector2(.5f, 1);
+            content.anchoredPosition = Vector2.zero;
+            var commands = new List<string> { "Help", "Season: Summer", "Season: Fall", "Season: Winter" };
+            if (SelectedDistrict >= 0)
+                commands.AddRange(new[] { "Let it rain", "Let it snow", "Place lot", "Hooligan harass", "Fell fir", "Eagle perch", "The eagle has landed" });
+            else
+                commands.AddRange(CityForgeTimeline.Eras.Where(era => !string.IsNullOrWhiteSpace(era.summary))
+                    .Select(era => "Display message: " + era.Name));
+            content.sizeDelta = new Vector2(650, commands.Count * 50 + 10);
+            for (int i = 0; i < commands.Count; i++)
+            {
+                string command = commands[i];
+                var button = TownButton(content, lotFont, command, 10, -5 - i * 50, 630, () => RunNamedScript(command));
+                ((RectTransform)button.transform).sizeDelta = new Vector2(630, 42);
+            }
+            scroll.viewport = viewport; scroll.content = content; scroll.horizontal = false;
+            scroll.movementType = ScrollRect.MovementType.Clamped; scroll.scrollSensitivity = 30;
+            districtScriptFeedback = FounderText(panel, "Click a script to run it · Scroll for more · Esc to close",
+                new Vector2(0, -242), new Vector2(650, 38), 16);
+            districtScriptFeedback.color = TownGold;
         }
 
         private static string EraCommandName(string name) =>
@@ -266,6 +330,8 @@ namespace CityForge.World
             districtScriptDialog.gameObject.SetActive(false);
             Destroy(districtScriptDialog.gameObject);
             districtScriptDialog = null;
+            districtScriptInput = null;
+            districtScriptFeedback = null;
         }
     }
 }

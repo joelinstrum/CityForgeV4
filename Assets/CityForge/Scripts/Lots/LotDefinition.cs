@@ -54,6 +54,7 @@ namespace CityForge.Lots
         public LotCapitalBonus capitalBonus;
         public int width = 6;
         public int length = 8;
+        public float elevation;
         public int waterfrontRows;
         public HarborVesselTraffic harborVesselTraffic;
         public LotWaterfrontSide waterfrontSide;
@@ -154,6 +155,7 @@ namespace CityForge.Lots
                 lot.schema = CurrentSchema;
             }
             if (lot == null || lot.schema != CurrentSchema || !Guid.TryParseExact(lot.id, "N", out _) ||
+                !float.IsFinite(lot.elevation) || Mathf.Abs(lot.elevation)>20 ||
                 string.IsNullOrWhiteSpace(lot.name) || !ValidSize(lot.width, lot.length) ||
                 !Enum.IsDefined(typeof(LotWaterfrontSide), lot.waterfrontSide) ||
                 !Enum.IsDefined(typeof(HarborVesselTraffic), lot.harborVesselTraffic) ||
@@ -182,6 +184,7 @@ namespace CityForge.Lots
             {
                 if (item == null || !Guid.TryParseExact(item.id, "N", out _) || !ids.Add(item.id) ||
                     string.IsNullOrWhiteSpace(item.assetId) || !float.IsFinite(item.yaw) ||
+                    !float.IsFinite(item.elevation) || Mathf.Abs(item.elevation)>20 ||
                     !float.IsFinite(item.scale) || item.scale < .25f || item.scale > 3f ||
                     !float.IsFinite(item.fenceLength) || item.fenceLength < 0f || item.fenceLength > 192f ||
                     !float.IsFinite(item.position.x) || !float.IsFinite(item.position.y) ||
@@ -279,7 +282,7 @@ namespace CityForge.Lots
         }
     }
 
-    public enum LotScriptedBehavior { None, DockWorker, Shopkeeper, Lumberjack, Harass }
+    public enum LotScriptedBehavior { None, DockWorker, Shopkeeper, Lumberjack, Harass, Patrol, Farmer }
 
     [Serializable]
     public struct LotCharacterScript
@@ -310,9 +313,11 @@ namespace CityForge.Lots
     [Serializable]
     public sealed class LotObjectDefinition
     {
+        public bool generatedRowBuilding;
         public string id = Guid.NewGuid().ToString("N");
         public string assetId;
         public Vector2 position;
+        public float elevation;
         public float yaw;
         public float scale = 1f;
         public float fenceLength;

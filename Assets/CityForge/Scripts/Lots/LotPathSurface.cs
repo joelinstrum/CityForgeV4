@@ -89,7 +89,16 @@ namespace CityForge.Lots
             new LotPathMaterial("tilled-garden-soil", "Tilled Garden Soil", "Natural",
                 new Color32(127, 96, 66, 255), 3f, requiresTexture: true),
             new LotPathMaterial("garden-soil", "Realistic Garden Soil", "Natural",
-                new Color32(114, 85, 60, 255), 3f, requiresTexture: true)
+                new Color32(114, 85, 60, 255), 3f, requiresTexture: true),
+            // Reuse existing lot ground artwork in Texturize's shared Natural palette.
+            new LotPathMaterial("lush-grass", "Lush Grass", "Natural", new Color32(93, 132, 55, 255), 8f,
+                requiresTexture: true, textureResource: "Lots/GroundTextures/lush-grass"),
+            new LotPathMaterial("patchy-grass", "Patchy Grass", "Natural", new Color32(135, 128, 79, 255), 8f,
+                requiresTexture: true, textureResource: "Lots/GroundTextures/patchy-grass"),
+            new LotPathMaterial("tileable-grass", "Tileable Grass", "Natural", new Color32(112, 125, 64, 255), 8f,
+                requiresTexture: true, textureResource: "Lots/GroundTextures/tileable-grass"),
+            new LotPathMaterial("residential-worn-grass", "Worn Grass", "Natural", new Color32(112, 125, 64, 255), 16f,
+                requiresTexture: true, textureResource: "Lots/GroundTextures/Residential/worn-grass-base")
         };
 
         public readonly string Id, Label, Group;
@@ -97,11 +106,12 @@ namespace CityForge.Lots
         public readonly Vector2 TileSize;
 
         private readonly bool requiresPbr, requiresTexture;
+        private readonly string textureResource;
         private Material PbrMaterial => Resources.Load<Material>("Lots/PathMaterials/PBR/" + Id);
         public bool IsAvailable => (!requiresPbr || PbrMaterial) && (!requiresTexture || ColorTexture);
 
         private LotPathMaterial(string id, string label, string group, Color fallback, float tileX, float tileZ = 0f,
-            bool requiresPbr = false, bool requiresTexture = false)
+            bool requiresPbr = false, bool requiresTexture = false, string textureResource = null)
         {
             Id = id;
             Label = label;
@@ -109,13 +119,14 @@ namespace CityForge.Lots
             Fallback = fallback;
             this.requiresPbr = requiresPbr;
             this.requiresTexture = requiresTexture;
+            this.textureResource = textureResource;
             TileSize = new Vector2(tileX, tileZ > 0f ? tileZ : tileX);
         }
 
         private static Texture2D deckTexture;
         private Texture2D ColorTexture => Id == "timber-deck"
             ? deckTexture ? deckTexture : (deckTexture = CreateDeckTexture())
-            : Resources.Load<Texture2D>("Lots/PathMaterials/" + (Id == ResidentialFootpath ? "packed-earth" : Id));
+            : Resources.Load<Texture2D>(textureResource ?? "Lots/PathMaterials/" + (Id == ResidentialFootpath ? "packed-earth" : Id));
 
         private static Texture2D CreateDeckTexture()
         {
@@ -221,7 +232,7 @@ namespace CityForge.Lots
         }
 
         public static void RoundCorners(IReadOnlyList<Vector2> points, Vector2? end, bool loop,
-            float width, List<Vector2> rounded)
+            float width, List<Vector2> rounded, ISet<int> sharpCorners = null)
         {
             const int steps = 6;
             rounded.Clear();
@@ -229,7 +240,7 @@ namespace CityForge.Lots
             for (int i = 0; i < count; i++)
             {
                 var corner = PointAt(i);
-                if (!loop && (i == 0 || i == count - 1))
+                if (sharpCorners != null && sharpCorners.Contains(i) || !loop && (i == 0 || i == count - 1))
                 {
                     rounded.Add(corner);
                     continue;
@@ -257,13 +268,13 @@ namespace CityForge.Lots
         }
 
         public static Mesh BuildMesh(LotPathDefinition path, Vector2 tileSize, float height, Func<Vector2, float> ground = null,
-            int shoulderSide = 0, float shoulderWidth = 0f)
+            int shoulderSide = 0, float shoulderWidth = 0f, ISet<int> sharpCorners = null)
         {
             IReadOnlyList<Vector2> points = path.points;
             if (path.curved)
             {
                 var rounded = new List<Vector2>();
-                RoundCorners(points, null, path.closed, path.width, rounded);
+                RoundCorners(points, null, path.closed, path.width, rounded, sharpCorners);
                 points = rounded;
             }
 

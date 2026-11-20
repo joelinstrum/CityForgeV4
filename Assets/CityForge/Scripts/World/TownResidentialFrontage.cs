@@ -24,14 +24,14 @@ namespace CityForge.World
         private static int ResidentialDepth(TownZone zone) => zone switch
         {
             TownZone.Residential1 => 6,
-            TownZone.Commercial1 => LotDefinition.MaxTiles,
+            TownZone.Commercial1 or TownZone.Commercial2 or TownZone.Commercial3 => LotDefinition.MaxTiles,
             TownZone.Residential2 => 4,
             TownZone.Residential3 => 5,
             _ => 0
         };
 
         private string ResidentialDragHint(TownZone zone) =>
-            zone == TownZone.Commercial1 ? "Drag along a street to zone small shops · Tab to change street frontage" :
+            IsCommercialZone(zone) ? "Drag along a street to zone small shops · Tab to change street frontage" :
                 $"Drag beside a road, up to {ZonePaintDepth(zone)} cells deep · Tab to rotate frontage";
 
         private TownZoneFacing ResidentialFacing(TownZoneFacing frontage) =>
@@ -202,7 +202,7 @@ namespace CityForge.World
         {
             var lot = draft ?? record.definition;
             var layout = lot.zoningLayout;
-            if (!layout.autoPaths || layout.faceAwayFromRoad || lot.paths.Count > 0) return;
+            if (layout.buildingRow || !layout.autoPaths || layout.faceAwayFromRoad || lot.paths.Count > 0) return;
             if (!TryResidentialEntry(lot, building, out var entry, out var forward)) return;
 
             int frontage = (int)layout.frontage;

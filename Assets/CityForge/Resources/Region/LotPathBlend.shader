@@ -24,6 +24,9 @@ Shader "CityForge/Lot Path Blend"
         _EdgeBlend("Edge Blend in Meters", Float) = 0
         _Recessed("Recessed Edge Shadow", Float) = 0
         [HideInInspector] _RecessDepth("Visual Depth in Meters", Float) = 0
+        [HideInInspector] _RecessUseFootprint("Shared road boundary", Float) = 0
+        [HideInInspector] _RecessFootprint("Road boundary distances", 2D) = "black" {}
+        [HideInInspector] _RecessFootprintRect("Road boundary bounds", Vector) = (0,0,1,1)
         [HideInInspector] _RecessBorder("Recess Border", Float) = 0
         [HideInInspector] _RecessDirt("Dirt Lining", 2D) = "white" {}
         [HideInInspector] _RecessBrick("Brick Lining", 2D) = "white" {}
@@ -102,6 +105,7 @@ Shader "CityForge/Lot Path Blend"
             }
             #endif
 
+            #include "RoadRecess.hlsl"
             struct Attributes
             {
                 float4 positionOS : POSITION;
@@ -151,6 +155,16 @@ Shader "CityForge/Lot Path Blend"
             {
                 half3 view = GetWorldSpaceNormalizeViewDir(input.positionWS);
                 float2 uv = input.uv;
+                #if defined(_WAGON_SURFACE)
+                    float repeatLength = 4.5;
+                    if (input.ribbon.w < 0)
+                    {
+                        float loopLength = -input.ribbon.w;
+                        repeatLength = loopLength / (2 * max(1, round(loopLength / (2 * repeatLength))));
+                    }
+                    uv = float2(input.ribbon.z / repeatLength, saturate(input.ribbon.x / input.ribbon.y));
+                #endif
+                float roadEdgeDistance = 1000;
                 float wall = 0;
                 float2 wallUV = 0;
                 if (_RecessDepth > 0)
@@ -169,34 +183,26 @@ Shader "CityForge/Lot Path Blend"
                         float sideHit = RecessWallHit(ribbon.x, input.ribbon.y, offset.x);
                         float endHit = input.ribbon.w > 0 ? RecessWallHit(ribbon.y, input.ribbon.w, offset.y) : 2;
                         float hit = saturate(min(sideHit, endHit));
+                        if (_RecessUseFootprint > .5) hit = RoadRecessHit(input.positionWS.xz, ray, roadEdgeDistance);
                         uv += (ddx(uv) * pixels.x + ddy(uv) * pixels.y) * hit;
                         float2 wallPosition = ribbon + offset * hit;
                         wallUV = float2(sideHit < endHit ? wallPosition.y : wallPosition.x, hit * _RecessDepth);
                         wall = 1 - smoothstep(.96, 1, hit);
                     }
                 }
-                #if defined(_WAGON_SURFACE)
-                    float repeatLength = 4.5;
-                    if (input.ribbon.w < 0)
-                    {
-                        float loopLength = -input.ribbon.w;
-                        repeatLength = loopLength / (2 * max(1, round(loopLength / (2 * repeatLength))));
-                    }
-                    uv = float2(input.ribbon.z / repeatLength, saturate(input.ribbon.x / input.ribbon.y));
-                #endif
                 #if defined(_PARALLAXMAP)
                     ApplyPerPixelDisplacement(GetViewDirectionTangentSpace(input.tangentWS, input.normalWS, view), uv);
                 #endif
                 SurfaceData surface;
                 InitializeStandardLitSurfaceData(uv, surface);
-                if (_RecessDepth > 0)
+                if (_RecessDepth > 0 && _RecessUseFootprint < .5)
                 {
                     half3 lining = SAMPLE_TEXTURE2D(_RecessDirt, sampler_RecessDirt, wallUV * 2).rgb;
                     if (_RecessBorder > 1.5)
                         lining = SAMPLE_TEXTURE2D(_RecessBrick, sampler_RecessBrick, wallUV * 2).rgb;
                     else if (_RecessBorder > .5)
                         lining = half3(.39, .38, .35);
-                    surface.albedo = lerp(surface.albedo * .91, lining * .72, wall);
+                    surface.albedo = lerp(surface.albedo * .91, lining * .54, wall);
                     surface.normalTS = lerp(surface.normalTS, half3(0, 0, 1), wall);
                     surface.smoothness *= 1 - wall;
                 }
@@ -379,9 +385,22 @@ Shader "CityForge/Lot Path Blend"
                         half3 rim = _RecessBorder > 1.5
                             ? SAMPLE_TEXTURE2D(_RecessBrick, sampler_RecessBrick, input.uv * 4).rgb
                             : half3(.39, .38, .35);
-                        surface.albedo = lerp(surface.albedo, rim, 1 - smoothstep(.05, .09, edgeDistance));
+                        float rimDistance = _RecessUseFootprint > .5 ? roadEdgeDistance : edgeDistance;
+                        surface.albedo = lerp(surface.albedo, rim, 1 - smoothstep(.05, .09, rimDistance));
                     }
-                    opacity = 1;
+                    if (_RecessUseFootprint < .5) opacity = 1;
+                }
+                if (_RecessDepth > 0 && _RecessUseFootprint > .5)
+                {
+                    half3 lining = SAMPLE_TEXTURE2D(_RecessDirt, sampler_RecessDirt, wallUV * 2).rgb;
+                    lining *= half3(.783, .774, .801); // Darker exposed earth; pavement keeps its authored color.
+                    if (_RecessBorder > 1.5)
+                        lining = SAMPLE_TEXTURE2D(_RecessBrick, sampler_RecessBrick, wallUV * 2).rgb;
+                    else if (_RecessBorder > .5)
+                        lining = half3(.39, .38, .35);
+                    surface.albedo = lerp(surface.albedo * .91, lining * .54, wall);
+                    surface.normalTS = lerp(surface.normalTS, half3(0, 0, 1), wall);
+                    surface.smoothness *= 1 - wall;
                 }
                 half4 color = UniversalFragmentPBR(lighting, surface);
                 if (_Recessed > 0)
@@ -389,7 +408,9 @@ Shader "CityForge/Lot Path Blend"
                     // Move the contact shadow inward as the feather widens so it remains visible.
                     float lip = min(_EdgeBlend * .65, input.ribbon.w > 0 ? input.ribbon.w * .28 : _EdgeBlend);
                     float falloff = min(.40, input.ribbon.y * .24);
-                    float shadow = 1 - smoothstep(lip, lip + falloff, edgeDistance);
+                    float shadow = _RecessUseFootprint > .5
+                        ? 1 - smoothstep(0, _RecessDepth * .85, roadEdgeDistance)
+                        : 1 - smoothstep(lip, lip + falloff, edgeDistance);
                     color.rgb *= 1 - .20 * shadow;
                 }
                 color.rgb = MixFog(color.rgb, input.fog);

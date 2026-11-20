@@ -15,7 +15,7 @@ namespace CityForge.Editor
             lot.zoningLayout.zone = TownZone.Residential3; Require(NeighborhoodFootpaths.Eligible(lot), "Low R3 excluded");
             lot.zoningLayout.wealth = LotWealth.Medium; Require(!NeighborhoodFootpaths.Eligible(lot), "Medium wealth changed");
             lot.zoningLayout.wealth = LotWealth.Low; lot.zoningLayout.zone = TownZone.Residential1;
-            Require(!NeighborhoodFootpaths.Eligible(lot), "R1 changed"); lot.zoningLayout.zone = TownZone.Residential2;
+            Require(NeighborhoodFootpaths.Eligible(lot), "Low R1 excluded"); lot.zoningLayout.zone = TownZone.Residential2;
             for (int facing = 0; facing < 4; facing++)
             for (int rotation = 0; rotation < 8; rotation++)
             {
@@ -48,7 +48,7 @@ namespace CityForge.Editor
                 Require(material.HasProperty("_VertexOpacity") && material.HasProperty("_NaturalFootpath"), "Missing neighborhood transition controls");
             }
             finally { UnityEngine.Object.DestroyImmediate(material); }
-            Debug.Log("NEIGHBORHOOD FOOTPATH CHECKS PASS: low R2/R3 only; four frontages and eight rotations; correct road side; soft ends; continuous adjoining lots; existing dirt texture and feathered shader.");
+            Debug.Log("NEIGHBORHOOD FOOTPATH CHECKS PASS: low R1/R2/R3; four frontages and eight rotations; correct road side; soft ends; continuous adjoining lots; existing dirt texture and feathered shader.");
         }
     }
 }

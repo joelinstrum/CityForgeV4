@@ -40,6 +40,9 @@ namespace CityForge.Editor
                     }
                     bool Matches() => (bool)Call("HasGrowthZoning", rect, zone, World.TownZoneFacing.South, LotWealth.Low, new Vector2Int(3, 3));
                     Require(Matches(), zone + " rejected uniform parcel");
+                    foreach (var smaller in new[] { new Vector2Int(2, 2), new Vector2Int(2, 3), Vector2Int.one })
+                        Require(!(bool)Call("HasGrowthZoning", new RectInt(rect.min, smaller), zone,
+                            World.TownZoneFacing.South, LotWealth.Low, new Vector2Int(3, 3)), zone + " accepted a smaller layout inside a fixed parcel");
                     wealth[rect.min] = LotWealth.High;
                     Require(!Matches(), zone + " grew across wealth boundary"); wealth[rect.min] = LotWealth.Low;
                     zones[rect.min] = World.TownZone.Commercial1;
@@ -58,6 +61,8 @@ namespace CityForge.Editor
                 }
                 Require(!(bool)type.GetMethod("SupportsLotGrowth", Static).Invoke(null, new object[] { World.TownZone.Industrial1 }), "Industrial growth changed");
                 Require((bool)type.GetMethod("SupportsLotGrowth", Static).Invoke(null, new object[] { World.TownZone.Commercial1 }), "C1 growth regressed");
+                Require((bool)type.GetMethod("SupportsLotGrowth",Static).Invoke(null,new object[]{World.TownZone.Commercial2}),"C2 row growth excluded");
+                Require((bool)type.GetMethod("SupportsLotGrowth",Static).Invoke(null,new object[]{World.TownZone.Commercial3}),"C3 row growth excluded");
                 var catalog = LotAssetCatalog.Load();
                 var building = catalog.entries.First(a => a.growableZone == World.TownZone.Residential2 && a.growableWealth == LotWealth.Low && a.prefab);
                 var layout = new LotDefinition { type = LotType.Zoning, width = 3, length = 3, firstEraId = "founders",
@@ -67,14 +72,16 @@ namespace CityForge.Editor
                 Require(LotGrowableBuildings.Candidates(layout, catalog).Single().assetId == building.id, "R2 import not selected for matching lot");
                 layout.zoningLayout.zone = World.TownZone.Residential3;
                 Require(LotGrowableBuildings.Candidates(layout, catalog).Length == 0, "R3 borrowed an R2 building");
-                // R3 currently has no supplied assets: a transient R3 tag tests the same candidate pipeline without inventing production content.
-                var original = building.growableZone;
+                // Early-era R3 excludes low wealth; medium-wealth tags exercise the shared candidate path.
+                var original = building.growableZone;var originalWealth=building.growableWealth;
                 try
                 {
                     building.growableZone = World.TownZone.Residential3;
+                    Require(LotGrowableBuildings.Candidates(layout,catalog).Length==0,"Founders R3 accepted low wealth");
+                    building.growableWealth=LotWealth.Medium;layout.zoningLayout.wealth=LotWealth.Medium;
                     Require(LotGrowableBuildings.Candidates(layout, catalog).Single().assetId == building.id, "R3 matching content cannot grow");
                 }
-                finally { building.growableZone = original; }
+                finally { building.growableZone = original;building.growableWealth=originalWealth; }
                 Debug.Log("RESIDENTIAL GROWTH CHECKS PASS: R1/R2/R3 scheduling, parcel/wealth/density boundaries, save restoration, R2/R3 building selection, C1 preserved.");
             }
             finally { UnityEngine.Object.DestroyImmediate(root); }

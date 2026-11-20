@@ -26,6 +26,8 @@ namespace CityForge.World
         }
         public bool SmoothRiverHeights;
         internal bool HasIncisionGrade=>riverGrade!=null;
+        internal float[,] HeightInterpolationSource=>riverGrade??Heights;
+        internal float RestoreStoredIncision(float u,float v,float interpolated)=>riverGrade!=null?interpolated-RiverIncision(u,v)/riverVertical:interpolated;
         float[,] riverGrade;float riverSide,riverVertical;
         public void ConfigureContinuousRiver(float side)
         {

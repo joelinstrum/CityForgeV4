@@ -17,6 +17,7 @@ namespace CityForge.World
         public Vector2 position;
         public bool pedestrian;
         public bool tree;
+        public bool zoningStreetlamp;
         public LotObjectDefinition streetscape;
 
         internal static void Validate(DistrictPlacedActor[] actors, int districts, float mapSide)
@@ -69,7 +70,7 @@ namespace CityForge.World
             public float VehicleRestartTime;
             public Vector2 PassingOffset;
             public int Next, Direction = 1, TrafficRank;
-            public bool Closed, Ambient, Vehicle, EagleCarried;
+            public bool Closed, Ambient, Vehicle, EagleCarried, VisualWakePending;
             public ActorSimulationCadence Cadence;
         }
 
@@ -84,7 +85,6 @@ namespace CityForge.World
         private RouteRoad[] pedestrianSidewalkSnapshot = Array.Empty<RouteRoad>();
         private float pedestrianTick;
         private int ambientTrafficCount;
-        private RegionTimeOfDay? trafficVisibilityPhase;
 
         internal void ArmDistrictActor(string id, int count, bool pedestrian, bool tree = false)
         {
@@ -292,7 +292,6 @@ namespace CityForge.World
 
             populatedTrafficLots.RemoveWhere(lot => !districtLotRoots.ContainsKey(lot));
             ambientTrafficCount = pedestrians.Count(actor => actor.Ambient);
-            trafficVisibilityPhase = null;
             // Industrial actors and delivery vehicles are authored on their lot. A tent is
             // not a residential/commercial traffic generator.
             var buildings = districtLotRoots.Keys.Where(lot =>
@@ -755,6 +754,11 @@ namespace CityForge.World
             pedestrianBlockCircuits = ResidentialBlockRoutes();
             foreach (var (lot, root) in districtLotRoots)
             {
+                foreach(var path in lot.definition.paths.Where(p=>p.use==LotPathUse.Pedestrian))
+                {
+                    var line=new List<Vector2>();if(path.curved)LotPathSurface.RoundCorners(path.points,null,path.closed,path.width,line);else line.AddRange(path.points);
+                    AddPath(line.Select(p=>{var w=root.TransformPoint(new Vector3(p.x,0,p.y));return new Vector2(w.x,w.z);}).ToArray(),path);
+                }
                 foreach (var overlay in lot.definition.overlays)
                     if (overlay.texture == "worn-sidewalk") Sidewalk(overlay.Bounds, root);
                 if (lot.definition.overlayTexture == "worn-sidewalk")
@@ -778,7 +782,16 @@ namespace CityForge.World
                     pedestrianRoutes.Add((shoulder, road.closed, false));
                 }
             }
+            foreach(var record in parkPaths.Where(p=>ActiveDistrictMembers.Contains(p.district)))
+            {
+                var p=record.path;var line=new List<Vector2>();if(p.curved)LotPathSurface.RoundCorners(p.points,null,p.closed,p.width,line);else line.AddRange(p.points);AddPath(line.ToArray(),p);
+            }
             pedestrianSidewalkSnapshot = pedestrianSidewalks.ToArray();
+            void AddPath(Vector2[] points,LotPathDefinition path)
+            {
+                pedestrianRoutes.Add((points,path.closed,true));
+                pedestrianSidewalks.Add(new RouteRoad(points,path.width,path.closed));
+            }
             void Sidewalk(Rect bounds, Transform root)
             {
                 if (Mathf.Min(bounds.width, bounds.height) > 5f) return;
@@ -797,8 +810,8 @@ namespace CityForge.World
 
         private void RefreshTrafficVisibility()
         {
-            if (trafficVisibilityPhase == TimeOfDay) return;
-            trafficVisibilityPhase = TimeOfDay;
+            // Reconcile live bodies as well as the clock phase. An actor can have been
+            // disabled while its parent/Animator was hidden, without another phase change.
             foreach (var actor in pedestrians)
                 SetTrafficVisibility(actor);
         }
@@ -813,7 +826,25 @@ namespace CityForge.World
                 _ => ambientTrafficCount
             };
             bool active = actor.VehicleRestartTime <= 0f && (!actor.Ambient || actor.TrafficRank < limit);
-            if (actor.Body.gameObject.activeSelf != active) actor.Body.gameObject.SetActive(active);
+            if (!actor.Body) return;
+            if (actor.Body.gameObject.activeSelf != active)
+            {
+                actor.Body.gameObject.SetActive(active);
+                actor.VisualWakePending = active;
+            }
+            if (active && actor.VisualWakePending && actor.Body.gameObject.activeInHierarchy)
+            {
+                actor.VisualWakePending = false;
+                if (actor.Vehicle || !actor.Animator) return;
+                // Refresh retained skin/bone state once when returning from the night pool.
+                var animator = actor.Animator;
+                var culling = animator.cullingMode;
+                animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+                if (!animator.isInitialized) animator.Rebind();
+                SetPedestrianAnimation(actor, actor.Route is { Length: > 1 });
+                animator.Update(0f);
+                animator.cullingMode = culling;
+            }
         }
 
         private readonly List<(Vector2 center, Vector2 forward)> wagonTraffic = new();
@@ -834,9 +865,14 @@ namespace CityForge.World
                 RebuildAmbientTraffic(LotAssetCatalog.Load());
             }
             if (!pedestrianRoot) return;
-            RefreshTrafficVisibility();
+            if (!pedestrianCamera) pedestrianCamera = GetComponentInChildren<CityForgeCameraController>();
             bool visible = pedestrianCamera && pedestrianCamera.ZoomLevel <= 2;
-            if (pedestrianRoot.gameObject.activeSelf != visible) pedestrianRoot.gameObject.SetActive(visible);
+            if (pedestrianRoot.gameObject.activeSelf != visible)
+            {
+                pedestrianRoot.gameObject.SetActive(visible);
+                if (visible) foreach (var actor in pedestrians) actor.VisualWakePending = true;
+            }
+            RefreshTrafficVisibility();
             if (!visible) return;
             pedestrianTick += Mathf.Min(Time.deltaTime, .1f);
             float elapsed = pedestrianTick;

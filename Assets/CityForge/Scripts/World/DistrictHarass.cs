@@ -14,6 +14,18 @@ namespace CityForge.World
         internal float TestEnds;
         internal int TestDistrict;
         internal const float ChaseSpeed = 2.4f;
+        internal bool IncidentActive { get; private set; }
+        internal bool InCustody { get; private set; }
+        internal bool Booked { get; private set; }
+        internal DistrictPatrol RespondingOfficer { get; private set; }
+        private Vector3 authoredHome;
+        private bool homeCaptured;
+        private Renderer[] custodyRenderers;
+        private bool[] enabledBeforeBooking;
+        private Animator custodyAnimator;
+        private string custodyAnimation;
+        private AnimatorCullingMode originalCulling;
+
         private uint random;
         private float nextSearch, chaseEnds, nextScare, pending;
         private Vector2 segmentEnd;
@@ -27,16 +39,27 @@ namespace CityForge.World
 
         internal void Step(float delta, float now, bool visible)
         {
-            if (behavior == null || !view) return;
+            if (behavior == null || !view || view.IsSaving || view.DistrictLoading) return;
+            CaptureHome();
             if (TestMode && (now >= TestEnds || view.SelectedDistrict != TestDistrict))
             {
                 if (view.HarassTest == this) view.EndHarassTest(showMessage: false);
                 else Destroy(gameObject);
                 return;
             }
-            if (!TestMode && view.TimeOfDay != RegionTimeOfDay.Evening)
+            if (Booked)
             {
-                behavior.Stop(); target = null; hasSegment = false; pending = 0; nextSearch = 0;
+                if (view.TimeOfDay is RegionTimeOfDay.Morning or RegionTimeOfDay.Noon or RegionTimeOfDay.Afternoon)
+                {
+                    Booked = false; transform.position = authoredHome;
+                    for (int i = 0; i < custodyRenderers.Length; i++) if (custodyRenderers[i]) custodyRenderers[i].enabled = enabledBeforeBooking[i];
+                }
+                return;
+            }
+            if (InCustody) return;
+            if (!TestMode && view.TimeOfDay != RegionTimeOfDay.Evening && !RespondingOfficer)
+            {
+                EndIncident(); behavior.Stop(); target = null; hasSegment = false; pending = 0; nextSearch = 0;
                 return;
             }
             // Visual street trouble pauses outside the close camera view; no offscreen targeting or movement probes.
@@ -50,6 +73,7 @@ namespace CityForge.World
                 (target.Body.position - transform.position).sqrMagnitude > 32f * 32f)
             {
                 target = null; hasSegment = false;
+                if (!RespondingOfficer) EndIncident();
                 if (now < nextSearch) return;
                 if (random == 0) random = (uint)GetInstanceID();
                 target = view.ChooseHarassTarget(Point, ref random, TestMode);
@@ -66,7 +90,11 @@ namespace CityForge.World
             {
                 nextScare = now + 1.5f;
                 MovementProbes++;
-                if (view.FreightClear(point, destination, .15f)) view.ScarePedestrian(target, point, now, TestMode);
+                if (view.FreightClear(point, destination, .15f))
+                {
+                    view.ScarePedestrian(target, point, now, TestMode);
+                    if (!IncidentActive) { IncidentActive = true; view.ReportHarass(this); }
+                }
             }
             if (direction.sqrMagnitude <= 2f * 2f) { hasSegment = false; return; }
             var state = new NavigationState(view);
@@ -80,6 +108,73 @@ namespace CityForge.World
                 segmentState = state; hasSegment = true;
             }
             Advance(delta);
+        }
+
+        private void CaptureHome() { if (!homeCaptured) { authoredHome = transform.position; homeCaptured = true; } }
+        private void EndIncident() { IncidentActive = false; if (view) view.ForgetHarass(this); }
+        internal bool Reserve(DistrictPatrol officer, float now)
+        {
+            if (!officer || RespondingOfficer || !IncidentActive || InCustody || Booked || !isActiveAndEnabled) return false;
+            CaptureHome(); RespondingOfficer = officer;
+            if (TestMode) TestEnds = Mathf.Max(TestEnds, now + 180);
+            return true;
+        }
+        internal void TakeCustody(DistrictPatrol officer)
+        {
+            if (RespondingOfficer != officer) return;
+            InCustody = true; EndIncident(); behavior.Stop(); hasSegment = false; pending = 0;
+            if (target != null) { target.ScaredUntil = target.HarassTestUntil = 0; if (target.Animator) target.Animator.speed = 1; }
+            target = null;
+            custodyAnimator = GetComponentInChildren<Animator>();
+            if (custodyAnimator) { originalCulling = custodyAnimator.cullingMode; custodyAnimator.cullingMode = AnimatorCullingMode.AlwaysAnimate; }
+            CustodyIdle();
+        }
+        internal void CustodyMove(Vector2 next, float delta)
+        {
+            var direction = next - Point;
+            if (direction.sqrMagnitude > .000001f)
+            {
+                transform.rotation = Quaternion.LookRotation(new Vector3(direction.x, 0, direction.y));
+                AnimateCustody("Walk");
+            }
+            else AnimateCustody("Idle");
+            transform.position = new Vector3(next.x, view.HarassGroundHeight(next), next.y);
+        }
+        internal void CustodyIdle() => AnimateCustody("Idle");
+        private void AnimateCustody(string state)
+        {
+            if (custodyAnimation == state || !custodyAnimator || !custodyAnimator.isActiveAndEnabled || !custodyAnimator.runtimeAnimatorController) return;
+            int hash = Animator.StringToHash(custodyAnimator.GetLayerName(0) + "." + state);
+            if (!custodyAnimator.HasState(0, hash)) return;
+            custodyAnimator.speed = 1; custodyAnimator.Play(hash, 0, 0); custodyAnimator.Update(0); custodyAnimation = state;
+        }
+        internal void Release(DistrictPatrol officer, float now)
+        {
+            if (RespondingOfficer != officer) return;
+            RespondingOfficer = null; InCustody = false; EndIncident(); hasSegment = false;
+            nextSearch = now + 8; target = null; behavior.Stop();
+            CustodyIdle();
+            if (custodyAnimator) custodyAnimator.cullingMode = originalCulling;
+            custodyAnimation = null;
+        }
+        internal void Book(DistrictPatrol officer)
+        {
+            if (RespondingOfficer != officer || !InCustody) return;
+            Release(officer, Time.time);
+            if (TestMode && view.HarassTest == this) { view.EndHarassTest(false); return; }
+            Booked = true; custodyRenderers ??= GetComponentsInChildren<Renderer>(true);
+            enabledBeforeBooking = new bool[custodyRenderers.Length];
+            for (int i = 0; i < custodyRenderers.Length; i++)
+            {
+                enabledBeforeBooking[i] = custodyRenderers[i] && custodyRenderers[i].enabled;
+                if (custodyRenderers[i]) custodyRenderers[i].enabled = false;
+            }
+        }
+        private void OnDisable()
+        {
+            if (RespondingOfficer) Release(RespondingOfficer, Time.time);
+            EndIncident(); InCustody = false; RespondingOfficer = null;
+            if (gameObject.activeInHierarchy) behavior?.Stop();
         }
 
         private void Advance(float delta)

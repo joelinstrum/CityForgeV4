@@ -74,11 +74,11 @@ namespace CityForge.Lots
                 }
             }
         }
-        internal string Dab(Vector2 center, float radius, float falloff, string material,
+        internal string Dab(Vector2 center, float radius, float feather, string material,
             IReadOnlyList<Vector2> polygon, bool erase, Predicate<Vector2> contains, HashSet<GroundPaintTile> dirty)
         {
             if (!float.IsFinite(center.x) || !float.IsFinite(center.y) || !float.IsFinite(radius) || radius < .25f || radius > 16f ||
-                !float.IsFinite(falloff) || falloff < 0 || falloff > 1 || polygon == null || polygon.Count < 3)
+                !float.IsFinite(feather) || feather < 0 || feather > 8 || (polygon != null && polygon.Count < 3))
                 return "Choose a valid boundary and brush size.";
             if (!erase && !LotPathMaterial.All.Any(item => item.Id == material)) return "Choose a path texture.";
             var low = Vector2Int.FloorToInt((center - Vector2.one * radius) / TileMeters);
@@ -98,7 +98,9 @@ namespace CityForge.Lots
                 {
                     var point = new Vector2(tx * TileMeters + (x + .5f) * PixelMeters, tz * TileMeters + (y + .5f) * PixelMeters);
                     float distance = Vector2.Distance(point, center);
-                    if (distance >= radius || (contains != null && !contains(point)) || !PointWireGeometry.Contains(polygon, point)) continue;
+                    if (distance >= radius || (contains != null && !contains(point))) continue;
+                    float mask = SelectionCoverage(polygon, point, feather);
+                    if (mask <= 0) continue;
                     if (tile == null)
                     {
                         if (erase) continue;
@@ -121,8 +123,18 @@ namespace CityForge.Lots
                             slot = tile.materials.Length; tile.materials = tile.materials.Concat(new[] { material }).ToArray();
                         }
                     }
-                    float strength = .38f * Mathf.SmoothStep(0, 1, (1 - distance / radius) / Mathf.Max(.02f, falloff));
+                    float brush = feather <= 0 ? 1f : Mathf.SmoothStep(0, 1, (radius - distance) / Mathf.Min(radius, feather));
                     int index = (y * Resolution + x) * Layers;
+                    float strength = .38f * brush * mask;
+                    if (!erase)
+                    {
+                        // A feathered selection is a coverage ceiling, not a weak brush
+                        // that eventually becomes opaque after repeated passes.
+                        int target = Mathf.RoundToInt(255 * mask);
+                        int previous = bytes[index + slot];
+                        int next = Mathf.Max(previous, Mathf.RoundToInt(Mathf.Lerp(previous, target, .38f * brush)));
+                        strength = previous >= 255 ? 0 : (float)(next - previous) / (255 - previous);
+                    }
                     int sum = 0;
                     for (int layer = 0; layer < Layers; layer++)
                     {
@@ -139,6 +151,13 @@ namespace CityForge.Lots
                 if (changed) dirty.Add(tile);
             }
             return problem;
+        }
+        internal static float SelectionCoverage(IReadOnlyList<Vector2> polygon, Vector2 point, float feather)
+        {
+            if (polygon == null) return 1f; // Unbounded spray; district/lot containment is still enforced per pixel.
+            if (feather <= 0) return PointWireGeometry.Contains(polygon, point) ? 1 : 0;
+            float distance = PointWireGeometry.SignedDistance(polygon, point);
+            return 1f - Mathf.SmoothStep(0, 1, (distance + feather) / (2 * feather));
         }
         internal void RotateClockwise()
         {

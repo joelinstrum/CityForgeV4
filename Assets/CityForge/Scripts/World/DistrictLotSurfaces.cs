@@ -8,7 +8,11 @@ namespace CityForge.World
 {
     internal sealed class DistrictLotSurfaces : MonoBehaviour
     {
+        internal const float PathLift = .075f;
+        internal const int PathRenderQueue = 4034;
+        internal const int SidewalkRenderQueue = 4040;
         private readonly List<UnityEngine.Object> assets = new();
+        private readonly List<(Mesh Source, MeshFilter Filter)> paths = new();
         private static readonly int BaseColor = Shader.PropertyToID("_BaseColor");
         // The meadow grade lifts lot materials more than the Lot Editor's preview.
         private static readonly Color GradedGround = new(.59f, .60f, .52f, 1f);
@@ -42,8 +46,12 @@ namespace CityForge.World
                 var material = style.CreateMaterial();
                 if (meadowGrade && material.HasProperty(BaseColor))
                     material.SetColor(BaseColor, material.GetColor(BaseColor) * GradedPath);
-                if (path.edgeBlend > 0 || path.HasRecess) LotPathMaterial.ApplyEdgeTreatment(material, path, path.edgeBlend, i);
-                AddSurface(style.Label + " path", LotPathSurface.BuildMesh(path, style.TileSize, .10f + i * .0005f, PathHeight), material);
+                LotPathMaterial.ApplyEdgeTreatment(material, path, path.edgeBlend, i);
+                material.SetFloat("_VertexOpacity", 1f);
+                material.renderQueue = material.shader.name == "CityForge/Lot Path Blend" ? PathRenderQueue : material.renderQueue;
+                var source = LotPathSurface.BuildMesh(path, style.TileSize, PathLift + Mathf.Min(i, 100) * .00005f, PathHeight);
+                var filter = AddSurface(style.Label + " path", source, material);
+                paths.Add((source, filter));
             }
 
             float Height(Vector2 point)
@@ -129,7 +137,19 @@ namespace CityForge.World
             AddSurface(label, mesh, material);
         }
 
-        private void AddSurface(string label, Mesh mesh, Material material)
+        internal void ApplyStreetMask(StreetSurfaceMask mask)
+        {
+            foreach (var (source, filter) in paths)
+            {
+                var old = filter.sharedMesh;
+                if (old != source) { assets.Remove(old); Destroy(old); }
+                var clipped = mask.Clip(source, transform.localToWorldMatrix, .55f);
+                filter.sharedMesh = clipped;
+                if (clipped != source) assets.Add(clipped);
+            }
+        }
+
+        private MeshFilter AddSurface(string label, Mesh mesh, Material material)
         {
             var surface = new GameObject(label, typeof(MeshFilter), typeof(MeshRenderer));
             surface.transform.SetParent(transform, false);
@@ -139,6 +159,7 @@ namespace CityForge.World
             renderer.shadowCastingMode = ShadowCastingMode.Off;
             assets.Add(mesh);
             assets.Add(material);
+            return surface.GetComponent<MeshFilter>();
         }
 
         private void OnDestroy()

@@ -22,6 +22,8 @@ Shader "CityForge/Calm Lake Water"
   _NormalDetail("Static normal detail",Float)=0.008
   _DepthMask("Cached depth and footprint",2D)="black"{}
   _Environment("One-time local environment",Cube)=""{}
+  _StreamCascades("Player stream rapids and falls",Float)=0
+  _AbsorptionDensity("Water absorption per metre",Float)=0.42
   _Deep("Deep teal scattering",Color)=(.035,.15,.18,1)
   _Shallow("Shallow teal scattering",Color)=(.13,.28,.25,1)
  }
@@ -36,13 +38,14 @@ Shader "CityForge/Calm Lake Water"
    #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
    #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/EntityLighting.hlsl"
    #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
+   #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareOpaqueTexture.hlsl"
    #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
    TEXTURE2D(_RiverNormal); SAMPLER(sampler_RiverNormal);
    TEXTURE2D(_RiverFlow); SAMPLER(sampler_RiverFlow);
    TEXTURE2D(_DepthMask); SAMPLER(sampler_DepthMask);
    TEXTURECUBE(_Environment); SAMPLER(sampler_Environment);
    CBUFFER_START(UnityPerMaterial)
-   float4 _DepthRegion, _EnvironmentHDR, _CapturePosition, _CaptureBoxMin, _CaptureBoxMax; half4 _Deep, _Shallow; float _EnvironmentReady,_ReflectionMip,_ReflectionStrength,_NormalDetail,_RiverSurface,_CurrentSpeed,_CurrentPreviewTime,_RiverSceneDepth,_RippleScale,_RippleStrength,_RiverRoughness,_SunStrength;
+   float4 _DepthRegion, _EnvironmentHDR, _CapturePosition, _CaptureBoxMin, _CaptureBoxMax; half4 _Deep, _Shallow; float _EnvironmentReady,_ReflectionMip,_ReflectionStrength,_NormalDetail,_RiverSurface,_CurrentSpeed,_CurrentPreviewTime,_RiverSceneDepth,_RippleScale,_RippleStrength,_RiverRoughness,_SunStrength,_AbsorptionDensity,_StreamCascades;
    CBUFFER_END
    struct A {float4 position:POSITION;};
    struct V {float4 position:SV_POSITION;float3 world:TEXCOORD0;};
@@ -66,7 +69,7 @@ Shader "CityForge/Calm Lake Water"
     clip(field.y-.5);float depth=max(0,field.x);clip(depth-.008);
     float2 p=i.world.xz*.7;
     float3 normal=normalize(float3((Noise(p)-.5)*_NormalDetail,1,(Noise(p+31)-.5)*_NormalDetail));
-    if(_RiverSurface>.5){
+    if(_RiverSurface>.5&&_StreamCascades<.5){
      float4 flow=SAMPLE_TEXTURE2D(_RiverFlow,sampler_RiverFlow,uv);
      float seconds=_CurrentPreviewTime>=0?_CurrentPreviewTime:_Time.y;
      float2 downstream=normalize(flow.zw+float2(.00001,0));
@@ -76,6 +79,17 @@ Shader "CityForge/Calm Lake Water"
      float2 secondary=FlowingNormal(rotated+71,rotatedFlow,seconds,max(4,_RippleScale)*2.13);
      secondary=float2(.9063*secondary.x-.4226*secondary.y,.4226*secondary.x+.9063*secondary.y);
      float2 slope=(primary+secondary*.35)*_RippleStrength;
+     normal=normalize(float3(slope.x,1,slope.y));
+    }
+    if(_StreamCascades>.5){
+     float4 streamFlow=SAMPLE_TEXTURE2D(_RiverFlow,sampler_RiverFlow,uv);
+     float seconds=_CurrentPreviewTime>=0?_CurrentPreviewTime:_Time.y;
+     float2 downstream=normalize(streamFlow.zw+float2(.00001,0));
+     float2 q=i.world.xz;
+     float2 n0=FlowingNormal(q,downstream,seconds,max(1,_RippleScale));
+     float2 n1=FlowingNormal(float2(q.y,-q.x)+17,float2(downstream.y,-downstream.x),seconds,max(1,_RippleScale)*.32);
+     float2 slope=(n0+float2(-n1.y,n1.x)*.2)*_RippleStrength;
+     slope*=min(1,1.5/max(.001,length(slope)));
      normal=normalize(float3(slope.x,1,slope.y));
     }
     float3 view=GetWorldSpaceNormalizeViewDir(i.world);
@@ -96,8 +110,9 @@ Shader "CityForge/Calm Lake Water"
      opticalDepth=min(depth,max(0,sceneEye-surfaceEye)*cosine);
     }
     float path=opticalDepth/cosine*max(.5,field.b);
-    float absorption=1-exp(-path*.42);
+    float absorption=1-exp(-path*_AbsorptionDensity);
     half3 scattering=lerp(_Shallow.rgb,_Deep.rgb,1-exp(-depth*.6))*(.992+.016*Noise(i.world.xz*1.8));
+    if(_StreamCascades>.5)scattering*=max(.04,saturate(3*max(GetMainLight().color.r,max(GetMainLight().color.g,GetMainLight().color.b))));
     float3 direction=reflect(-view,normal);
     // Approximate finite capture volume: orthographic view directions alone are constant across a flat lake.
     float3 skyDirection=direction;
@@ -108,23 +123,65 @@ Shader "CityForge/Calm Lake Water"
     half3 environment=half3(.19,.28,.32);
     if(_EnvironmentReady>.5) environment=DecodeHDREnvironment(SAMPLE_TEXTURECUBE_LOD(_Environment,sampler_Environment,direction,_ReflectionMip),_EnvironmentHDR);
     if(_RiverSurface>.5)environment=GlossyEnvironmentReflection(skyDirection,i.world,_RiverRoughness,1,GetNormalizedScreenSpaceUV(i.position.xy));
+    if(_StreamCascades>.5){
+     // A clear sky lobe remains available without a local reflection probe.
+     float sky=saturate(skyDirection.y*.5+.5);
+     half3 skyLight=lerp(half3(.14,.23,.27),half3(.36,.52,.64),sky);
+     float daylight=saturate(3*max(GetMainLight().color.r,max(GetMainLight().color.g,GetMainLight().color.b)));
+     environment=lerp(environment,skyLight*max(.025,daylight),.8);
+    }
     // Premultiplied absorption leaves the real bed visible; Fresnel adds soft, approximate environment reflection.
     float reflectionWeight=(_RiverSurface>.5?saturate(.025+fresnel*.8):saturate(fresnel+_ReflectionStrength*lerp(.2,1,smoothstep(.5,3,depth))))*smoothstep(0,.25,depth);
+    if(_StreamCascades>.5)reflectionWeight=min(.16,.04+fresnel*.45)*smoothstep(0,.18,depth);
     float edge=smoothstep(0,.12,depth);
     float alpha=(absorption+(1-absorption)*reflectionWeight)*edge;
     half3 color=(scattering*absorption*(1-reflectionWeight)+environment*reflectionWeight)*edge;
+    if(_StreamCascades>.5&&_CameraOpaqueTexture_TexelSize.z>4){
+     float2 screenUV=GetNormalizedScreenSpaceUV(i.position.xy);
+     float3 viewNormal=TransformWorldToViewDir(normal);
+     float2 refractedUV=screenUV+viewNormal.xy*.0015*saturate(depth*2);
+     half3 bed=SampleSceneColor(refractedUV);
+     float basin=smoothstep(.18,.65,depth);
+     float3 extinction=lerp(float3(.75,.30,.16),float3(2,1,.6),basin);
+     float3 transmission=exp(-extinction*depth/max(.4,cosine));
+     half3 throughWater=bed*transmission+scattering*(1-transmission)*lerp(.18,.55,basin);
+     color=(throughWater*(1-reflectionWeight)+environment*reflectionWeight)*edge;
+     alpha=edge;
+    }
     if(_RiverSurface>.5){
      Light sun=GetMainLight();
      float3 halfDirection=normalize(view+sun.direction);
      float nh=saturate(dot(normal,halfDirection));float nl=saturate(dot(normal,sun.direction));
      float variance=dot(ddx(normal),ddx(normal))+dot(ddy(normal),ddy(normal));
-     float roughness=sqrt(_RiverRoughness*_RiverRoughness+min(.3,variance*4));
+     float roughness=_StreamCascades>.5?max(.1,_RiverRoughness+min(.035,variance*.05)):sqrt(_RiverRoughness*_RiverRoughness+min(.3,variance*4));
      float a2=roughness*roughness*roughness*roughness;
      float denominator=nh*nh*(a2-1)+1;
      float distribution=a2/max(.00001,3.14159265*denominator*denominator);
      float vh=saturate(dot(view,halfDirection));float specularFresnel=.025+.975*pow(1-vh,5);
      float glint=min(_SunStrength,distribution*specularFresnel*.12)*nl;
+     if(_StreamCascades>.5){
+      float3 skyHalf=normalize(view+float3(.05,1,-.08));
+      float skyGlint=pow(saturate(dot(normal,skyHalf)),180)*.22*saturate(sun.direction.y*2);
+      glint+=skyGlint;
+     }
      color+=sun.color*glint*edge;
+    }
+    if(_StreamCascades>.5){
+     // The saved grade mesh supplies the actual water slope. No particle simulation,
+     // camera-dependent terrain edits or independent waterfall levels are needed.
+     float3 face=normalize(cross(ddx(i.world),ddy(i.world)));
+     float gradient=sqrt(max(0,1-face.y*face.y))/max(.01,abs(face.y));
+     float rapid=smoothstep(.06,.32,gradient);
+     float fall=smoothstep(.45,.9,gradient);
+     float4 flow=SAMPLE_TEXTURE2D(_RiverFlow,sampler_RiverFlow,uv);
+     float seconds=_CurrentPreviewTime>=0?_CurrentPreviewTime:_Time.y;
+     float2 foamUV=float2(flow.x*.85-seconds*(2+fall*3),flow.y*2.2);
+     float streak=Noise(foamUV)*.6+Noise(foamUV*2.03+17)*.4;
+     float broken=smoothstep(.35,.8,streak);
+     float foam=(rapid*broken*.32+fall*(.24+broken*.48))*edge;
+     half3 whitewater=half3(.72,.84,.81);
+     color=color*(1-foam)+whitewater*foam;
+     alpha=alpha+(1-alpha)*foam;
     }
     return half4(color,alpha);
    }

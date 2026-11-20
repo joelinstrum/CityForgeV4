@@ -52,7 +52,9 @@ namespace CityForge.World
                 AlignFenceDistant(closeModel, distantModel);
 
             var detail = instance.gameObject.AddComponent<DistrictBuildingDetail>();
-            detail.distantZoom = asset.category == "Fences" ? 3 : DistantZoom;
+            detail.distantZoom = asset.category == "Fences" || asset.id.StartsWith("v3-building-r3-", System.StringComparison.Ordinal) ||
+                asset.id.StartsWith("v3-building-c2-", System.StringComparison.Ordinal) ||
+                asset.id is "v3-building-chapel" or "v3-building-constable-station" ? 3 : DistantZoom;
             detail.closeRenderers = closeRenderers;
             detail.distantRenderers = distantModel.GetComponentsInChildren<Renderer>();
             for (int i = 0; i < detail.distantRenderers.Length; i++)

@@ -62,7 +62,7 @@ namespace CityForge.World
             additionIndex = null;
             ForestRemovals = ForestRemovals.Select(stroke => new ForestRemovalStroke
             {
-                x = stroke.x, z = stroke.z, radius = stroke.radius,
+                x = stroke.x, z = stroke.z, radius = stroke.radius, rectangleSize = stroke.rectangleSize,
                 districts = stroke.districts.Where(cell => !members.Contains(cell)).ToArray()
             }).Where(stroke => stroke.districts.Length > 0).ToArray();
             DeepHarborDistricts = DeepHarborDistricts.Where(cell => !members.Contains(cell)).ToArray();

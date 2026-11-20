@@ -23,24 +23,24 @@ namespace CityForge.World
         {
             lots = new(); streets = new();
             var zone = plan.Cells[0].zone;
-            var wealth = zone == TownZone.Commercial1 ? LotWealth.Low : plan.Cells[0].wealth;
+            var wealth = plan.Cells[0].wealth;
             diagonalGrowthOptions ??= FoundersGrowthLayouts(out _);
             var options = diagonalGrowthOptions.Where(option => option.Buildings.Length > 0 && option.Layout.zoningLayout.zone == zone &&
                 option.Layout.zoningLayout.wealth == wealth && option.Layout.SideStreetTurn == 0 &&
-                GrowthFrontageSize(option.Layout) == Vector2Int.one * plan.LotSize).ToArray();
-            if (options.Length == 0) return $"Save a matching {plan.LotSize} × {plan.LotSize} growable layout for this zone to try a diagonal block.";
+                GrowthFrontageSize(option.Layout) == new Vector2Int(plan.LotSize,plan.LotDepth)).ToArray();
+            if (options.Length == 0) return $"Save a matching {plan.LotSize} × {plan.LotDepth} growable layout for this zone to try a diagonal block.";
             var water = DistrictLotWater();
             foreach (var parcel in plan.Cells.GroupBy(cell => new Vector2Int(cell.lotAnchorX, cell.lotAnchorZ)))
             {
                 var template = options[0].Layout;
                 var facing = parcel.First().facing;
                 int rotation = (8 - (int)facing - (int)template.zoningLayout.frontage) % 4;
-                var center = DiagonalBlockPoint(plan, ZoneCorner(parcel.Key) + Vector2.one * (plan.LotSize * DistrictGridCellMeters * .5f));
+                var center = DiagonalBlockPoint(plan, ZoneCorner(parcel.Key) + new Vector2(parcel.First().lotWidth,parcel.First().lotDepth) * (DistrictGridCellMeters*.5f));
                 var record = new DistrictLotRecord { center = center, rotation = rotation, diagonalRotation = true,
                     definition = template, district = DistrictAtWorld(new Vector3(center.x, 0, center.y)) };
                 var footprint = new DistrictLotFootprint(record);
                 if (PlacedLots.Any(lot => footprint.Overlaps(new DistrictLotFootprint(lot))) ||
-                    FootprintHasGridZoning(footprint) || LotOverlapsDistrictRoad(record, .05f)) continue;
+                    FootprintHasGridZoning(footprint) || LotOverlapsDistrictRoad(record, ResidentialRoadCornerInset)) continue;
                 if (InCampClearing(center, template.Size.magnitude * .5f)) return "Keep the lot clear of camps.";
                 var problem = LotSiteProblem(record, water, growing: true);
                 if (problem != null) return problem;
@@ -95,7 +95,7 @@ namespace CityForge.World
             }
             return districtRoads.Count + streets.Count > MaxDistrictRoads ? "This region has reached its road limit." : null;
             DistrictRoadRecord Street(Vector2[] points) => new() { points = points, width = ring.width,
-                surfaceId = ring.surfaceId, district = ring.district };
+                surfaceId = ring.surfaceId, district = ring.district, curved = ring.curved };
         }
 
         private bool FootprintHasGridZoning(DistrictLotFootprint footprint)
@@ -121,7 +121,7 @@ namespace CityForge.World
                 var option = options.First(item => item.Layout.id == record.definition.id);
                 if (option.Buildings.Length == 0) return "This layout needs a matching growable building.";
                 var building = option.Buildings[UnityEngine.Random.Range(0, option.Buildings.Length)];
-                record.definition = LotGrowableBuildings.Materialize(option.Layout, building);
+                record.definition = LotGrowableBuildings.Materialize(option.Layout, building, option.Layout.id+":"+record.district+":"+record.center);
                 record.growthBuildingId = record.definition.objects.Last().id;
                 record.id = Guid.NewGuid().ToString("N");
                 if (IsResidentialZone(record.definition.zoningLayout.zone)) AddResidentialEntryPath(record, building);
@@ -130,6 +130,7 @@ namespace CityForge.World
             problem = CommitNewRoadPieces(streets);
             if (problem != null) return problem;
             PlacedLots.AddRange(lots); PresentDistrictLots(lots);
+            foreach (var record in lots) AddLotStreetlamps(record);
             foreach (var record in lots) StartCoroutine(ConstructZonedLot(record));
             RefreshZoneOverlay(); RefreshDirtRoadEndFades();
             if (ApprovedDistrict)
@@ -138,6 +139,19 @@ namespace CityForge.World
                 ApprovedDistrict.Geography?.RefreshSettlements();
             }
             return null;
+        }
+
+        private List<DistrictLotRecord> DiagonalPreviewFootprints(ZonedBlockPlan plan)
+        {
+            var result=new List<DistrictLotRecord>();
+            foreach(var parcel in plan.Cells.GroupBy(cell=>new Vector2Int(cell.lotAnchorX,cell.lotAnchorZ)))
+            {
+                var cell=parcel.First();
+                var center=DiagonalBlockPoint(plan,ZoneCorner(parcel.Key)+new Vector2(cell.lotWidth,cell.lotDepth)*(DistrictGridCellMeters*.5f));
+                result.Add(new DistrictLotRecord{center=center,rotation=(8-(int)cell.facing)%4,diagonalRotation=true,
+                    definition=new LotDefinition{width=plan.LotSize,length=plan.LotDepth}});
+            }
+            return result;
         }
 
         private void FillDiagonalBlockPreview(ZonedBlockPlan plan, List<DistrictLotRecord> lots, bool valid)
@@ -154,8 +168,11 @@ namespace CityForge.World
                 {
                     var local = new Vector2(x * DistrictGridCellMeters, z * DistrictGridCellMeters) - size * .5f;
                     int start = vertices.Count;
-                    Add(local + new Vector2(.09f, .09f)); Add(local + new Vector2(.09f, 3.91f));
-                    Add(local + new Vector2(3.91f, 3.91f)); Add(local + new Vector2(3.91f, .09f));
+                    float left = x == 0 ? .09f : 0, bottom = z == 0 ? .09f : 0;
+                    float right = x == record.definition.width - 1 ? 3.91f : 4f;
+                    float top = z == record.definition.length - 1 ? 3.91f : 4f;
+                    Add(local + new Vector2(left, bottom)); Add(local + new Vector2(left, top));
+                    Add(local + new Vector2(right, top)); Add(local + new Vector2(right, bottom));
                     indices[valid ? (int)plan.Cells[0].zone : 0].AddRange(new[] { start, start + 1, start + 2, start, start + 2, start + 3 });
                 }
                 void Add(Vector2 point)
