@@ -25,10 +25,10 @@ namespace CityForge.World
             try { lots = LotLibrary.Local.List().Select(entry => entry.Lot).Where(lot => !IsFoundersLot(lot)).ToArray(); }
             catch (Exception error) when (error is IOException || error is UnauthorizedAccessException)
             {
-                lotFeedback.text = "Could not read the saved lot library.";
+                SetLotFeedback("Could not read the saved lot library.");
                 return;
             }
-            if (lots.Length == 0) { lotFeedback.text = "Save a lot in the Lot Editor first."; return; }
+            if (lots.Length == 0) { SetLotFeedback("Save a lot in the Lot Editor first."); return; }
             lastRepaveSurface = null;
             CloseTownSection();
             SetRoadPaths(false);
@@ -130,14 +130,17 @@ namespace CityForge.World
             ghostPlacement = placement;
             lotGhost.transform.SetPositionAndRotation(new Vector3(placement.center.x, 0, placement.center.y),
                 Quaternion.Euler(0, placement.FacingDegrees, 0));
-            foreach (Transform item in lotGhost.transform)
+            var assets = LotAssetCatalog.Load();
+            var objects = placement.definition.objects.Where(item => assets.Find(item.assetId)?.prefab).ToArray();
+            for(int i=0;i<lotGhost.transform.childCount&&i<objects.Length;i++)
             {
-                var position = item.position;
-                var point = new Vector2(position.x, position.z);
-                position.y = LotHeight(point);
-                if (placement.definition.OnWaterfront(new Vector2(item.localPosition.x, item.localPosition.z)))
-                    position.y = Mathf.Max(position.y, placement.waterfrontDeckHeight);
-                item.position = position;
+                var item=lotGhost.transform.GetChild(i);var authored=objects[i];
+                var position=item.position;
+                position.y=LotHeight(new Vector2(position.x,position.z));
+                if(placement.definition.IsWaterfront&&LotRuntimeLoader.Footprint(authored,assets.Find(authored.assetId)).Overlaps(placement.definition.WaterfrontBounds))
+                    position.y=Mathf.Max(position.y,placement.waterfrontDeckHeight);
+                position.y+=authored.elevation+placement.definition.elevation+placement.elevation;
+                item.position=position;
             }
         }
 
@@ -170,7 +173,7 @@ namespace CityForge.World
             if (removed.Count > 0) QueueDemolitionGrowth(removed);
             PlacedActors.RemoveAll(actor =>
             {
-                if (actor.streetscape == null || !footprint.Contains(actor.position)) return false;
+                if (actor.zoningStreetlamp || actor.streetscape == null || !footprint.Contains(actor.position)) return false;
                 if (streetscapeViews.Remove(actor, out var view) && view)
                 {
                     view.SetActive(false);
@@ -184,86 +187,15 @@ namespace CityForge.World
 
         private System.Collections.IEnumerator LotPlacementDust(DistrictLotRecord record)
         {
-            var shader = Resources.Load<Shader>("Weather/Precipitation");
-            if (!shader) yield break;
-            revealingLots.Add(record);
-            if (districtLotRoots.TryGetValue(record, out var hiddenLot) && hiddenLot)
-                hiddenLot.gameObject.SetActive(false);
-            var material = new Material(shader) { name = "Lot construction dust" };
-            var emitter = new GameObject("Settling lot dust");
-            emitter.transform.SetParent(transform, false);
-            var system = emitter.AddComponent<ParticleSystem>();
-            system.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
-            var main = system.main;
-            main.playOnAwake = false;
-            main.simulationSpace = ParticleSystemSimulationSpace.World;
-            main.startLifetime = 4.2f;
-            main.startSpeed = 0f;
-            main.maxParticles = 10000;
-            var emission = system.emission;
-            emission.enabled = false;
-            var shape = system.shape;
-            shape.enabled = false;
-            var renderer = system.GetComponent<ParticleSystemRenderer>();
-            renderer.sharedMaterial = material;
-            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            renderer.receiveShadows = false;
-            renderer.maxParticleSize = 1f;
-            var fade = system.colorOverLifetime;
-            fade.enabled = true;
-            var gradient = new Gradient();
-            gradient.SetKeys(new[] { new GradientColorKey(new Color(.43f, .28f, .14f), 0f),
-                new GradientColorKey(new Color(.62f, .45f, .27f), 1f) },
-                new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(.8f, .12f), new GradientAlphaKey(.7f, .55f),
-                    new GradientAlphaKey(0f, 1f) });
-            fade.color = gradient;
-            var growth = system.sizeOverLifetime;
-            growth.enabled = true;
-            growth.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.EaseInOut(0f, .35f, 1f, 1.7f));
-            var turbulence = system.noise;
-            turbulence.enabled = true;
-            turbulence.strength = 1.1f;
-            turbulence.frequency = .3f;
-            turbulence.scrollSpeed = .45f;
-            var footprint = new DistrictLotFootprint(record);
-            var size = record.definition.Size;
-            float step = Mathf.Max(2f, Mathf.Max(size.x, size.y) / 48f);
-            try
-            {
-                system.Play();
-                // Emit fresh overlapping billows at ground level while older ones climb and expand.
-                const int waves = 14;
-                for (int wave = 0; wave < waves; wave++)
-                {
-                    for (float z = step * .5f; z < size.y; z += step)
-                    for (float x = step * .5f; x < size.x; x += step)
-                    {
-                        var point = footprint.WorldPoint(new Vector2(
-                            x - size.x * .5f + UnityEngine.Random.Range(-step * .4f, step * .4f),
-                            z - size.y * .5f + UnityEngine.Random.Range(-step * .4f, step * .4f)));
-                        var particle = new ParticleSystem.EmitParams
-                        {
-                            position = new Vector3(point.x, LotHeight(point) + UnityEngine.Random.Range(.1f, .8f), point.y),
-                            velocity = new Vector3(UnityEngine.Random.Range(-.7f, .7f),
-                                UnityEngine.Random.Range(3f, 5f), UnityEngine.Random.Range(-.7f, .7f)),
-                            startSize = UnityEngine.Random.Range(step * 1.4f, step * 2.6f),
-                            startLifetime = UnityEngine.Random.Range(3.5f, 4.2f),
-                            startColor = new Color(UnityEngine.Random.Range(.8f, 1f), .9f, .85f, 1f),
-                            rotation = UnityEngine.Random.Range(0f, 360f)
-                        };
-                        system.Emit(particle, 1);
-                    }
-                    yield return new WaitForSeconds(.13f);
-                }
-                yield return new WaitForSeconds(4.3f);
-            }
-            finally
-            {
+            districtLotRoots.TryGetValue(record,out var hiddenLot);
+            float ground=LotHeight(record.center),height=8;
+            if(hiddenLot)foreach(var renderer in hiddenLot.GetComponentsInChildren<Renderer>(true))height=Mathf.Max(height,renderer.bounds.max.y-ground);
+            var veil=ConstructionDustVeil.Create(transform,record,ground,height);
+            try { yield return new WaitForSeconds(6f); }
+            finally {
                 revealingLots.Remove(record);
-                if (districtLotRoots.TryGetValue(record, out var revealedLot) && revealedLot)
-                    revealedLot.gameObject.SetActive(true);
-                if (emitter) Destroy(emitter);
-                if (material) Destroy(material);
+                if(districtLotRoots.TryGetValue(record,out var revealed)&&revealed)revealed.gameObject.SetActive(true);
+                if(veil)veil.Reveal();
             }
         }
 

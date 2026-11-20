@@ -122,6 +122,9 @@ namespace CityForge.World
             {
                 if (body.kind != WaterBodyKind.River && body.kind != WaterBodyKind.Lake && body.kind != WaterBodyKind.Pond)
                     continue;
+                // A drawn stream carves its bed without replacing the surrounding biome.
+                // Keep native waterways and lake/canal moisture rules authoritative.
+                if(body.playerChannel&&body.isStream)continue;
                 var bounds = body.Bounds;
                 bounds.min -= Vector2.one * margin;
                 bounds.max += Vector2.one * margin;
@@ -236,6 +239,19 @@ namespace CityForge.World
             var biome = land.View.Data.Biomes?.At(uv);
             float height = land.Height(point);
             float slope = land.MountainSlope(point);
+            // Excavating a player stream must not reclassify its dry banks as a
+            // different geographic surface. Use the retained original ground here.
+            foreach(var body in land.View.Data.WaterBodies)if(body.playerChannel&&body.isStream){
+                var bounds=body.Bounds;float margin=(body.bankWidthNormalized*land.View.MapSide+3)/land.View.MapSide;
+                bounds.min-=Vector2.one*margin;bounds.max+=Vector2.one*margin;
+                if(!bounds.Contains(uv))continue;
+                float distance=PlayerChannelGeometry.Sampler(body,land.View.MapSide).Query(point,out _,out _);
+                if(distance>(body.halfWidthNormalized+body.bankWidthNormalized)*land.View.MapSide+3)continue;
+                height=land.CoverageHeight(point);
+                float dx=(land.CoverageHeight(point+Vector2.right*2)-land.CoverageHeight(point-Vector2.right*2))/4;
+                float dz=(land.CoverageHeight(point+Vector2.up*2)-land.CoverageHeight(point-Vector2.up*2))/4;
+                slope=Mathf.Atan(Mathf.Sqrt(dx*dx+dz*dz))*Mathf.Rad2Deg;break;
+            }
             // Offset the geographic thresholds slightly at two scales. These
             // signals shape an existing edge and never pick a surface by themselves.
             float broadEdge = land.Noise(point, 37f, 19) - .5f;

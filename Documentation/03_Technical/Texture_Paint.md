@@ -7,7 +7,7 @@ within24 screen pixels of the first marker. PointWirePath owns marker/closure st
 PointWireGeometry rejects intersecting outlines and supplies concave containment.
 The first marker is larger. Backspace removes an unclosed marker. Hold the left mouse
 button to paint or erase after closure. Right/middle camera navigation stays available.
-The diameter slider covers1–32m; falloff controls the soft brush edge. Erasing fades
+The diameter slider covers1–32m; Feather controls a symmetric0–8m selection-edge blend (0m is a hard edge). Erasing fades
 all paint weights back toward the underlying ground. New boundary retains paint;
 Done/Esc removes editing guides. Undo stroke retains the last12 paint edits in this
 editing session. Lot Editor strokes also enter the normal lot undo history.
@@ -16,8 +16,11 @@ editing session. Lot Editor strokes also enter the normal lot undo history.
 
 GroundPaintData stores sparse32m tiles, each with a128×128 map (25cm texels), at most
 eight path-material IDs and eight normalized byte weights per texel. The polygon
-mask is rasterized without bilinear sampling across its edge; the brush falloff is
-soft inside that mask. Polygons themselves are transient. Maps are deflate/base64
+mask uses PointWireGeometry signed distance for a symmetric smooth coverage ramp
+across the selection boundary. The mask caps incoming texture coverage so repeated
+strokes preserve feathered edges. Brush edges soften over the selected feather
+distance; zero uses a hard brush and hard selection. District/lot eligibility
+still clips painting to allowed ground. Polygons themselves are transient. Maps are deflate/base64
 encoded on stroke completion, never as individual persistent brush strokes. Data
 validation checks sizes, duplicate tiles/palettes, known IDs, coverage and bounded
 compressed payloads. Empty tiles are removed after erasing. A document caps at256
@@ -56,3 +59,14 @@ maps, four rotations, lot undo/redo, actual .cflot library and .cfregion file ro
 Parks/Textures menu entrypoints, lot-tool arm/close callbacks, shader compilation, fixed
 mesh counts, rendered controls, and reconstruction with no visible boundary. Fixtures
 use an isolated product/library and scratch snapshots, never the player's saves.
+
+## Existing grass textures in Natural
+
+The shared palette now includes Lush Grass, Patchy Grass, Tileable Grass and Worn
+Grass, reusing Lots/GroundTextures resources directly. LotPathMaterial accepts an
+optional explicit textureResource; entries require that texture to be available.
+Grass IDs are appended, preserving earlier catalog ordering. Lush/Patchy/Tileable
+repeat at8m and Worn at16m, matching their established ground-texture scales.
+Maintained Grass is byte-identical to Lush Grass, so it is not a duplicate swatch.
+Both Parks and Lot Editor Texturize expose these through Natural and All. Current
+private content has26 available textures. Original artwork and saves remain unchanged.

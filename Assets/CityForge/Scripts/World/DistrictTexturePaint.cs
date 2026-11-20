@@ -22,24 +22,29 @@ namespace CityForge.World
         private void RebuildGroundPaint()
         {
             if(tearingDownPaint)return;
-            if(districtTexturePaint){CancelTexturePaint();return;}
+            if(districtTexturePaint)return; // Presentation refresh must not silently relinquish the active paint tool.
             if(districtPaintRendering){districtPaintRendering.gameObject.SetActive(false);Destroy(districtPaintRendering.gameObject);}
             if(SelectedDistrict<0||districtGroundPaint.tiles.Count==0)return;
             var go=new GameObject("District texture paint");go.transform.SetParent(transform,false);
             districtPaintRendering=go.AddComponent<GroundPaintRenderer>();
             districtPaintRendering.Initialize(districtGroundPaint,LotHeight,ActiveDistrictBounds,InActiveDistrict);
         }
+        private bool PaintHitsBuilding(Vector2 point)
+        {
+            foreach(var building in roadBuildings)if(building.Contains(point,0))return true;
+            return false;
+        }
         private void OpenTexturize()
         {
             if(!CanBuildTown||IsSaving)return;
+            CancelTexturePaint();CancelZoneDrag();CancelZonedBlock(false);zoneToolArmed=false;CloseRoadContext();SetRoadPaths(false);
             CloseTownSection();CancelRoadPlacement();CancelLotPlacement();CancelDistrictActor();SelectDistrictLot(null);
             if(districtPaintRendering)districtPaintRendering.gameObject.SetActive(false);
             var camera=GetComponentInChildren<CameraSystem.CityForgeCameraController>().GetComponent<Camera>();
             var go=new GameObject("District Texturize tool");go.transform.SetParent(transform,false);
             districtTexturePaint=go.AddComponent<TexturePaintTool>();
-            var water=DistrictLotWater();
             districtTexturePaint.Initialize(townToolbar.parent,districtGroundPaint,Pointer,Project,LotHeight,
-                point=>InActiveDistrict(point)&&!InCampClearing(point)&&(water!=null?water.Dry(point):IsTownLand(point/MapSide+Vector2.one*.5f)),
+                point=>InActiveDistrict(point)&&!PaintHitsBuilding(point),
                 ()=>CanBuildTown&&TownConstructionVisible&&!IsSaving&&!DistrictLoading,
                 data=>districtGroundPaint=data,()=>{districtTexturePaint=null;RebuildGroundPaint();},ActiveDistrictBounds);
             Vector2? Pointer()

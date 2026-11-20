@@ -5,14 +5,19 @@ using CityForge.World;
 namespace CityForge.UI
 {
     public enum NatureTool { None, Terrain, Water, Trees, Animals, Sun }
-    /// <summary>Icon-only district nature categories. Mutation tools connect through ToolSelected.</summary>
+    /// <summary>District nature categories with the City toolbar frame and layout.</summary>
     public sealed class NatureToolbar : MonoBehaviour
     {
         public NatureTool Selected {get;private set;}
         public event Action<NatureTool> ToolSelected;
         PrototypeRegionView view;RectTransform root,sunMenu;Texture2D atlas;
         readonly Button[] categories=new Button[5],seasons=new Button[3],weather=new Button[3];
-        readonly Image[] marks=new Image[5],seasonMarks=new Image[3],weatherMarks=new Image[3];
+        readonly Image[] seasonMarks=new Image[3],weatherMarks=new Image[3];
+        readonly DistrictCategoryButtonArtwork[] categoryFaces=new DistrictCategoryButtonArtwork[5];
+        Material categoryMaterial;
+        Font categoryFont;
+        bool ownsCategoryFont;
+        static readonly string[] CategoryLabels={"Terrain","Water","Forests","Animals","Sun & Sky"};
         public NatureToolPopup Popup {get;private set;}
         public ForestRemovalBrush ForestBrush {get;private set;}
         public LakeOutlineTool LakeOutline {get;private set;}
@@ -21,9 +26,17 @@ namespace CityForge.UI
         public void Initialize(PrototypeRegionView source,Transform hud)
         {
             view=source;atlas=Resources.Load<Texture2D>("UI/NatureToolbarIcons");
-            root=Rect(hud,"NatureToolbar",new Vector2(.5f,0),new Vector2(0,42),new Vector2(500,80));
+            root=Rect(hud,"NatureToolbar",new Vector2(.5f,0),new Vector2(0,117),new Vector2(738,82));
+            var shader=Resources.Load<Shader>("UI/TownButtonArtwork");
+            if(shader)categoryMaterial=new Material(shader){name="Nature category button artwork"};
+            categoryFont=Font.CreateDynamicFontFromOSFont(new[]{"Georgia","Times New Roman","Liberation Serif"},19);
+            ownsCategoryFont=categoryFont;
+            if(!categoryFont)categoryFont=Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            var dark=Resources.Load<Texture2D>("UI/TownConstruction/Dark");
+            var gold=Resources.Load<Texture2D>("UI/TownConstruction/Gold");
             for(int i=0;i<5;i++){
-                int index=i;categories[i]=Icon(root,((NatureTool)(i+1)).ToString(),i,new Vector2((i-2)*100,0),64,out marks[i]);
+                int index=i;
+                categories[i]=CategoryButton(root,i,dark,gold);
                 categories[i].onClick.AddListener(()=>Select((NatureTool)(index+1)));
             }
             sunMenu=Rect(root,"SunMenu",new Vector2(.5f,0),new Vector2(0,100),new Vector2(430,74));
@@ -60,6 +73,25 @@ namespace CityForge.UI
         {
             var go=new GameObject(name,typeof(RectTransform));go.transform.SetParent(parent,false);var rect=go.GetComponent<RectTransform>();rect.anchorMin=rect.anchorMax=anchor;rect.pivot=new Vector2(.5f,0);rect.anchoredPosition=position;rect.sizeDelta=size;return rect;
         }
+        Button CategoryButton(RectTransform parent,int index,Texture2D dark,Texture2D gold)
+        {
+            var buttonRect=Rect(parent,((NatureTool)(index+1)).ToString(),Vector2.up,new Vector2(index*148,0),new Vector2(146,82));
+            buttonRect.pivot=Vector2.up;
+            var face=buttonRect.gameObject.AddComponent<DistrictCategoryButtonArtwork>();
+            face.Configure(dark,gold,categoryMaterial);categoryFaces[index]=face;
+            var button=buttonRect.gameObject.AddComponent<Button>();button.targetGraphic=face;
+            var colors=button.colors;colors.highlightedColor=new Color(.95f,.95f,.95f);colors.pressedColor=new Color(.8f,.8f,.8f);button.colors=colors;
+            var iconRect=Rect(buttonRect,"Category icon",new Vector2(.5f,1),new Vector2(0,-2),new Vector2(52,52));
+            iconRect.pivot=new Vector2(.5f,1);
+            var icon=iconRect.gameObject.AddComponent<RawImage>();icon.texture=atlas;
+            icon.uvRect=new Rect(index%4/4f,(2-index/4)/3f,.25f,1f/3);icon.raycastTarget=false;
+            var labelRect=Rect(buttonRect,"Caption",new Vector2(.5f,0),new Vector2(0,8),new Vector2(140,27));
+            var label=labelRect.gameObject.AddComponent<Text>();label.text=CategoryLabels[index];label.font=categoryFont;
+            label.fontSize=19;label.alignment=TextAnchor.MiddleCenter;label.color=new Color(1f,.89f,.68f);label.raycastTarget=false;
+            var shadow=labelRect.gameObject.AddComponent<Shadow>();shadow.effectColor=new Color(0,0,0,.8f);shadow.effectDistance=new Vector2(0,-1);
+            return button;
+        }
+        void OnDestroy(){if(categoryMaterial)Destroy(categoryMaterial);if(ownsCategoryFont&&categoryFont)Destroy(categoryFont);}
         Button Icon(Transform parent,string name,int tile,Vector2 position,float size,out Image mark)
         {
             var rect=Rect(parent,name,new Vector2(.5f,0),position,new Vector2(size,size));
@@ -79,7 +111,7 @@ namespace CityForge.UI
         public void Select(NatureTool tool)
         {
             if(!view||view.SelectedDistrict<0||view.DistrictLoading||view.TownConstructionVisible)return;
-            bool reopen=Selected==tool&&!Popup.gameObject.activeSelf;Selected=Selected==tool&&!reopen?NatureTool.None:tool;Popup.Show(Selected);sunMenu.gameObject.SetActive(Selected==NatureTool.Sun);
+            bool reopen=Selected==tool&&!Popup.Visible;Selected=Selected==tool&&!reopen?NatureTool.None:tool;Popup.Show(Selected);sunMenu.gameObject.SetActive(Selected==NatureTool.Sun);
             ToolSelected?.Invoke(Selected);Refresh();
         }
         public bool Dismiss()
@@ -92,7 +124,7 @@ namespace CityForge.UI
             if(!view||!root)return;bool district=view.SelectedDistrict>=0&&!view.DistrictLoading;
             bool leaving=!district&&wasDistrict;wasDistrict=district;if(leaving)Dismiss();root.gameObject.SetActive(district&&!view.TownConstructionVisible);
             var controls=view.transform.Find("RegionHud/Controls");if(controls)controls.gameObject.SetActive(!district);
-            for(int i=0;i<5;i++)marks[i].gameObject.SetActive(Selected==(NatureTool)(i+1));
+            for(int i=0;i<5;i++)categoryFaces[i].SetSelected(Selected==(NatureTool)(i+1));
             var current=Weather;
             if(Selected==NatureTool.Sun)Popup.SetStatus(Popup.Option==0?view.VisualSeason.ToString():current?current.Current.ToString():"");
             for(int i=0;i<3;i++){

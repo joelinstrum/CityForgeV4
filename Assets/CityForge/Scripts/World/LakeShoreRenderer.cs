@@ -55,6 +55,20 @@ namespace CityForge.World
                 }
             }
             if(body.playerCreated)BuildShoreAccents(rocks,salt);
+            if(body.appearanceProfile=="player-marsh-v1")
+            {
+                float step=Mathf.Max(2.5f,Mathf.Sqrt((max.x-min.x)*(max.y-min.y)/1200f));
+                for(float z=min.y;z<max.y&&Plants<1400;z+=step)
+                for(float x=min.x;x<max.x&&Plants<1400;x+=step)
+                {
+                    var p=new Vector2(x+R()*step,z+R()*step);
+                    if(!land.Contains(p)||!body.Contains(p/land.View.MapSide+Vector2.one*.5f)||land.Noise(p,13,421)<.44f)continue;
+                    float height=land.Height(p),depth=level-height;
+                    if(depth<-.1f||depth>.8f)continue;
+                    var pose=Matrix4x4.TRS(new Vector3(p.x,height-.025f,p.y),Quaternion.Euler(0,R()*360,0),Vector3.one*Mathf.Lerp(1f,1.45f,R()));
+                    foreach(var piece in reeds)piece.batch.placements.Add(pose*piece.local);Plants++;
+                }
+            }
             BuildLeaves(min,max,level,rng);
             PlacementFingerprint=1469598103934665603UL;
             foreach(var batch in batches){

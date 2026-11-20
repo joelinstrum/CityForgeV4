@@ -11,7 +11,7 @@ namespace CityForge.World
         {
             LakeWaterRenderer river=null;
             foreach(var surface in land.GetComponentsInChildren<LakeWaterRenderer>())
-                if(surface.SurfaceMaterial&&surface.SurfaceMaterial.HasProperty("_RiverSurface")&&surface.SurfaceMaterial.GetFloat("_RiverSurface")>.5f){river=surface;break;}
+                if(!surface.IsPlayerChannelSurface&&surface.SurfaceMaterial&&surface.SurfaceMaterial.HasProperty("_RiverSurface")&&surface.SurfaceMaterial.GetFloat("_RiverSurface")>.5f){river=surface;break;}
             if(!river)yield break;
             var template=Resources.Load<Material>("ApprovedWater/River");
             if(!template||!template.shader)throw new InvalidOperationException("Approved river material missing. Prepare the local runtime river shader/material before loading districts.");

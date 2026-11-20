@@ -17,7 +17,7 @@ namespace CityForge.World
             public readonly int Road;
             public readonly Vector2 A, B;
             public readonly float Start, Length, RoadLength, HalfWidth;
-            public readonly bool Dirt, Closed;
+            public readonly bool Dirt, Closed, Street;
 
             public Segment(int road, DistrictRoadRecord record, Vector2 a, Vector2 b, float start, float roadLength)
             {
@@ -29,6 +29,7 @@ namespace CityForge.World
                 RoadLength = roadLength;
                 HalfWidth = record.width * .5f;
                 Dirt = record.surfaceId == "dirt";
+                Street = StreetJunctions.IsStreet(record.surfaceId);
                 Closed = record.closed;
             }
 
@@ -53,7 +54,7 @@ namespace CityForge.World
                 if (road.curved)
                 {
                     var rounded = new List<Vector2>();
-                    LotPathSurface.RoundCorners(points, null, road.closed, road.width, rounded);
+                    LotPathSurface.RoundCorners(points, null, road.closed, road.width, rounded, road.junctionCorners);
                     points = rounded;
                 }
 
@@ -87,7 +88,7 @@ namespace CityForge.World
 
         private void AddSegment(Segment segment)
         {
-            var padding = Vector2.one * (segment.HalfWidth + .85f);
+            var padding = Vector2.one * (segment.HalfWidth + (segment.Street ? LotPathSurface.ResidentialSidewalkWidth + 1f : .85f));
             var min = CellAt(Vector2.Min(segment.A, segment.B) - padding);
             var max = CellAt(Vector2.Max(segment.A, segment.B) + padding);
             for (int z = min.y; z <= max.y; z++)
@@ -104,8 +105,8 @@ namespace CityForge.World
             if (!tiles.TryGetValue(cell, out var segments)) return false;
             foreach (var segment in segments)
             {
-                float clearance = Mathf.Max(0, segment.HalfWidth - .28f);
-                if (segment.Dirt && segment.DistanceSquared(point) < clearance * clearance) return true;
+                float clearance = segment.Street ? segment.HalfWidth + LotPathSurface.ResidentialSidewalkWidth + .85f : Mathf.Max(0, segment.HalfWidth - .28f);
+                if ((segment.Dirt || segment.Street) && segment.DistanceSquared(point) < clearance * clearance) return true;
             }
             return false;
         }
@@ -153,7 +154,7 @@ namespace CityForge.World
         {
             foreach (var other in segments)
             {
-                float clearance = other.HalfWidth + (other.Road == road ? -.25f : .55f);
+                float clearance = other.HalfWidth + (other.Street ? LotPathSurface.ResidentialSidewalkWidth + .85f : other.Road == road ? -.25f : .55f);
                 if (other.DistanceSquared(point) < clearance * clearance) return false;
             }
             return true;

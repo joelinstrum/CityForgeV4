@@ -11,14 +11,15 @@ namespace CityForge.UI
         public bool Closed=>Wire&&Wire.Closed;
         public IReadOnlyList<Vector2> Points=>Wire.Points;
         PrototypeRegionView view;NatureToolbar toolbar;
+        public bool Marsh {get;private set;}
         public void Initialize(PrototypeRegionView source,NatureToolbar tools,Transform hud)
         {
             view=source;toolbar=tools;Wire=gameObject.AddComponent<PointWireTool>();
             Wire.Initialize(view.GetComponentInChildren<Camera>(),hud,new DistrictSurface(view),new Color(.18f,.7f,1));
             Wire.Label="Lake / pond";Wire.RepeatOnCompletion=true;Wire.AllowClosedUndo=false;
-            Wire.CompletionRequested=points=>view.ApprovedDistrict.CreatePlayerLake(points);
+            Wire.CompletionRequested=points=>view.ApprovedDistrict.CreatePlayerLake(points,Marsh);
             toolbar.ToolSelected+=_=>Cancel();toolbar.Popup.OptionChanged+=_=>Cancel();
-            toolbar.Popup.WaterBodySelected+=(adding,kind)=>{if(adding&&kind==0)Arm();else Cancel();};
+            toolbar.Popup.WaterBodySelected+=(adding,kind)=>{if(adding&&(kind==0||kind==4)){Marsh=kind==4;Wire.Label=Marsh?"Marsh":"Lake / pond";Arm();}else Cancel();};
         }
         public void Arm(){toolbar.ForestBrush.Cancel();Wire.Arm();if(Armed)toolbar.Popup.gameObject.SetActive(false);}
         public void Cancel(){if(Wire)Wire.Cancel();}

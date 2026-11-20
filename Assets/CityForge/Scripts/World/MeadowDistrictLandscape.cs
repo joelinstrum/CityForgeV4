@@ -282,13 +282,14 @@ namespace CityForge.World
             bool smooth=view.RiverBedVersion>=4||view.CreationSettings?.version>=5;
             var columns=new float[resolution];
             for(int x=0;x<resolution;x++)columns[x]=Mathf.Clamp((origin.x+step*x)*mapScale+256,0,512);
+            var heightTimer=System.Diagnostics.Stopwatch.StartNew();
             float[,] horizontal=null;
             Vector2Int[] channelRows=null;
-            if(smooth&&!data.HasIncisionGrade&&rockBankBlend==null&&streamBankBlend==null){
+            if(smooth&&rockBankBlend==null&&streamBankBlend==null){
                 channelRows=RegionalRiverNetwork.HeightRowBounds(data,origin/view.MapSide+Vector2.one*.5f,Side/view.MapSide,resolution);
                 horizontal=new float[PrototypeRegionData.Resolution,resolution];
                 yield return RegionBuildSteps.ComputeRows(PrototypeRegionData.Resolution,z=>
-                    SmoothRiverSurface.FillHorizontalRow(data.Heights,horizontal,z,columns));
+                    SmoothRiverSurface.FillHorizontalRow(data.HeightInterpolationSource,horizontal,z,columns));
             }
             void FillHeightRow(int z)
             {
@@ -302,6 +303,7 @@ namespace CityForge.World
                         smooth?data.SmoothHeight(u,v):Mathf.Lerp(
                         Mathf.Lerp(data.Heights[iz,ix],data.Heights[iz,ix+1],fx),
                         Mathf.Lerp(data.Heights[iz+1,ix],data.Heights[iz+1,ix+1],fx),fz);
+                    if(horizontal!=null)h=data.RestoreStoredIncision(u,v,h);
                     if(channelRows!=null&&x>=channelRows[z].x&&x<=channelRows[z].y)
                         h=RegionalRiverNetwork.ContinuousHeight(data,u,v,h);
                     if(estuaryRiver!=null)h=ShapeEstuaryHeight(new Vector2(u,v),h);
@@ -321,6 +323,7 @@ namespace CityForge.World
             progress?.Invoke("Applying terrain heights",.21f);yield return null;
             yield return ShapeDeepHarborStages(heights);
             ApplyPlayerLakeBasins(heights);ApplyPlayerChannels(heights);
+            long heightMilliseconds=heightTimer.ElapsedMilliseconds;
             if(view.IsCombinedDistrict){
                 float min=float.PositiveInfinity,max=float.NegativeInfinity;
                 foreach(float sample in heights){min=Mathf.Min(min,sample);max=Mathf.Max(max,sample);}
@@ -356,7 +359,7 @@ namespace CityForge.World
             DisplayTerrain.treeDistance=regionOverview?Mathf.Max(baseline.treeDistance,view.MapSide*3):baseline.treeDistance;DisplayTerrain.treeBillboardDistance=baseline.treeBillboardDistance;DisplayTerrain.treeCrossFadeLength=baseline.treeCrossFadeLength;DisplayTerrain.treeMaximumFullLODCount=baseline.treeMaximumFullLODCount;
             // Avoid competing ray hits; the continuous original collider remains the authoritative gameplay surface.
             go.GetComponent<TerrainCollider>().enabled=view.RiverBedVersion>=4||view.CreationSettings?.version>=5;
-            var timings=new System.Text.StringBuilder();
+            var timings=new System.Text.StringBuilder("heightfield="+heightMilliseconds+" ms; ");
             void Measure(string name,Action action){var timer=System.Diagnostics.Stopwatch.StartNew();action();timings.Append(name+"="+timer.ElapsedMilliseconds+" ms; ");}
             progress?.Invoke("Preparing shorelines",.25f);yield return null;
             Measure("slab",BuildDistrictSlab);Measure("shore field",BuildShoreField);var cached=View.LoadedMeadowDistrict==View.SelectedDistrict?View.LoadedMeadow:null;
@@ -415,7 +418,7 @@ namespace CityForge.World
             progress?.Invoke("Applying landscape lighting",.78f);yield return null;Measure("presentation",BuildPresentation);
             progress?.Invoke("Preparing water",.84f);yield return null;
             if(View.MinimalRiverCrest)Measure("minimal river Crest",BuildMinimalRiverCrest);else if(!View.Waterless)Measure("water setup",BuildWater);
-            BuildPlayerLakes();BuildPlayerChannels();
+            Measure("player water meshes and paint",()=>{BuildPlayerLakes();BuildPlayerChannels();});
             if(!ApprovedForestAssets.CheckpointReplay&&!Water&&!View.Waterless&&!View.MinimalRiverCrest){
                 var approvedWater=ApprovedRiverWater.Initialize(this);while(approvedWater.MoveNext())yield return approvedWater.Current;
             }

@@ -66,6 +66,16 @@ namespace CityForge.Lots
             return hash;
         }
 
+        internal static bool FenceWordsMatch(LotAssetCatalogEntry source, LotAssetCatalogEntry candidate)
+        {
+            foreach(var word in new[]{"section","partial"})
+            {
+                bool Has(LotAssetCatalogEntry entry)=>(entry.id+" "+entry.label).IndexOf(word,StringComparison.OrdinalIgnoreCase)>=0;
+                if(Has(source)!=Has(candidate))return false;
+            }
+            return true;
+        }
+
         // Called once on a detached lot definition at construction. Saved definitions
         // hold the result, so reopening and repainting wealth cannot reroll a lot.
         internal static void Apply(LotDefinition lot, string instanceId, LotAssetCatalog catalog)
@@ -127,7 +137,7 @@ namespace CityForge.Lots
                 var style = Find(source.assetId);
                 var match = Fences.Where(s => s.family == family && s.part == style.part && s.wealth == style.wealth && s.era == era)
                     .Select(s => catalog.Find(s.assetId))
-                    .FirstOrDefault(a => a != null && a.prefab && (!style.Straight || a.fenceSpan > 0));
+                    .FirstOrDefault(a => a != null && a.prefab && FenceWordsMatch(old,a) && (!style.Straight || a.fenceSpan > 0));
                 var copy = JsonUtility.FromJson<LotObjectDefinition>(JsonUtility.ToJson(source));
                 copy.assetId = match?.id ?? source.assetId;
                 if (style.Straight && match != null && match.id != source.assetId)

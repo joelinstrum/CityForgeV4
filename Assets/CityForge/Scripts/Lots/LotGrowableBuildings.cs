@@ -15,6 +15,8 @@ namespace CityForge.Lots
             "v3-building-plymouth-store" or "v3-building-founders-bakery" or "v3-building-founders-blacksmith"
                 or "v3-building-founders-cooperage" or "v3-building-founders-tavern" => 180f,
             string id when id.StartsWith("v3-building-r2-", System.StringComparison.Ordinal) ||
+                id.StartsWith("v3-building-r3-", System.StringComparison.Ordinal) ||
+                id.StartsWith("v3-building-c2-", System.StringComparison.Ordinal) ||
                 id.StartsWith("v3-building-low-wealth-", System.StringComparison.Ordinal) ||
                 id.StartsWith("v3-building-medium-wealth-", System.StringComparison.Ordinal) ||
                 id.StartsWith("v3-building-founders-shop-", System.StringComparison.Ordinal) => 180f,
@@ -38,6 +40,7 @@ namespace CityForge.Lots
         internal static LotObjectDefinition[] Candidates(LotDefinition lot, LotAssetCatalog catalog)
         {
             if (!catalog || !lot.zoningLayout.Configured) return System.Array.Empty<LotObjectDefinition>();
+            if(lot.zoningLayout.buildingRow)return LotRowBuildings.Candidates(lot,catalog);
             var layout = lot.zoningLayout;
             string era = ResidentialGround.LotEra(lot);
             return catalog.entries
@@ -50,6 +53,7 @@ namespace CityForge.Lots
         internal static string PlacementProblem(LotDefinition lot, LotAssetCatalogEntry asset, LotAssetCatalog catalog,
             out LotObjectDefinition building, bool enforceFit = false)
         {
+            if(lot.zoningLayout.buildingRow)return LotRowBuildings.PlacementProblem(lot,asset,catalog,out building);
             var layout = lot.zoningLayout;
             var info = LotBuildingInfo.Load(asset.id);
             var entry = info != null && !info.dimensionsOnly ? info : null;
@@ -81,8 +85,9 @@ namespace CityForge.Lots
             return null;
         }
 
-        internal static LotDefinition Materialize(LotDefinition layout, LotObjectDefinition building)
+        internal static LotDefinition Materialize(LotDefinition layout, LotObjectDefinition building, string seed = null)
         {
+            if(layout.zoningLayout.buildingRow)return LotRowBuildings.Materialize(layout,LotAssetCatalog.Load(),seed??building.assetId);
             var grown = LotDefinition.Parse(JsonUtility.ToJson(layout));
             grown.objects.Add(new LotObjectDefinition
             {

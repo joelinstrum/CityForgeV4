@@ -6,11 +6,21 @@ namespace CityForge.Lots
 {
     public enum LotWealth { None, Low, Medium, High }
 
+    internal static class ResidentialWealthPolicy
+    {
+        internal static bool Allows(TownZone zone, LotWealth wealth, string era) =>
+            zone != TownZone.Residential3 || wealth != LotWealth.Low ||
+            !(string.IsNullOrEmpty(era) || era == "founders" || era == "industrial");
+    }
+
     public enum LotFrontage { South, West, North, East }
 
     [Serializable]
     public struct LotZoningLayout
     {
+        public bool buildingRow;
+        public float rowGap;
+        public int rowSeed;
         public TownZone zone;
         public LotWealth wealth;
         public string previewBuildingId;
@@ -61,6 +71,7 @@ namespace CityForge.Lots
         internal bool Valid => !Configured || (zone >= TownZone.Residential1 && zone <= TownZone.Industrial3 &&
             wealth >= LotWealth.Low && wealth <= LotWealth.High &&
             BuildingScale >= .25f && BuildingScale <= 3f &&
+            float.IsFinite(rowGap) && rowGap >= 0 && rowGap <= 4 &&
             buildingQuarterTurns >= 0 && buildingQuarterTurns < 4 &&
             frontage >= LotFrontage.South && frontage <= LotFrontage.East &&
             (!hasEntrance || Finite(entrance)) && (!hasDriveway || Finite(driveway)) &&

@@ -18,6 +18,7 @@ namespace CityForge.World
         // Missing/zero values in older saves migrate to the accepted lake/pond renderer.
         public int lakeWaterVersion=1;
         public RegionTimeOfDay timeOfDay;
+        public bool hasClockHour, clockPaused;public float clockHour;
         public bool animals;
         public string[] readMessages;
         // Also supports climate on legacy coastal maps without inventing a creation recipe.
@@ -35,6 +36,7 @@ namespace CityForge.World
         public TownZoneCell[] townZones;
         public int townZoneGridVersion;
         public DistrictRoadRecord[] districtRoads;
+        public DistrictParkPathRecord[] parkPaths;
         public CityForge.Lots.GroundPaintData groundPaint;
         public DistrictPlacedActor[] placedActors;
         public int[] deepHarborDistricts;
@@ -99,12 +101,13 @@ namespace CityForge.World
         public static SavedRegionSnapshot Capture(PrototypeRegionView view,string id=null,string name=null)
         {
             var baseline=Resources.Load<MeadowRuntimeBaseline>("Region/MeadowRuntimeBaseline");
-            var info=new SavedRegionInfo{animals=view.AnimalsEnabled,id=id??view.SavedRegionId??Guid.NewGuid().ToString("N"),name=name??view.RegionName,season=(int)view.Season,timeOfDay=view.TimeOfDay,terrainHeightRange=view.TerrainHeightRange,seed=view.Data.Seed,size=(int)view.Size,district=view.SelectedDistrict,meadow=view.PrefersMeadow,waterBodies=view.Data.WaterBodies,waterless=view.Waterless,coastline=view.Coastline,coastVersion=view.CoastVersion,minimalRiverCrest=view.MinimalRiverCrest,stillWater=false,lakeWaterVersion=LakeWaterRenderer.UsesCalmWater(view)?1:-1,riverBedVersion=view.RiverBedVersion,savedUtc=DateTime.UtcNow.ToString("O"),baselineVersion=baseline?baseline.generationVersion:0,camera=view.GetComponentInChildren<CameraSystem.CityForgeCameraController>().CaptureRegionState()};
+            var info=new SavedRegionInfo{animals=view.AnimalsEnabled,id=id??view.SavedRegionId??Guid.NewGuid().ToString("N"),name=name??view.RegionName,season=(int)view.Season,timeOfDay=view.TimeOfDay,hasClockHour=true,clockHour=view.CurrentClockHour,clockPaused=view.ClockPaused,terrainHeightRange=view.TerrainHeightRange,seed=view.Data.Seed,size=(int)view.Size,district=view.SelectedDistrict,meadow=view.PrefersMeadow,waterBodies=view.Data.WaterBodies,waterless=view.Waterless,coastline=view.Coastline,coastVersion=view.CoastVersion,minimalRiverCrest=view.MinimalRiverCrest,stillWater=false,lakeWaterVersion=LakeWaterRenderer.UsesCalmWater(view)?1:-1,riverBedVersion=view.RiverBedVersion,savedUtc=DateTime.UtcNow.ToString("O"),baselineVersion=baseline?baseline.generationVersion:0,camera=view.GetComponentInChildren<CameraSystem.CityForgeCameraController>().CaptureRegionState()};
             info.deepHarborDistricts = view.DeepHarborDistricts;
             info.readMessages = view.CaptureReadRegionMessages();
             info.townZones = view.CaptureTownZones();
             info.townZoneGridVersion = PrototypeRegionView.TownZoneGridVersion;
             info.districtRoads = view.CaptureDistrictRoads();
+            info.parkPaths = view.CaptureParkPaths();
             info.groundPaint = view.CaptureGroundPaint();
             info.placedActors = view.PlacedActors.ToArray();
             if (view.PlacedLots.Count != 0) info.lots = view.PlacedLots.ToArray();
@@ -138,6 +141,7 @@ namespace CityForge.World
         {
             snapshot.info.groundPaint?.Flush();
             CityForge.Lots.GroundPaintData.Validate(snapshot.info.groundPaint);
+            PrototypeRegionView.ValidateParkPaths(snapshot.info.parkPaths,(snapshot.info.creation?.GridSide??2)*(snapshot.info.creation?.GridSide??2),NativeCampPlanner.MapSide(snapshot.info.size,snapshot.info.creation?.GridSide??2));
             RegionTown.Validate(snapshot.info.towns);
             int districtGrid = snapshot.info.creation?.GridSide ?? 2;
             PrototypeRegionView.ValidateDeepHarbors(snapshot.info.deepHarborDistricts, districtGrid * districtGrid);
@@ -193,6 +197,7 @@ namespace CityForge.World
         {
             if(reader.ReadString()!=Magic)throw new InvalidDataException("Unsupported saved region.");int length=Count(reader,2,16777216);var bytes=reader.ReadBytes(length);if(bytes.Length!=length)throw new EndOfStreamException();
             var json=Encoding.UTF8.GetString(bytes);var info=JsonUtility.FromJson<SavedRegionInfo>(json);
+            if(info!=null&&info.hasClockHour&&(!float.IsFinite(info.clockHour)||info.clockHour<0||info.clockHour>=24))throw new InvalidDataException("Invalid saved clock time.");
             if (info != null && !Enum.IsDefined(typeof(RegionTimeOfDay), info.timeOfDay))
                 throw new InvalidDataException("Invalid time of day.");
             // JsonUtility can instantiate a missing nested recipe with current defaults.
@@ -207,6 +212,7 @@ namespace CityForge.World
             PrototypeRegionView.ValidateDeepHarbors(info.deepHarborDistricts, gridSide * gridSide);
             ValidateZones(info, gridSide);
             CityForge.Lots.GroundPaintData.Validate(info.groundPaint);
+            PrototypeRegionView.ValidateParkPaths(info.parkPaths,gridSide*gridSide,NativeCampPlanner.MapSide(info.size,gridSide));
             PrototypeRegionView.ValidateDistrictRoads(info.districtRoads, gridSide * gridSide, NativeCampPlanner.MapSide(info.size, gridSide));
             // JsonUtility writes the absent inline streetscape field as an empty object.
             if (info.placedActors != null)

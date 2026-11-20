@@ -76,6 +76,8 @@ namespace CityForge.UI
         private Text growthPreviewLabel;
         private LotObjectDefinition[] growthPreviews = Array.Empty<LotObjectDefinition>();
         private string growthPreviewLotId, growthPreviewId;
+        private bool rowPreviewVisible;
+        private int rowPreviewSeed;
         private Text lotTitle, lotSummary, validation, tooltip;
         private Font headingFont;
         private LotToolDescription tooltipOwner;
@@ -219,7 +221,7 @@ namespace CityForge.UI
                 () => OpenAssetPopup("Fences", "Choose fence for path"), LotGlyph.Fence,
                 "Fill the purple path with a fence style");
 
-            var bar = selectionToolbar = Tray("Tools", 648, 147, 385, 53);
+            var bar = selectionToolbar = Tray("Tools", 648, 147, 385, 141);
             selectTool = Control(bar, "Select", 6, 8, 42, () => { armed = null; moving = false; Refresh(); },
                 LotGlyph.Select, "Select an object on the lot", true);
             moveTool = Control(bar, "Move", 53, 8, 42, () => { armed = null; moving = CanEdit(Selection); Refresh(); },
@@ -239,6 +241,11 @@ namespace CityForge.UI
             varyTreeButton = Control(bar, "Vary when placed: Off", 6, 48, 222,
                 () => ChangeObject(item => item.varyTreeOnPlacement = !item.varyTreeOnPlacement),
                 description: "Vary this tree’s species, size and rotation when a lot is placed");
+
+            Control(bar,"Object −",6,92,84,()=>ChangeObject(item=>item.elevation=Mathf.Max(-20,item.elevation-.25f)),description:"Lower the selected object 0.25 metres");
+            Control(bar,"Object +",98,92,84,()=>ChangeObject(item=>item.elevation=Mathf.Min(20,item.elevation+.25f)),description:"Raise the selected object 0.25 metres");
+            Control(bar,"Lot −",194,92,84,()=>{session.Edit(draft=>draft.elevation=Mathf.Max(-20,draft.elevation-.25f));Refresh();},description:"Lower the whole lot 0.25 metres");
+            Control(bar,"Lot +",286,92,84,()=>{session.Edit(draft=>draft.elevation=Mathf.Min(20,draft.elevation+.25f));Refresh();},description:"Raise the whole lot 0.25 metres");
 
             pathSelectionToolbar = Tray("Selected path tools", 22, 207, 358, 218);
             Label(pathSelectionToolbar, "Width", 10, 9, 63);
@@ -862,6 +869,7 @@ namespace CityForge.UI
             {
                 assetId = asset.id, position = SnapPoint(point), yaw = placementYaw, scale = placementScale
             };
+            if(layout.buildingRow){armed=null;rowPreviewVisible=true;Refresh("Use building choices to edit the row pool; the footprint stays empty.");return;}
             var next = layout.SeedBuilding(building, asset);
             var problem = next.FitProblem(lot);
             if (problem == null && SlotOverlapsBuilding(lot, next))
@@ -1031,180 +1039,6 @@ namespace CityForge.UI
             }, LotGlyph.Check);
         }
 
-        private void OpenZoningLayout()
-        {
-            if (assetPopup || PlayerMode) return;
-            CloseChoices();
-            var lot = session.Lot;
-            var layout = lot.zoningLayout;
-            int zone = layout.Configured ? (int)layout.zone - 1 : 0;
-            int use = zone / 3, density = zone % 3, wealth = layout.wealth != LotWealth.None ? (int)layout.wealth - 1 : 0;
-            var slot = layout.Configured ? layout.BuildingSlot : new Rect(lot.LandBounds.center - lot.LandBounds.size * .25f,
-                lot.LandBounds.size * .5f);
-            var building = Selection;
-            var asset = building != null && catalog ? catalog.Find(building.assetId) : null;
-            var frame = CreateModal("Growable layout");
-            Place(frame, Vector2.one * .5f, Vector2.one * .5f,
-                new Vector2(-280, -384), new Vector2(280, 384));
-            Label(frame, "Variable building slot · meters from the lot center", 20, 220, 608, 17);
-            var widthField = SlotField("Width", 20, 253, slot.width);
-            var depthField = SlotField("Depth", 285, 253, slot.height);
-            var xField = SlotField("Center X", 20, 298, slot.center.x);
-            var zField = SlotField("Center Z", 285, 298, slot.center.y);
-            bool replaceBuilding = false;
-            if (asset?.category == "Buildings")
-                Control(frame, "Use selected building as slot", 20, 348, 608, () =>
-                {
-                    var bounds = LotRuntimeLoader.Footprint(building, asset);
-                    widthField.text = MeterText(bounds.width);
-                    depthField.text = MeterText(bounds.height);
-                    xField.text = MeterText(bounds.center.x);
-                    zField.text = MeterText(bounds.center.y);
-                    replaceBuilding = true;
-                }, description: "Use this building's footprint and remove the model when applying");
-            Choices("Zone use", new[] { "Residential", "Commercial", "Industrial" }, 79, use, value => use = value);
-            Choices("Density", new[] { "1", "2", "3" }, 123, density, value => density = value);
-            Choices("Wealth", new[] { "$", "$$", "$$$" }, 167, wealth, value => wealth = value);
-            var frontage = layout.frontage;
-            Label(frame, "Road edge", 20, 397, 88, 16);
-            var frontageButton = Control(frame, frontage.ToString(), 115, 397, 154, () => { },
-                description: "Edge of the template that follows the zoning arrow.");
-            var frontageLabel = frontageButton.GetComponentInChildren<Text>();
-            frontageButton.onClick.AddListener(() =>
-            {
-                frontage = (LotFrontage)(((int)frontage + 1) % 4);
-                frontageLabel.text = frontage.ToString();
-            });
-            bool faceAwayFromRoad = layout.faceAwayFromRoad;
-            Choices("House faces", new[] { "Face Road", "Face Away from Road" }, 441,
-                faceAwayFromRoad ? 1 : 0, value => faceAwayFromRoad = value == 1, buttonWidth: 190);
-            bool autoPaths = layout.autoPaths;
-            Choices("Auto Paths", new[] { "Off", "On" }, 485,
-                autoPaths ? 1 : 0, value => autoPaths = value == 1);
-            Label(frame, "Entrance guide coordinates", 20, 533, 260, 16);
-            var entranceX = SlotField("House X", 20, 565, layout.hasEntrance ? layout.entrance.x : (float?)null);
-            var entranceZ = SlotField("House Z", 285, 565, layout.hasEntrance ? layout.entrance.y : (float?)null);
-            var drivewayX = SlotField("Driveway X", 20, 608, layout.hasDriveway ? layout.driveway.x : (float?)null);
-            var drivewayZ = SlotField("Driveway Z", 285, 608, layout.hasDriveway ? layout.driveway.y : (float?)null);
-            var error = Label(frame, "", 20, 657, 608, 16);
-            At(error.rectTransform, 20, 657, 608, 49);
-            error.color = Gold;
-            Control(frame, "Place entry marker", 285, 523, 248,
-                () => ApplyLayout(placeEntryMarker: true));
-            Control(frame, "Choose which buildings can be placed here", 20, 710, 345, () =>
-            {
-                if (string.IsNullOrEmpty(lot.firstEraId))
-                {
-                    error.text = "Set the lot’s era in the Lot Editor before choosing buildings.";
-                    return;
-                }
-                ApplyLayout(openBuildingChoices: true);
-            });
-            Control(frame, "Apply layout", 373, 710, 167, () => ApplyLayout(), LotGlyph.Check);
-
-            void Choices(string title, string[] labels, int y, int initial, Action<int> select, int buttonWidth = 132)
-            {
-                Label(frame, title, 20, y, 100, 16);
-                var buttons = new Button[labels.Length];
-                for (int i = 0; i < labels.Length; i++)
-                {
-                    int value = i;
-                    buttons[i] = Control(frame, labels[i], 124 + i * (buttonWidth + 8), y, buttonWidth, () =>
-                    {
-                        select(value);
-                        for (int j = 0; j < buttons.Length; j++) MarkActive(buttons[j], j == value);
-                    });
-                    MarkActive(buttons[i], i == initial);
-                }
-            }
-
-            TownZone SelectedZone() => (TownZone)(use * 3 + density + 1);
-            LotWealth SelectedWealth() => (LotWealth)(wealth + 1);
-
-            InputField SlotField(string title, int x, int y, float? value)
-            {
-                Label(frame, title, x, y, 88, 16);
-                var field = Field(frame, "m", x + 95, y, 154);
-                field.gameObject.name = title + " input";
-                field.contentType = InputField.ContentType.DecimalNumber;
-                field.text = value.HasValue ? MeterText(value.Value) : "";
-                return field;
-            }
-
-            void ApplyLayout(bool openBuildingChoices = false, bool placeEntryMarker = false)
-            {
-                if (!ReadMeters(widthField, out float w) || !ReadMeters(depthField, out float d) ||
-                    !ReadMeters(xField, out float x) || !ReadMeters(zField, out float z))
-                {
-                    error.text = "Enter width, depth and center coordinates in meters.";
-                    return;
-                }
-                if (!ReadAnchor(entranceX, entranceZ, out bool hasEntrance, out var entrance) ||
-                    !ReadAnchor(drivewayX, drivewayZ, out bool hasDriveway, out var driveway))
-                {
-                    error.text = "Enter both coordinates for each entrance you want to use.";
-                    return;
-                }
-                var next = new LotZoningLayout
-                {
-                    zone = SelectedZone(), wealth = SelectedWealth(), previewBuildingId = layout.previewBuildingId,
-                    overrideBuildingFit = layout.overrideBuildingFit,
-                    restrictGrowthBuildings = layout.restrictGrowthBuildings,
-                    growthBuildingIds = layout.growthBuildingIds,
-                    buildingQuarterTurns = layout.buildingQuarterTurns,
-                    faceAwayFromRoad = faceAwayFromRoad, autoPaths = autoPaths, buildingScale = layout.buildingScale,
-                    buildingCenter = new Vector2(x, z), buildingSize = new Vector2(w, d),
-                    frontage = frontage, hasEntrance = hasEntrance, entrance = entrance,
-                    hasDriveway = hasDriveway, driveway = driveway
-                };
-                var fitProblem = next.Valid ? next.FitProblem(lot) : "Enter a positive width and depth for the building slot.";
-                if (fitProblem != null)
-                {
-                    error.text = fitProblem;
-                    return;
-                }
-                if (SlotOverlapsBuilding(lot, next, replaceBuilding ? building : null))
-                {
-                    error.text = "Move fixed buildings out of the variable slot.";
-                    return;
-                }
-                session.Edit(item =>
-                {
-                    item.zoningLayout = next;
-                    if (replaceBuilding) item.objects.Remove(building);
-                });
-                if (replaceBuilding) selected = null;
-                CloseAssetPopup();
-                if (placeEntryMarker)
-                {
-                    armed = null;
-                    pickingLotEntrance = true;
-                    Refresh();
-                    return;
-                }
-                if (openBuildingChoices)
-                {
-                    OpenGrowthBuildingChoices();
-                    return;
-                }
-                Refresh($"{next.Label} growable layout ready to save. Building fit allows 10% extra.");
-            }
-
-            static bool ReadAnchor(InputField x, InputField z, out bool present, out Vector2 point)
-            {
-                point = default;
-                present = !string.IsNullOrWhiteSpace(x.text) || !string.IsNullOrWhiteSpace(z.text);
-                if (!present) return true;
-                if (!ReadMeters(x, out float east) || !ReadMeters(z, out float north)) return false;
-                point = new Vector2(east, north);
-                return float.IsFinite(east) && float.IsFinite(north);
-            }
-
-            static string MeterText(float value) => value.ToString("0.###", CultureInfo.InvariantCulture);
-            static bool ReadMeters(InputField field, out float value) =>
-                float.TryParse(field.text, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
-        }
-
         private void OpenGrowthBuildingChoices()
         {
             var lot = session.Lot;
@@ -1222,6 +1056,7 @@ namespace CityForge.UI
             Label(frame, $"{era.Name} / {use} / {layout.Label}", 20, 57, modalWidth - 40, 18);
             var overrideFit = Checkbox(frame, "Override does not fit", "Override does not fit", 20, 88, 450,
                 layout.overrideBuildingFit);
+            if(layout.buildingRow){overrideFit.isOn=false;overrideFit.interactable=false;}
             var feedback = Label(frame, "", 20, modalHeight - 81, modalWidth - 40, 16);
             CreatePickerResults(frame, 134, 82);
 
@@ -1292,7 +1127,7 @@ namespace CityForge.UI
             if (!catalog) return false;
             foreach (var item in lot.objects)
             {
-                if (item == except) continue;
+                if (item == except || PlayerMode && item.generatedRowBuilding) continue;
                 var asset = catalog.Find(item.assetId);
                 if (asset?.category == "Buildings" && layout.BuildingSlot.Overlaps(LotRuntimeLoader.Footprint(item, asset)))
                     return true;
@@ -1384,7 +1219,7 @@ namespace CityForge.UI
             if (fencePicker) AddFenceWealthFilter(frame, search);
             if (filter == "Trees")
             {
-                var randomize = Checkbox(frame, "Randomize tree", "Randomize tree within the selected group",
+                var randomize = Checkbox(frame, "Randomize tree", "Randomize tree within this group when the lot is placed in-game",
                     20, 147, 520, randomizeTreeSpecies);
                 randomize.onValueChanged.AddListener(value => randomizeTreeSpecies = value);
             }
@@ -1506,18 +1341,8 @@ namespace CityForge.UI
                 (string.IsNullOrEmpty(asset.group) ? asset.category : asset.group);
         }
 
-        private LotAssetCatalogEntry RandomTree(LotAssetCatalogEntry tree, bool excludeCurrent)
-        {
-            var variants = catalog.entries.Where(asset => asset != null && asset.prefab &&
-                asset.category == "Trees" && asset.group == tree.group &&
-                (!excludeCurrent || asset.id != tree.id) &&
-                (!PlayerMode || LotCustomizationService.IsCosmetic(catalog, asset.id))).ToArray();
-            return variants.Length == 0 ? tree : variants[placementRandom.Next(variants.Length)];
-        }
-
         private void ArmAsset(LotAssetCatalogEntry item)
         {
-            if (randomizeTreeSpecies && item.category == "Trees") item = RandomTree(item, false);
             armed = item.id;
             placementYaw = item.id is "v3-building-low-wealth-vertical-siding-front-gable" or "v3-building-low-wealth-front-gable-cottage" or
                 "v3-building-medium-wealth-old-yeller" or "v3-building-medium-wealth-stone-house"
@@ -1536,6 +1361,33 @@ namespace CityForge.UI
         }
 
         private bool pickingLotEntrance;
+        private void OpenRowBuildingInfo(LotAssetCatalogEntry asset,Action returnToBuildings)
+        {
+            CloseAssetPopup();var frame=CreateModal("Row alignment · "+asset.label,1040,690);
+            var geometry=LotRowBuildings.Geometry(asset);float span=Mathf.Max(asset.footprint.x,asset.footprint.y)*.7f;
+            var plan=new GameObject("South-facing building plan",typeof(RectTransform),typeof(RawImage)).GetComponent<RawImage>();
+            plan.transform.SetParent(frame,false);At(plan.rectTransform,20,68,560,560);plan.texture=thumbnails.GetPlan(asset,span);
+            plan.rectTransform.localRotation=Quaternion.Euler(0,0,-LotGrowableBuildings.FrontageOffset(asset.id));
+            Label(frame,"Measured in metres with the building facing down (South). Walls exclude stairs, barrels and roof overhangs.",610,80,405,18);
+            var left=Metric("Left joining wall X",180,geometry.leftWall);
+            var right=Metric("Right joining wall X",235,geometry.rightWall);
+            var step=Metric("Bottom front step Z",290,geometry.frontStep);
+            var leftLine=AddImage("Left joining wall",frame,new Color(0.3f,.9f,1));
+            var rightLine=AddImage("Right joining wall",frame,new Color(0.3f,.9f,1));
+            var stepLine=AddImage("Front step line",frame,Gold);
+            var feedback=Label(frame,"These markers are shared by future rows using this building.",610,380,405,85);
+            left.onValueChanged.AddListener(_=>Draw());right.onValueChanged.AddListener(_=>Draw());step.onValueChanged.AddListener(_=>Draw());
+            Control(frame,"Back",610,597,175,()=>OpenBuildingInfo(asset,returnToBuildings));
+            Control(frame,"Save row alignment",805,597,210,()=>{
+                if(!Read(left,out float l)||!Read(right,out float r)||!Read(step,out float z)||r-l<.25f||r-l>128||Mathf.Abs(l)>128||Mathf.Abs(r)>128||Mathf.Abs(z)>128){feedback.text="Enter valid wall coordinates and a front step coordinate. Right wall must be beyond left wall.";return;}
+                try{var info=LotBuildingInfo.Load(asset.id)??new LotBuildingInfo{dimensionsOnly=true};info.rowGeometry=new LotRowGeometry{leftWall=l,rightWall=r,frontStep=z};info.Save(asset.id);CloseAssetPopup();Refresh("Saved row alignment for "+asset.label);returnToBuildings();}
+                catch(Exception error)when(error is IOException||error is UnauthorizedAccessException){feedback.text="Could not save row alignment: "+error.Message;}
+            });Draw();
+            InputField Metric(string title,int y,float value){Label(frame,title,610,y,200,17);var field=Field(frame,"Metres",825,y,185);field.contentType=InputField.ContentType.DecimalNumber;field.text=value.ToString("0.###",CultureInfo.InvariantCulture);return field;}
+            void Draw(){if(Read(left,out float l))At(leftLine.rectTransform,20+280+l/span*280,68,2,560);if(Read(right,out float r))At(rightLine.rectTransform,20+280+r/span*280,68,2,560);if(Read(step,out float z))At(stepLine.rectTransform,20,68+280-z/span*280,560,2);}
+            bool Read(InputField field,out float value)=>float.TryParse(field.text,NumberStyles.Float,CultureInfo.InvariantCulture,out value)&&float.IsFinite(value);
+        }
+
         private void OpenBuildingInfo(LotAssetCatalogEntry asset, Action returnToBuildings)
         {
             CloseAssetPopup();
@@ -1638,6 +1490,7 @@ namespace CityForge.UI
                 {
                     new LotBuildingInfo
                     {
+                        rowGeometry=saved?.rowGeometry,
                         entrance = entrance, facing = facing, entryType = type, width = meters, measuredDoorHeight = door,
                         dimensions = new Vector3(x, y, z) * metersPerFoot
                     }.Save(asset.id);
@@ -1651,6 +1504,7 @@ namespace CityForge.UI
                     Debug.LogWarning(error.Message);
                 }
             });
+            Control(frame,"Row alignment…",610,597,175,()=>OpenRowBuildingInfo(asset,returnToBuildings));
             UpdateMarker();
 
             float DefaultWidth() => type == LotEntryType.Vehicle ? 3f : 1f;
@@ -1981,6 +1835,12 @@ namespace CityForge.UI
             var shopkeeper = Control(scripted, "Shopkeeper", 177, 0, 166, () => { });
             var lumberjack = Control(scripted, "Lumberjack", 354, 0, 166, () => { });
             var harass = Control(scripted, "Harass", 0, 44, 166, () => { });
+            var patrol = Control(scripted, "Patrol", 177, 44, 166, () => { });
+            var farmer = Control(scripted, "Farmer", 354, 44, 166, () => { });
+            var farmerNote = Label(scripted, "Place the Farmer in an open field on this lot. Walks between nearby patches and works with his hoe, staying inside the lot and clear of buildings and water.", 8, 94, 495, 16);
+            At(farmerNote.rectTransform, 8, 94, 495, 110);
+            var patrolNote = Label(scripted, "Place a Constable outside the Constable Station and assign Patrol. Walks nearby streets, runs to harassment, and escorts the hooligan back here. Runs in the district.", 8, 94, 495, 16);
+            At(patrolNote.rectTransform, 8, 94, 495, 110);
             var harassNote = Label(scripted, "Evening only: raises both arms and follows nearby pedestrians, who hurry away.", 8, 94, 495, 16);
             At(harassNote.rectTransform, 8, 94, 495, 78);
             var lumberNote = Label(scripted, "Claims a nearby forest tree within 80m, walks over, chops it down, then returns home. Requires Walk and Chop animations. Harvesting runs in the district.", 8, 47, 495, 16);
@@ -2002,6 +1862,8 @@ namespace CityForge.UI
             shopkeeper.onClick.AddListener(() => SelectBehavior(LotScriptedBehavior.Shopkeeper));
             lumberjack.onClick.AddListener(() => SelectBehavior(LotScriptedBehavior.Lumberjack));
             harass.onClick.AddListener(() => SelectBehavior(LotScriptedBehavior.Harass));
+            patrol.onClick.AddListener(() => SelectBehavior(LotScriptedBehavior.Patrol));
+            farmer.onClick.AddListener(() => SelectBehavior(LotScriptedBehavior.Farmer));
             SelectBehavior(behavior);
 
             void SelectBehavior(LotScriptedBehavior selected)
@@ -2013,6 +1875,10 @@ namespace CityForge.UI
                 MarkActive(shopkeeper, isShop);
                 MarkActive(lumberjack, selected == LotScriptedBehavior.Lumberjack);
                 MarkActive(harass, selected == LotScriptedBehavior.Harass);
+                MarkActive(patrol, selected == LotScriptedBehavior.Patrol);
+                MarkActive(farmer, selected == LotScriptedBehavior.Farmer);
+                farmerNote.gameObject.SetActive(selected == LotScriptedBehavior.Farmer);
+                patrolNote.gameObject.SetActive(selected == LotScriptedBehavior.Patrol);
                 harassNote.gameObject.SetActive(selected == LotScriptedBehavior.Harass);
                 lumberNote.gameObject.SetActive(selected == LotScriptedBehavior.Lumberjack);
                 dockNote.gameObject.SetActive(isDock);
@@ -2090,6 +1956,21 @@ namespace CityForge.UI
                         return;
                     }
                 }
+                if (!randomizedSelected && behavior == LotScriptedBehavior.Farmer && character.assetId != "v3-farmer")
+                { error.text = "Choose Farmer with Walk and Hoe animations."; return; }
+                if (!randomizedSelected && behavior == LotScriptedBehavior.Patrol)
+                {
+                    if (character.assetId != "v3-founders-constable")
+                    {
+                        error.text = "Choose Constable with Walk and Run animations.";
+                        return;
+                    }
+                    if (!DistrictPatrol.HasStation(session.Lot))
+                    {
+                        error.text = "Place the constable on a Constable Station lot.";
+                        return;
+                    }
+                }
                 if (!randomizedSelected && behavior == LotScriptedBehavior.Harass &&
                     !LotHarass.Supports(catalog.Find(character.assetId)?.prefab))
                 {
@@ -2117,7 +1998,11 @@ namespace CityForge.UI
                 session.Edit(_ => character.characterScript = settings);
                 CloseAssetPopup();
                 viewport.RestartCharacterPreview(character.id);
-                Refresh(settings.scriptedBehavior == LotScriptedBehavior.Harass
+                Refresh(settings.scriptedBehavior == LotScriptedBehavior.Farmer
+                    ? "Farmer assigned · walks the field and works with his hoe in the district."
+                    : settings.scriptedBehavior == LotScriptedBehavior.Patrol
+                    ? "Patrol assigned · responds to harassment and escorts hooligans to this station."
+                    : settings.scriptedBehavior == LotScriptedBehavior.Harass
                     ? "Harass assigned · follows and scares pedestrians in the evening."
                     : settings.scriptedBehavior == LotScriptedBehavior.Shopkeeper
                     ? "Shopkeeper assigned · uses the nearest marked pedestrian entrance."
@@ -2627,7 +2512,8 @@ namespace CityForge.UI
         private void SurroundLotWithFence()
         {
             StartFencePath();
-            var half = session.Lot.Size * .5f;
+            var half = Vector2.Max(Vector2.one * .25f, session.Lot.Size * .5f -
+                Vector2.one * LotPathSurface.ResidentialSidewalkWidth);
             fencePath.TryAdd(new Vector2(-half.x, -half.y));
             fencePath.TryAdd(new Vector2(half.x, -half.y));
             fencePath.TryAdd(new Vector2(half.x, half.y));
@@ -2714,7 +2600,7 @@ namespace CityForge.UI
             }
 
             var size = LotRuntimeLoader.Footprint(source, asset).size;
-            var centerLimit = LotRuntimeLoader.PlacementHalfExtents(lot) - size * .5f;
+            var centerLimit = asset.category == "Trees" ? lot.Size * .5f : LotRuntimeLoader.PlacementHalfExtents(lot) - size * .5f;
             if (centerLimit.x < 0f || centerLimit.y < 0f || !LotRuntimeLoader.Fits(lot, source, asset))
             {
                 Refresh("Move the selected asset closer to the lot before repeating it.", rebuildPreview: false);
@@ -2880,7 +2766,8 @@ namespace CityForge.UI
                     Refresh("This lot has reached its object limit.", rebuildPreview: false);
                     return;
                 }
-                var placed = new LotObjectDefinition { assetId = previewAsset.id, position = position.Value, yaw = placementYaw, scale = placementScale };
+                var placed = new LotObjectDefinition { assetId = previewAsset.id, position = position.Value, yaw = placementYaw, scale = placementScale,
+                    varyTreeOnPlacement = randomizeTreeSpecies && previewAsset.category == "Trees" };
                 if (previewAsset.fenceSpan > 0)
                 {
                     placed.fenceLength = previewAsset.FencePlacementLength;
@@ -2889,7 +2776,7 @@ namespace CityForge.UI
                 session.Edit(lot => lot.objects.Add(placed));
                 selected = placed.id;
                 if (randomizeTreeSpecies && previewAsset.category == "Trees")
-                    armed = RandomTree(previewAsset, true).id;
+                    armed = previewAsset.id;
                 else if (previewAsset.category != "Fences")
                     armed = null;
                 RememberAsset(previewAsset.id);
@@ -3121,6 +3008,7 @@ namespace CityForge.UI
         {
             var asset = catalog ? catalog.Find(item.assetId) : null;
             if (asset == null) return;
+            if (asset.category == "Trees") { item.scale *= Mathf.Lerp(.85f, 1.15f, (float)placementRandom.NextDouble()); return; }
             var margin = LotRuntimeLoader.PlacementHalfExtents(session.Lot) - new Vector2(Mathf.Abs(item.position.x), Mathf.Abs(item.position.y));
             var footprint = LotRuntimeLoader.Footprint(item, asset).size * .5f;
             float max = Mathf.Min(1.15f, margin.x / footprint.x, margin.y / footprint.y);
@@ -3166,7 +3054,7 @@ namespace CityForge.UI
 
         private static LotObjectDefinition CopyAsset(LotObjectDefinition item, Vector2 position) => new()
         {
-            assetId = item.assetId, position = position, yaw = item.yaw, scale = item.scale,
+            assetId = item.assetId, position = position, yaw = item.yaw, scale = item.scale, elevation=item.elevation,
             fenceLength = item.fenceLength, fenceEndPost = item.fenceEndPost, characterScript = item.characterScript, vehicleScript = item.vehicleScript,
             varyTreeOnPlacement = item.varyTreeOnPlacement
         };
@@ -3315,6 +3203,7 @@ namespace CityForge.UI
             {
                 lotOpen = true;
                 foreach (var panel in editingUi) panel.SetActive(true);
+                if(tooltip)tooltip.transform.parent.gameObject.SetActive(false);
             }
             category = null;
             session.Open(lot);
@@ -3524,7 +3413,7 @@ namespace CityForge.UI
             var problem = Validate();
             if (problem != null)
             {
-                Refresh(problem);
+                ShowSaveProblem(problem);
                 return;
             }
             try
@@ -3545,8 +3434,19 @@ namespace CityForge.UI
             }
             catch (Exception error) when (error is IOException || error is InvalidDataException || error is UnauthorizedAccessException)
             {
-                Refresh(type == LotType.Template ? "Could not save the template." : "Could not save the lot.");
+                ShowSaveProblem((type == LotType.Template ? "Could not save the template. " : "Could not save the lot. ") + error.Message);
             }
+        }
+
+        private void ShowSaveProblem(string problem)
+        {
+            Refresh(problem, rebuildPreview: false);
+            CloseAssetPopup();
+            var frame = CreateModal("Unable to save lot", 620, 240);
+            var message = Label(frame, problem, 24, 65, 572, 18);
+            At(message.rectTransform, 24, 65, 572, 100);
+            message.horizontalOverflow = HorizontalWrapMode.Wrap;
+            Control(frame, "OK", 252, 184, 116, CloseAssetPopup);
         }
 
         private string Validate()
@@ -3558,6 +3458,7 @@ namespace CityForge.UI
                 var fitProblem = zoning.FitProblem(session.Lot);
                 if (fitProblem != null) return fitProblem;
             }
+            if(!PlayerMode&&zoning.buildingRow&&!LotRowBuildings.TryPack(session.Lot,catalog,session.Lot.id,out _,out var rowProblem))return rowProblem;
             if (zoning.Configured && SlotOverlapsBuilding(session.Lot, zoning))
                 return "Move fixed buildings out of the variable slot.";
             if (!session.Lot.HasValidCapitalSettings()) return "Review the lot requirements and capital bonus.";
@@ -3630,7 +3531,7 @@ namespace CityForge.UI
             selectionToolbar.gameObject.SetActive(hasSelection);
             bool editableTree = singleEditable && catalog && catalog.Find(item.assetId)?.category == "Trees";
             varyTreeButton.gameObject.SetActive(editableTree);
-            At(selectionToolbar, 648, 147, 385, editableTree ? 92 : 53);
+            At(selectionToolbar, 648, 147, 385, 141);
             if (editableTree)
             {
                 varyTreeButton.GetComponentInChildren<Text>().text = item.varyTreeOnPlacement
@@ -3711,7 +3612,7 @@ namespace CityForge.UI
                     ? "Delete removes the preview building from this lot’s growable options"
                     : "Drag an asset to move · Right drag or Shift + arrows to orbit · Shift + 0 to reset";
             var issue = Validate();
-            validation.text = issue == null ? "No validation issues" : "Check lot boundaries / assets";
+            validation.text = issue ?? "No validation issues";
             validation.color = issue == null ? new Color32(142, 211, 141, 255) : Gold;
             status.text = $"{lot.width} × {lot.length}  |  {lot.objects.Count} objects" +
                 (session.Dirty ? "  |  Unsaved" : "") + "  |  " + (message ?? (pickingLotEntrance || repeatSource != null || drawingPath || groundPath.Finished || drawingFence || fencePath.Finished ? hint : issue ?? hint));
@@ -3726,7 +3627,7 @@ namespace CityForge.UI
             growthPreviewTools.gameObject.SetActive(!PlayerMode && lot.zoningLayout.Configured);
             if (rebuildPreview)
                 viewport.Refresh(lot, catalog, selected, selectedGroup, selectedPath, grid,
-                    terrainTile.HasValue ? TileBounds(terrainTile.Value) : (Rect?)null, ResolveGrowthPreview(lot));
+                    terrainTile.HasValue ? TileBounds(terrainTile.Value) : (Rect?)null, ResolveGrowthPreview(lot), ResolveRowPreview(lot));
         }
 
         private LotObjectDefinition ResolveGrowthPreview(LotDefinition lot)
@@ -3735,9 +3636,20 @@ namespace CityForge.UI
             if (growthPreviewLotId != lot.id)
             {
                 growthPreviewLotId = lot.id;
+                rowPreviewVisible=false;rowPreviewSeed=0;
                 growthPreviewId = lot.zoningLayout.previewBuildingId;
             }
 
+            if(lot.zoningLayout.buildingRow){
+                bool fits=LotRowBuildings.TryPack(lot,catalog,lot.id+":"+rowPreviewSeed,out var row,out var problem);
+                growthPreviews=Array.Empty<LotObjectDefinition>();
+                rotateGrowthBuilding.interactable=fits;removeGrowthBuilding.interactable=false;
+                previousGrowthPreview.interactable=nextGrowthPreview.interactable=fits;
+                rotateGrowthBuilding.GetComponentInChildren<Text>().text=rowPreviewVisible?"Hide Row":"Preview Row";
+                growthPreviewLabel.text=fits?$"Building row · {row.Length} buildings\n{(rowPreviewVisible?"Preview only · arrows reshuffle":"Empty template · preview optional")}":problem;
+                return null;
+            }
+            rotateGrowthBuilding.GetComponentInChildren<Text>().text="Rotate building";
             growthPreviews = LotGrowableBuildings.Candidates(lot, catalog)
                 .OrderBy(building => catalog.Find(building.assetId).label, StringComparer.OrdinalIgnoreCase).ToArray();
             int index = Array.FindIndex(growthPreviews, building => building.assetId == growthPreviewId);
@@ -3758,6 +3670,9 @@ namespace CityForge.UI
             growthPreviewLabel.text = $"Preview building · {index + 1}/{growthPreviews.Length}\n{catalog.Find(preview.assetId).label}";
             return preview;
         }
+
+        private LotObjectDefinition[] ResolveRowPreview(LotDefinition lot) =>
+            lot.zoningLayout.buildingRow&&rowPreviewVisible&&LotRowBuildings.TryPack(lot,catalog,lot.id+":"+rowPreviewSeed,out var row,out _)?row:null;
 
         private bool RemoveGrowthPreview()
         {
@@ -3787,6 +3702,7 @@ namespace CityForge.UI
 
         private void RotateGrowthBuilding()
         {
+            if(session.Lot.zoningLayout.buildingRow){rowPreviewVisible=!rowPreviewVisible;Refresh();return;}
             var lot = session.Lot;
             var asset = catalog ? catalog.Find(growthPreviewId) : null;
             if (asset == null) return;
@@ -3808,6 +3724,7 @@ namespace CityForge.UI
 
         private void CycleGrowthPreview(int direction)
         {
+            if(session.Lot.zoningLayout.buildingRow){rowPreviewSeed+=direction;rowPreviewVisible=true;Refresh();return;}
             int count = growthPreviews.Length;
             if (count < 2) return;
             int index = Array.FindIndex(growthPreviews, building => building.assetId == growthPreviewId);

@@ -1,3 +1,1001 @@
+# Current checkpoint — November 20, 2026
+
+Branch: `feature/district-authoring-and-waterways`, based on the merged R2 import/Texturize checkpoint (PR #26). This checkpoint includes the November18–20 district authoring, civic/NPC, growable-row and water work. The repository remains source-only; local private artwork, generated catalogs, Unity caches and player saves are not part of the PR.
+
+Latest behavior: Texturize owns world input, excludes building footprints and supports feathered Boundary/Free spray modes. Parks → Paths shares lot path materials, widths and presets and adds preferred pedestrian routes with persistent district path records. Rotated rectangular C2 parcels recover correct frontage dimensions on restore, undeveloped reservations can be restamped, C2 medium-wealth block streets default to cobblestone, and growth failures are visible. Day sky is softer blue with an orange/red sunset around19:00. Tiny player-stream stone meshes are replaced with pebble bed texture; fixed200m fixture near dressing801,714→409,752 triangles (-48.9%), not a whole-district FPS claim.
+
+Other included work: deterministic/curved street connections and surface masks, six-inch visual road recess, area demolition, combined zoning-parcel grid cells, Change Lot, growable building rows and the redesigned layout dialog, civic placement browser, constable Patrol/crime escort, farmer field work, low-wealth rats, water features and width variation, stream connections/cascades/waterfalls, improved water glints, authored elevation carry-through/mill wheel, clocks/scripts/HUD/toolbars and content registration for private civic/R3/C2 imports. Detailed behavior and prior targeted validation remain below and in Documentation/03_Technical.
+
+Latest validation: isolated DistrictRefinementsQA passed actual saved C2 4x4/8x4 candidates and materialization, all four cardinal parcel/frontage/physical street-fit checks, restore/re-stamping, spray containment/building masks/input ownership, preferred pedestrian paths and binary region save/load. Modal QA and stream before/after renders passed. Main Unity runtime assembly rebuilt after sync with no new compilation errors. `git diff --check` passes. Broader historical feature QA is recorded in the dated sections; no claim of a fresh exhaustive all-features run. Player saves were not written during latest QA.
+
+Next session: read this summary, AGENTS.md and the relevant technical document before editing. Preserve approved meadow/forest/ocean presentation, older save behavior and private-asset separation. Work in the isolated QA copy while Joel edits lots. He asked not to be repeatedly prompted to save/return to menu; coordinate synchronization only when an active session would be interrupted. Main was at the menu outside Play at synchronization. No merge is authorized by the commit/PR/handoff request.
+
+---
+
+# C2 medium-wealth commercial imports · November 20, 2026
+
+Imported all12 FBX archives in Downloads/C2-commercial as private V3Buildings/
+C2MidWealth* assets: Ye Olde Inn, King's Arms, Apothecary (two variants), Bookshop,
+Ceramics, Chevron Store, Coffee Shop, Merchants Shop, Dry Goods, Pottery Barn and
+Sea Urchin. The coffee archive's supplied sign reads Sherborne Dry Goods; original
+art remains intact. Registered Commercial2 / Medium / Founders via the existing
+commercial catalog/growth pipeline; C1, wealth and residential pools are unchanged.
+One sideways Apothecary was rotated in scratch geometry so storefront faces+Z like
+the other imports. South-facing growth/row offset is180° for this C2 prefix.
+
+Original Model.fbx at L0–2; reduced Distant.fbx at L3–5, same UVs/origin/footprint/
+roof silhouette. Measured catalog dimensions and row wall/front-step profiles for
+all12. Selected front window/shopfront masks preserve sash/merchandise detail;
+projecting exterior lantern glass includes side faces and warm local pools. Existing
+28% softer building emission and accepted broader lamp ranges apply to both tiers.
+No authored source wall/brickwork replaced, no player lots/saves changed.
+
+C2ImportQA isolated copy passed12 registrations, exact medium C2 pool/no low-wealth
+fallback, fitted dimensions/ground pivots, reduced triangle counts, zoom switch both
+ways, noon/evening/night emission and lantern pools; four corner and near/far renders.
+C2RowsQA passed deterministic row packing at all four frontages and every profile
+in a roomy footprint. Evidence: ple-2/outputs/C2-Commercial/{Day-Review.jpg,
+Night-Review.jpg,Dimensions.csv}.
+Some supplied buildings are deeper than three tiles including attachments; growth
+and row selection retain normal fit checks instead of squeezing their proportions.
+
+---
+
+# District polish, Candlewick performance and rats · November 19, 2026
+
+Texturize now blocks PrototypeRegionView.OnGUI world picking as well as Update
+picking, and cancels active zone/road editing before opening. Zoom4 pan multiplier
+1.3→1.625 (+25%). Residential window RGB emission is multiplied .72 at both night
+and evening, including high wealth; lamp light pools retain their accepted strength.
+Prebuilt medium-wealth R2/R3 stamps default to founders-cobblestone-street; existing
+roads are reused. Fence substitutions enforce section/partial words on catalog ID
+and label in addition to existing wealth/family/part/clearance checks. Invalid
+diagonal rectangular stamps keep all red footprint geometry and feedback instead
+of vanishing when preparation returns no lots. QA covers3×8 and8×3 at45/135/225/315°;
+cardinal rectangle coverage was already verified.
+
+Candlewick profiling: 259 bank-dressing batches,3926 instances/~3M triangles.
+GeneratedStreamAppearance now retains exact near batches and supplies coarser
+zoom4/5 batches, culling tiny stones and disabling tiny distant shadows. Dedicated
+player-channel water cannot be promoted by ApprovedRiverWater into a Crest engine.
+Candlewick also has a legitimate native river: its Crest clip-mask creation was
+sampling the entire1024² district. Conservative river/ocean bands skip proven dry
+pixels; GPU readback versus original computation matched every pixel (max error0).
+Controlled open (overview plus district) fell14.429→10.151 seconds. Actual player
+load depends on cold assets/editor state. Same-process play samples showed modest
+wide-render gains, not a promised FPS. Grade-backed terrain now uses separable
+sampling too;66563 comparison points had normalized error0. Player-channel terrain
+replay uses conservative bands. Heightfield timing added to landscape stage log.
+No ocean material or persistent shadow settings changed.
+
+Urban rats: private UrbanRats/Rat.fbx + reduced Distant.fbx, body/normal/whisker/eye
+materials; rat.blend meshes baked static, source Rat_Lod_0.rar supplies DDS maps.
+Whisker mask is grayscale→alpha (original DDS alpha is opaque). Model fits0.5m full
+length including tail; original texture detail retained at appropriate1024px/512px.
+DistrictRats supplies2 per low-wealth zoning lot, capped24 across12 homes; bounded
+short dry/obstacle-safe scurries and pauses, no rig/path graph/colliders/save schema.
+Near/far meshes switch atzoom3, hidden and idle atzoom4–5, offscreen pauses. Homes
+refresh every5s and removals/wealth changes/moves clear stale rats. Assets/catalog
+remain private/ignored. No player saves written; SHA checks passed.
+
+QA: HeightSamplingQA + StreamGroundQA + StreamConnectionsQA + DistrictPolishQA
+passed in isolated copy, including full native mask preservation, fence words,
+road defaults, texture GUI guard, all diagonal rectangle previews, window reduction,
+rat population/movement/leash/far visibility, and original save preservation.
+Evidence: ple-2/outputs/District-Polish.
+
+---
+
+# Additional R3 homes and broader lamps · November 19, 2026
+
+Imported eight FBX archives from Downloads/R3-middle: Barn Roof, Blue Townhouse,
+Dutch Roof, Mansard Roof, Stone Dutch, Stone House, 3 Window Brick Dormers and
+3 Window Brick. All are medium-wealth Founders Residential3, 11.3m tall with
+measured footprints and wall/step row geometry. Private model/color/normal/window
+assets preserve supplied art. Distant meshes preserve UVs, footprint and roofs.
+There are now sixteen R3 imports; existing PNG-only townhouse remains separate.
+New modeled front lantern on 3 Window Brick has a ray-picked anchor; other new
+fronts have no modeled lantern. QA registration, dimensions/pivots, reduced meshes,
+original L0–2 / distant L3–5 switching, and evening/night windows passed for all16.
+
+Streetlamp cones widen110→130°, inner55→75°, range increases25%; wall lantern
+range2.8→3.8m. Warm colors, intensity, day/night timing and shadow-free lights stay.
+Art and catalog remain private/ignored. Evidence: ple-2/outputs/R3-Middle.
+
+User preference: do not repeatedly ask to save/return to main menu before reloads.
+They explicitly said this after saving and replying ready for this import.
+
+---
+
+# Evening controls and stream load optimization · November 19, 2026
+
+Player channel masks, terrain paint and graded meshes now use conservative per-row
+segment bands, avoiding repeated nearest-segment queries over dry bounding-box
+corners. Same copied two-stream district: player water meshes/paint 5475 ms before,
+1444 ms after (74% reduction); this measures that stage, not total interactive load.
+Existing water appearance, dry ground paint, joins and waterfall checks passed.
+
+Zoom label sits above bottom-right messages. Clock has Pause/Resume, draggable
+hour selection with AM/PM continuity, and exact hour/pause persistence. Stars fade
+in after 20:00 and a procedural moon tracks the night. Prebuilt zones support
+independent width/depth arrows (including 8×3), rotated rectangular parcels and
+wealth/type-filtered counts. R3 window masks fill glazing UV shapes while retaining
+sash lines. Construction dust has half material alpha, smaller billows and footprint;
+scaffolding stays visible and dust waits until completion before rising. Move stays
+cloud-free. Main Unity refreshed at main menu; no player save writes.
+
+QA: EveningOddsQA interaction/sky/dust/8×3 rotation checks; StreamGroundQA,
+StreamConnectionsQA, SavedStreamLookQA and R3ImportQA all passed in isolated copy.
+Saved region SHA256 unchanged. Preview artifacts in ple-2/outputs/Evening-Updates.
+
+---
+
+# Growable Building Row prototype · November19, 2026
+
+Growable layout now offers Single building / Building row. Rows save an empty
+footprint and eligible pool. The road-facing edge supplies a gold front-step line;
+entry marker moves it, row gap0–4m controls touching/spacing. Optional Preview Row
+and arrow reshuffles never add permanent objects. Selected manually placed
+buildings can become a footprint in an undoable edit. Single-only facing/path
+controls are disabled in row mode. Building info / Row alignment edits canonical
+South-facing wall/step markers; the eight R3 imports have measured catalog defaults.
+
+LotRowBuildings performs bounded deterministic width packing, avoids repetition,
+aligns measured walls/steps and validates bounds without stretching. Actual row
+objects/positions/valid GUID IDs persist in normal lot/region metadata. Normal and
+diagonal zoning, Change Lot, construction reveal and Change row are wired through
+materialization. Change row preserves fixed authored props. Commercial1–3 growth
+now respects stored wealth and the same frontage pipeline (matching assets/layouts
+still required); low-wealth R3 restriction remains. Straight frontage/level ground
+is the first-version target, with leftovers split at row ends.
+
+See Documentation/03_Technical/Growable_Building_Rows.md. RowLotsQA in isolated clone
+checks deterministic packing/site variety, joins/step line/no stretching, four
+frontages, gaps/failure messages, commercial pool, exact row serialization, empty
+saved templates, selected-building conversion, actual district construction reveal,
+Change row and saved-region validation. Existing growth checks updated for the
+already-established R3 low-wealth exclusion and C2/C3 support. Protected landscaping
+also covered. Evidence: ple-2/outputs/Building-Rows. No player saves/lots edited.
+
+# R3 medium-wealth Founders homes · November19, 2026
+
+Imported eight FBX packages from Downloads/midwealth-r3 as private V3Buildings/
+R3MidWealth* assets. The ninth archive, r3-midwealth-3story-brick-townhouse.zip,
+contains twelve PNGs only; user said they will provide the model. Rechecked the
+same directory after their follow-up; no additional model was present. Townhouse
+is pending, not silently replaced with a flat image.
+
+Catalog IDs v3-building-r3-mid-wealth-{2-story-brick,2-story-tan-wood,
+2-story-yellow-house,3-story-brick,3-story-brick-2,3-story-yellow,
+3-story-yellow-stucco,painted-white-brick}. Registered residential / Founders /
+Residential3 / Medium, with supplied color and normal textures, actual dimensions
+and ground-centered pivots. No procedural replacement of the incoming brickwork.
+Each has an authored Windows.png, a reduced Distant.fbx preserving UV charts,
+roof/footprint extremes, and a facade-ray-picked entrance-lantern light anchor.
+Original models at L0–2; reduced at L3–5. Shared dusk/night emission and lamp pool
+behavior applies to both tiers. No automatic lots/zones were added.
+
+ResidentialWealthPolicy rejects Low Residential3 in Founders and Industrial,
+including candidate growth and Founders layout eligibility. Zone modal disables
+Low for R3 and switches selection to Medium; both direct and prebuilt zoning arm
+paths normalize invalid early-era R3 Low to Medium. Other densities retain existing
+wealth behavior. Old saved zoning is not rewritten.
+
+R3ImportQA PASS in isolated QA: eight complete registrations, candidate growth,
+early-era low-wealth exclusion, unchanged low R2 policy, dimension/ground pivots,
+near/distant transitions0→2→3→5→2, noon/evening/night emission on both models and
+lantern pools. Four-corner/day/night/LOD images visually reviewed. Evidence under
+ple-2/outputs/R3-Residential, including Dimensions.csv and verification. Source
+art, generated masks, FBX, materials and local catalogs remain private/ignored.
+
+# Height carry-through, Feather, eagle fallbacks and horizon · November19, 2026
+
+Read-only inspection found the saved library mill has item elevation−.5m, but the
+existing district snapshot retained0m (and an older3×3 footprint vs library4×4).
+LotElevationUpgrade performs a one-time height-only backfill for legacy placed
+records from the same local template/object IDs. It preserves placed geometry,
+nonzero per-object heights and district elevation. authoredElevationVersion1 is
+persisted; new manual placements start at1. No disk region migration is performed:
+normal user Save retains upgraded metadata. Preview now uses the same footprint
+waterfront clamp and both authored height offsets as the placed model.
+
+Texturize replaces Falloff with Feather0–8m; zero is a hard stop. GroundPaintData
+uses PointWireGeometry.SignedDistance for a symmetric selection-edge coverage
+ramp. Repeated passes respect its ceiling. Existing byte-weight persistence and
+undo remain; no alphamap or biome changes.
+
+Eagle drops prefer deep/open water, then actual river/stream centerline samples,
+then a real canopy (approved forest, placed trees or lot trees). Waterless no longer
+blocks the encounter. Tree landings skip water splash/submergence. Existing
+passenger return and camera cleanup retained. Horizon blues extend down to the
+horizon; near/far ridge tints are blue rather than the prior pale gray band.
+
+LOCAL PRIVATE CREST PATCH (not public repo content): in embedded package
+WaterReflections.Render, both reflection slices now ResetProjectionMatrix AFTER
+CopyTargets and BEFORE ComputeHorizonPositionAndNormal. RenderCamera still uses
+and stores the original oblique reflected matrices; this only makes the horizon
+unprojection use a regular frustum instead of a degenerate oblique far plane.
+Reapply this ordering after replacing/upgrading the private package. Reflection
+settings, ocean materials and rendering resolution are unchanged.
+
+FollowupPolishQA PASS against copied real saved region: authored height backfill,
+explicit override preservation, actual district lowered mill and matching ghost,
+feather hard/soft and repeated strokes, paint roundtrip, water and tree eagle
+fallbacks, 280 orthographic/perspective camera pitch/height horizon cases with no
+frustum errors. Source player save SHA unchanged. Screenshots in
+ple-2/outputs/Followup-Polish; main project refreshed separately.
+
+# Mill elevation, construction reveal and sky polish · November 19, 2026
+
+District selected-lot panel now has separate Lot ±0.25m and Building ±0.25m
+controls. Placed-lot elevation and authored per-object / whole-lot elevations
+serialize as optional zero-default fields, clamped to ±20m. Editor selected-object
+toolbar has Object ± and Lot ± controls. Whole-lot elevation moves its rendered
+contents and ground overlays; it does not excavate terrain. Building control uses
+the growth building, otherwise the first building on a playable lot. Save the
+region after adjustments; editor-authored offsets save with the lot definition.
+
+Lumber mill runtime wrapper and footprint are scaled 1.3, preserving authored
+object scale. WaterMillWheel rotates both authored Mill_Wheel pivots (near and
+far models) at 18 degrees/second about their thin mesh axis. No art rewrite.
+
+Moving an existing lot no longer triggers construction dust. New placement hides
+the final root behind stationary tan billows, without the old rising ground dust.
+Reveal enables upward velocity and fades the veil after completion. Zoned growth
+uses the same veil. District horizon has richer daytime blues and darkens the
+entire sky/cloud composition at evening/night.
+
+MillPolishQA PASS in isolated clone: offset serialization, runtime position,
+30% scale, both loaded wheel tiers rotating, stationary tan veil and reveal-only
+rise. Rendered cloud and day/night sky samples in ple-2/outputs/Mill-Polish.
+Main project refreshed and assemblies reloaded successfully. No player saves edited.
+
+# Clear, sparkling player streams · November19, 2026
+
+User supplied a clear shallow blue-green stream reference and requested sustained
+screenshot iteration. Seventeen variants plus baseline were rendered and compared.
+Final production player streams have smaller advected ripple normals, narrow sky/sun
+glints, subtle opaque-color refraction and depth-graded transmission, clearer stony
+shallows and a bluer center. Daylight scaling keeps night water dark. Material
+preset is isolated to playerChannel&&isStream; native river/lake/canal settings stay
+authoritative. Requires one shared camera opaque-color copy, not per-body captures.
+No wave physics; standalone GPU cost has not been benchmarked.
+
+PlayerChannelEdits adds a derived stream-only coarse-pebble layer using existing
+wet gravel at7m, strongest near margins, finer gravel centrally. Canonical saved
+alphas exclude derived bed paint; dry bank paint and geography stay unchanged.
+GeneratedStreamAppearance reuses existing instanced edge stones and native meadow
+grass clumps for player streams. Saved grades, widths and routes are unchanged.
+
+FinalStreamQA PASS: ground controls168, dry-bank alpha preservation (including new
+layer zero weights outside bed), native moisture, width/grade/extension consistency,
+confluences, waterfall geometry, descriptor roundtrip/exact terrain replay. Actual
+copied user district opened normally and rendered with final production defaults;
+original SHA256 unchanged/no normal saves. Close/wide, motion, alternate sun and
+night rendered/inspected;48-frame motion clip exported. Main refreshed without new
+C# or shader errors. User explicitly replied ready; stopped MainMenu verified.
+
+See Player_Waterways.md and current chat outputs/Stream-Look for evidence, iterations,
+Final-District.png, Before-After.png and Stream-Motion.mp4. No commit/push requested.
+
+# Preserve grass around drawn streams · November19, 2026
+
+TerrainGeography's44m moist-grass influence was recoloring ground around player
+streams bright green. RefreshWater now excludes playerChannel&&isStream, preserving
+native water/lake/marsh/canal moisture. Near drawn streams, geography height/slope
+classification uses CoverageHeight (original retained terrain), so excavation does
+not replace the surrounding geographic surface. PaintPlayerChannelBanks skips dry
+stream-bank samples; wet bed rendering remains. Existing streams get corrected
+derived controls and bed paint on reload; no save mutation/migration.
+
+StreamGroundQA:168 before/after control samples and all dry-bank alpha samples
+unchanged; native stream/canal/marsh moisture preserved. Before/after terrain
+rendered with geography controls. Previous stream connection/waterfall/width and
+persistence regressions retained. Main Unity stopped at MainMenu before edits.
+
+# Stream connections and actual waterfalls · November19, 2026
+
+Player stream snap/join now accepts either endpoint, interior tributaries and
+crossings. Previous downstream-only/stream-overlap/self-overlap and12m stream
+trench rejections are removed. Roads/camps/bounds/route limits and lakes/native
+water remain guarded. Existing downstream extensions preserve ID/stations; drawing
+uphill from that endpoint creates a reversed incoming branch instead. Existing
+receiver records are not rewritten. Connection grades blend into the receiver;
+ordered single-owner overlap masks prevent doubled translucent water. Indexed
+nearest-point queries and overlap-only ownership lists bound creation cost.
+
+StreamWaterfallRenderer adds separate lips, real vertical falling curtains and
+landing foam at sharp drops, in addition to slope-based rapids. One combined mesh
+per body, <=128 falls, no particle or per-frame terrain simulation. New procedural
+shader included via Rendering/Water/Resources/StreamWaterfall.shader. Rebuilt from
+existing saved grade arrays; no new descriptor fields. Removal ray bounds now
+include all grade extrema and the actual stream fill level.
+
+StreamConnectionsQA passes actual middle/upstream joins, uphill incoming branch
+from an old downstream end, matched join levels, unchanged receivers, serialization,
+extensions/exact replay, falling curtain geometry/shader and prior water tests.
+Rendered join/fall inspected. Main Unity stopped at MainMenu before edits; no player
+saves written. See Player_Waterways.md for authoritative scope/details.
+
+# Stream rapids and cascades · November19, 2026
+
+Player stream grading now uses original detailed CoverageHeight locally, avoiding
+false trenches from regional smoothing. New streams sample1m, auto-reverse an
+unconnected uphill sketch, and retain monotone downhill grades. Extensions preserve
+all previous stations/modes/ID and direction. Regional portal stubs retain shared
+stored grades. Canal/river behavior is unchanged. Routes climbing over12m still
+need a path around the hill; steep downhill drops are supported.
+
+Player streams enable slope-derived, animated whitewater in LakeWater.shader: calm
+water, broken rapids on inclines and cascading sheets on steep drops. Uses existing
+grade mesh/flow field; no physics/particles/per-frame terrain changes. Saved stream
+grades are not regenerated. New shaping persists using existing descriptor arrays.
+
+Private StreamCascadeQA: original detailed terrain vs flat regional approximation,
+auto direction, gentle rapids and4m ledge grades, stream-only optics, exact saved
+replay, extension identity/station preservation; rendered two animation times. Full
+prior water/width/bankfull integration checks also pass. No player saves touched.
+Main Unity stopped at MainMenu before source changes. See Player_Waterways.md.
+
+# Stream water fill · November19, 2026
+
+Player stream surfaces now sit15cm above their saved excavation grades, bringing
+water toward the bank lip while leaving the approved bed and widths intact. Shared
+PlayerChannelGeometry.Level reports the raised surface for rendering, removal,
+wildlife and overview. Sampler.Query retains raw grades for excavation and extension.
+No descriptors are rewritten; existing streams get this presentation on reopening.
+Player-only stream absorption density1.4 makes shallow water visible; shader default
+0.42 preserves other water. Bounded local footprint remains unchanged.
+
+Private StreamFillQA passed actual creation, sampled wet bank edges, shared15cm
+level, stream-only optics, disk roundtrip/exact terrain replay and existing width,
+canal/marsh, farmer and modal checks. Rendered before/after inspected: formerly
+brown-dominant stream now has continuous teal water across its bed. No player
+saves written. Main Unity verified stopped at MainMenu before edits.
+
+# Narrow streams and width variation · November19, 2026
+
+New streams opt into playerStreamWidthVersion1 and a saved width mode: Uniform,
+Gentle(default), Natural. Maximum halfWidthNormalized is4m/mapSide; Uniform uses
+6m full width, Gentle5–7m and Natural4–8m (1–2 district tiles). Two smooth seeded
+sine components vary width by cumulative normalized station. The seed derives
+from stable body ID, so saving, cross-district rendering and extending never reroll
+existing reaches. Width preferences/version are optional fields; legacy zero keeps
+old constant widths, and extensions retain their original width/depth/bank settings.
+
+Water modal has Stream-only Vary width buttons. Stream preview shows the maximum
+for its choice (6/7/8m). The exposed River route action was removed per the user's
+future-river scope; shared internal mechanics remain. Creation still uses PointWire.
+New stream depth0.45m and banks1.5m plus a narrower dry paint feather avoid the broad
+river-like corridor. Existing streams/canals/marshes/river descriptors are retained.
+
+PlayerStreamWidth.AtStation is the shared normalized evaluator. Terrain excavation,
+bank paint, RegionWaterBody.Contains / water depth-mask coverage, distance/wildlife
+queries, and scanned stream rock/shrub placement use the same local width. Maximum
+bounds remain conservative for clipping and collision/forest protections. Cached
+phase is NonSerialized; validation bounds the saved version/mode. New state lives
+on the existing water descriptor; no global terrain recipe or save-version change.
+
+Private StreamWidthQA samples all modes at6001 stations each, asserting4–8m bounds,
+continuity, distinct ranges, water-mask/point-width agreement and reload stability;
+legacy widths stay constant. Actual Natural stream creation and full water-descriptor
+disk roundtrip/fresh terrain replay pass alongside canal/marsh, farmer and zone-count
+regressions. Modal and actual stream rendered/inspected. No player files written.
+Live district was observed running before edits; user saved/closed it and explicitly
+replied ready, then stopped MainMenu was verified before main C# changes.
+
+--- Earlier work ---
+
+# Water Features, field-working Farmer and filtered zone counts · November19, 2026
+
+Zone modal footprint cards now distinguish block placement capacity (spaces) from
+available saved buildable layouts. FoundersGrowthLayouts is loaded once on open;
+counts filter current zone type/density, wealth and road-facing size, and refresh
+on each selector change. Auto counts all matching sizes. No per-frame library IO.
+
+LotScriptedBehavior.Farmer is appended as6, preserving Harass4/Patrol5. Character
+Script > Scripted > Farmer validates the v3-farmer asset and persists the assignment.
+DistrictFarmer walks a bounded grid of nearby field patches inside LandBounds,
+rotated with the lot, and alternates Walk with7s Hoe work. It reuses PatrolClear
+oriented obstacle/dry-ground checks, conforms to terrain and uses actor simulation
+cadence. Blocked routes retry without teleporting; original authored positions stay
+unchanged. LotCatalogSetup adds/loops the existing Farmer_Hoe FBX take on both
+existing/new Farmer controllers. Private source art/controller remains ignored.
+
+Nature > Water opens a centered Water Features modal on the HUD canvas, using
+supplied private Icons.png as separate illustration/state layers and Concept.png
+for text-free banner/water accents. User art is unchanged, sampled by UV rectangles.
+Stream/Canal/Pond/Lake/Marsh cards select, Draw Feature arms existing PointWire tools.
+River remains available via River route; Remove Water uses the existing picker.
+Shape editing is explicitly unavailable, and unsupported brush options are not
+presented as working controls. Popup.Visible includes the modal so repeated Water
+category clicks dismiss it correctly. Close/Escape/mode change release the modal.
+
+User explicitly requested real Canal and Marsh creation after clarification.
+Canal uses the existing regional playerChannel descriptor with appearanceProfile
+player-canal-v1, isStream=false,8m width,1.6m depth and1.2m banks. Guide reaches stay
+straight, samples/immutable grades still use existing regional station machinery.
+Pow16 bed cross-section creates a flatter engineered bed. A separate child mesh
+supplies joined masonry retaining banks/caps with existing Bluestone material;
+water mesh is preserved. Channel snapping/extension matches the canal profile so
+it cannot silently extend an ordinary river. Existing streams/rivers unchanged.
+
+Marsh uses playerCreated basin metadata with profile player-marsh-v1,0.55m depth,
+8m bank and10m outer bank, requires <=2m bank height variation, and keeps lake's
+existing closed PointWire validation, excavation, clearing and replay. Its water
+has muted green shallow/deep tints and existing batched native reeds populate
+shallow interior patches (bounded1400 total plant placements). Profile strings and
+all dimensions persist in existing water records; no save-version/schema migration.
+Both feature types use ordinary water removal and original-terrain restoration.
+
+Private WaterFarmerQA verifies actual modal dispatch, wealth-filtered counts using
+a disposable QA-only lot, Farmer movement/rotation/blocked-route and Walk/Hoe state,
+script serialization, real canal and marsh creation, separate bank/water meshes,
+reeds, disk water descriptor roundtrip, exact fresh terrain replay and removal
+picking for both types. Rendered modal/zone/farmer/water close-ups inspected.
+No player files were saved or modified. The isolated QA catalog needed an in-memory
+R2 prefab binding repair due its older copied GUID; no production catalog change.
+
+--- Earlier work ---
+
+# Construction reveals, connected corners and shared HUD · November19, 2026
+
+ConstructionDustVeil supplies a prefilled stationary dark particle volume plus
+rising wisps for placed/moved lots and growable construction. Fixed billows have
+zero velocity/noise and long lifetimes; completion explicitly starts a0.7s fade,
+then the component releases its material/object. Finished lots remain hidden via
+revealingLots throughout the existing schedule, including presentation rebuilds.
+Intermediate timber/ground construction is also hidden behind the independent
+veil. Existing upward placement dust remains. No persistent construction schema.
+
+DistrictRoadRecord.junctionCorners is a NonSerialized, derived corner index set.
+ConnectedRoadCorners finds additional incident legs at curved authored corners;
+RoundCorners skips only those corners. Isolated and unrelated bends remain round.
+RefreshRoadShoulderDetails recomputes corner policy and replaces affected pavement
+meshes before rebuilding sidewalks, masks/recess and junctions. Sidewalks, shoulders,
+guides and navigation share the same sampled centerline. Removing a branch restores
+isolated curvature without changing saved points or curved preferences. Street snap
+prefers an authored corner near the sampled curve. Junction patches now also cover
+ordinary road-to-road Ts, per the user's expanded road connection rule.
+
+Developer Zone modal height816 (normal game684), layout720 vs600, adds exclusive
+Low/Medium/High wealth radio controls under UNITY_EDITOR || DEVELOPMENT_BUILD.
+Selection changes selectedZoneWealth used by both automatic and preset zoning.
+Nondevelopment builds omit the entire wealth row and use Low. Existing saved wealth
+is retained. Radio discs are native UI graphics; no new raster artwork.
+
+Both views use RegionBrass save/back artwork at53px. District positions shift left
+to retain the clock. BrassHudHover adds a gold outline and6% scale on hover, resets
+on exit/disable. SaveWithFeedback enables/animates the existing progress strip in
+both views before capture and hides it in finally. No save triggered during QA.
+
+Private RevealPolishQA covers isolated/local corner cleanup and branch removal,
+three-arm Ts including ordinary roads, wealth selection/exclusivity/layout rendering,
+shared brass art and hover/reset, district save pre-capture animation/cleanup, fixed
+particle positions over simulation, rising wisps and explicit completion reveal.
+BlockOverlapQA regression checks preset road reuse. No player files written.
+
+--- Earlier work ---
+
+# District placement, scripts and HUD polish · November19, 2026
+
+Surround lot with fence now reserves the shared1m residential sidewalk width on
+all four sides before the existing fence post/corner inset. Manual fence guides
+retain their original placement behavior. Growable (Zoning) lot trees render at
+75% of their authored runtime scale, after deterministic species variation; saved
+objects and playable-lot trees retain their authored scales.
+
+New low-wealth R2 zoning creates independent simple streetlamps at12m /3-tile
+intervals along exposed road-facing boundaries. Cardinal frontages share a global
+3-cell phase; rotated frontages use12m world-projected stations. Nearby fixtures
+are deduplicated. Actor records persist zoningStreetlamp ownership, and lot
+structure replacement skips those records. Demolition/player removal still works.
+Existing actor placement limit512 remains; no player save/library is auto-written.
+
+Civics → Government explicitly offers one built-in4x4 Town Center using the
+existing Timber Council Hall asset. This exception does not restore unwanted
+embedded Chapel/Constable lots. The center has a stable valid32-digit definition
+ID, TownCenter freight delivery role, and registers a noncapital town in a district
+that lacks one when placed. City/Civics opens in districts without towns once the
+capital foundation exists; other construction asks for a local Town Center first.
+
+Cmd+S command prompt accepts Help in either view. Help is a scrollable modal whose
+buttons call the same dispatcher; region era-message scripts are region-only,
+weather/lot/encounter commands are district-only, and season commands are shared.
+Let it snow switches to Winter; Let it rain switches Winter to Summer. Tropical
+snow is explicitly rejected. Place lot opens the existing saved-lot picker.
+Existing Hooligan/Fell fir/Eagle command behaviors are preserved.
+
+Persistent top placement strip is hidden. Customize lot now lives in the selected
+lot panel; Tab rotates a placement. Placement feedback routes to the existing
+message area. The52px clock is at top right, to the right of the back arrow;
+back/save move left. Clicking the clock toggles pause and colors its hand orange
+while paused. Legacy Pause clock toggle is gone; lower-right time/wealth/shadow/
+lighting controls and legacy fish button are hidden/removed. Nature controls retain
+weather and time-of-day access.
+
+Private isolated DistrictSmallItemsQA validates scoped Help rendering, season
+execution, pause/resume/clock positioning, hidden legacy UI, valid Town Center
+serialization and district registration, R2 spacing/deduplication/ownership
+serialization and protection during lot clearing, runtime tree scale without
+authored mutation, and actual fence surround guide inset. No player data written.
+
+--- Earlier work ---
+
+# Matching district Nature and City toolbars · November19, 2026
+
+User requested only the main district Nature menu match City. NatureToolbar now
+uses five captioned category cards with the City's actual dark/gold rounded frame
+artwork, identical146x82 hit targets and148 spacing, row bottom117, and the same
+Nature/City switch bottom64 in both modes. Existing Nature icons remain, labeled
+Terrain, Water, Forests, Animals and Sun & Sky. Georgia/serif captions, hover/press
+palette and gold active states match the City styling. No inner popup redesign.
+
+DistrictCategoryButtonArtwork samples the unchanged City atlas's empty side strips
+and column to construct a caption-free frame; icons/text are separate UI elements.
+It uses the existing TownButtonArtwork material/shader, with no new raster art or
+licensed art checked into git. Selected state only dirties the graphic on change.
+Runtime material/font ownership is disposed with the Nature component. Original
+NatureToolPopup and seasonal/weather controls remain unchanged; the popup follows
+the higher main row so it clears the new buttons. All category callbacks and tool
+arming/dismissal hooks are retained.
+
+Private NatureToolbarQA passes actual-render comparison, every category action,
+gold selection/repeat-click dismissal, hover colors and pointer tint, row/button
+geometry, both mode switches, hidden opposite row and existing popup routing.
+Screenshots in current chat outputs/Nature-Toolbar. No player data written.
+
+--- Earlier work ---
+
+# Road curves, blend and civic scale polish · November19, 2026
+
+User requested another5% closer Region Zoom5, curved angles by default, two-sided
+T curves, softer road/street texture joins, a roughly20% larger Constable Station,
+and25% darker exposed sunken edges. Zoom5 default factor is now.9025 relative to
+the original (two successive.95 adjustments); farthestSize baseline and zoom0–4
+remain unchanged. Existing saved camera poses still restore as authored.
+
+New transport roads and preset rings/spans use curved=true; old saved choices and
+Straighten angles remain intact. Curved proposal/existing-road reuse compares
+authored guides, preventing duplicate corner fragments. BlockOverlapQA passes
+all12 preset size/rotation cases, including zero new pieces over a matching ring.
+
+StreetJunctions now blends ordinary road-to-street connections too, while unrelated
+road-to-road policy remains. Same-direction arms use longest available reach and
+widest source, rather than a short overlapping stub. Rounded-guide fallback keeps
+an explicit authored intersection when both rendered ribbons cover it; incident
+guide legs restore the receiving continuation. This fixes bilateral T fillets in
+the user's actual saved topology. No endpoint positions or player records change.
+Approaches extend5m beyond half-width and fade over3.5m; junction lighting now uses
+the ribbons' URP PBR path instead of the brighter hand-lit decal. Shared recess
+fields rebind to existing junction materials after rebuild. Lining multiplier.72
+becomes.54 (25% darker), preserving pavement color and6-inch depth.
+
+Station catalog footprint/dimensions scale by1.18: a full1.20 made the authored
+135-degree building just exceed its existing5x5 placement allowance. User was told
+18% is used to retain validity. Height10.62m, max span15.459m; original and reduced
+meshes fit uniformly, and emission UVs remain. Catalog setup explicitly updates
+this asset's existing generated dimensions; it previously left existing civic
+footprints unchanged. Saved lot positions, scale and definitions are untouched.
+
+JunctionPolishQA checks/renders bilateral T, curved receiver, road/street blend,
+read-only saved layout, current recess binding, shader compilation, defaults and
+station dimensions/LOD/emission/existing-lot fit. SavedPatrolQA and full PatrolQA /
+Harass regressions pass after scaling. Actual player files were only read; no
+region or lot saved. Screenshots in current chat outputs/Junction-Polish. See
+Documentation/03_Technical/Street_Junctions.md for the current behavior.
+
+--- Earlier work ---
+
+# District and lot-editor maintenance · November 19, 2026
+
+User authorized ten small changes, explicitly including natural forest and ground
+paint in rectangle destruction. DistrictDemolition now previews a red world-axis
+rectangle from mouse-down to pointer; release clears fully enclosed lots, origin-
+contained placed actors/trees/props, center-contained zoning, forest trunks and
+paint pixels. Crossing roads retain outside polylines. Escape/focus/UI cancellation
+mutates nothing. Areas respect original active members. Road count/guide limits
+preflight before mutation. ForestRemovalStroke.rectangleSize is optional additive
+metadata, zero preserving circles; masks persist and filter caches/fresh ecology.
+Later additions still override older masks. See District_Area_Demolition.md and
+Forest_Removal.md. No player map/lot file was modified during implementation.
+
+Preset roads already use UnpavedRoadPieces: existing coincident roads, regardless
+of surface, are reused. Private BlockOverlapQA passed all12 size/cardinal-rotation
+cases with a full existing ring producing zero new road pieces. Junction crossing
+patches remain intentional, not duplicate parallel roads.
+
+Selected zoned lots now have separate Change lot and Change building actions.
+Change lot chooses a different saved Founders layout with matching frontage size,
+zone, wealth, era and corner handedness; adjusts quarter turns for authored
+frontage and retains diagonal heading, placed identity and stored resources. It
+validates site before replacing, materializes a matching building/entry/path-style
+variation, clears obsolete customization/vehicle jobs and rebuilds presentation.
+No alternative gives visible feedback. Other saved lots remain untouched.
+
+Trees fit if their origin/trunk lies within actual lot bounds; canopy no longer
+blocks placement/save, repeats or runtime variants. The asset-picker randomize
+checkbox no longer changes species in the editor: it marks newly authored trees
+varyTreeOnPlacement. Existing deterministic same-group runtime variation handles
+population, stays stable on reload and leaves authored definitions unchanged.
+Save validation failures now open an explicit Unable to save lot modal with the
+actual reason; IO/parse failures also display their reason. Validation label uses
+the actual issue instead of a generic boundary warning.
+
+Zoom5 size is95% of its prior default, both initial overview/area framing and
+normal discrete zoom; farthestSize baseline is retained so zoom0–4 do not shrink.
+Saved custom camera states still restore as authored. Nature/City modes sit at
+bottom126 in Nature, above icons; City mode retains64 to avoid its toolbar.
+Low-wealth R1 joins R2/R3 soft dirt frontage eligibility. Founders dirt streets
+have dirt sidewalks by default and masked plank strips only at commercial lot
+frontages; masonry street style remains authoritative. Preset zoning Escape
+cancels without reopening the picker.
+
+Private MaintenanceQA passed road clipping, actual area mutation and outside
+paint preservation, forest mask compatibility, trunk fit, editor/runtime tree
+variation, visible save failure, outline cancellation and Zoom5 sizing.
+LotActionsQA passed real same-size/wealth lot replacement at45°, identity/resource
+preservation, both action buttons, actual R1 dirt/no-plank rendering, commercial
+plank rendering and hidden picker cancellation. Temporary QA library copies were
+removed; main user library was read only. NeighborhoodFootpathChecks updated for
+R1 inclusion. Isolated destruction render in current chat outputs/Maintenance.
+
+--- Earlier work ---
+
+# Combined parcel grid cells · November 19, 2026
+
+User rejected floating size labels/extra parcel outlines and requested the grid
+itself merge tiles, like combined districts. Replaced the prior parcel overlay:
+G now shows one actual grid cell per complete reserved or grown zoning lot.
+DistrictGrid clips fine lattice edges out of parcel interiors using spatially
+bucketed ParcelGridCell rectangles; diagonal footprint borders join the same
+mesh/material. Cardinal boundaries remain the original grid lines. There is no
+extra colored border renderer or OnGUI label pass. Adjacent ordinary ground keeps
+its fine grid; partially erased reservations are not visually combined.
+
+Valid block previews temporarily merge the grid too; hover/cancel/focus visibility
+restores the underlying grid. Zone color fills now join internal tile edges and
+use one cardinal frontage arrow per parcel, including permanent zoning and block
+preview. Diagonal color previews no longer have per-tile gaps. Saved dimensions,
+exact-size growth enforcement and the underlying4m placement lattice are unchanged.
+
+Private MergedGridQA covers12 size/rotation combinations, no interior lattice
+segments, exterior fine grid, native diagonal borders, preview/cancel/G visibility,
+partial erasure, unchanged zoning serialization and residential growth checks.
+Combined district exterior borders and excluded L-shaped corners are covered.
+Isolated actual-mesh Unity render saved in the current chat outputs. No player
+region/lot files written. See Documentation/03_Technical/Zoning_Parcels.md.
+
+--- Superseded parcel-label implementation and earlier work ---
+
+# Exact zoning parcels and grid guides · November 19, 2026
+
+Investigated the user's latest Guilford save via read-only metadata. Fixed parcels
+already retained their requested sizes: no fixed-size/grown-layout mismatches.
+Most smaller 2x2 lots grew on Auto zoning. Preset block placement skips existing
+zoning rather than converting it; no existing lots or saves were rewritten.
+
+HasGrowthZoning now also checks the final candidate world dimensions against the
+requested frontage/depth, swapping axes for east/west. Existing exact-layout and
+anchor checks remain. Missing matching layouts get an explicit size-required
+status rather than the generic smallest-layout space hint.
+
+DistrictParcelGrid adds terrain-conforming .14m parcel borders and cached world
+label anchors. G toggles gold reserved parcels and cyan Auto-grown footprints;
+labels show frontage × depth, with Auto marked. Native diagonal zoning lots retain
+their rotated footprint. Block placement previews outline/label each available
+parcel (green/red) and include selected size in the placement status. Borders are
+rebuilt on grid/zoning changes or hover changes, not every frame; screen labels
+are projected only on repaint, hidden when too small, overlap-filtered and capped
+at256. Cancellation/UI hover hide the preview with the existing zone guide.
+
+ResidentialGrowthChecks adds smaller-layout rejection. Private ParcelGridQA
+covers fixed block sizes/rotations, exact preview border/label counts, rectangular
+frontage rotations, save restoration and existing residential boundaries. See
+Documentation/03_Technical/Zoning_Parcels.md. No save schema changes.
+
+--- Previous handoff ---
+
+# Diagonal station Patrol access fix · November 19, 2026
+
+User's saved Constable Station already had configured Patrol=5, including the
+placed definition in the region. Building yaw135°, local center(-1,1), constable
+(7.02956,-7.02956). Work collision used the rotated model's enclosing AABB, falsely
+classifying that clear front corner as inside the station. Every initial Patrol
+connector therefore failed; this was not an assignment or missing-road issue.
+
+LotRuntimeLoader.ObjectFootprintSize now exposes the existing unrotated footprint
+size calculation. Work obstacle cache retains per-piece center, half-size and
+inverse object yaw alongside its original AABB. Patrol's ActorRouteClear uses the
+oriented narrow phase after inverse lot rotation; broadphase expands conservatively
+for rotated clearance. FreightClear/LumberjackObstacle keep their existing default
+AABB behavior and API, so unrelated vehicle/worker navigation is not broadened.
+Water, terrain grade, trees and district bounds remain authoritative.
+
+Private SavedPatrolQA reads a metadata-only copy of the user's saved region, checks
+the actual placed assignment, reproduces the old false block, then runs the saved
+station and five nearby road records on isolated flat terrain. With the fix the
+constable walks away; real building interiors remain blocked across eight headings.
+Existing2000-probe work-obstacle/cache checks and full PatrolQA/Harass regressions
+pass. Original player lots/maps were only read, never rewritten. User need only
+reopen the region after Unity refresh; existing lot/script assignment is retained.
+
+--- Earlier Patrol implementation ---
+
+# Constable Patrol and Harass response · November 18, 2026
+
+User requested assignable Patrol for a constable authored on a Constable Station
+lot. Appended LotScriptedBehavior.Patrol=5, preserving Harass=4 and older IDs.
+Lot Editor Character Script → Scripted → Patrol requires v3-founders-constable
+and a v3-building-constable-station in the same saved lot. Place the constable on
+clear ground outside the entrance: that authored world point becomes home/booking
+location. No officers, stations or lots spawn automatically. Assignment persists
+through existing strict lot serialization; runtime crime/custody is transient.
+
+DistrictLots attaches DistrictPatrol only to valid configured station constables.
+DistrictHarass reports an incident when it actually scares a pedestrian. PatrolCrimes
+keeps bounded actor registries and dispatches each incident to one nearest reachable
+available constable, with saved registration order breaking ties. No per-frame
+FindObjects scans or new crime types. Existing Hooligan harass test command reports
+the same incident even in daytime, so it exercises response with an assigned officer.
+A reserved temporary actor's deadline extends for the escort; booking releases the
+test actor, camera-follow target and fright effects through normal test cleanup.
+
+Patrol walks nearby street/road shoulders, runs using Run to intercept, stops the
+harassment and victim fright at capture, then walks the detained unarmed hooligan
+behind it along the same certified return route. Both wait safely if edits block
+the route and retry; no teleport shortcuts. At home they retain separation, pause
+for two seconds, then hide the hooligan through evening/night and resume patrol.
+A normal hooligan restores its authored position/visibility next daytime; temporary
+test actors are removed on arrival. Disable/deletion releases claims/custody. Motion
+pauses beyond close zoom; active-operation budgets pause with it.
+
+PatrolStreetGraph is cached by NavigationState. It splits walking lines at T/crossing
+intersections and adds links across street ends/explicit junctions. Projected access
+is limited12m, ordinary beat targets80m from home. Edges lazily reuse dry-ground,
+structure/tree and district-boundary certificates. Per-frame movement interpolates
+known paths; response replans at most once per second for a moved target, blocked
+escorts retry every2s. Offscreen movement uses existing coarse actor cadence.
+
+Private PatrolQA verifies strict save/script IDs, actual Scripted→Patrol Apply and
+wrong-character/missing-station guards; street beat, Run, real Harass event, exclusive
+claim, escort spacing, station booking, night hold/day restore, disabled officer,
+blocked/newly edited routes, cache/steady allocation behavior and the real daytime
+Hooligan harass command through delivery/cleanup. Existing HarassChecks and
+HarassFollowChecks also run. Renders are in ple-2/outputs/Constable-Patrol. No player
+region or saved lot changed. Main Unity was at MainMenu before editing.
+
+--- Earlier saved-civics browser correction ---
+
+# Civic browser uses only saved lots · November 18, 2026
+
+User rejected the extra automatic model-only civic lots. CivicBuildingChoices.Collect
+now accepts only saved LotDefinitions; removed catalog enumeration and BuildIn.
+The browser lists only user-created saved civic lots, preserving their names,
+objects, footprints, era and category. Two distinct saved lots using the same
+building both remain selectable. Imported models remain available in the Lot Editor;
+no assets, saved library files or placed regional lots were removed or changed.
+Read failures show a retry message rather than offering imported fallback lots.
+This supersedes the direct-model browser behavior described below.
+
+--- Earlier popup implementation ---
+
+# Civic Buildings placement popup · November 18, 2026
+
+City → Civic Lots now opens the illustrated Civic Buildings modal, using the user's
+private gold service-icon atlas and sunset panorama. TownCivicsPopup.cs uses the
+existing ZoneModalArtwork skin and transportModal input/lifecycle slot. Eight
+categories: Government, Education, Health, Safety, Culture, Parks & Recreation,
+Maritime, Infrastructure. ContentCatalog adds Maritime/Infrastructure civic lot
+subcategories for authoring. Chapel is Culture; Constable Station is Safety;
+Small School is Education; existing Founders civic hall models are Government.
+
+CivicBuildingChoices combines catalog civic building models with saved civic lots,
+including legacy category/subcategory labels and saved Founder's Buildings under
+Government. Agriculture remains in the Parks tool. Direct model choices become
+normal playable LotDefinitions with valid generated GUIDs, a one-metre margin on
+each side rounded up to 4m tiles, and the original asset/era reference. Definitions
+pass LotDefinition.Parse, not just unchecked JsonUtility. Saved definitions aren't
+modified. Existing lot placement/site validation/save presentation is reused.
+
+Browser has a four-column scrolling card grid, selected detail/lot size, exact era
+filter, future-era availability guard, true empty states, 45-degree rotation of the
+selected preview/placement, hover/press states and Close/Cancel/Escape. Preview
+textures are cached per opening at256px with transparent daylight and a front
+view; other thumbnail clients retain96px defaults. Preview cache and camera lock
+are released on dismissal, placement handoff and view destruction. Atlas crops
+normalize to source dimensions regardless of Unity import downsampling. UI scales
+to fit the canvas. No invented coverage/maintenance/power simulation is displayed.
+
+CivicPopupQA (private QA checkout) passed real catalog placement-fit and strict lot
+parse roundtrips, saved alias/immutability, category/era selection, empty Place
+blocking, hover/reset, initial full card visibility and scrolling, rotation and
+actual BeginLotPlacement handoff/cancel, camera/cache cleanup, plus screen bounds
+at1920x1080,1280x720,1024x768. Reviewed renders in ple-2/outputs/Civic-Popup.
+Main Unity was at MainMenu for refresh; no player region opened/saved. Artwork
+remains ignored/private; code/config changes are local/uncommitted.
+
+--- Earlier civics asset import ---
+
+# Founders civics import · November 18, 2026
+
+Imported the user's chapel, Constable Station and constable from Downloads/civics.
+Catalog IDs: v3-building-chapel, v3-building-constable-station, v3-founders-constable.
+Buildings appear under Buildings / Civics / Founders; character under Characters /
+Founders. Chapel is10.107m wide x13.480m deep x14m tall; station is10.823m wide x
+13.101m deep x9m tall. Station source entrance was on-X, rotated to match the
+standard fitted frontage. Both have matching Distant.fbx meshes and use originals
+at L0–2, reduced meshes at L3–5. Preserve source UV seams and roofs during reduction:
+chapel25139→19808 triangles, station26881→23902; aggressive collapse visibly smeared
+these atlases. Original sources/textures, prepared models/materials/catalog/prefabs
+and emission masks remain ignored/private.
+
+Warm pane masks preserve sash; station mask includes both lanterns' glass faces.
+ResidentialWindowLights now admits any emissive Buildings entry, allowing civics
+without pretending they are growable residences. Two aligned station wall-lantern
+light pools share the existing day/evening/night controls. Constable retains source
+skinning, Walk/Run/FoldArms takes, plus a quiet authored Idle; catalog preparation
+builds the existing generic controller/prefab at1.72m. No patrol/policing simulation
+or automatic officer traffic was added.
+
+CivicsQA in the private QA checkout checks catalog filters, dimensions, reduced mesh
+registration, L0/L2↔L3/L5 switching, both-tier emission and noon reset, lantern pools,
+all four character states and moving baked skin, and lot JSON references. Preview
+renders and verification live in ple-2/outputs/Civics. Batch pose review bakes the
+sampled skin to avoid stale GPU skin matrices across multiple renders in one editor
+frame. No player map opened or saved. Source changes remain local/uncommitted.
+
+--- Earlier road-edge correction ---
+
+# Exposed road edge correction and L0 panning · November 18, 2026
+
+User clarified the darker brown request refers to exposed earth below sidewalks,
+not the roadway. Removed the mistaken road-surface tint trial; authored pavement
+colors restored. Shared-footprint earth wall shading now multiplies its lining by
+(.783,.774,.801) on road ribbons and junctions. Masonry curbs and lot paths retain
+their existing appearance. L0 pan multiplier is2.1125 (previous1.69), exactly25%
+faster for keyboard/edge and drag panning; other zoom levels unchanged.
+
+--- Superseded roadway tint trial ---
+
+# Darker dirt tint trial · November 18, 2026
+
+User approved trying a slightly darker, less yellow brown after accepting the
+six-inch visual recess. Dirt Road, Wagon Road and Founders Dirt Street now multiply
+their existing material tint by(.783,.774,.801), including the user-requested
+additional10% darkening of the first(.87,.86,.89) trial. Junction blends inherit the same tint
+from their source material. Texture/rut artwork and recess geometry/shading remain
+as approved; this is a material-color trial awaiting visual feedback. No new render
+work or licensed artwork. Before/after loop renders are in ple-2/outputs.
+
+--- Approved six-inch recess baseline ---
+
+# Six-inch visual road recess · November 18, 2026
+
+User approved the visual recess proposal for roads and streets. District road
+materials now use LotPathBlend at exactly .1524m virtual depth, with earth-cut
+lining on natural roads and curb lining on paved surfaces. Sidewalks remain at
+their prior grade. Junction blend materials use the same virtual depth/boundary.
+Road/terrain/collision meshes, vehicle/pedestrian heights, saved records and water
+levels are unchanged: this is a visual recess, not physical excavation.
+
+StreetSurfaceMask.BoundaryEdges extracts only exposed union edges (including
+rounded junctions and old edge-touching joins), so no internal curb spans a T or
+crossing. DistrictRoadRecess caches a shared signed-distance RFloat texture at
+nominal .5m samples, capped1024x1024/4MiB. Two shader lookups trace the virtual
+bed/wall. Field rebuilds only when road geometry/surface signatures change and
+is freed on district teardown; ordinary refreshes reuse it. The small six-road
+fixture field was106x112/47,488bytes and rebuilt in about26ms in batch QA; this
+is not a full-town GPU/FPS benchmark. Existing road meshes/draw calls are reused.
+Explicit sidewalk/junction sorting orders preserve the overlap fixes after roads
+switch to the blended recess shader. Legacy lot-path recess rendering is retained.
+
+RoadRecessQA passes exactdepth, shared fields, exposed T/duplicate-strip boundaries,
+dirt/wagon/gravel/masonry/curve/junction shader renders, unchanged sidewalks/geometry/
+road JSON, field reuse and cleanup. SidewalkOverlapQA still passes. Before/after
+renders are in ple-2/outputs. Main Unity was stopped at MainMenu before editing.
+Source-only RoadRecess.hlsl is allowed in .gitignore; no licensed art added.
+Changes remain local/uncommitted on feature/deterministic-street-junctions.
+
+--- Earlier grass-palette update ---
+
+# Grass Texturize palette · November 18, 2026
+
+User clarified grass ground textures in the palette. Added four existing distinct
+textures to Natural/All: Lush Grass, Patchy Grass, Tileable Grass and Worn Grass.
+Maintained Grass is identical to Lush, so no duplicate swatch. Reuses private ground
+textures via LotPathMaterial's optional textureResource path; no new/copied art.
+Natural entries require available source textures. Existing entries/order remain;
+current private palette totals26. Both Parks and Lot Editor use the same collection.
+TexturePaintQA passed existing palette scrolling/count, paint/erase, shader/render,
+rotation, undo/redo and save roundtrips. Unity was stopped at MainMenu before edits.
+Changes remain local/uncommitted on feature/deterministic-street-junctions.
+
+--- Earlier sidewalk correction ---
+
+# Sidewalk overlap correction · November 18, 2026
+
+Latest source supersedes draw-order-only handling described below. StreetSurfaceMask
+indexes world-XZ carriageway/sidewalk footprints and clips presentation meshes:
+street sidewalks are physically trimmed out of other street pavement, including
+edge-to-edge T joins without an exact centerline junction. Actual rounded junction
+footprints also mask sidewalks. Lot paths clip out of street+sidewalk coverage and
+fade to zero at the cut over a nominal .55m band. Frontage dirt paths also trim at
+other roads. UVs, ribbon attributes, original alpha and terrain heights interpolate
+at clipped vertices. All district lot paths use the existing blend shader so both
+hard and soft authored paths support the mask. Original meshes remain owned by the
+lot surface; masks rebuild from them after road/lot edits and opening a district,
+and removing a road restores the full path. Saved definitions are not changed.
+
+SidewalkOverlapQA passes five lot rotations, exact hidden-area removal, soft alpha,
+repeatable geometry, slope/UV interpolation, actual near-miss T trimming, two
+coincident lot paths, unchanged lot JSON, and full restoration after road removal.
+Rendered Sidewalk-Join-and-Path-Fade.png is under ple-2/outputs. Prior OddsQA and
+street/block regressions also pass with the clipping integrated. Main Unity was
+stopped at MainMenu before editing; no player saves or region generation touched.
+Branch remains feature/deterministic-street-junctions, local/uncommitted.
+
+--- Earlier district fixes ---
+
+# District odds-and-ends fixes · November 18, 2026
+
+Latest fixes on feature/deterministic-street-junctions (still local/uncommitted):
+- Lamp emission now uses owned runtime materials with the emission keyword restored
+  on both detail tiers. Catalog validation keeps a nonblack authored emission color;
+  runtime day/night property blocks still switch glow off/on. Simple lamp's private
+  LanternGlow mask now includes the reduced model's glass UV triangles, removing its
+  unlit triangular holes. Art remains private/ignored; originals backed up in ple-2/work.
+- Junction dirt uses the existing seamless DirtRoadEarth albedo in world UVs,
+  fading back into the original wagon ruts on approaches. This removes both the
+  closed-loop UV seam and stretched/repeated grassy shoulders at joins. RoadShoulderDetails now excludes native plants from street
+  carriageways and sidewalks, with existing streamed tiles invalidated normally.
+- Pedestrian visibility is reconciled without the phase-only cache. Returning actors
+  refresh retained animation/bones, including a deferred wake when zoom-hidden.
+  Time changes refresh visibility immediately. Night reductions and vehicle restart
+  guards remain; actors are preserved rather than replaced each morning.
+- Lot paths use a bounded .075–.080m lift, soft frontage paths share it; district
+  sidewalks use .12m and an explicit later render queue. Junctions render after
+  sidewalks, preserving clear junction mouths. Normal path layering stays below them.
+- District Save/Back ColorTint now targets the button background, with explicit
+  highlighted, pressed, disabled and reset states.
+
+Isolated OddsQA passes four complete night/day cycles, actor identity/skin/animation
+return, same-phase recovery, vehicle cooldown, street/sidewalk plant exclusion,
+closed-loop UV continuity, actual path mesh height/queue and Save/Back pointer hover
+and exit. Both lamp tiers rendered and inspected. Existing junction, Founders street,
+block corner and twelve block overlap cases pass. Player saves were not modified;
+main Unity was stopped at MainMenu before edits. New QA renders/logs are under ple-2.
+No packaged-player or full-town benchmark claim. Await user gameplay feedback.
+
+--- Earlier street-junction handoff ---
+
+# Street junction first pass · November 18, 2026
+
+Latest street behavior supersedes the earlier manual-road join description below.
+PR26 is merged (verified November18). Current local branch is
+feature/deterministic-street-junctions; changes are uncommitted and not pushed.
+Unity was verified stopped at MainMenu before editing; no player region regenerated.
+
+Streets now opt into PointWire release placement: release on a green snapped
+centerline square to finish a T, drag beyond the snap lock to cross. Click waypoints
+and Enter still work. Saved-order targets, endpoint preference and hysteresis make
+selection stable. Exact centerline junctions reconstruct explicit nodes/arms on
+load; no new save field or historical near-miss repositioning. One terrain-following
+patch per node adds small quadratic inner-corner flares and blends original street
+albedos. Normal roads retain their previous interaction/rendering. Existing sidewalk
+ribbons remain. Invalid/space-constrained flare geometry is omitted. See
+Documentation/03_Technical/Street_Junctions.md.
+
+Isolated StreetJunctionQA passes topology, release/drag/click/cancel handling,
+actual three-node presentation/shader render, stable snapping, overshoot handling,
+green overlay, binary region roundtrip and teardown. Existing FoundersStreetChecks,
+BlockCornerQA and all twelve BlockOverlapQA cases pass. This is a first visual pass,
+awaiting user gameplay feedback; no packaged-player/performance qualification.
+QA renders are in the November18 ple-2/outputs folder. Player saves and licensed
+art were not modified. Source-only shader is explicitly allowed in .gitignore.
+
+--- Previous session summary ---
+
 # CityForge V4 session wrap · November 18, 2026
 
 Read AGENTS.md, then this summary before using the historical entries below. This
@@ -2448,3 +3446,19 @@ User requested supplied dirt throughout applicable terrain (e.g. riverbanks), le
 ### NPC movement/idle sliding fix
 
 User reported translating actors still in idle. Reproduced34 non-walk Animator states among770 actual moving samples. NpcBrain now derives IsMoving from actual horizontal displacement, resolves final animation after action changes, and population resolves again after meeting callbacks. Walk is immediate/evaluated before visual translation (no idle-to-walk blend lag); stationary Idle/Talk resolved explicitly. Animate checks real current/next state rather than only cached request. Animator.keepAnimatorStateOnDisable true and CullUpdateTransforms preserve state across hiding/offscreen. NpcLocomotionChecks observes actual root displacement and real Walk state plus actual walk clip, all3 definitions at Zoom0/1/2, far hide/show and forced Animator idle reset. PASS1299 moving/2805 stopped samples,0 mismatches,3 moving definitions. Normal camp movement/hearth/ground checks also PASS; compile passed;52 existing saved files unchanged. Left Play camp Zoom1; outputs/npc-locomotion contains before/after evidence. No commit/push.
+
+## Growable Lot Layout modal — 2026-11-20
+
+Redesigned the lot editor growable layout modal to group Building Type, Building Footprint, Orientation, Paths & Access, and Optional Offsets. Added gold selected states, numeric step controls, road-edge dropdown, and viewport fitting. Existing apply/validation, eligible-building selection, entry-marker picking and selected-building footprint conversion remain intact. UI now lives in LotGrowableLayoutModal.cs (LotEditorPanel partial); LotEditorIcon adds shop/industry/row/chevron glyphs. No growth schema changes. Tested in isolated CityForgeQA: Apply/Close, validation, spinners, row/single enablement, selected-building conversion and dropdown; captured 1920x1080 and1366x768. GROWABLE_MODAL_PASS. Synced the four tested source/meta files to main; player saves untouched.
+
+## District painting, paths, zoning and sky — 2026-11-20
+
+Texturize retains input ownership across presentation refreshes, refuses lot selection at both picker and selection entry points, paints empty lot ground and other district terrain while excluding physical rotated building footprints. Added Boundary / Free spray modes using the existing feather, brush, erase and undo controls; null GroundPaintData polygon explicitly means unbounded spray, retaining per-pixel containment. Palette starts at top.
+
+Parks → Paths adds shared lot path materials/widths, curved angles, freehand PointWire open/closed routes and four presets. New additive SavedRegionInfo.parkPaths array captures/restores/validates district paths; old saves default empty. Paths clip/fade beneath street sidewalks, avoid buildings/water and participate in area demolition. District park paths and authored lot pedestrian paths register as preferred walking surfaces; vehicles unchanged. See Documentation/03_Technical/District_Park_Paths.md.
+
+C2 medium-wealth automatic block streets default to cobblestone. Rectangular stamp parcel sizes now persist relative to frontage; RestoreTownZones repairs complete anchored parcels from actual cell extents, recovering older rotated stamps. Undeveloped zoning may be restamped; intersecting old reservations are replaced without removing built lots. Placement uses the same curved paving-corner tolerance as growth; sidewalks are not obstacles. Commercial growth enforces wealth too. Growth failure/status messages now appear outside the zone-drag mode.
+
+Day horizon lightened toward sky blue; directional orange/red sunset peaks at19:00, fading toward stars/night. Player stream tiny stones (<0.4m) and fine bank-stone meshes replaced with existing photographic compacted-gravel-pebble bed texture at2.5m repeat. Medium/big rocks, scanned patches, native bank plants and water shader retained; generated natural streams unchanged. Fixed200m fixture:801,714 ->409,752 near dressing triangles (-48.9%),952 ->163 individual stone instances. This measures dressing geometry, not district FPS or total frame triangles.
+
+Isolated QA passed: actual saved C2 4x4/8x4 row candidates/materialization; all cardinal rotations, parcel restore, full frontage/physical fit against curved included streets, restamping undeveloped zoning; spray masking and lot input exclusion; path creation, preferred walking registration, metadata plus binary region roundtrip; UI and day/19:00 shader renders. Compared production stream captures before/after. No player save writes. Synced21 files from QA; main was at menu outside Play. Artifacts: current chat outputs/District-Refinements.

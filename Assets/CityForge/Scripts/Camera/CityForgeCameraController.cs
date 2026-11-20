@@ -52,7 +52,7 @@ namespace CityForge.CameraSystem
                 (level <= 1 ? 1.25f : 1f) * (level <= 2 ? .5f : 1f);
             var region = GetComponentInParent<World.PrototypeRegionView>();
             if (level >= 3 && (meadowFraming || (region && region.SelectedDistrict >= 0))) size *= .5f;
-            return size;
+            return level == 5 ? size * .9025f : size;
         }
 
         public void SetZoomLevel(int level)
@@ -104,7 +104,7 @@ namespace CityForge.CameraSystem
             get
             {
                 if (regionSide <= 0f) return 1f;
-                float multiplier = ZoomLevel == 4 ? 1.3f : ZoomLevel <= 1 ? 1.69f : 1f;
+                float multiplier = ZoomLevel == 0 ? 2.1125f : ZoomLevel == 4 ? 1.625f : ZoomLevel == 1 ? 1.69f : 1f;
                 // Close navigation: the original 2x boost, plus the requested further 25%.
                 return ZoomLevel >= 1 && ZoomLevel <= 3 ? multiplier * 2.5f : multiplier;
             }
@@ -459,7 +459,7 @@ namespace CityForge.CameraSystem
             focus=bounds.center+orientation*(Vector3)((min+max)*.5f);
             var halfSpan=(max-min)*.5f;
             orthographicSize=1.12f*Mathf.Max(halfSpan.y,halfSpan.x/Mathf.Max(.1f,viewCamera.aspect));
-            farthestSize=orthographicSize;ApplyPose();
+            farthestSize=orthographicSize;orthographicSize*=.9025f;ApplyPose();
         }
 
         public void FrameDistrictUnion(float side,float absoluteHeight,float low,float high,Vector3 center)
@@ -488,7 +488,7 @@ namespace CityForge.CameraSystem
             var halfHeight = halfWidth * Mathf.Sin(pitch * Mathf.Deg2Rad)
                 + height * .5f * Mathf.Cos(pitch * Mathf.Deg2Rad);
             orthographicSize = 1.12f * Mathf.Max(halfHeight, halfWidth / Mathf.Max(.1f, viewCamera.aspect));
-            farthestSize = orthographicSize; ZoomLevel = 5; ZoomChanged?.Invoke(ZoomLevel);
+            farthestSize = orthographicSize; orthographicSize *= .9025f; ZoomLevel = 5; ZoomChanged?.Invoke(ZoomLevel);
             viewCamera.orthographic = true;
             ApplyPose();
         }

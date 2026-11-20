@@ -318,7 +318,7 @@ namespace CityForge.UI
         }
 
         public void Refresh(LotDefinition lot, LotAssetCatalog catalog, string selected, HashSet<string> selectedGroup,
-            LotPathDefinition selectedPath, bool grid, Rect? selectedTile, LotObjectDefinition growablePreview)
+            LotPathDefinition selectedPath, bool grid, Rect? selectedTile, LotObjectDefinition growablePreview, LotObjectDefinition[] rowPreview = null)
         {
             selectedObject = selected;
             footprintRoot = null;
@@ -353,6 +353,7 @@ namespace CityForge.UI
 
             content = new GameObject("Lot preview contents").transform;
             content.SetParent(stage, false);
+            content.localPosition=Vector3.up*lot.elevation;
             content.gameObject.layer = PreviewLayer;
             var size = lot.Size;
             var ground = LotGroundTexture.Find(false, lot.baseTexture) ?? LotGroundTexture.Base[0];
@@ -438,6 +439,15 @@ namespace CityForge.UI
                 DrawBuildingFootprint(zoning.BuildingSlot);
                 var building = growablePreview != null && catalog ? catalog.Find(growablePreview.assetId) : null;
                 if (building != null) DrawBuildingPreview(growablePreview, building);
+                if(zoning.buildingRow){
+                    var front=LotRowBuildings.FrontBounds(lot);float line=LotRowBuildings.FrontLine(lot);
+                    var a=LotGroundOverlay.QuarterTurn(new Vector2(front.xMin,line),(int)zoning.frontage);
+                    var b=LotGroundOverlay.QuarterTurn(new Vector2(front.xMax,line),(int)zoning.frontage);
+                    var marker=Box("Row frontage · front steps",new Vector3((a.x+b.x)*.5f,.23f,(a.y+b.y)*.5f),
+                        new Vector3(Vector2.Distance(a,b),.08f,.12f),Material(new Color32(255,211,109,255),unlit:true));
+                    marker.transform.SetParent(content,false);marker.transform.localRotation=Quaternion.Euler(0,90*(int)zoning.frontage,0);
+                    if(rowPreview!=null)foreach(var placement in rowPreview){var rowAsset=catalog.Find(placement.assetId);if(rowAsset!=null)DrawBuildingPreview(placement,rowAsset);}
+                }
 
                 void DrawBuildingPreview(LotObjectDefinition placement, LotAssetCatalogEntry building)
                 {

@@ -18,6 +18,7 @@ namespace CityForge.World
         public Vector2[] points;
         public bool closed;
         public bool curved;
+        [NonSerialized] internal HashSet<int> junctionCorners;
         public bool gridAligned;
         public int width;
     }
@@ -58,7 +59,7 @@ namespace CityForge.World
         private MaterialPropertyBlock dirtEndProperties;
         private const float RoadSurfaceLift = .13f;
         private const float MasonryPavingLift = .115f;
-        private const float SidewalkLift = .088f;
+        private const float SidewalkLift = .12f;
         private const int MaxDistrictRoads = 256;
         private const int MaxRoadPoints = 64;
         private const float MaxRoadLength = 1024f;
@@ -192,6 +193,9 @@ namespace CityForge.World
             lastRepaveSurface = surfaceIndex;
             string label = RoadSurfaces[surfaceIndex].Label;
             roadWire.Label = label;
+            roadWire.PlaceOnRelease = StreetJunctions.IsStreet(RoadSurfaces[surfaceIndex].Id);
+            roadWire.ConnectionPreview = roadWire.PlaceOnRelease ? PreviewStreetConnection : null;
+            streetSnapTarget = null;
             roadWire.ProjectGuide = ProjectRoadPlacementGuide;
             RefreshRoadPlacementHint(force: true);
             roadWire.Arm();
@@ -253,6 +257,7 @@ namespace CityForge.World
                 surfaceId = RoadSurfaces[roadSurfaceIndex].Id,
                 points = guide,
                 closed = closed,
+                curved = true,
                 gridAligned = aligned,
                 width = width
             };
@@ -291,7 +296,10 @@ namespace CityForge.World
             if (!force && roadExtensionHint == road) return;
             roadExtensionHint = road;
             roadWire.RibbonWidth = road?.width ?? DefaultRoadWidth(RoadSurfaces[roadSurfaceIndex].Id);
-            roadWire.DrawingHint = road == null
+            roadWire.DrawingHint = roadWire.PlaceOnRelease
+                ? roadWire.Label + " · Drag to draw · Release on a green square to join · Drag through to cross\n" +
+                    "Click to add waypoints · Enter to place · Esc to cancel · Backspace to undo"
+                : road == null
                 ? roadWire.Label + " · Click an existing endpoint to continue that road, or click open ground to start a road\n" +
                     "Click the first marker to close a loop · Enter to place · Esc to cancel · Backspace to undo"
                 : "Continue " + RoadSurfaces[FindRoadSurface(road.surfaceId)].Label +
@@ -331,8 +339,13 @@ namespace CityForge.World
             pointer.Use();
         }
 
+        private DistrictRoadRecord streetSnapTarget;
+        private Vector2 streetSnapPoint;
+
         private Vector2 SnapRoadPlacementPoint(Vector2 point)
         {
+            if (StreetJunctions.IsStreet(RoadSurfaces[roadSurfaceIndex].Id))
+                return SnapStreetPlacementPoint(point);
             if (roadWire.Points.Count == 0)
             {
                 var road = FindRoadExtensionEnd(point, 1.25f, out bool prepend);
@@ -371,7 +384,8 @@ namespace CityForge.World
         private List<DistrictRoadRecord> UnpavedRoadPieces(DistrictRoadRecord proposal, DistrictRoadRecord exclude = null)
         {
             var existing = districtRoadMeshes.Keys.Where(road => road != exclude)
-                .Select(road => (Road: road, Line: RoadCenterline(road))).ToArray();
+                .Select(road => (Road: road, Line: road.curved && proposal.curved
+                    ? (IReadOnlyList<Vector2>)road.points : RoadCenterline(road))).ToArray();
             var pieces = new List<DistrictRoadRecord>();
             var run = new List<Vector2>();
             bool clipped = false;
@@ -601,7 +615,7 @@ namespace CityForge.World
                 width = record.width
             };
             float lift = HasSidewalks(record.surfaceId) ? MasonryPavingLift : RoadSurfaceLift;
-            var mesh = LotPathSurface.BuildMesh(path, style.TileSize, lift, LotHeight);
+            var mesh = LotPathSurface.BuildMesh(path, style.TileSize, lift, LotHeight, sharpCorners: record.junctionCorners);
             if (record.surfaceId == FoundersStreetId)
             {
                 var ribbon = new List<Vector4>();
@@ -622,8 +636,13 @@ namespace CityForge.World
                 material = DistrictRoadStyle(record.surfaceId).CreateMaterial();
                 if (record.surfaceId == "blacktop")
                     material.SetColor("_BaseColor", new Color(.27f, .28f, .30f));
-                if (!HasSidewalks(record.surfaceId))
-                    LotPathMaterial.ApplyEdgeTreatment(material, new LotPathDefinition { width = RoadWidth }, 8, 0);
+                LotPathMaterial.ApplyEdgeTreatment(material, new LotPathDefinition
+                {
+                    width = record.width, depth = LotPathDepth.HalfFoot, recessed = true,
+                    border = IsMasonryRoad(record.surfaceId) || record.surfaceId is "blacktop" or "paved-street" ? LotPathBorder.Curb : LotPathBorder.None
+                }, HasSidewalks(record.surfaceId) ? 0 : 8, 0);
+                material.renderQueue = DistrictLotSurfaces.PathRenderQueue + 1;
+                BindRoadRecess(material);
                 if (record.surfaceId == "dirt" && material.HasProperty("_RoadWearMap"))
                 {
                     const string folder = "Lots/PathMaterials/";
@@ -723,6 +742,7 @@ namespace CityForge.World
 
         private void RefreshRoadShoulderDetails()
         {
+            RefreshConnectedRoadCorners();
             pedestrianRoutesDirty = true;
             if (ApprovedDistrict) ApprovedDistrict.RefreshRoadShoulders(districtRoads);
             RefreshDistrictSidewalks();
@@ -731,8 +751,32 @@ namespace CityForge.World
         private void RefreshDistrictSidewalks()
         {
             ClearDistrictSidewalks();
+            var pavementMask = new StreetSurfaceMask();
+            var lotPathMask = new StreetSurfaceMask();
+            var visibleRoads = districtRoadMeshes.Keys.ToArray();
+            foreach (var road in visibleRoads)
+            {
+                var centerline = RoadCenterline(road);
+                pavementMask.AddRibbon(road, centerline, road.width);
+                lotPathMask.AddRibbon(road, centerline, road.width + (HasSidewalks(road.surfaceId) ? 2 * LotPathSurface.ResidentialSidewalkWidth : 0));
+            }
+            foreach (var node in StreetJunctions.Build(visibleRoads, RoadCenterline))
+            {
+                var outline = StreetJunctions.Outline(node);
+                if (!CityForge.Geometry.PointWireGeometry.IsSimple(outline)) continue;
+                for (int i = 0; i < outline.Count; i++)
+                {
+                    pavementMask.AddTriangle(node.Point, outline[i], outline[(i + 1) % outline.Count]);
+                    lotPathMask.AddTriangle(node.Point, outline[i], outline[(i + 1) % outline.Count]);
+                }
+            }
+            RefreshRoadRecess(pavementMask, visibleRoads);
+            RebuildParkPaths(lotPathMask);
+            if (lotInstances)
+                foreach (var surface in lotInstances.GetComponentsInChildren<DistrictLotSurfaces>(true)) surface.ApplyStreetMask(lotPathMask);
             if (!districtRoadRoot) return;
             var frontages = NeighborhoodFootpaths.Collect(districtLotRoots.Keys);
+            var shopFrontages = NeighborhoodFootpaths.Collect(districtLotRoots.Keys, commercial: true);
             var roads = districtRoadMeshes.Keys.Where(road => HasSidewalks(road.surfaceId) || frontages.Count > 0).ToArray();
             if (roads.Length == 0) return;
             districtSidewalkRoot = new GameObject("District sidewalks").transform;
@@ -758,13 +802,40 @@ namespace CityForge.World
                 if (!paved && nearby.Count == 0) continue;
                 for (int side = -1; side <= 1; side += 2)
                 {
+                    if (plank)
+                    {
+                        var shops = shopFrontages.FindAll(edge => search.Overlaps(Rect.MinMaxRect(Mathf.Min(edge.A.x, edge.B.x),
+                            Mathf.Min(edge.A.y, edge.B.y), Mathf.Max(edge.A.x, edge.B.x), Mathf.Max(edge.A.y, edge.B.y))));
+                        var earth = LotPathMaterial.Find(LotPathMaterial.ResidentialFootpath);
+                        var dirtWalk = LotPathSurface.BuildMesh(path, earth.TileSize, DistrictLotSurfaces.PathLift, LotHeight,
+                            shoulderSide: side, shoulderWidth: width, sharpCorners: road.junctionCorners);
+                        if (shops.Count > 0) NeighborhoodFootpaths.ApplyCoverage(dirtWalk, line, shops, inverse: true);
+                        var clippedDirt = pavementMask.Clip(dirtWalk, transform.localToWorldMatrix, .3f, road);
+                        if (clippedDirt != dirtWalk) { Destroy(dirtWalk); dirtWalk = clippedDirt; }
+                        Add("Soft dirt sidewalk", dirtWalk, Material(earth.Id + "-street", earth, soft: true, masked: shops.Count > 0));
+                        if (shops.Count > 0)
+                        {
+                            var woodWalk = LotPathSurface.BuildMesh(path, style.TileSize, SidewalkLift, LotHeight,
+                                shoulderSide: side, shoulderWidth: width, sharpCorners: road.junctionCorners);
+                            NeighborhoodFootpaths.ApplyCoverage(woodWalk, line, shops, inverse: false);
+                            var uv = new List<Vector4>(); woodWalk.GetUVs(1, uv);
+                            woodWalk.SetUVs(0, uv.ConvertAll(v => new Vector2(v.x / v.y, v.z / style.TileSize.y)));
+                            var clippedWood = pavementMask.Clip(woodWalk, transform.localToWorldMatrix, exclude: road);
+                            if (clippedWood != woodWalk) { Destroy(woodWalk); woodWalk = clippedWood; }
+                            woodWalk.RecalculateTangents();
+                            Add("Commercial plank sidewalk", woodWalk, Material(styleId + "-commercial", style, soft: false, masked: true));
+                        }
+                        continue;
+                    }
                     bool dirt = false;
                     if (nearby.Count > 0)
                     {
                         var earth = LotPathMaterial.Find(LotPathMaterial.ResidentialFootpath);
-                        var mesh = LotPathSurface.BuildMesh(path, earth.TileSize, SidewalkLift + .002f, LotHeight,
-                            shoulderSide: side, shoulderWidth: NeighborhoodFootpaths.Width);
+                        var mesh = LotPathSurface.BuildMesh(path, earth.TileSize, DistrictLotSurfaces.PathLift, LotHeight,
+                            shoulderSide: side, shoulderWidth: NeighborhoodFootpaths.Width, sharpCorners: road.junctionCorners);
                         NeighborhoodFootpaths.ApplyCoverage(mesh, line, nearby, inverse: false);
+                        var trimmed = pavementMask.Clip(mesh, transform.localToWorldMatrix, .3f, road);
+                        if (trimmed != mesh) { Destroy(mesh); mesh = trimmed; }
                         dirt = mesh.colors.Any(color => color.a > .001f);
                         if (dirt)
                         {
@@ -778,7 +849,7 @@ namespace CityForge.World
                     if (!paved) continue;
                     // Preserve the street's authored cross sections and alignment.
                     var paving = LotPathSurface.BuildMesh(path, style.TileSize, SidewalkLift, LotHeight,
-                        shoulderSide: side, shoulderWidth: width);
+                        shoulderSide: side, shoulderWidth: width, sharpCorners: road.junctionCorners);
                     if (plank)
                     {
                         var ribbon = new List<Vector4>(); paving.GetUVs(1, ribbon);
@@ -786,6 +857,8 @@ namespace CityForge.World
                         paving.RecalculateTangents();
                     }
                     if (dirt) NeighborhoodFootpaths.ApplyCoverage(paving, line, nearby, inverse: true);
+                    var trimmedPaving = pavementMask.Clip(paving, transform.localToWorldMatrix, exclude: road);
+                    if (trimmedPaving != paving) { Destroy(paving); paving = trimmedPaving; }
                     Add(plank ? "Plank sidewalk" : "Bluestone sidewalk", paving,
                         Material(styleId + (dirt ? "-transition" : ""), style, soft: false, masked: dirt));
                 }
@@ -802,6 +875,7 @@ namespace CityForge.World
                     material.SetFloat("_VertexOpacity", 1);
                     material.SetFloat("_NaturalFootpath", soft ? 1 : 0);
                 }
+                material.renderQueue = soft ? DistrictLotSurfaces.PathRenderQueue : DistrictLotSurfaces.SidewalkRenderQueue;
                 materials.Add(key, material); sidewalkAssets.Add(material);
                 return material;
             }
@@ -811,6 +885,7 @@ namespace CityForge.World
                 walk.transform.SetParent(districtSidewalkRoot, false);
                 walk.GetComponent<MeshFilter>().sharedMesh = mesh;
                 var renderer = walk.GetComponent<MeshRenderer>(); renderer.sharedMaterial = material;
+                renderer.sortingOrder = MaxDistrictRoads + 1;
                 renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 sidewalkAssets.Add(mesh);
             }
@@ -830,6 +905,8 @@ namespace CityForge.World
 
         private void ClearDistrictRoadPresentation()
         {
+            ClearRoadRecess();
+            ClearStreetJunctionPresentation();
             ClearRoadPathGuides();
             ClearDistrictSidewalks();
             if (districtRoadRoot)

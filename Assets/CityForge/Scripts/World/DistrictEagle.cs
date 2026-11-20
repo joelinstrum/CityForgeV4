@@ -30,7 +30,7 @@ namespace CityForge.World
         private float eagleStreetHalfWidth, eagleGripBlend;
         private Vector3 eagleFlightVelocity, eagleDropHeading, eagleReleasePoint, eaglePassengerVelocity;
         private float eagleBank;
-        private bool eagleReleased, eaglePassengerHidden;
+        private bool eagleReleased, eaglePassengerHidden, eagleDropIntoTrees;
         private const float EagleDropSpeed = 14f;
         private const float EagleGravity = 9.81f;
         internal Transform EagleCameraTarget => !eagleCameraFollow ? null :
@@ -249,6 +249,11 @@ namespace CityForge.World
                 case EaglePhase.Splash:
                     eagleTimer += delta;
                     FlyEagleTo(eagle.position + EagleHorizontalForward() * 20f + Vector3.up * (delta * 2f), delta, 16f);
+                    if(eagleDropIntoTrees){
+                        if(eagleTimer>=.25f)eagleCameraFollow=false;
+                        if(eagleTimer>=1.2f){ReturnEaglePassenger();FinishEagleEvent();}
+                        break;
+                    }
                     DrawEagleSplash(eagleTimer);
                     float depth = Mathf.Min(5f, eagleTimer * 5.5f);
                     eaglePassenger.Body.position = eagleWater - Vector3.up * depth;
@@ -274,7 +279,7 @@ namespace CityForge.World
         private bool StartEagleSearch(bool command = false, bool retry = false)
         {
             eagleEventDelay = 16f;
-            if (Waterless || !pedestrians.Any(candidate => IsEagleTarget(candidate, command))) return false;
+            if (!pedestrians.Any(candidate => IsEagleTarget(candidate, command))) return false;
             if (!retry)
             {
                 eaglePickupRetries = 0;
@@ -293,7 +298,7 @@ namespace CityForge.World
         private bool TryBeginEagleEvent(bool allowZoomCulled = false)
         {
             eagleEventDelay = 16f;
-            if (Waterless || pedestrians.Count == 0) return false;
+            if (pedestrians.Count == 0) return false;
 
             var water = DistrictLotWater();
             float startAngle = Random.value * Mathf.PI * 2f;
@@ -304,27 +309,61 @@ namespace CityForge.World
             foreach (var candidate in candidates)
             {
                 var point = candidate.Body.position;
-                for (float radius = 12f; radius <= 300f; radius += 12f)
-                for (int i = 0; i < 16; i++)
-                {
-                    float angle = startAngle + i * (Mathf.PI * 2f / 16f);
-                    var sample = new Vector2(point.x, point.z) + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius;
-                    if (!InActiveDistrict(sample)) continue;
-                    float ground = LotHeight(sample);
-                    if (!TryLotWater(sample, ground, water, out float level) || level - ground < 2f ||
-                        !ClearOfShore(sample, water)) continue;
-                    eagleWater = new Vector3(sample.x, level, sample.y);
-                    eaglePassenger = candidate;
-                    eagleEventDelay = Random.Range(125f, 220f);
-                    bool hasStreet = TryGetEagleStreetEntry(point);
-                    eaglePhase = hasStreet ? EaglePhase.StreetApproach : EaglePhase.Reach;
-                    eagleTimer = 0f;
-                    eagleApproachLimit = 9f + Vector3.Distance(point, eagle.position) / 15f;
-                    EagleAnimation(hasStreet ? "Glide" : "Reach");
-                    return true;
-                }
+                if (!TryEagleDropTarget(point, water, startAngle, out eagleWater, out eagleDropIntoTrees)) continue;
+                eaglePassenger = candidate;
+                eagleEventDelay = Random.Range(125f, 220f);
+                bool hasStreet = TryGetEagleStreetEntry(point);
+                eaglePhase = hasStreet ? EaglePhase.StreetApproach : EaglePhase.Reach;
+                eagleTimer = 0f;
+                eagleApproachLimit = 9f + Vector3.Distance(point, eagle.position) / 15f;
+                EagleAnimation(hasStreet ? "Glide" : "Reach");
+                return true;
             }
             return false;
+        }
+
+        private bool TryEagleDropTarget(Vector3 origin, WildlifeWaterAccess water, float startAngle,
+            out Vector3 target, out bool trees)
+        {
+            trees=false;target=default;
+            // Prefer open, deep water as before.
+            if(!Waterless)for(float radius=12;radius<=300;radius+=12)for(int i=0;i<16;i++){
+                float angle=startAngle+i*Mathf.PI*2/16;
+                var sample=new Vector2(origin.x,origin.z)+new Vector2(Mathf.Cos(angle),Mathf.Sin(angle))*radius;
+                if(!InActiveDistrict(sample))continue;float ground=LotHeight(sample);
+                if(!TryLotWater(sample,ground,water,out float level)||level-ground<2||!ClearOfShore(sample,water))continue;
+                target=new Vector3(sample.x,level,sample.y);return true;
+            }
+            // Sample actual centerline segments: a coarse radial search misses narrow streams.
+            float best=float.PositiveInfinity;
+            foreach(var body in Data.WaterBodies??System.Array.Empty<RegionWaterBody>()){
+                if(body.kind!=WaterBodyKind.River||body.centerline==null)continue;
+                for(int i=1;i<body.centerline.Length;i++){
+                    var a=(body.centerline[i-1]-Vector2.one*.5f)*MapSide;
+                    var b=(body.centerline[i]-Vector2.one*.5f)*MapSide;
+                    int steps=Mathf.Clamp(Mathf.CeilToInt(Vector2.Distance(a,b)/4),1,256);
+                    for(int j=0;j<=steps;j++){
+                        var sample=Vector2.Lerp(a,b,(float)j/steps);if(!InActiveDistrict(sample))continue;
+                        float ground=LotHeight(sample);
+                        if(!TryLotWater(sample,ground,water,out float level))continue;
+                        var point=new Vector3(sample.x,level,sample.y);float distance=(point-origin).sqrMagnitude;
+                        if(distance>=best)continue;best=distance;target=point;
+                    }
+                }
+            }
+            if(!float.IsPositiveInfinity(best))return true;
+            // Last choice: a real canopy, without a water splash or sinking effect.
+            Vector3 canopyTarget=default;best=float.PositiveInfinity;
+            if(ApprovedDistrict&&ApprovedDistrict.GetComponentInChildren<ApprovedDistrictForest>() is {} forest&&forest.TryClosestCanopy(origin,out var canopy))Consider(canopy);
+            foreach(var tree in placedTreeViews.Values)if(tree)ConsiderTree(tree.transform);
+            foreach(var tree in eagleLotTrees)if(tree)ConsiderTree(tree);
+            if(float.IsPositiveInfinity(best))return false;
+            target=canopyTarget;trees=true;return true;
+            void ConsiderTree(Transform tree){var renderers=tree.GetComponentsInChildren<Renderer>();if(renderers.Length==0)return;
+                var bounds=renderers[0].bounds;foreach(var renderer in renderers)bounds.Encapsulate(renderer.bounds);
+                if(bounds.size.y>=2)Consider(new Vector3(bounds.center.x,bounds.max.y-.5f,bounds.center.z));}
+            void Consider(Vector3 point){if(!InActiveDistrict(new Vector2(point.x,point.z)))return;float distance=(point-origin).sqrMagnitude;
+                if(distance<best){best=distance;canopyTarget=point;}}
         }
 
         private bool TryGetEagleStreetEntry(Vector3 pedestrian)

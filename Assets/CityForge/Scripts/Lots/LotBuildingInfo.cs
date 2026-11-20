@@ -9,6 +9,7 @@ namespace CityForge.Lots
     [Serializable]
     internal sealed class LotBuildingInfo
     {
+        public LotRowGeometry rowGeometry;
         public Vector2 entrance;
         public LotFrontage facing;
         public LotEntryType entryType;

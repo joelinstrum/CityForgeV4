@@ -420,6 +420,14 @@
           "legacyName": "Parks"
         },
         {
+          "id": "maritime",
+          "name": "Maritime"
+        },
+        {
+          "id": "infrastructure",
+          "name": "Infrastructure"
+        },
+        {
           "id": "agriculture",
           "name": "Agriculture"
         }

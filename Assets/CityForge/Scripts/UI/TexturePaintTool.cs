@@ -20,10 +20,11 @@ namespace CityForge.UI
         private Action<GroundPaintData> committed; private Action closed;
         private Rect? paintClip;
         private readonly List<LineRenderer> markers = new();
-        private RectTransform panel; private Text hint, sizeText, falloffText, modeText;
+        private RectTransform panel; private Text hint, sizeText, featherText, modeText;
         private LineRenderer outline, brush; private Material lineMaterial;
-        private float radius = 3, falloff = .65f, nextDab;
-        private bool erase, waiting = true, stroke, closing;
+        private float radius = 3, feather = 1f, nextDab;
+        private bool erase, waiting = true, stroke, closing, freeSpray;
+        private Button sprayButton, boundaryButton;
         private Vector2 last;
         private GroundPaintData before;
         private string texture = "packed-earth", group = "All";
@@ -53,7 +54,7 @@ namespace CityForge.UI
         }
         private void BuildPanel(Transform hud)
         {
-            panel = Rect(hud,"Texturize",new Vector2(24,-132),new Vector2(374,650));
+            panel = Rect(hud,"Texturize",new Vector2(24,-132),new Vector2(374,692));
             var skin=panel.gameObject.AddComponent<Image>();skin.sprite=ZoneModalArtwork.Panel;skin.type=Image.Type.Sliced;
             var title=Label(panel,"Paint Textures",new Vector2(16,-18),new Vector2(340,40),29);
             title.font=paintHeadingFont=Font.CreateDynamicFontFromOSFont(new[]{"Georgia","Times New Roman","Liberation Serif"},29);
@@ -67,31 +68,40 @@ namespace CityForge.UI
             window.gameObject.AddComponent<RectMask2D>();
             paletteScroll=window.gameObject.AddComponent<ScrollRect>();paletteScroll.viewport=window;
             paletteScroll.horizontal=false;paletteScroll.scrollSensitivity=28;paletteScroll.movementType=ScrollRect.MovementType.Clamped;
-            palette=Rect(window,"All available path textures",Vector2.zero,new Vector2(324,222));paletteScroll.content=palette;
+            palette=Rect(window,"All available ground textures",Vector2.zero,new Vector2(324,222));paletteScroll.content=palette;
             var bar=Rect(window,"Texture scrollbar",new Vector2(328,0),new Vector2(10,222));bar.gameObject.AddComponent<Image>().color=new Color(.19f,.23f,.25f);
             var scrollbar=bar.gameObject.AddComponent<Scrollbar>();var handle=Rect(bar,"Handle",Vector2.zero,Vector2.zero);handle.anchorMin=Vector2.zero;handle.anchorMax=Vector2.one;handle.pivot=new Vector2(.5f,.5f);var grip=handle.gameObject.AddComponent<Image>();grip.sprite=ZoneModalArtwork.Gold;grip.type=Image.Type.Sliced;
             scrollbar.handleRect=handle;scrollbar.targetGraphic=grip;scrollbar.direction=Scrollbar.Direction.BottomToTop;paletteScroll.verticalScrollbar=scrollbar;
             paletteCount=Label(panel,"",new Vector2(18,-338),new Vector2(338,30),16);Populate();
             sizeText=Label(panel,"Brush size: 6 m",new Vector2(18,-378),new Vector2(338,26),19);
             Slider(panel,new Vector2(22,-416),1,32,6,v=>{radius=v*.5f;sizeText.text=$"Brush size: {v:0.0} m";});
-            falloffText=Label(panel,"Falloff: 65%",new Vector2(18,-440),new Vector2(338,26),19);
-            Slider(panel,new Vector2(22,-478),0,1,.65f,v=>{falloff=v;falloffText.text=$"Falloff: {v:P0}";});
+            featherText=Label(panel,"Feather: 1.0 m",new Vector2(18,-440),new Vector2(338,26),19);
+            Slider(panel,new Vector2(22,-478),0,8,1,v=>{feather=v;featherText.text=v<=0?"Feather: 0 m · Hard edge":$"Feather: {v:0.0} m";});
             var paint=paintButton=Button(panel,"Paint",new Vector2(18,-506),new Vector2(160,40),()=>{erase=false;Mode();});
             eraseButton=Button(panel,"Erase",new Vector2(194,-506),new Vector2(160,40),()=>{erase=true;Mode();});
             modeText=paint.GetComponentInChildren<Text>(); Mode();
-            Button(panel,"New boundary",new Vector2(18,-558),new Vector2(160,32),()=>{FinishStroke();boundary.Clear();waiting=true;});
-            Button(panel,"Undo stroke",new Vector2(194,-558),new Vector2(160,32),Undo);
-            Button(panel,"Done",new Vector2(18,-602),new Vector2(336,32),Close);
+            boundaryButton=Button(panel,"Boundary",new Vector2(18,-550),new Vector2(160,32),()=>SetFreeSpray(false));
+            sprayButton=Button(panel,"Free spray",new Vector2(194,-550),new Vector2(160,32),()=>SetFreeSpray(true));
+            Button(panel,"New boundary",new Vector2(18,-594),new Vector2(160,32),()=>{SetFreeSpray(false);boundary.Clear();});
+            Button(panel,"Undo stroke",new Vector2(194,-594),new Vector2(160,32),Undo);
+            Button(panel,"Done",new Vector2(18,-638),new Vector2(336,32),Close);
             hint=Label(hud,"",new Vector2(420,-92),new Vector2(950,70),19);
+            SetFreeSpray(false);Canvas.ForceUpdateCanvases();paletteScroll.verticalNormalizedPosition=1;
         }
-        private void Mode(){if(modeText)modeText.text="Paint";if(paintButton)paintButton.image.sprite=erase?ZoneModalArtwork.Dark:ZoneModalArtwork.Gold;if(eraseButton)eraseButton.image.sprite=erase?ZoneModalArtwork.Gold:ZoneModalArtwork.Dark; SetHint(erase?"Erase inside the boundary · Original ground shows through":"Paint inside the boundary · Esc finishes");}
+        private void SetFreeSpray(bool value)
+        {
+            FinishStroke();freeSpray=value;waiting=true;boundary.Clear();
+            boundaryButton.image.sprite=value?ZoneModalArtwork.Dark:ZoneModalArtwork.Gold;
+            sprayButton.image.sprite=value?ZoneModalArtwork.Gold:ZoneModalArtwork.Dark;Mode();
+        }
+        private void Mode(){if(modeText)modeText.text="Paint";if(paintButton)paintButton.image.sprite=erase?ZoneModalArtwork.Dark:ZoneModalArtwork.Gold;if(eraseButton)eraseButton.image.sprite=erase?ZoneModalArtwork.Gold:ZoneModalArtwork.Dark; SetHint(freeSpray ? "Hold the mouse to spray anywhere · Feather softens the brush edge · Esc finishes" : erase?"Erase inside the boundary · Original ground shows through":"Outline an area, then hold the mouse to paint inside it · Esc finishes");}
         private void Populate()
         {
             foreach(Transform child in palette){child.gameObject.SetActive(false);Destroy(child.gameObject);}
             var styles=LotPathMaterial.All.Where(s=>s.IsAvailable&&(group=="All"||s.Group==group)).ToArray();
             palette.sizeDelta=new Vector2(324,Mathf.Max(222,Mathf.CeilToInt(styles.Length/3f)*112));
             foreach(var button in groupButtons)button.Value.image.sprite=button.Key==group?ZoneModalArtwork.Gold:ZoneModalArtwork.Dark;
-            if(paletteCount)paletteCount.text=$"{styles.Length} path textures · Scroll to browse";
+            if(paletteCount)paletteCount.text=$"{styles.Length} ground textures · Scroll to browse";
             foreach(var pair in styles.Select((style,index)=>(style,index)))
             {
                 var style=pair.style;int i=pair.index;
@@ -114,7 +124,7 @@ namespace CityForge.UI
             var point=pointer();
             if(!point.HasValue||!contains(point.Value)){FinishStroke();brush.enabled=false;DrawBoundary(null);return;}
             DrawBoundary(point);
-            if(!boundary.Closed)
+            if(!freeSpray&&!boundary.Closed)
             {
                 brush.enabled=false;
                 if(Input.GetMouseButtonDown(0))
@@ -136,7 +146,7 @@ namespace CityForge.UI
             nextDab=Time.unscaledTime+.085f;
             int steps=Mathf.Clamp(Mathf.CeilToInt(Vector2.Distance(last,point.Value)/Mathf.Max(.2f,radius*.2f)),1,64);
             dirty.Clear();string problem=null;
-            for(int i=1;i<=steps;i++)problem=Data.Dab(Vector2.Lerp(last,point.Value,(float)i/steps),radius,falloff,texture,boundary.Points,erase,contains,dirty)??problem;
+            for(int i=1;i<=steps;i++)problem=Data.Dab(Vector2.Lerp(last,point.Value,(float)i/steps),radius,feather,texture,freeSpray?null:boundary.Points,erase,contains,dirty)??problem;
             foreach(var tile in dirty)rendering.Refresh(tile);
             if(problem!=null)SetHint(problem);
             last=point.Value;

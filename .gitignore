@@ -286,3 +286,12 @@ venv/
 
 !/Assets/CityForge/Resources/Config/LotPropStyles.json
 !/Assets/CityForge/Resources/Config/LotPropStyles.json.meta
+
+# Authored street-junction blend shader; private street artwork remains excluded.
+!/Assets/CityForge/Resources/UI/
+!/Assets/CityForge/Resources/UI/StreetJunction.shader
+!/Assets/CityForge/Resources/UI/StreetJunction.shader.meta
+
+# Original shared road-recess shader helper.
+!/Assets/CityForge/Resources/Region/RoadRecess.hlsl
+!/Assets/CityForge/Resources/Region/RoadRecess.hlsl.meta

@@ -26,6 +26,8 @@ namespace CityForge.World
             set { rotation = value / 2; diagonalRotation = value % 2 != 0; }
         }
         internal int FacingDegrees => RotationSteps * 45;
+        public int authoredElevationVersion;
+        public float elevation;
         public float waterfrontDeckHeight;
         public LotDefinition definition;
         public LotCustomization customization;
@@ -43,7 +45,8 @@ namespace CityForge.World
         private GameObject lotActions;
         private Text lotFeedback;
         private Text placeLotLabel, lotFacingLabel, selectedLotTitle, selectedLotDetails, selectedLotFeedback;
-        private Button lotFacingButton, changeBuildingButton, deliveryRoleButton, selectedLotDetonateButton;
+        private Button lowerLotButton,raiseLotButton,lowerBuildingButton,raiseBuildingButton;
+        private Button lotFacingButton, changeBuildingButton, changeLotButton, deliveryRoleButton, selectedLotDetonateButton;
         private GameObject selectedLotPanel;
         private DistrictLotRecord selectedDistrictLot;
         private LineRenderer selectedLotOutline;
@@ -53,6 +56,12 @@ namespace CityForge.World
         private int lotRotation;
         private GameObject playerLotWorkspace;
         private CityForgeCameraController lotCamera;
+
+        private void SetLotFeedback(string message)
+        {
+            if (lotFeedback) lotFeedback.text = message;
+            ShowDistrictMessage(message);
+        }
 
         private void BuildLotActions(Transform hud, Font font)
         {
@@ -120,13 +129,15 @@ namespace CityForge.World
             AddPanelButton("×", 250, -12, 36, () => SelectDistrictLot(null));
             AddPanelButton("Rotate left 45°", 14, -96, 130, () => RotateSelectedLot(-1));
             AddPanelButton("Rotate right 45°", 156, -96, 130, () => RotateSelectedLot(1));
-            AddPanelButton("Move", 14, -140, 272, () =>
+            AddPanelButton("Customize lot", 14, -140, 272, () => CustomizeLot(font));
+            AddPanelButton("Move", 14, -184, 272, () =>
             {
                 if (selectedDistrictLot != null && !DistrictLoading && !IsSaving)
                     BeginLotPlacement(selectedDistrictLot.definition, selectedDistrictLot);
             });
-            changeBuildingButton = AddPanelButton("Change building", 14, -184, 272, ChangeSelectedLotBuilding);
-            deliveryRoleButton = AddPanelButton("Receives: None · change", 14, -228, 272, () =>
+            changeBuildingButton = AddPanelButton("Change building", 14, -228, 272, ChangeSelectedLotBuilding);
+            changeLotButton = AddPanelButton("Change lot", 14, -272, 272, ChangeSelectedLotLayout);
+            deliveryRoleButton = AddPanelButton("Receives: None · change", 14, -272, 272, () =>
             {
                 var lot = selectedDistrictLot;
                 if (lot == null || DistrictLoading || IsSaving) return;
@@ -137,10 +148,14 @@ namespace CityForge.World
                 SelectDistrictLot(lot);
                 selectedLotFeedback.text = "Delivery role changed. Save the region to keep it.";
             });
-            selectedLotDetonateButton = AddPanelButton("Detonate", 14, -272, 272, DetonateSelectedLot);
+            lowerLotButton=AddPanelButton("Lot −0.25 m",14,-316,130,()=>ShiftLotElevation(false,-.25f));
+            raiseLotButton=AddPanelButton("Lot +0.25 m",156,-316,130,()=>ShiftLotElevation(false,.25f));
+            lowerBuildingButton=AddPanelButton("Building −0.25 m",14,-360,130,()=>ShiftLotElevation(true,-.25f));
+            raiseBuildingButton=AddPanelButton("Building +0.25 m",156,-360,130,()=>ShiftLotElevation(true,.25f));
+            selectedLotDetonateButton = AddPanelButton("Detonate", 14, -316, 272, DetonateSelectedLot);
             selectedLotDetonateButton.GetComponent<Image>().color = new Color(.40f, .14f, .10f, 1f);
             selectedLotFeedback = HudText(rect, "Lot action feedback", font, 14);
-            Position(selectedLotFeedback.rectTransform, new Vector2(14, -226), new Vector2(270, 46));
+            Position(selectedLotFeedback.rectTransform, new Vector2(14, -270), new Vector2(270, 46));
             selectedLotPanel.SetActive(false);
 
             Button AddPanelButton(string label, int x, int y, int width, UnityEngine.Events.UnityAction action)
@@ -153,6 +168,7 @@ namespace CityForge.World
 
         private void SelectDistrictLot(DistrictLotRecord record)
         {
+            if (record != null && (districtTexturePaint || ParkPathArmed)) return;
             selectedDistrictLot = record;
             if (!selectedLotPanel) return;
             selectedLotPanel.SetActive(record != null);
@@ -177,14 +193,39 @@ namespace CityForge.World
                 : $"Facing {record.FacingDegrees}°";
             bool growable = GrowthBuildingIndex(record, LotAssetCatalog.Load()) >= 0;
             changeBuildingButton.gameObject.SetActive(growable);
+            changeBuildingButton.GetComponentInChildren<Text>().text=record.definition.zoningLayout.buildingRow?"Change row":"Change Building";
+            bool replaceable = record.definition.type == LotType.Zoning && record.definition.zoningLayout.Configured;
+            changeLotButton.gameObject.SetActive(replaceable);
+            int extraRow = replaceable ? 44 : 0;
+            ((RectTransform)changeLotButton.transform).anchoredPosition = new Vector2(14, growable ? -272 : -228);
             var panel = (RectTransform)selectedLotPanel.transform;
-            panel.sizeDelta = new Vector2(300, growable ? 366 : 322);
-            ((RectTransform)deliveryRoleButton.transform).anchoredPosition = new Vector2(14, growable ? -228 : -184);
+            panel.sizeDelta = new Vector2(300, (growable ? 498 : 454) + extraRow);
+            ((RectTransform)deliveryRoleButton.transform).anchoredPosition = new Vector2(14, (growable ? -272 : -228) - extraRow);
             deliveryRoleButton.GetComponentInChildren<Text>().text = "Receives: " + (record.definition.DeliveryRole switch
             { LotDeliveryRole.LumberMill => "Lumber Mill", LotDeliveryRole.TownCenter => "Town Center", _ => "None" }) + " · change";
-            ((RectTransform)selectedLotDetonateButton.transform).anchoredPosition = new Vector2(14, growable ? -272 : -228);
-            Position(selectedLotFeedback.rectTransform, new Vector2(14, growable ? -314 : -270), new Vector2(270, 46));
+            float heightRow=(growable?-316:-272)-extraRow;
+            ((RectTransform)lowerLotButton.transform).anchoredPosition=new Vector2(14,heightRow);
+            ((RectTransform)raiseLotButton.transform).anchoredPosition=new Vector2(156,heightRow);
+            ((RectTransform)lowerBuildingButton.transform).anchoredPosition=new Vector2(14,heightRow-44);
+            ((RectTransform)raiseBuildingButton.transform).anchoredPosition=new Vector2(156,heightRow-44);
+            ((RectTransform)selectedLotDetonateButton.transform).anchoredPosition = new Vector2(14, heightRow-88);
+            Position(selectedLotFeedback.rectTransform, new Vector2(14, (growable ? -446 : -402) - extraRow), new Vector2(270, 46));
             RefreshSelectedFreight(record);
+        }
+
+        private void ShiftLotElevation(bool building,float delta)
+        {
+            var lot=selectedDistrictLot;if(lot==null||DistrictLoading||IsSaving)return;
+            float value;
+            if(building){
+                var catalog=LotAssetCatalog.Load();int index=GrowthBuildingIndex(lot,catalog);
+                if(index<0)index=lot.definition.objects.FindIndex(item=>catalog.Find(item.assetId)?.category=="Buildings");
+                if(index<0){selectedLotFeedback.text="This lot has no building to adjust.";return;}
+                lot.definition=LotDefinition.Parse(JsonUtility.ToJson(lot.definition));var item=lot.definition.objects[index];
+                item.elevation=Mathf.Clamp(item.elevation+delta,-20,20);value=item.elevation;
+            }else{lot.elevation=Mathf.Clamp(lot.elevation+delta,-20,20);value=lot.elevation;}
+            RebuildDistrictLots();SelectDistrictLot(lot);
+            selectedLotFeedback.text=$"{(building?"Building":"Lot")} elevation: {value:0.00} m. Save the region to keep it.";
         }
 
         internal void RefreshSelectedFreight(DistrictLotRecord record)
@@ -208,6 +249,7 @@ namespace CityForge.World
 
         private bool TrySelectDistrictLot(Ray ray)
         {
+            if (districtTexturePaint || ParkPathArmed) return false;
             var nature = GetComponent<NatureToolbar>();
             if (nature && nature.Selected != NatureTool.None) return false;
             var picked = PickDistrictLot(ray);
@@ -294,6 +336,15 @@ namespace CityForge.World
             var record = selectedDistrictLot;
             if (record == null || DistrictLoading || IsSaving || !districtLotRoots.ContainsKey(record)) return;
             var catalog = LotAssetCatalog.Load();
+            if(record.definition.zoningLayout.buildingRow){
+                var template=LotDefinition.Parse(JsonUtility.ToJson(record.definition));
+                template.objects.RemoveAll(item=>item.generatedRowBuilding);
+                var layout=template.zoningLayout;layout.rowSeed++;template.zoningLayout=layout;
+                if(!LotRowBuildings.TryPack(template,catalog,record.id+":"+layout.rowSeed,out _,out var problem)){selectedLotFeedback.text=problem;return;}
+                record.definition=LotRowBuildings.Materialize(template,catalog,record.id+":"+layout.rowSeed);
+                record.growthBuildingId=record.definition.objects.Last().id;RebuildDistrictLots();
+                selectedLotFeedback.text="Building row changed. Save the region to keep it.";return;
+            }
             int index = GrowthBuildingIndex(record, catalog);
             if (index < 0) return;
 
@@ -323,6 +374,44 @@ namespace CityForge.World
             selectedLotFeedback.text = $"Building changed to {catalog.Find(building.assetId).label}. Save the region to keep it.";
         }
 
+        private void ChangeSelectedLotLayout()
+        {
+            var record = selectedDistrictLot;
+            if (record == null || DistrictLoading || IsSaving || !districtLotRoots.ContainsKey(record)) return;
+            var current = record.definition;
+            var choices = FoundersGrowthLayouts(out var libraryProblem).Where(option =>
+                option.Layout.id != current.id && GrowthFrontageSize(option.Layout) == GrowthFrontageSize(current) &&
+                option.Layout.zoningLayout.zone == current.zoningLayout.zone &&
+                option.Layout.zoningLayout.wealth == current.zoningLayout.wealth &&
+                option.Layout.SideStreetTurn == current.SideStreetTurn &&
+                ResidentialGround.LotEra(option.Layout) == ResidentialGround.LotEra(current))
+                .OrderBy(option => option.Layout.name, StringComparer.Ordinal).ToArray();
+            foreach (var (layout, buildings) in choices)
+            {
+                int rotation = (record.rotation + (int)current.zoningLayout.frontage - (int)layout.zoningLayout.frontage + 4) % 4;
+                if (GrowthLotCells(layout, rotation) != GrowthLotCells(current, record.rotation)) continue;
+                var candidate = new DistrictLotRecord { id = record.id, district = record.district, center = record.center,
+                    rotation = rotation, diagonalRotation = record.diagonalRotation, definition = layout };
+                if (LotSiteProblem(candidate, DistrictLotWater(), growing: true) != null) continue;
+                var draft = buildings.Length == 0 ? LotDefinition.Parse(JsonUtility.ToJson(layout))
+                    : LotGrowableBuildings.Materialize(layout, buildings[0],record.id+":"+layout.id);
+                candidate.definition = draft;
+                if (buildings.Length > 0)
+                {
+                    candidate.growthBuildingId = draft.objects.Last().id;
+                    if (IsResidentialZone(draft.zoningLayout.zone)) AddResidentialEntryPath(candidate, draft.objects.Last());
+                }
+                LotPropStyles.Apply(draft, record.id, LotAssetCatalog.Load());
+                record.definition = draft; record.rotation = rotation; record.customization = null;
+                record.growthBuildingId = candidate.growthBuildingId;
+                record.vehicleJobs.Clear();
+                RebuildDistrictLots(); SelectDistrictLot(record); RefreshDistrictSidewalks();
+                selectedLotFeedback.text = $"Lot changed to {draft.name}. Save the region to keep it.";
+                return;
+            }
+            selectedLotFeedback.text = libraryProblem ?? "No other saved lot matches this size, zone, wealth and frontage.";
+        }
+
         private static Text AddLotButton(Transform parent, Font font, string label, int x, int width,
             UnityEngine.Events.UnityAction onClick)
         {
@@ -349,10 +438,10 @@ namespace CityForge.World
             var rig = GetComponentInChildren<CityForgeCameraController>();
             var focus = rig.CaptureRegionState().focus;
             var center = new Vector2(focus.x, focus.z);
-            var record = PlacedLots.Find(item => InActiveDistrict(item.center) && LotContains(item, center));
+            var record = selectedDistrictLot ?? PlacedLots.Find(item => InActiveDistrict(item.center) && LotContains(item, center));
             if (record == null)
             {
-                lotFeedback.text = "Center the view over a placed lot to customize it.";
+                SetLotFeedback("Center the view over a placed lot to customize it.");
                 return;
             }
             try
@@ -364,7 +453,7 @@ namespace CityForge.World
                     {
                         record.customization = customization;
                         RebuildDistrictLots();
-                        lotFeedback.text = "Landscaping applied. Save the region to keep it.";
+                        SetLotFeedback("Landscaping applied. Save the region to keep it.");
                     }, placedLotId: record.id);
                 playerLotWorkspace = back.GetComponentInParent<Canvas>().gameObject;
                 lotCamera = rig;
@@ -374,7 +463,7 @@ namespace CityForge.World
             }
             catch (InvalidDataException error)
             {
-                lotFeedback.text = error.Message;
+                SetLotFeedback(error.Message);
             }
         }
 
@@ -398,7 +487,7 @@ namespace CityForge.World
             }
             if (Capital == null)
             {
-                lotFeedback.text = "Establish the capital on the region map first.";
+                SetLotFeedback("Establish the capital on the region map first.");
                 return;
             }
             if (savedLotPicker)
@@ -637,6 +726,7 @@ namespace CityForge.World
 
         private void RebuildDistrictLots()
         {
+            EnsureDistrictRats();
             pedestrianRoutesDirty = true;
             hasSeasonalLotTrees = false;
             RefreshZoneOverlay();
@@ -665,7 +755,7 @@ namespace CityForge.World
             }
             if (lotActions)
             {
-                lotActions.SetActive(SelectedDistrict >= 0);
+                lotActions.SetActive(false);
                 placeLotLabel.text = PendingFounder != null ? "Founder’s Building…" : "Place saved lot";
             }
             if (SelectedDistrict < 0 || PlacedLots.Count == 0) return;
@@ -693,6 +783,10 @@ namespace CityForge.World
             foreach (var record in records)
             {
                 if (!active.Contains(record.district)) continue;
+                if(record.authoredElevationVersion==0){
+                    try{LotElevationUpgrade.Apply(record,LotLibrary.Local.Load(record.definition.id));}
+                    catch(Exception error) when(error is IOException||error is UnauthorizedAccessException){}
+                }
                 var root = new GameObject(record.definition.name).transform;
                 root.SetParent(lotInstances, false);
                 districtLotRoots.Add(record, root);
@@ -730,10 +824,13 @@ namespace CityForge.World
                     if (dockWorker && !item.characterScript.dockStayVisible) continue;
                     hasSeasonalLotTrees |= asset.IsSeasonalTree;
                     var instance = LotRuntimeLoader.InstantiateObject(item, asset, root, VisualSeason, cameraRig).transform;
+                    if (definition.type == LotType.Zoning && asset.category == "Trees")
+                        instance.localScale *= .75f;
                     var point = instance.position;
                     point.y = LotHeight(new Vector2(point.x, point.z));
                     if (definition.IsWaterfront && LotRuntimeLoader.Footprint(item, asset).Overlaps(definition.WaterfrontBounds))
                         point.y = Mathf.Max(point.y, record.waterfrontDeckHeight);
+                    point.y += item.elevation;
                     instance.position = point;
                     if (asset.category == "Trees")
                     {
@@ -776,6 +873,12 @@ namespace CityForge.World
                         foreach (var animator in character.GetComponentsInChildren<Animator>())
                             animator.cullingMode = AnimatorCullingMode.CullCompletely;
                     }
+                    if (item.characterScript.configured && item.characterScript.scriptedBehavior == LotScriptedBehavior.Farmer &&
+                        item.assetId == FarmerAssetId)
+                        character.gameObject.AddComponent<DistrictFarmer>().Initialize(this, camera, record, item.position);
+                    if (item.characterScript.configured && item.characterScript.scriptedBehavior == LotScriptedBehavior.Patrol &&
+                        item.assetId == "v3-founders-constable" && DistrictPatrol.HasStation(definition))
+                        character.gameObject.AddComponent<DistrictPatrol>().Initialize(this, camera, record);
                     if (item.characterScript.configured && item.characterScript.scriptedBehavior == LotScriptedBehavior.Lumberjack && ApprovedDistrict)
                         character.gameObject.AddComponent<DistrictLumberjack>().Initialize(ApprovedDistrict, camera, record);
                     if (item.characterScript.configured && item.characterScript.scriptedBehavior == LotScriptedBehavior.Shopkeeper &&
@@ -795,8 +898,9 @@ namespace CityForge.World
                 }
                 if (definition.AttractsVessels && ApprovedDistrict && ApprovedDistrict.DisplayTerrain)
                     HarborLanding.Build(root, ApprovedDistrict, record, harborPorch);
-                residentialGround.Add(definition, record.id, ResidentialGround.LotEra(definition), root, LotHeight);
+                residentialGround.Add(definition, record.id, ResidentialGround.LotEra(definition), root, p => LotHeight(p)+definition.elevation+record.elevation);
                 root.gameObject.AddComponent<DistrictLotSurfaces>().Build(definition, LotHeight, record.waterfrontDeckHeight, meadowGrade);
+                root.position+=Vector3.up*(definition.elevation+record.elevation);
             }
             residentialGround.Build();
             RefreshDistrictSidewalks();
@@ -811,7 +915,7 @@ namespace CityForge.World
                 seed = unchecked((seed ^ character) * 16777619);
             var item = new LotObjectDefinition
             {
-                id = authored.id, position = authored.position, assetId = authored.assetId,
+                id = authored.id, position = authored.position, assetId = authored.assetId, elevation=authored.elevation,
                 scale = Mathf.Clamp(authored.scale * Mathf.Lerp(.9f, 1.1f, (seed & 255) / 255f), .25f, 3f),
                 yaw = Mathf.Repeat(authored.yaw + ((seed >> 8) & 255) * (360f / 256f), 360f)
             };
@@ -840,6 +944,8 @@ namespace CityForge.World
             {
                 if (record == null || !Guid.TryParseExact(record.id, "N", out _) || !ids.Add(record.id) ||
                     record.district < 0 || record.district >= districtCount ||
+                    !float.IsFinite(record.elevation) || Mathf.Abs(record.elevation)>20 ||
+                    record.authoredElevationVersion<0 || record.authoredElevationVersion>1 ||
                     !float.IsFinite(record.center.x) || !float.IsFinite(record.center.y) ||
                     record.rotation < 0 || record.rotation > 3 || record.definition == null || !float.IsFinite(record.waterfrontDeckHeight))
                     throw new InvalidDataException("Invalid placed lot.");

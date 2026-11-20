@@ -51,3 +51,13 @@ Explicit forestAdditions override older removal masks at their positions. A late
 removal deletes matching addition records as well as visible trees, so stale caches
 cannot resurrect them. Filter base removals before merging additions. See
 Forest_Planting.md.
+
+## Rectangular area destruction
+
+District Detonate can now record a rectangular removal mask when dragging an area.
+Optional ForestRemovalStroke.rectangleSize stores its width/depth around x/z;
+zero retains circular radius semantics for all existing saves and forest brushes.
+IsForestRemoved tests the shared Contains method, preserving district scope,
+cache/fresh filtering and later-addition precedence. Area destruction removes
+matching explicit additions and refreshes native/mixed trees through existing
+ClearTreesUnderLot and geography invalidation. See District_Area_Demolition.md.

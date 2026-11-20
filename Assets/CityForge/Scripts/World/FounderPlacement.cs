@@ -55,7 +55,7 @@ namespace CityForge.World
             if (capital == null || DistrictLoading || IsSaving || founderPicker || playerLotWorkspace) return;
             if (!InCapitalDistrict(capital))
             {
-                lotFeedback.text = "Open the capital’s district to place its Founder’s Building.";
+                SetLotFeedback("Open the capital’s district to place its Founder’s Building.");
                 return;
             }
             offeredFounderPicker = true;
@@ -224,7 +224,7 @@ namespace CityForge.World
             {
                 lotMoveRotation = moving.RotationSteps;
                 placeLotLabel.text = "Cancel move";
-                lotFeedback.text = "Drag the lot to move it · Esc to cancel";
+                SetLotFeedback("Drag the lot to move it · Esc to cancel");
                 SetLotMoveCursor(true);
             }
             RefreshLotFacing();
@@ -277,7 +277,7 @@ namespace CityForge.World
                 if (moving != null && SelectedDistrict >= 0 && ActiveDistrictMembers.Contains(moving.district))
                     SelectDistrictLot(moving);
                 RefreshLotFacing();
-                if (lotFeedback) lotFeedback.text = "";
+                if (lotFeedback) SetLotFeedback("");
             }
             lotPlacementWater = null;
             lotPlacementCamera = null;
@@ -335,6 +335,13 @@ namespace CityForge.World
 
         private void UpdateLotCursor(RegionTown capital)
         {
+            if (Input.GetKeyDown(KeyCode.Tab))
+            {
+                if (movingDistrictLot != null) lotMoveRotation = (lotMoveRotation + 1) % 8;
+                else lotRotation = (lotRotation + 1) % 8;
+                RefreshLotFacing();
+                lotPlacementEvaluated = false;
+            }
             var events = EventSystem.current;
             bool pressed = Input.GetMouseButtonDown(0);
             bool released = Input.GetMouseButtonUp(0);
@@ -421,12 +428,12 @@ namespace CityForge.World
             if (waterfrontGuide) waterfrontGuide.enabled = true;
             if (movingDistrictLot == null)
             {
-                lotFeedback.text = (lotPlacementProblem ?? "Click to place " + lotPlacementDraft.name) + " · Esc to cancel";
+                SetLotFeedback((lotPlacementProblem ?? "Click to place " + lotPlacementDraft.name) + " · Tab to rotate · Esc to cancel");
                 if (pressed && lotPlacementProblem == null) CommitLotPlacement(capital, evaluatedLotPlacement);
                 return;
             }
 
-            lotFeedback.text = (lotPlacementProblem ?? "Release to place the lot") + " · Esc to cancel";
+            SetLotFeedback((lotPlacementProblem ?? "Release to place the lot") + " · Tab to rotate · Esc to cancel");
             PreviewLotMove(lotPlacementProblem == null ? evaluatedLotPlacement : movingDistrictLot);
             if (!released) return;
             if (lotPlacementProblem == null) CommitLotPlacement(capital, evaluatedLotPlacement);
@@ -596,13 +603,14 @@ namespace CityForge.World
                 var movedLot = movingDistrictLot;
                 CancelLotPlacement();
                 RebuildDistrictLots();
-                StartCoroutine(LotPlacementDust(movedLot));
                 selectedLotFeedback.text = "Lot moved. Save the region to keep it.";
                 return;
             }
             record.id = Guid.NewGuid().ToString("N");
             record.definition = LotDefinition.Parse(JsonUtility.ToJson(record.definition));
+            record.authoredElevationVersion = 1;
             PlacedLots.Add(record);
+            RegisterDistrictTownCenter(record);
             ClearLotVegetation(record);
             if (capital != null)
             {
@@ -613,8 +621,8 @@ namespace CityForge.World
                 CancelLotPlacement();
             RebuildDistrictLots();
             StartCoroutine(LotPlacementDust(record));
-            lotFeedback.text = capital != null ? "Founder’s Building placed. Save the region to keep it." :
-                "Lot placed. Save the region to keep it.";
+            SetLotFeedback(capital != null ? "Founder’s Building placed. Save the region to keep it." :
+                "Lot placed. Save the region to keep it.");
         }
 
         private void DrawLotOutline(DistrictLotRecord record)

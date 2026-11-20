@@ -9,6 +9,10 @@ namespace CityForge.World
     {
         public float x,z,radius;
         public int[] districts;
+        public Vector2 rectangleSize;
+        internal bool Contains(Vector2 point) => rectangleSize.x > 0 && rectangleSize.y > 0
+            ? Mathf.Abs(point.x - x) <= rectangleSize.x * .5f && Mathf.Abs(point.y - z) <= rectangleSize.y * .5f
+            : (point - new Vector2(x, z)).sqrMagnitude <= radius * radius;
     }
     public sealed partial class PrototypeRegionView
     {
@@ -17,7 +21,7 @@ namespace CityForge.World
         {
             if(InPlayerLakeClearing(point)||InPlayerChannelClearing(point)||LotClearsForest(point))return true;
             if(ForestAddition(point)!=null||ForestRemovals.Length==0)return false;int district=DistrictAtWorld(new Vector3(point.x,0,point.y));
-            foreach(var stroke in ForestRemovals){if((point-new Vector2(stroke.x,stroke.z)).sqrMagnitude>stroke.radius*stroke.radius)continue;foreach(int member in stroke.districts)if(member==district)return true;}return false;
+            foreach(var stroke in ForestRemovals){if(!stroke.Contains(point))continue;foreach(int member in stroke.districts)if(member==district)return true;}return false;
         }
         internal void RecordForestRemovals(IReadOnlyList<Vector2> points,float radius)
         {
@@ -36,6 +40,9 @@ namespace CityForge.World
             if(strokes==null)return;if(strokes.Length>8192)throw new InvalidDataException("Too many forest removal edits.");
             foreach(var stroke in strokes){
                 if(stroke==null||!float.IsFinite(stroke.x)||!float.IsFinite(stroke.z)||!float.IsFinite(stroke.radius)||stroke.radius<=0||stroke.radius>1000||stroke.districts==null||stroke.districts.Length<1||stroke.districts.Length>4)throw new InvalidDataException("Invalid forest removal edit.");
+                if (!float.IsFinite(stroke.rectangleSize.x) || !float.IsFinite(stroke.rectangleSize.y) ||
+                    stroke.rectangleSize.x < 0 || stroke.rectangleSize.y < 0 || stroke.rectangleSize.x > 65536 || stroke.rectangleSize.y > 65536 ||
+                    ((stroke.rectangleSize.x > 0) != (stroke.rectangleSize.y > 0))) throw new InvalidDataException("Invalid forest removal rectangle.");
                 var unique=new HashSet<int>();foreach(int cell in stroke.districts)if(cell<0||cell>=grid*grid||!unique.Add(cell))throw new InvalidDataException("Invalid forest removal district.");
             }
         }

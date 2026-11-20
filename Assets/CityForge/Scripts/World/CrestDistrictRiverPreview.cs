@@ -95,10 +95,29 @@ namespace CityForge.World
             var clip=WaveHarmonic.Crest._Extensions.AddComponent<ClipLodInput>(clipObject,LodInputMode.Primitive);clip.Primitive=LodInputPrimitive.Quad;clip.Inverted=true;
             clip.Queue=0;
             const int clipSize=1024;var clipPixels=new Color[clipSize*clipSize];
+            bool continuous=RegionalRiverNetwork.HasContinuousChannels(land.View.Data);
+            var first=new int[clipSize];var last=new int[clipSize];
+            for(int z=0;z<clipSize;z++){first[z]=clipSize;last[z]=-1;}
+            if(continuous)foreach(var body in land.View.Data.WaterBodies){
+                if(body.kind==WaterBodyKind.Ocean){
+                    var minimum=((body.Bounds.min-Vector2.one*.5f)*land.View.MapSide-land.Origin+Vector2.one*padding)*(clipSize/clipSide);
+                    var maximum=((body.Bounds.max-Vector2.one*.5f)*land.View.MapSide-land.Origin+Vector2.one*padding)*(clipSize/clipSide);
+                    for(int z=Mathf.Max(0,Mathf.FloorToInt(minimum.y)-2);z<=Mathf.Min(clipSize-1,Mathf.CeilToInt(maximum.y)+2);z++){
+                        first[z]=Mathf.Min(first[z],Mathf.Max(0,Mathf.FloorToInt(minimum.x)-2));last[z]=Mathf.Max(last[z],Mathf.Min(clipSize-1,Mathf.CeilToInt(maximum.x)+2));}
+                    continue;
+                }
+                if(body.playerChannel||body.centerline==null||body.centerline.Length<2)continue;
+                // SignedDistance is fully dry four metres beyond the bank. Include
+                // bilinear padding; all potentially visible samples keep exact queries.
+                PlayerChannelGeometry.RasterRanges(body,land.View.MapSide,land.Origin-Vector2.one*padding,
+                    Vector2.one*(clipSide/clipSize),clipSize,clipSize,4+2*clipSide/clipSize,out var begin,out var end);
+                for(int z=0;z<clipSize;z++){first[z]=Mathf.Min(first[z],begin[z]);last[z]=Mathf.Max(last[z],end[z]);}
+            }
             for(int z=0;z<clipSize;z++)for(int x=0;x<clipSize;x++){
                 var point=land.Origin-Vector2.one*padding+new Vector2((x+.5f)/clipSize,(z+.5f)/clipSize)*clipSide;
                 bool within=point.x>=land.Origin.x+.5f&&point.x<=land.Origin.x+land.Side-.5f&&point.y>=land.Origin.y+.5f&&point.y<=land.Origin.y+land.Side-.5f;
-                if(within&&RegionalRiverNetwork.HasContinuousChannels(land.View.Data)&&land.View.InActiveDistrict(point)){
+                if(continuous&&(x<first[z]||x>last[z])){clipPixels[z*clipSize+x]=Color.white;continue;}
+                if(within&&continuous&&land.View.InActiveDistrict(point)){
                     float d=RegionalRiverNetwork.SignedDistance(land.View.Data,point/land.View.MapSide+Vector2.one*.5f)*land.View.MapSide;
                     float value=Mathf.Clamp01(.5f+d/8f);clipPixels[z*clipSize+x]=new Color(value,value,value,1);
                 }else clipPixels[z*clipSize+x]=within&&ContainsWetPoint(point)?Color.black:Color.white;

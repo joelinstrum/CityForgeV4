@@ -65,7 +65,7 @@ namespace CityForge.World
         void CaptureCoverageGround(float[,] heights){if(playerLakeBaseTerrain)return;playerLakeBaseTerrain=Own(new TerrainData{heightmapResolution=heights.GetLength(0),size=terrainData.size});playerLakeBaseTerrain.SetHeights(0,0,heights);}
         float LakeRoadDistance(Vector2 p){float best=float.PositiveInfinity;for(int i=1;i<Road.Count;i++){var a=Road[i-1];var d=Road[i]-a;float t=d.sqrMagnitude>0?Mathf.Clamp01(Vector2.Dot(p-a,d)/d.sqrMagnitude):0;best=Mathf.Min(best,Vector2.Distance(p,a+d*t));}return best;}
         /// <returns>Empty on success; user-facing validation message otherwise.</returns>
-        public string CreatePlayerLake(IReadOnlyList<Vector2> guide)
+        public string CreatePlayerLake(IReadOnlyList<Vector2> guide,bool marsh=false)
         {
             if(IsRegionOverview||View.IsSaving||View.DistrictLoading)return "Wait for the district to finish loading.";
             if(guide.Count>64)return "Use up to 64 markers for one lake.";
@@ -79,6 +79,7 @@ namespace CityForge.World
                 var a=curve[i];var b=curve[(i+1)%curve.Length];min=Vector2.Min(min,a);max=Vector2.Max(max,a);int steps=Mathf.Max(1,Mathf.CeilToInt(Vector2.Distance(a,b)/4));
                 for(int j=0;j<steps;j++){var p=Vector2.Lerp(a,b,j/(float)steps);string error=Check(p);if(error!=null)return error;float h=Height(p);low=Mathf.Min(low,h);high=Mathf.Max(high,h);}
             }
+            if(marsh&&high-low>2)return "Choose flatter ground for a marsh; the banks span more than 2 m.";
             if(high-low>12)return "Choose flatter ground for a lake; these banks span more than 12 m in height.";
             for(float z=min.y;z<=max.y;z+=8)for(float x=min.x;x<=max.x;x+=8){var p=new Vector2(x,z);if(PointWireGeometry.Contains(curve,p)){string error=Check(p);if(error!=null)return error;}}
             if(low<3.5f)return "Choose higher ground so the pond has room for a basin.";
@@ -86,6 +87,7 @@ namespace CityForge.World
             var outline=new Vector2[curve.Length];for(int i=0;i<outline.Length;i++)outline[i]=curve[i]/View.MapSide+Vector2.one*.5f;
             var body=new RegionWaterBody{id="player-lake-"+Guid.NewGuid().ToString("N"),kind=area<5000?WaterBodyKind.Pond:WaterBodyKind.Lake,outline=outline,hasSurfaceLevel=true,surfaceLevelNormalized=(low-.12f)/terrainData.size.y,appearanceProfile="calm-lake",playerCreated=true,playerDepth=6,playerBankWidth=35,playerOuterBankWidth=14};
             PlayerLakeGeometry.ConfigureApprovedProfile(body,View.MapSide);
+            if(marsh){body.appearanceProfile="player-marsh-v1";body.playerDepth=.55f;body.playerBankWidth=8;body.playerOuterBankWidth=10;}
             var heights=terrainData.GetHeights(0,0,terrainData.heightmapResolution,terrainData.heightmapResolution);CaptureCoverageGround(heights);View.RecordPlayerLake(body);
             PlayerLakeGeometry.Apply(body,heights,Origin,Side,terrainData.size.y,View.MapSide);terrainData.SetHeights(0,0,heights);
             bodyShores.Clear();BuildShoreField();

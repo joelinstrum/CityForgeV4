@@ -25,6 +25,8 @@ namespace CityForge.World
         private static readonly Color TownGold = new(.98f, .86f, .63f);
 
         internal bool TownConstructionVisible { get; private set; }
+        private bool CanOpenCityMenu => SelectedDistrict >= 0 && !DistrictLoading &&
+            Capital is { awaitingFoundersBuilding: false } && PlacedLots.Exists(lot => IsFoundersLot(lot.definition));
         private bool CanBuildTown => SelectedDistrict >= 0 && !DistrictLoading &&
             Capital is { awaitingFoundersBuilding: false } && PlacedLots.Exists(lot => IsFoundersLot(lot.definition)) &&
             Towns.Any(town => ActiveDistrictMembers.Contains(town.DistrictIndex(GridSide)));
@@ -138,12 +140,13 @@ namespace CityForge.World
         private void RefreshTownConstruction()
         {
             if (!townModeSwitch) return;
-            bool available = CanBuildTown;
+            bool available = CanOpenCityMenu;
             if (!available && TownConstructionVisible)
             {
                 TownConstructionVisible = false;
                 CloseTownSection();
             }
+            townModeSwitch.anchoredPosition = new Vector2(0, 64);
             townModeSwitch.gameObject.SetActive(available);
             townToolbar.gameObject.SetActive(available && TownConstructionVisible);
             MarkTownButton(natureModeButton, !TownConstructionVisible);
@@ -152,7 +155,7 @@ namespace CityForge.World
 
         private void SetTownConstruction(bool town)
         {
-            if (TownConstructionVisible == town || (town && !CanBuildTown) || IsSaving) return;
+            if (TownConstructionVisible == town || (town && !CanOpenCityMenu) || IsSaving) return;
             CancelRoadPlacement();
             CancelLotPlacement();
             SelectDistrictLot(null);
@@ -167,6 +170,7 @@ namespace CityForge.World
         private void CloseTownSection()
         {
             CancelTexturePaint();
+            CancelParkPath();
             CancelParkTreeBrush();
             CancelStreetscape();
             SetDetonate(false);
@@ -211,9 +215,17 @@ namespace CityForge.World
             button.image.color = active ? new Color(.48f, .33f, .15f) : new Color(.16f, .17f, .17f);
         }
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        private const float ZoneSelectionHeight = 904f;
+#else
+        private const float ZoneSelectionHeight = 772f;
+#endif
+
         private void ShowTownSection(TownSection section)
         {
-            if (!TownConstructionVisible || !CanBuildTown || IsSaving) return;
+            if (!TownConstructionVisible || !CanOpenCityMenu || IsSaving) return;
+            if (!CanBuildTown && section != TownSection.CivicLots)
+            { ShowDistrictMessage("Place a Town Center from Civics → Government first."); return; }
             CancelRoadPlacement();
             if (section != TownSection.Transport) lastRepaveSurface = null;
             if (section == TownSection.Zones && townSection == section && townPanel && !townPanel.gameObject.activeSelf)
@@ -231,6 +243,12 @@ namespace CityForge.World
             var category = townCategories[(int)section - 1];
             MarkTownButton(category, true);
 
+            if (section == TownSection.CivicLots)
+            {
+                BuildCivicSelectionModal();
+                return;
+            }
+
             float width = section switch
             {
                 TownSection.Transport => 1120,
@@ -238,8 +256,9 @@ namespace CityForge.World
                 TownSection.Parks => 820,
                 _ => 560
             };
-            townPanel = FounderRect(townToolbar, "Town tool panel", new Vector2(0, section == TownSection.Zones ? 120 : 92), new Vector2(width, section == TownSection.Zones ? 684 : section == TownSection.Parks ? 376 : 276));
+            townPanel = FounderRect(townToolbar, "Town tool panel", new Vector2(0, section == TownSection.Zones ? 120 : 92), new Vector2(width, section == TownSection.Zones ? ZoneSelectionHeight : section == TownSection.Parks ? 376 : 276));
             townPanel.anchorMin = townPanel.anchorMax = townPanel.pivot = new Vector2(.5f, 0);
+            if(section==TownSection.Zones){townPanel.SetParent(townToolbar.parent,false);townPanel.anchorMin=townPanel.anchorMax=townPanel.pivot=Vector2.one*.5f;townPanel.anchoredPosition=Vector2.zero;}
             if (section != TownSection.Zones) StyleTownPanel(townPanel, TownPanelColor);
             if (section != TownSection.Transport && section != TownSection.Zones)
                 FounderText(townPanel, category.name, new Vector2(0, section == TownSection.Parks ? 163 : 113), new Vector2(440, 34), 25).color = TownGold;
@@ -253,9 +272,8 @@ namespace CityForge.World
                 case TownSection.Zones:
                     ShowZoning();
                     break;
-                case TownSection.CivicLots:
                 case TownSection.Parks:
-                    ShowTownLots(section == TownSection.Parks);
+                    ShowTownLots(true);
                     break;
                 case TownSection.TownInfo:
                     var towns = TownsInDistrict(SelectedDistrict);
@@ -808,6 +826,15 @@ namespace CityForge.World
 
         private void CloseTransportModal()
         {
+            if (civicThumbnails != null)
+            {
+                civicThumbnails.Dispose();
+                civicThumbnails = null;
+                if (civicCamera) civicCamera.enabled = civicCameraWasEnabled;
+                civicCamera = null;
+                MarkTownButton(townCategories[2], false);
+                if (townSection == TownSection.CivicLots) townSection = TownSection.None;
+            }
             industryThumbnails?.Dispose();
             industryThumbnails = null;
             repaveTarget = null;
@@ -829,6 +856,7 @@ namespace CityForge.World
             }
             if (parks && !agriculture)
             {
+                TownButton(townPanel, lotFont, "Paths", 440, -9, 145, OpenParkPaths);
                 var paint = TownButton(townPanel, lotFont, "▧ Texturize", 610, -9, 145, OpenTexturize);
             }
             if (parks)

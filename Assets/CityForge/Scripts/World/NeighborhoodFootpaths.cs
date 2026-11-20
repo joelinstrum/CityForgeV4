@@ -15,15 +15,15 @@ namespace CityForge.World
 
         internal static bool Eligible(LotDefinition lot) => !lot.IsWaterfront &&
             lot.zoningLayout.wealth == LotWealth.Low &&
-            lot.zoningLayout.zone is TownZone.Residential2 or TownZone.Residential3;
+            lot.zoningLayout.zone is TownZone.Residential1 or TownZone.Residential2 or TownZone.Residential3;
 
-        internal static List<Frontage> Collect(IEnumerable<DistrictLotRecord> lots)
+        internal static List<Frontage> Collect(IEnumerable<DistrictLotRecord> lots, bool commercial = false)
         {
             var result = new List<Frontage>();
             foreach (var record in lots)
             {
                 var lot = record.definition;
-                if (!Eligible(lot)) continue;
+                if (commercial ? lot.IsWaterfront || lot.zoningLayout.zone is not (TownZone.Commercial1 or TownZone.Commercial2 or TownZone.Commercial3) : !Eligible(lot)) continue;
                 int facing = (int)lot.zoningLayout.frontage;
                 var aligned = LotGroundOverlay.QuarterTurn(lot.LandBounds, -facing);
                 var rotation = Quaternion.Euler(0, record.FacingDegrees, 0);

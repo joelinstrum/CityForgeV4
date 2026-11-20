@@ -79,7 +79,7 @@ namespace CityForge.UI
             hint ??= new GUIStyle(GUI.skin.box) { fontSize = 16, alignment = TextAnchor.MiddleCenter };
             GUI.Box(new Rect((Screen.width - 430) * .5f, 16, 430, 34),
                 target == null ? "Remove Water · Click a player-added water body · Esc to cancel"
-                    : $"Click to remove this {(target.isStream ? "stream" : target.playerChannel ? "river" : "lake or pond")} · Esc to cancel", hint);
+                    : $"Click to remove this {(target.appearanceProfile == "player-canal-v1" ? "canal" : target.appearanceProfile == "player-marsh-v1" ? "marsh" : target.isStream ? "stream" : target.playerChannel ? "river" : "lake or pond")} · Esc to cancel", hint);
             if (!showCursor) return;
             removalCursor ??= new GUIStyle(GUI.skin.label) { fontSize = 28, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
             var pointer = Event.current.mousePosition;

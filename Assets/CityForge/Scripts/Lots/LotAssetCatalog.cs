@@ -8,6 +8,7 @@ namespace CityForge.Lots
     [Serializable]
     public sealed class LotAssetCatalogEntry
     {
+        public LotRowGeometry rowGeometry;
         public string id;
         public string label;
         public string category;
@@ -20,6 +21,7 @@ namespace CityForge.Lots
         public string idleState;
         internal bool CanPreviewGrowable(TownZone zone, LotWealth wealth, string era) =>
             prefab && category == "Buildings" && growableZone == zone && growableWealth == wealth &&
+            ResidentialWealthPolicy.Allows(zone, wealth, era) &&
             (string.IsNullOrEmpty(era) || eraId == era);
 
         public bool IsCharacter => category == "Characters";
@@ -193,11 +195,12 @@ namespace CityForge.Lots
             }
             if (asset.id == "corn-garden" || asset.id == "wheat-garden")
                 AddGardenSoil(wrapper.transform);
-            wrapper.transform.localPosition = new Vector3(item.position.x, 0f, item.position.y);
+            wrapper.transform.localPosition = new Vector3(item.position.x, item.elevation, item.position.y);
             wrapper.transform.localRotation = Quaternion.Euler(0f, item.yaw, 0f);
             wrapper.transform.localScale = Vector3.one * (item.scale * PlaceableTreeScale(asset));
             if (districtCamera && !asset.IsCharacter)
                 DistrictBuildingDetail.Attach(wrapper.transform, model.transform, asset, districtCamera, season);
+            if(asset.id=="v3-building-lumber-mill")WaterMillWheel.Attach(wrapper);
             if (asset.category == "Trees")
                 TintPlaceableTree(wrapper, asset.id, season);
             if (item.vehicleScript.behavior != LotVehicleBehavior.None && item.vehicleScript.ResourceTask && VehicleProfile.Find(asset.id) is { } cargoProfile)
@@ -246,6 +249,7 @@ namespace CityForge.Lots
 
         private static float PlaceableTreeScale(LotAssetCatalogEntry asset)
         {
+            if(asset.id=="v3-building-lumber-mill")return 1.3f;
             if (asset.category != "Trees" || !asset.prefab) return 1f;
             if (!TreeDimensions.TryGetValue(asset.prefab, out var dimensions))
             {
@@ -345,13 +349,23 @@ namespace CityForge.Lots
 
         public static bool Fits(LotDefinition lot, LotObjectDefinition item, LotAssetCatalogEntry asset)
         {
+            if (asset.category == "Trees")
+            {
+                var half = lot.Size * .5f;
+                return Mathf.Abs(item.position.x) <= half.x + .001f && Mathf.Abs(item.position.y) <= half.y + .001f;
+            }
             return FitsPlacementBounds(lot, Footprint(item, asset));
+        }
+
+        internal static Vector2 ObjectFootprintSize(LotObjectDefinition item, LotAssetCatalogEntry asset, Vector2? footprintOverride = null)
+        {
+            return (item.fenceLength > 0 && asset.fenceSpan > 0
+                ? new Vector2(item.fenceLength + asset.fencePostWidth, Mathf.Max(asset.fenceDepth, asset.fencePostWidth)) : (footprintOverride ?? PlacementFootprint(asset))) * (item.scale * PlaceableTreeScale(asset));
         }
 
         public static Rect Footprint(LotObjectDefinition item, LotAssetCatalogEntry asset, Vector2? footprintOverride = null)
         {
-            var size = (item.fenceLength > 0 && asset.fenceSpan > 0
-                ? new Vector2(item.fenceLength + asset.fencePostWidth, Mathf.Max(asset.fenceDepth, asset.fencePostWidth)) : (footprintOverride ?? PlacementFootprint(asset))) * (item.scale * PlaceableTreeScale(asset));
+            var size = ObjectFootprintSize(item, asset, footprintOverride);
             var angle = item.yaw * Mathf.Deg2Rad;
             var c = Mathf.Abs(Mathf.Cos(angle));
             var s = Mathf.Abs(Mathf.Sin(angle));

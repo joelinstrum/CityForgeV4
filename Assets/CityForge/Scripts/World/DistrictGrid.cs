@@ -96,6 +96,21 @@ namespace CityForge.World
                 renderer.receiveShadows = false;
             }
 
+            var parcels = CollectGridParcels();
+            var buckets = new Dictionary<Vector2Int, List<int>>();
+            for (int i = 0; i < parcels.Count; i++)
+            {
+                var bounds = parcels[i].Bounds;
+                var min = DistrictGridCell(bounds.min); var max = DistrictGridCell(bounds.max);
+                for (int z = min.y; z <= max.y; z++)
+                for (int x = min.x; x <= max.x; x++)
+                {
+                    var key = new Vector2Int(x, z);
+                    if (!buckets.TryGetValue(key, out var list)) buckets.Add(key, list = new List<int>());
+                    list.Add(i);
+                }
+            }
+            var intervals = new List<Vector2>();
             var vertices = new List<Vector3>();
             var indices = new List<int>();
             const float spacing = DistrictGridCellMeters;
@@ -115,6 +130,22 @@ namespace CityForge.World
                 }
             }
 
+            // Cardinal parcel edges already coincide with surviving lattice edges.
+            // Rotated cells need their own edges, in this same grid mesh/material.
+            var edges = new HashSet<(Vector2Int, Vector2Int)>();
+            foreach (var parcel in parcels)
+                if (parcel.Diagonal)
+                    for (int side = 0; side < 4; side++)
+                    {
+                        var a = parcel.Corner(side); var b = parcel.Corner((side + 1) % 4);
+                        var ka = Vector2Int.RoundToInt(a * 1000); var kb = Vector2Int.RoundToInt(b * 1000);
+                        if (!edges.Add((ka, kb))) continue;
+                        edges.Add((kb, ka));
+                        int steps = Mathf.Max(1, Mathf.CeilToInt(Vector2.Distance(a, b) / spacing));
+                        for (int step = 0; step < steps; step++)
+                            AddSegment(Vector2.Lerp(a, b, (float)step / steps), Vector2.Lerp(a, b, (float)(step + 1) / steps));
+                    }
+
             var mesh = districtGrid.sharedMesh;
             mesh.Clear();
             mesh.SetVertices(vertices);
@@ -123,15 +154,30 @@ namespace CityForge.World
 
             void AddLine(Vector2 start, Vector2 direction)
             {
-                for (int sample = 0; sample <= cells; sample++)
+                for (int sample = 0; sample < cells; sample++)
                 {
-                    var point = start + direction * (sample * spacing);
-                    int index = vertices.Count;
-                    vertices.Add(new Vector3(point.x, LotHeight(point) + .24f, point.y));
-                    if (sample == 0) continue;
-                    indices.Add(index - 1);
-                    indices.Add(index);
+                    var a = start + direction * (sample * spacing);
+                    var b = a + direction * spacing;
+                    intervals.Clear();
+                    if (buckets.TryGetValue(DistrictGridCell((a + b) * .5f), out var nearby))
+                        foreach (int index in nearby)
+                            if (parcels[index].InteriorInterval(a, b, out var interval)) intervals.Add(interval);
+                    intervals.Sort((x, y) => x.x.CompareTo(y.x));
+                    float cursor = 0;
+                    foreach (var interval in intervals)
+                    {
+                        if (interval.x > cursor + .00001f) AddSegment(Vector2.Lerp(a, b, cursor), Vector2.Lerp(a, b, interval.x));
+                        cursor = Mathf.Max(cursor, interval.y);
+                    }
+                    if (cursor < .99999f) AddSegment(Vector2.Lerp(a, b, cursor), b);
                 }
+            }
+            void AddSegment(Vector2 a, Vector2 b)
+            {
+                int index = vertices.Count;
+                vertices.Add(new Vector3(a.x, LotHeight(a) + .24f, a.y));
+                vertices.Add(new Vector3(b.x, LotHeight(b) + .24f, b.y));
+                indices.Add(index); indices.Add(index + 1);
             }
         }
     }

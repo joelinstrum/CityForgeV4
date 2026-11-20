@@ -50,6 +50,11 @@ namespace CityForge.World
                 if (sampledDistrict != region.SelectedDistrict)
                     BuildSkyline();
                 material.SetFloat(Visibility, visibility);
+                float night=region.TimeOfDay==RegionTimeOfDay.Night?1:region.TimeOfDay==RegionTimeOfDay.Evening?.5f:0;
+                float hour=region.CurrentClockHour;
+                float stars=hour>=20?Mathf.SmoothStep(0,1,Mathf.InverseLerp(20,21,hour)):hour<6?1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(4,6,hour)):0;
+                material.SetFloat("_Night",Mathf.Max(night,stars));
+                material.SetFloat("_StarVisibility",stars);material.SetFloat("_Hour",hour);
             }
 
             bool visible = visibility > 0f;

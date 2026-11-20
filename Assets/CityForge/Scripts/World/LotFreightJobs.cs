@@ -74,7 +74,8 @@ namespace CityForge.World
 
         private WildlifeWaterAccess freightWaterAccess;
         private MeadowDistrictLandscape freightWaterLandscape;
-        internal bool FreightClear(Vector2 from, Vector2 to, float clearance = .9f)
+        internal bool FreightClear(Vector2 from, Vector2 to, float clearance = .9f) => ActorRouteClear(from, to, clearance, false);
+        private bool ActorRouteClear(Vector2 from, Vector2 to, float clearance, bool orientedObjects)
         {
             var land = ApprovedDistrict;
             if (!land || !land.DisplayTerrain) return false;
@@ -86,7 +87,7 @@ namespace CityForge.World
             {
                 var p = Vector2.Lerp(from, to, (float)i / steps);
                 float height = land.Height(p);
-                if (!water.Dry(p, clearance) || height < SeaLevel + .1f || Mathf.Abs(height - previous) > .35f || LumberjackObstacle(p, clearance)) return false;
+                if (!water.Dry(p, clearance) || height < SeaLevel + .1f || Mathf.Abs(height - previous) > .35f || (orientedObjects ? OrientedWorkObstacle(p, clearance) : LumberjackObstacle(p, clearance))) return false;
                 previous = height;
             }
             return land.TimberRouteClear(from, to);

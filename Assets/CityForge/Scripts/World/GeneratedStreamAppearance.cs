@@ -11,7 +11,9 @@ namespace CityForge.World
         struct Batch {public Mesh mesh;public Material material;public Matrix4x4[] instances;public int submesh;public Bounds bounds;}
         readonly Dictionary<Material,Material> shrubMaterials=new();
         Material ShrubMaterial(Material source){if(!shrubMaterials.TryGetValue(source,out var material))shrubMaterials[source]=material=new Material(source){enableInstancing=true};return material;}
-        readonly List<Batch> batches=new();readonly List<Vector3> clusterSeats=new();
+        readonly List<Batch> batches=new();
+        readonly List<Batch> wideBatches=new(), farBatches=new();
+        CityForge.CameraSystem.CityForgeCameraController cameraRig;readonly List<Vector3> clusterSeats=new();
         MeadowDistrictLandscape playerLand;RegionWaterBody playerBody;RegionSeason playerSeason;
         public int PatchCount {get;private set;}
         public int StoneCount {get;private set;}
@@ -46,16 +48,24 @@ namespace CityForge.World
         }
         public static Vector2 Cover(MeadowDistrictLandscape land,Vector2 world,float distance,Vector2 studyPoint)
             =>StreamBankBlend.VariedCover(land,world,distance,studyPoint);
-        const float BatchCellSize = 48f;
 
         void AddBatches(Mesh mesh, Material material, int submesh, List<Matrix4x4> matrices)
         {
+            // Keep the approved near bank unchanged. Subpixel stones are omitted
+            // from coarser, wider batches; these do not cast tiny distant shadows.
+            AddTier(batches,48f,0);
+            AddTier(wideBatches,144f,.45f);
+            AddTier(farBatches,192f,.8f);
+            void AddTier(List<Batch> target,float cellSize,float minimumDiameter)
+            {
             // Each cell can be culled independently in camera and shadow passes.
             var cells = new Dictionary<Vector2Int, List<Matrix4x4>>();
             foreach (var matrix in matrices)
             {
                 var center = matrix.MultiplyPoint3x4(mesh.bounds.center);
-                var cell = Vector2Int.FloorToInt(new Vector2(center.x, center.z) / BatchCellSize);
+                var transformed=InstanceBounds(mesh.bounds,matrix);
+                if(Mathf.Max(transformed.size.x,transformed.size.z)<minimumDiameter)continue;
+                var cell = Vector2Int.FloorToInt(new Vector2(center.x, center.z) / cellSize);
                 if (!cells.TryGetValue(cell, out var instances))
                     cells[cell] = instances = new List<Matrix4x4>();
                 instances.Add(matrix);
@@ -71,9 +81,10 @@ namespace CityForge.World
                     bounds.Encapsulate(InstanceBounds(mesh.bounds, local[i]));
                 // Allow room for animated shrub foliage.
                 bounds.Expand(1f);
-                batches.Add(new Batch { mesh = mesh, material = material, submesh = submesh,
+                target.Add(new Batch { mesh = mesh, material = material, submesh = submesh,
                     instances = local, bounds = bounds });
             }
+        }
         }
 
         static Bounds InstanceBounds(Bounds meshBounds, Matrix4x4 transform)
@@ -90,6 +101,7 @@ namespace CityForge.World
         }
         public IEnumerator InitializeStages(MeadowDistrictLandscape land,RegionWaterBody playerRoute=null)
         {
+            cameraRig=land.View.GetComponentInChildren<CityForge.CameraSystem.CityForgeCameraController>();
             if(playerRoute!=null){playerLand=land;playerBody=playerRoute;playerSeason=land.View.VisualSeason;}
             var routes=new List<RegionWaterBody>();var rect=new Rect(land.Origin/land.View.MapSide+Vector2.one*.5f,Vector2.one*land.Side/land.View.MapSide);
             if(playerRoute!=null)routes.Add(playerRoute);
@@ -119,7 +131,7 @@ namespace CityForge.World
                 // Retain long irregular gaps between scanned patches, as in Pass17.
                 for(float station=7;station<length-7;station+=6.3f){
                     float s=station+(R()-.5f)*2,sign=R()<.5f?-1:1,scale=Mathf.Lerp(.60f,.98f,R()),heading=R()*360;
-                    Frame(s,out var p,out var normal);p+=normal*sign*half*.70f;
+                    Frame(s,out var p,out var normal);if(body.playerChannel)half=PlayerStreamWidth.AtStation(body,s/land.View.MapSide)*land.View.MapSide;p+=normal*sign*half*.70f;
                     if(!Usable(p)||Mathf.Sin(s*.055f)+.55f*Mathf.Sin(s*.137f)<-.2f)continue;
                     float radius=patches.meshes[0].bounds.extents.magnitude;
                     scale=Mathf.Min(scale,half*.55f/Mathf.Max(.01f,radius));radius*=scale;if(!Fits(p,radius))continue;
@@ -127,19 +139,56 @@ namespace CityForge.World
                 }
                 for(float station=6;station<length-6;station+=1.15f){
                     for(int j=0;j<3;j++){
+                        if(body.playerChannel)half=PlayerStreamWidth.AtStation(body,station/land.View.MapSide)*land.View.MapSide;
                         float s=station+(R()-.5f)*1.15f,across=(R()*2-1)*half*.90f,band=R();
                         float diameter=band<.62f?Mathf.Lerp(.16f,.40f,R()):band<.92f?Mathf.Lerp(.40f,.75f,R()):Mathf.Lerp(.85f,1.5f,R());
                         int type=random.Next(10);float heading=R()*360;Frame(s,out var p,out var normal);p+=normal*across;if(!Usable(p)||!Fits(p,diameter))continue;
                         bool overlap=false;foreach(var seat in clusterSeats)if(Vector2.Distance(p,new Vector2(seat.x,seat.y))<seat.z+diameter*.71f+.12f){overlap=true;break;}if(overlap)continue;
                         float ground=land.Height(p);var uv=p/land.View.MapSide+Vector2.one*.5f;
                         if(ground>WaterLevel(p)-.04f)continue;
+                        if(body.playerChannel&&diameter<.40f)continue;
                         float y=ground-diameter*.12f;stoneMatrices[type].Add(Matrix4x4.TRS(new Vector3(p.x,y,p.y),Quaternion.Euler(0,heading,0),Vector3.one*diameter));StoneCount++;
                     }
                     if(((int)(station/1.15f))%128==0)yield return null;
                 }
+                // Small stones define the waterline without repainting the grass.
+                if(body.playerChannel){
+                    for(float station=3;station<length-3;station+=.55f)for(int sign=-1;sign<=1;sign+=2){
+                        float s=station+(R()-.5f)*.5f;Frame(s,out var p,out var normal);
+                        float width=PlayerStreamWidth.AtStation(body,s/land.View.MapSide)*land.View.MapSide;
+                        p+=normal*sign*(width*Mathf.Lerp(.91f,1.025f,R()));
+                        if(R()<.25f||!Usable(p)||!Fits(p,.3f))continue;
+                        float diameter=Mathf.Lerp(.14f,.34f,R());int type=random.Next(10);
+                        float heading=R()*360; // Keep random sampling stable for the larger rocks and bank plants.
+                        // Tiny pebbles are photographic bed texture rather than thousands of meshes.
+                    }
+                    for(float station=5;station<length-5;station+=6.8f){
+                        float s=station+(R()-.5f)*3;Frame(s,out var p,out var normal);
+                        float width=PlayerStreamWidth.AtStation(body,s/land.View.MapSide)*land.View.MapSide;
+                        p+=normal*(R()<.5f?-1:1)*width*Mathf.Lerp(.86f,1.03f,R());
+                        if(!Usable(p)||!Fits(p,.65f))continue;
+                        float diameter=Mathf.Lerp(.48f,.95f,R());int type=random.Next(10);
+                        stoneMatrices[type].Add(Matrix4x4.TRS(new Vector3(p.x,land.Height(p)-diameter*.2f,p.y),Quaternion.Euler(0,R()*360,0),Vector3.one*diameter));StoneCount++;
+                    }
+                    // Existing photographic meadow grass forms small seeded bank clumps.
+                    if(land.SmallPlantsEnabled&&land.Baseline.plants?.Length>=2){
+                        for(float station=7;station<length-7;station+=8.5f){
+                            float sign=R()<.5f?-1:1;Frame(station+(R()-.5f)*3,out var center,out var normal);
+                            float width=PlayerStreamWidth.AtStation(body,station/land.View.MapSide)*land.View.MapSide;
+                            center+=normal*sign*(width+.35f);
+                            for(int tuft=0;tuft<5;tuft++){
+                                var p=center+new Vector2(R()-.5f,R()-.5f)*.85f;
+                                if(!Usable(p)||!Fits(p,.6f)||land.Height(p)<WaterLevel(p)-.05f)continue;
+                                var type=land.Baseline.plants[random.Next(2)];float scale=Mathf.Lerp(1.4f,1.9f,R());
+                                var pose=Matrix4x4.TRS(new Vector3(p.x,land.Height(p)-.025f,p.y),Quaternion.Euler(0,R()*360,0),Vector3.one*scale);
+                                foreach(var part in type.pieces){var key=(part.mesh,ShrubMaterial(part.material),part.submesh);if(!shrubBatches.TryGetValue(key,out var matrices))shrubBatches[key]=matrices=new List<Matrix4x4>();matrices.Add(pose*part.local);}
+                            }
+                        }
+                    }
+                }
                 for(float station=14;station<length-14;station+=11){
                     float sign=R()<.5f?-1:1,offset=Mathf.Lerp(-.2f,1.7f,R()),scale=Mathf.Lerp(.5f,.85f,R()),rotation=R()*Mathf.PI*2;int type=shrubTypes.Count>0?shrubTypes[random.Next(shrubTypes.Count)]:-1;
-                    Frame(station,out var p,out var normal);p+=normal*sign*(half+offset);if(type<0||!Usable(p))continue;
+                    Frame(station,out var p,out var normal);if(body.playerChannel)half=PlayerStreamWidth.AtStation(body,station/land.View.MapSide)*land.View.MapSide;p+=normal*sign*(half+offset);if(type<0||!Usable(p))continue;
                     float h=land.Height(p);var uv=p/land.View.MapSide+Vector2.one*.5f;if(h<WaterLevel(p)-.12f)continue;
                     var position=new Vector3((p.x-land.Origin.x)/land.Side,(h-.06f)/land.DisplayTerrain.terrainData.size.y,(p.y-land.Origin.y)/land.Side);
                     if(body.playerChannel){
@@ -165,9 +214,11 @@ namespace CityForge.World
         void OnDestroy(){foreach(var material in shrubMaterials.Values)Destroy(material);}
         void LateUpdate(){
             if(playerLand&&playerLand.View.VisualSeason!=playerSeason){
-                batches.Clear();clusterSeats.Clear();foreach(var material in shrubMaterials.Values)Destroy(material);shrubMaterials.Clear();PatchCount=StoneCount=ShrubCount=0;
+                batches.Clear();wideBatches.Clear();farBatches.Clear();clusterSeats.Clear();foreach(var material in shrubMaterials.Values)Destroy(material);shrubMaterials.Clear();PatchCount=StoneCount=ShrubCount=0;
                 var setup=InitializeStages(playerLand,playerBody);while(setup.MoveNext()){}(setup as IDisposable)?.Dispose();
             }
-            foreach(var batch in batches){var parameters=new RenderParams(batch.material){worldBounds=batch.bounds,shadowCastingMode=ShadowCastingMode.On,receiveShadows=true};Graphics.RenderMeshInstanced(parameters,batch.mesh,batch.submesh,batch.instances);}}
+            var tier=cameraRig?cameraRig.ZoomLevel:0;
+            var visible=tier>=5?farBatches:tier==4?wideBatches:batches;
+            foreach(var batch in visible){var parameters=new RenderParams(batch.material){worldBounds=batch.bounds,shadowCastingMode=tier>=4?ShadowCastingMode.Off:ShadowCastingMode.On,receiveShadows=true};Graphics.RenderMeshInstanced(parameters,batch.mesh,batch.submesh,batch.instances);}}
     }
 }

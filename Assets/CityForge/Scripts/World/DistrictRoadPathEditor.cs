@@ -81,6 +81,7 @@ namespace CityForge.World
         {
             if (showRoadPaths == visible) return;
             showRoadPaths = visible;
+            if(streetJunctionRoot)streetJunctionRoot.gameObject.SetActive(!visible);
             SelectRoadPoint(null, -1);
             foreach (var pair in districtRoadMeshes)
                 pair.Value.GetComponent<MeshRenderer>().enabled = !visible;

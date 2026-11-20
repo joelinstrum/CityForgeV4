@@ -220,7 +220,7 @@ namespace CityForge.World
         {
             if (!road.curved) return road.points;
             var rounded = new List<Vector2>();
-            LotPathSurface.RoundCorners(road.points, null, road.closed, road.width, rounded);
+            LotPathSurface.RoundCorners(road.points, null, road.closed, road.width, rounded, road.junctionCorners);
             return rounded;
         }
 
