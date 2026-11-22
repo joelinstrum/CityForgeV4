@@ -20,7 +20,7 @@ namespace CityForge.World
             [Range(.05f,2f)] public float albedoScale = 1f;
         }
 
-        [Tooltip("Meadow, dry grass, woodland, moist grass, disturbed soil, rocky ground. An empty meadow slot uses the existing terrain grass.")]
+        [Tooltip("Meadow, dry grass, woodland, reserved (retired wet grass), disturbed soil, rocky ground. An empty meadow slot uses the existing terrain grass.")]
         public Surface[] surfaces = new Surface[6];
     }
 }

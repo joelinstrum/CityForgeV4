@@ -8,8 +8,8 @@ public sealed partial class MeadowDistrictLandscape {
  var root=Instantiate(Baseline.waterTemplate,holder.transform);root.SetActive(false);root.transform.position=Vector3.up*View.SeaLevel;
  Water=root.GetComponent<WaterRenderer>();Water.Viewer=View.GetComponentInChildren<Camera>();Water.Viewpoint=Water.Viewer.transform;
  Water.AnimatedWavesLod.Enabled=true;Water.DynamicWavesLod.Enabled=false;Water.FoamLod.Enabled=!calmHarbor||harborSwash;Water.FlowLod.Enabled=false;
- var surf=Own(ScriptableObject.CreateInstance<FoamLodSettings>());surf.name="Coastal breaking surf";surf.ShorelineFoamMaximumDepth=1.8f;surf.ShorelineFoamStrength=.12f;surf.ShorelineFoamPriming=0;surf.FoamFadeRate=1.5f;// Include smaller offshore crests in the foam simulation. Shore surf uses its own inputs.
- surf.WaveFoamCoverage=.70f;surf.WaveFoamStrength=.85f;surf.FilterWaves=1;
+ var surf=Own(ScriptableObject.CreateInstance<FoamLodSettings>());surf.name="Coastal breaking surf";surf.ShorelineFoamMaximumDepth=1.8f;surf.ShorelineFoamStrength=.035f;surf.ShorelineFoamPriming=0;surf.FoamFadeRate=1.5f;// Include smaller offshore crests in the foam simulation. Shore surf uses its own inputs.
+ surf.WaveFoamCoverage=.70f;surf.WaveFoamStrength=.06f;surf.FilterWaves=1;
  if(harborSwash){surf.ShorelineFoamStrength=0;surf.WaveFoamStrength=.04f;}
  Water.FoamLod.Settings=surf;
  Water.DepthLod.Enabled=true;Water.DepthLod.Resolution=256;Water.ShadowLod.Enabled=false;Water.LevelLod.Enabled=false;Water.AlbedoLod.Enabled=false;Water.AbsorptionLod.Enabled=false;
@@ -60,7 +60,7 @@ public sealed partial class MeadowDistrictLandscape {
  var levels=new GameObject("Coastal river levels and foam limit");levels.transform.SetParent(holder.transform,false);levels.AddComponent<GroundFollowingWaterLevels>().Initialize(this,Water,View.SeaLevel,groundFollowing,!calmHarbor||harborSwash);
  }
 
- var mat=Water.Surface.Material;mat.SetFloat("_Crest_FoamEnabled",calmHarbor&&!harborSwash?0:1);mat.SetTexture("_Crest_FoamTexture",Resources.Load<Texture2D>("Coasts/CoastalFoam"));mat.SetFloat("_Crest_FoamFeather",.65f);mat.SetFloat("_Crest_FoamScale",5);mat.SetFloat("_Crest_FoamIntensityAlbedo",1);mat.SetFloat("_Crest_PlanarReflectionsEnabled",1);mat.SetFloat("_Crest_PlanarReflectionsApplySmoothness",1);mat.SetFloat("_Crest_Smoothness",.8f);mat.SetFloat("_Crest_SmoothnessFar",.8f);mat.SetFloat("_Crest_PlanarReflectionsIntensity",.65f);
+ var mat=Water.Surface.Material;mat.SetFloat("_Crest_FoamEnabled",calmHarbor&&!harborSwash?0:1);mat.SetTexture("_Crest_FoamTexture",Resources.Load<Texture2D>("Coasts/CoastalFoam"));mat.SetFloat("_Crest_FoamFeather",.65f);mat.SetFloat("_Crest_FoamScale",5);mat.SetFloat("_Crest_FoamIntensityAlbedo",.18f);mat.SetFloat("_Crest_PlanarReflectionsEnabled",1);mat.SetFloat("_Crest_PlanarReflectionsApplySmoothness",1);mat.SetFloat("_Crest_Smoothness",.8f);mat.SetFloat("_Crest_SmoothnessFar",.8f);mat.SetFloat("_Crest_PlanarReflectionsIntensity",.65f);
  if(Baseline.fftTemplate){var go=Instantiate(Baseline.fftTemplate,root.transform);go.transform.position=Vector3.up*View.SeaLevel;var fft=go.GetComponent<ShapeFFT>();fft.Weight=harborSwash?.40f:calmHarbor?.62f:.55f;fft.OverrideGlobalWindSpeed=true;fft.WindSpeed=calmHarbor?23:18;fft.OverrideGlobalWindDirection=true;fft.WaveDirectionHeadingAngle=0;fft.OverrideGlobalWindTurbulence=true;fft.WindTurbulence=.015f;fft.WindAlignment=.95f;}
  var swellObject=new GameObject(calmHarbor?"Harbor wind chop":"Incoming coastal swell");
  swellObject.transform.SetParent(root.transform,false);
@@ -80,11 +80,12 @@ public sealed partial class MeadowDistrictLandscape {
  var swash=new GameObject("Coastal swash trial");swash.transform.SetParent(holder.transform,false);swash.AddComponent<CoastalShorelineSwash>().Initialize(this);
  }else if(View.Coastline)BuildIncomingSurf(holder.transform);else if(!calmHarbor||harborSwash)
  {
-     var shoreward=BuildOceanOutlineSurf(holder.transform,harborSwash?.68f:2.8f);
+     var shoreward=BuildOceanOutlineSurf(holder.transform,harborSwash?.10f:.22f);
      if(harborSwash&&shoreward.sqrMagnitude>1f)
          swell.WaveDirectionHeadingAngle=Mathf.Atan2(shoreward.y,shoreward.x)*Mathf.Rad2Deg;
  }
  CoastalWaterPresentation.ApplyClimate(mat,View.Climate);
+ CoastalWaterPresentation.ApplyShoreClarity(mat,View.Climate);
  if(calmHarbor){
  mat.SetFloat("_Crest_NormalMapStrength",.055f);
  mat.SetFloat("_Crest_NormalMapScrollSpeed",.35f);

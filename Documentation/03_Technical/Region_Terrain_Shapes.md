@@ -1,3 +1,17 @@
+## One-metre native banks and textured shore transitions — November22,2026
+
+New recipes default to version13: coastal dry land starts1m above the actual sea
+level, and native channel records persist bankClearanceMeters1. Fixed channels use
+that shoulder height; ground-following water lies1m below the original ground.
+Rounded dry estuary banks keep the clearance. Tropical sea30m remains authoritative.
+Missing/zero body metadata preserves the original .08m fixed and .20m graded bank
+profiles. Opening saved maps never regenerates or raises their heightfield.
+
+Edited shore distances interpolate their signed grid. A narrow5–7m bank blends
+existing dirt/sand into detailed grass, and native beach transitions begin fading
+at the shoreline. No new textures or retired wet-grass surface. This changes shore
+presentation on existing maps without changing their heights or manual targets.
+
 ## River & Bay
 
 River & Bay appends terrain shape ID 8. A seeded tidal river crosses the mainland and meets a south-facing bay with three irregular islands. The bay uses the existing ocean outline and hole format. The main river and its tributaries use the same water datum as the bay. Rivers and Streams add feeders, and Topography still controls the uplands. Grading near the main channel creates low riverfront land that blends back into the regional terrain.

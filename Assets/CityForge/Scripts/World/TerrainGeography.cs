@@ -9,7 +9,6 @@ namespace CityForge.World
     internal sealed class TerrainGeography : MonoBehaviour
     {
         const int Chunk = 16;
-        const float MoistReach = 44f;
         MeadowDistrictLandscape land;
         Terrain terrain;
         Texture2D first, second;
@@ -17,7 +16,6 @@ namespace CityForge.World
         float step;
         bool ready, diagnostic, enabledBlend = true;
         readonly HashSet<Vector2Int> dirty = new();
-        readonly List<(RegionWaterBody Body, Rect Bounds, List<Vector2[]> Contours)> freshwater = new();
         readonly Dictionary<Vector2Int, List<Rect>> settlements = new();
         readonly HashSet<Rect> previousLots = new();
         MaterialPropertyBlock properties;
@@ -30,9 +28,8 @@ namespace CityForge.World
             terrain = land.DisplayTerrain;
             resolution = Mathf.Clamp(Mathf.NextPowerOfTwo(Mathf.CeilToInt(land.Side / 5f)), 64, 256) + 1;
             step = land.Side / (resolution - 1);
-            first = CreateMap("Meadow / dry / woodland / moist");
-            second = CreateMap("Disturbed / rocky");
-            RefreshWater();
+            first = CreateMap("Meadow / dry / woodland / reserved");
+            second = CreateMap("Disturbed / rocky / shore distance / sand");
             RefreshSettlements();
             dirty.Clear();
             var timer = System.Diagnostics.Stopwatch.StartNew();
@@ -96,6 +93,8 @@ namespace CityForge.World
 
             for (int i = 0; i < palette.surfaces.Length; i++)
             {
+                // Slot 3 stays reserved for compatibility with local palette assets.
+                if(i==3)continue;
                 var surface = palette.surfaces[i];
                 if (surface == null || !surface.albedo)
                 {
@@ -109,27 +108,6 @@ namespace CityForge.World
                 properties.SetVector("_GeographySurface" + i, new Vector4(
                     1f / Mathf.Max(1f, surface.tileMeters), surface.smoothness,
                     surface.normal ? surface.normalStrength : 0f, surface.albedoScale));
-            }
-        }
-
-        internal void RefreshWater()
-        {
-            freshwater.Clear();
-            float margin = MoistReach / land.View.MapSide;
-            var district = new Rect(land.Origin / land.View.MapSide + Vector2.one * .5f,
-                Vector2.one * (land.Side / land.View.MapSide));
-            foreach (var body in land.View.Data.WaterBodies)
-            {
-                if (body.kind != WaterBodyKind.River && body.kind != WaterBodyKind.Lake && body.kind != WaterBodyKind.Pond)
-                    continue;
-                // A drawn stream carves its bed without replacing the surrounding biome.
-                // Keep native waterways and lake/canal moisture rules authoritative.
-                if(body.playerChannel&&body.isStream)continue;
-                var bounds = body.Bounds;
-                bounds.min -= Vector2.one * margin;
-                bounds.max += Vector2.one * margin;
-                if (!bounds.Overlaps(district, true)) continue;
-                freshwater.Add((body, bounds, body.centerline is { Length: > 1 } ? null : new List<Vector2[]>(body.Contours)));
             }
         }
 
@@ -233,6 +211,15 @@ namespace CityForge.World
             }
         }
 
+        internal bool IsDryGrassReference(Vector2 point)
+        {
+            // Query native inputs directly; the uploaded maps can still be a
+            // frame behind tree clearing or a replay. Donor choice must be stable
+            // across the first update, repeated updates and reopening a save.
+            Sample(point,out var a,out var b);
+            return a.r+a.g>166&&a.a<38&&a.b<89&&b.r<38&&b.g<38;
+        }
+
         void Sample(Vector2 point, out Color32 primary, out Color32 extra)
         {
             var uv = point / land.View.MapSide + Vector2.one * .5f;
@@ -274,48 +261,26 @@ namespace CityForge.World
                 slope = Mathf.Lerp(Mathf.Atan(Mathf.Sqrt(dx*dx+dz*dz))*Mathf.Rad2Deg,slope,interior);
             }
             float woodland = land.Woodland(point);
-            woodland = Mathf.Lerp(woodland, land.GeographyCanopy(point), Ease(0, 20, edge));
+            woodland = Mathf.Lerp(woodland,land.GeographyCanopy(point),Ease(0,20,edge));
             float forest = Ease(.22f, .68f, woodland + irregular);
             float rock = Ease(25, 44, slope + irregular * 27);
             float exposed = Ease(12, 75, height - land.View.SeaLevel);
             float dry = Ease(.29f,.66f,(biome?.dryness ?? 0) * .7f + exposed * .46f + irregular)
                 * (1 - forest) * (1 - rock) * .70f;
-            float moist = (1 - Ease(7, MoistReach, FreshwaterDistance(uv) + irregular * 35)) * (1 - rock) * .86f;
             float soil = 0;
             if (settlements.TryGetValue(Vector2Int.FloorToInt(point / 32), out var lots))
                 foreach (var footprint in lots)
                     soil = Mathf.Max(soil, (1 - Ease(0, 9, Distance(point, footprint))) * .52f);
             soil *= Ease(0, 9, edge);
-            forest *= (1 - rock) * (1 - soil) * (1 - moist * .38f);
-            float meadow = Mathf.Max(.08f, 1 - Mathf.Max(Mathf.Max(forest, dry), Mathf.Max(moist, Mathf.Max(soil, rock))));
-            float inverse = 1f / (meadow + dry + forest + moist + soil + rock);
-            primary = new Color(meadow * inverse, dry * inverse, forest * inverse, moist * inverse);
-            extra = new Color(soil * inverse, rock * inverse, 0, 0);
-        }
-
-        float FreshwaterDistance(Vector2 uv)
-        {
-            float best = MoistReach;
-            foreach (var entry in freshwater)
-            {
-                if (!entry.Bounds.Contains(uv)) continue;
-                var body = entry.Body;
-                if (body.centerline is { Length: > 1 })
-                {
-                    float distance = body.IndexedCenterlineDistance(uv) - body.halfWidthNormalized;
-                    best = Mathf.Min(best, distance * land.View.MapSide);
-                    continue;
-                }
-                foreach (var contour in entry.Contours)
-                for (int i = 0; i < contour.Length; i++)
-                {
-                    var start = contour[i];
-                    var delta = contour[(i + 1) % contour.Length] - start;
-                    float t = Mathf.Clamp01(Vector2.Dot(uv - start, delta) / Mathf.Max(delta.sqrMagnitude, 1e-12f));
-                    best = Mathf.Min(best, Vector2.Distance(uv, start + delta * t) * land.View.MapSide);
-                }
-            }
-            return best;
+            forest *= (1 - rock) * (1 - soil);
+            float meadow = Mathf.Max(.08f, 1 - Mathf.Max(Mathf.Max(forest, dry), Mathf.Max(soil, rock)));
+            float inverse = 1f / (meadow + dry + forest + soil + rock);
+            primary = new Color(meadow * inverse, dry * inverse, forest * inverse, 0);
+            // Reuse the two spare channels. Signed shore distance is presentation,
+            // not another terrain surface weight, and does not enter normalization.
+            float shoreDistance=land.ShoreDistance(point);
+            float sand=land.CoastalBeachLayer>=0&&Mathf.Abs(shoreDistance)<28?land.CoastalBeachWeight(point):0;
+            extra = new Color(soil * inverse, rock * inverse, Mathf.Clamp01(.5f+shoreDistance/64f), sand);
         }
 
         static float Ease(float low, float high, float value) => Mathf.SmoothStep(0, 1, Mathf.InverseLerp(low, high, value));

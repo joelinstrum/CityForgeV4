@@ -55,6 +55,7 @@ namespace CityForge.UI
                 weather[i].GetComponent<RectTransform>().anchoredPosition=new Vector2((i-1)*106,22);
             }
             Popup.TerrainRequested+=settings=>view.ArmTerraform(settings);
+            Popup.TerrainUpdateRequested+=()=>view.UpdateTerraformTerrain();
             Popup.ActorPlacementRequested += (id, count, pedestrian) =>
             {
                 Popup.Show(NatureTool.None);

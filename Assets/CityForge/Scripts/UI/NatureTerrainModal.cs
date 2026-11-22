@@ -9,6 +9,7 @@ namespace CityForge.UI
         RectTransform terrainModal;
         readonly TerraformBrushSettings terrainSettings=new();
         public event Action<TerraformBrushSettings> TerrainRequested;
+        public event Action TerrainUpdateRequested;
         void CloseTerrainModal(){if(!terrainModal)return;terrainModal.gameObject.SetActive(false);Destroy(terrainModal.gameObject);terrainModal=null;}
         void OpenTerrainModal()
         {
@@ -35,7 +36,8 @@ namespace CityForge.UI
             if(terrainSettings.Action==TerraformAction.Level)SliderRow("Height offset",-156,-12,12,terrainSettings.Offset," m",v=>terrainSettings.Offset=Mathf.Round(v*10)/10,()=>terrainSettings.Offset);
             else if(terrainSettings.Action==TerraformAction.Smooth)SliderRow("Smoothing",-156,.1f,1,terrainSettings.Blend,"",v=>terrainSettings.Blend=v,()=>terrainSettings.Blend);
             else SliderRow("Elevation step",-156,.25f,12,terrainSettings.Step," m",v=>terrainSettings.Step=Mathf.Round(v*4)/4,()=>terrainSettings.Step);
-            TextLabel(panel,"Clears trees and objects across the brush and banks.\nDrag to sculpt · Shift: double size · Tab: rotate · Esc: finish\nOcean shorelines update after each drag",new Vector2(150,-255),new Vector2(980,86),20);
+            TextLabel(panel,"Clears trees and objects across the brush and banks.\nDrag to sculpt · Shift: double size · Tab: rotate · Esc: finish\nClick Update Terrain when ready to refresh water and sand",new Vector2(150,-255),new Vector2(980,86),20);
+            Action(panel,"Update terrain","Update Terrain",new Vector2(190,-338),new Vector2(300,55),()=>TerrainUpdateRequested?.Invoke());
             var start=Action(panel,"Sculpt terrain","Sculpt Terrain",new Vector2(540,-338),new Vector2(300,55),()=>{var copy=JsonUtility.FromJson<TerraformBrushSettings>(JsonUtility.ToJson(terrainSettings));CloseTerrainModal();TerrainRequested?.Invoke(copy);});start.image.sprite=ZoneModalArtwork.Gold;
             void Reopen(){CloseTerrainModal();OpenTerrainModal();}
             void SliderRow(string caption,float y,float min,float max,float value,string unit,Action<float> update,Func<float> read){

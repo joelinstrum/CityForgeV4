@@ -25,6 +25,21 @@ See the current tree-review note in Approved_Mixed_Forest.md. Do not restore rem
 models as fallbacks or through asset regeneration. Test maps/lots are disposable at
 the user's direction; keep references valid and the application functional.
 
+Nature earthwork banks use a smooth monotonic feather. Keep shoreline/grass-bank
+geometric curves broad; do not reintroduce metre-scale reach noise. Preserve the
+flat sculpted core and separate lot-grading behavior. Material coverage may use
+the approved irregular grass/sand breakup without moving the waterline. Keep
+wet-sand darkening and clearer shallow-water presentation subtle, especially foam;
+reference swatches are not production textures. Geographic control1 BA stores
+shore distance / sand coverage and is excluded from surface normalization.
+
+Terrain appearance decision, November22,2026: smooth moist/wet grass is retired
+globally, including river/lake/coastal edges. Use the existing detailed default
+grass surfaces; never reintroduce the bright smooth-green moisture halo as a
+fallback. Geographic palette slot3 stays reserved for compatibility, and legacy
+wet coverage renders as detailed meadow. This does not remove authored water,
+shore paint, physical wetness, ecology data or ordinary canopy/litter surfaces.
+
 The Git repository is public and source-only. Do not add licensed artwork, imported asset packs, Crest package source, builds, or saved maps.
 
 ## Building imports
@@ -61,6 +76,17 @@ watery district; otherwise lakes inherit a broad soil halo. Keep water renderer 
 separate. LakeMeadowRepair handles polluted lake caches locally before bed capture;
 preserve native banks, camps, roads, channel paint and authoritative geography.
 
+Shared Crest terrain-update connectivity must include surviving native river footprints,
+not only saved ocean polygons. Keep isolated low pits dry and retain original water
+levels/rendering. Player lakes/channels keep their separate renderer routing.
+
+Native ocean/river mouths share continuous submerged bed paint. Do not restore
+river-only(-4*Side) coastal-distance sentinels: clearer water exposes rectangular
+grass/seafloor seams. Preserve dry riverbank seed exclusions; graded river beds
+blend back to their native palette12–96m landward. Repaint overrides follow actual
+TerraformGroundBlend, never the rectangular pending area. Player channels retain
+their separate paint path.
+
 ## Forest editing
 
 Forest removal is persisted in additive SavedRegionInfo.forestRemovals metadata, scoped
@@ -83,13 +109,18 @@ Read Documentation/03_Technical/Regional_Relief_Map.md. New version-three recipe
 
 ## MapMagic geography
 
-Default new recipes are version12 and use MapMagicRegionGeography plus the Terrain shape plan. Read Documentation/03_Technical/Region_Terrain_Shapes.md. Preserve version1–11 generation and stored maps. Version11 adds seeded one-summit wall / two-summit / fuller ridge variation within the approved natural rear-quarter footprint. Version10 raises only the upper summits and adds shared permanent summit snow caps; preserve the approved green foothills. Version9 compresses the natural Mountain Border into the rear25% of the region. Version8 Mountain Border reuses the approved river-flanking massif shapes along the north/back edge. The exaggerated version7 range was rejected; do not restore it as the current baseline. Other shapes retain version6 geography. Read Documentation/03_Technical/MapMagic_Regional_Geography.md. Preserve stored maps and version1–4 behavior. MapMagic generates only the shared heightfield; approved district textures/trees and the relief renderer remain authoritative. Creation must use GenerateStages/worker generation behind the preloader. Do not use the old MapMagicMeadowStudy authoring scene as the biome baseline.
+Default new recipes are version13 and use MapMagicRegionGeography plus the Terrain shape plan. Read Documentation/03_Technical/Region_Terrain_Shapes.md. Preserve version1–11 generation and stored maps. Version11 adds seeded one-summit wall / two-summit / fuller ridge variation within the approved natural rear-quarter footprint. Version10 raises only the upper summits and adds shared permanent summit snow caps; preserve the approved green foothills. Version9 compresses the natural Mountain Border into the rear25% of the region. Version8 Mountain Border reuses the approved river-flanking massif shapes along the north/back edge. The exaggerated version7 range was rejected; do not restore it as the current baseline. Other shapes retain version6 geography. Read Documentation/03_Technical/MapMagic_Regional_Geography.md. Preserve stored maps and version1–4 behavior. MapMagic generates only the shared heightfield; approved district textures/trees and the relief renderer remain authoritative. Creation must use GenerateStages/worker generation behind the preloader. Do not use the old MapMagicMeadowStudy authoring scene as the biome baseline.
 
 Version5 uses RegionalLandformNode and RegionalRiverNetwork; see Documentation/03_Technical/Regional_Ridge_Valley_Trial.md. Preserve explicit physical height metadata and the 1.25× overview-only exaggeration. Never copy the reference illustration into the map as a texture.
 
 ## Combined districts
 
 CombinedDistrictGroup retains original grid cell IDs. Use DistrictMembers/ActiveDistrictMembers and InActiveDistrict rather than assuming every playable district is one square. Enforce2–4 original edge-connected cells, including when expanding existing groups; never fill an L-shaped union’s excluded corner. Group metadata is saved with the region; canonical shared geography is unchanged. Preserve native terrain holes, footprint-filtered trees/roads/snow/water and group-anchor cache identity.
+
+Version13 gives new coast dry land and native channel banks1m of water clearance.
+Persist native body bankClearanceMeters; missing/zero preserves legacy bank offsets.
+Do not raise saved heightfields or manual sculpt targets. Retain the narrow blended
+dirt/sand/default-grass shore and continuous edited shoreline sampling.
 
 Version12 adds the Tropical ocean shelf and sea30m datum, with all land/water surfaces shifted together. Other recipes keep sea12m. See TropicalOceanDepth. Keep shared-region water colors and union-aware district slab edges; do not regenerate older stored maps.
 
