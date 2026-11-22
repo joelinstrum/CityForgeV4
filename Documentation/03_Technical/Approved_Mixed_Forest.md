@@ -1,3 +1,33 @@
+# Player tree review — November 21, 2026
+
+User's exported inventory decisions remove56 entries and retain49 (29 Keep plus20
+Undecided). Inventory IDs T01–T105 remain stable in the review artifact; source-only
+runtime policy is in LotAssetCatalog.IsRetiredTree and MixedForestLibrary.
+
+Summer mixed forest retains four chestnuts (01/02/04/05) and two larches. Chestnut03
+(slot2) and Locust(slot5) have zero weight and retained-prefab aliases. Other weights
+are normalized from the accepted proportions: four chestnuts each15.3846%, tall
+larch28.8462%, medium larch9.6154%. ResolveVariant remaps removed planted choices;
+Mixed/Chestnut/Larch planting cannot select rejected shapes. Rendering, shadows,
+positions and coverage planning retain their previous behavior.
+
+ReviewedNativeTrees filters native indices0–2 and11–15: juvenile poplars, maple bushes,
+small willows and the retired evergreen pilot. It runs on cached/generated district
+load and seasonal presentation. Mature poplars3–10 remain. All optional experimental
+broadleaf species are retired, and their toggle panel is hidden. Native mountain
+Fraser/Cilician slots use the kept reduced seasonal prefabs; undecided original
+Balsam remains. Prototype indices and library references stay valid.
+
+The catalogue's rejected IDs are unavailable to planting/lot editors and do not render
+inside lots. Regenerating the catalogue respects the same retirement policy. Dormant
+source prefabs and shared art dependencies stay private; deleting them would break
+kept variants and authoring tools. This is gameplay curation, not a filesystem purge.
+
+Actual district verification covers the reviewed six-tree canopy, removed native
+plants, valid seasonal prototypes, summer/fall/winter/summer transitions and zoom
+changes. No player region data needs migration. Earlier palette proportions below
+are historical and superseded by this explicit player selection.
+
 # Larch foliage tint — November 3, 2026
 
 User requested a slight lift to evergreen brightness. Both private prepared larch

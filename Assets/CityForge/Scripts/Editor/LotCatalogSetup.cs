@@ -81,22 +81,22 @@ internal static class LotCatalogSetup
                 "HighWealthMediterraneanVilla", 14f, LotWealth.High),
             FoundersResidentialHome("high-wealth-georgian-three-dormers", "Georgian Colonial Three Dormers",
                 "HighWealthGeorgianThreeDormers", 12f, LotWealth.High),
-            R3MediumWealthHome("r3-mid-wealth-barn-roof", "Barn Roof", "R3MidWealthBarnRoof", 7.399569f),
-            R3MediumWealthHome("r3-mid-wealth-blue-townhouse", "Blue Townhouse", "R3MidWealthBlueTownhouse", 6.819484f),
-            R3MediumWealthHome("r3-mid-wealth-dutch-roof", "Dutch Roof", "R3MidWealthDutchRoof", 8.043133f),
-            R3MediumWealthHome("r3-mid-wealth-mansard-roof", "Mansard Roof", "R3MidWealthMansardRoof", 7.116240f),
-            R3MediumWealthHome("r3-mid-wealth-stone-dutch", "Stone Dutch", "R3MidWealthStoneDutch", 6.912975f),
-            R3MediumWealthHome("r3-mid-wealth-stone-house", "Stone House", "R3MidWealthStoneHouse", 7.001306f),
-            R3MediumWealthHome("r3-mid-wealth-3-window-brick-dormers", "3 Window Brick Dormers", "R3MidWealth3WindowBrickDormers", 7.277107f),
-            R3MediumWealthHome("r3-mid-wealth-3-window-brick", "3 Window Brick", "R3MidWealth3WindowBrick", 7.206851f),
-            R3MediumWealthHome("r3-mid-wealth-painted-white-brick", "Painted White Brick", "R3MidWealthPaintedWhiteBrick", 6.700951f),
-            R3MediumWealthHome("r3-mid-wealth-3-story-brick-2", "Three Story Brick 2", "R3MidWealth3StoryBrick2", 6.243569f),
-            R3MediumWealthHome("r3-mid-wealth-3-story-yellow", "Three Story Yellow", "R3MidWealth3StoryYellow", 7.142250f),
-            R3MediumWealthHome("r3-mid-wealth-3-story-brick", "Three Story Brick", "R3MidWealth3StoryBrick", 7.050409f),
-            R3MediumWealthHome("r3-mid-wealth-3-story-yellow-stucco", "Three Story Yellow Stucco", "R3MidWealth3StoryYellowStucco", 6.923958f),
-            R3MediumWealthHome("r3-mid-wealth-2-story-brick", "Two Story Brick", "R3MidWealth2StoryBrick", 6.562879f),
-            R3MediumWealthHome("r3-mid-wealth-2-story-tan-wood", "Two Story Tan Wood", "R3MidWealth2StoryTanWood", 6.335295f),
-            R3MediumWealthHome("r3-mid-wealth-2-story-yellow-house", "Two Story Yellow House", "R3MidWealth2StoryYellowHouse", 5.978082f),
+            R2Townhouse("r3-mid-wealth-barn-roof", "Barn Roof", "R3MidWealthBarnRoof", 7.399569f),
+            R2Townhouse("r3-mid-wealth-blue-townhouse", "Blue Townhouse", "R3MidWealthBlueTownhouse", 6.819484f),
+            R2Townhouse("r3-mid-wealth-dutch-roof", "Dutch Roof", "R3MidWealthDutchRoof", 8.043133f),
+            R2Townhouse("r3-mid-wealth-mansard-roof", "Mansard Roof", "R3MidWealthMansardRoof", 7.116240f),
+            R2Townhouse("r3-mid-wealth-stone-dutch", "Stone Dutch", "R3MidWealthStoneDutch", 6.912975f),
+            R2Townhouse("r3-mid-wealth-stone-house", "Stone House", "R3MidWealthStoneHouse", 7.001306f),
+            R2Townhouse("r3-mid-wealth-3-window-brick-dormers", "3 Window Brick Dormers", "R3MidWealth3WindowBrickDormers", 7.277107f),
+            R2Townhouse("r3-mid-wealth-3-window-brick", "3 Window Brick", "R3MidWealth3WindowBrick", 7.206851f),
+            R2Townhouse("r3-mid-wealth-painted-white-brick", "Painted White Brick", "R3MidWealthPaintedWhiteBrick", 6.700951f),
+            R2Townhouse("r3-mid-wealth-3-story-brick-2", "Three Story Brick 2", "R3MidWealth3StoryBrick2", 6.243569f),
+            R2Townhouse("r3-mid-wealth-3-story-yellow", "Three Story Yellow", "R3MidWealth3StoryYellow", 7.142250f),
+            R2Townhouse("r3-mid-wealth-3-story-brick", "Three Story Brick", "R3MidWealth3StoryBrick", 7.050409f),
+            R2Townhouse("r3-mid-wealth-3-story-yellow-stucco", "Three Story Yellow Stucco", "R3MidWealth3StoryYellowStucco", 6.923958f),
+            R2Townhouse("r3-mid-wealth-2-story-brick", "Two Story Brick", "R3MidWealth2StoryBrick", 6.562879f),
+            R2Townhouse("r3-mid-wealth-2-story-tan-wood", "Two Story Tan Wood", "R3MidWealth2StoryTanWood", 6.335295f),
+            R2Townhouse("r3-mid-wealth-2-story-yellow-house", "Two Story Yellow House", "R3MidWealth2StoryYellowHouse", 5.978082f),
             R2LowWealthHome("r2-four-story-low-wealth-stone-base", "Four Story Low Wealth Stone Base", "R2FourStoryLowWealthStoneBase", 10.818288f),
             R2LowWealthHome("r2-four-story-shanty", "Four Story Shanty", "R2FourStoryShanty", 12.607938f),
             R2LowWealthHome("r2-low-wealth-brick-apartment", "Low Wealth Brick Apartment", "R2LowWealthBrickApartment", 13.325564f),
@@ -145,6 +145,12 @@ internal static class LotCatalogSetup
             FoundersShop("founders-shop-right-corner-cooperage", "Right Corner · Cooperage", "FoundersRightCornerCooperage", 7.3323f),
             FoundersShop("founders-shop-right-corner-dry-goods", "Right Corner · Dry Goods", "FoundersRightCornerDryGoods", 7.8836f),
             FoundersShop("founders-shop-right-corner-inn", "Right Corner · Inn", "FoundersRightCornerInn", 8.6f),
+            FoundersCivic("founders-academy", "Academy", "FoundersAcademy", 17.2136713f, "education"),
+            FoundersCivic("founders-courthouse", "Courthouse", "FoundersCourthouse", 15.4768819f, "government"),
+            FoundersCivic("founders-infirmary", "Infirmary", "FoundersInfirmary", 10.2721535f, "healthcare"),
+            FoundersCivic("founders-schoolhouse", "Schoolhouse", "FoundersSchoolhouse", 9.4058629f, "education"),
+            FoundersCivic("founders-college", "College", "FoundersCollege", 34.4019896f, "education"),
+            FoundersCivic("new-england-church", "New England Church", "NewEnglandChurch", 18.482987f, "culture"),
             FoundersCivic("chapel", "Chapel", "FoundersChapel", 13.479562f),
             FoundersCivic("constable-station", "Constable Station", "FoundersConstableStation", 13.100854f * 1.18f),
             V3Building("small-school", "Small School", "SmallSchool", "civics", "founders", 9f, ".jpg", ".png"),
@@ -228,7 +234,7 @@ internal static class LotCatalogSetup
         var catalog = AssetDatabase.LoadAssetAtPath<LotAssetCatalog>(CatalogPath);
         var entries = (catalog ? catalog.entries : System.Array.Empty<LotAssetCatalogEntry>()).ToList();
         bool changed = false;
-        foreach (var entry in candidates.Concat(ConfiguredVehicles()).Concat(PlaceableSeasonalTrees.CatalogEntries()).Concat(foundersHomes).Concat(mediumHomes).Concat(meadowPoplars).Concat(Characters()).Concat(Landscaping()).Concat(Corn()).Concat(Wheat()).Where(item => item.prefab))
+        foreach (var entry in candidates.Concat(ConfiguredVehicles()).Concat(PlaceableSeasonalTrees.CatalogEntries()).Concat(CityForge.EditorTools.FoxOakPreparation.OakEntries()).Concat(PurchasedTreeCatalog.CatalogEntries()).Concat(CityForge.EditorTools.PlaneTreePreparation.CatalogEntries()).Concat(foundersHomes).Concat(mediumHomes).Concat(meadowPoplars).Concat(ChildrenCharacterSetup.Entries()).Concat(Characters()).Concat(Landscaping()).Concat(Corn()).Concat(Wheat()).Where(item => item.prefab))
         {
             if (entry.category != "Buildings" && !entry.IsCharacter)
                 entry.distantPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(
@@ -240,6 +246,28 @@ internal static class LotCatalogSetup
                 entries.Add(entry);
                 changed = true;
                 continue;
+            }
+            if (entry.id is "oak-pilot-a" or "oak-pilot-b")
+            {
+                if (existing.prefab != entry.prefab || existing.preserveTreeMaterials != entry.preserveTreeMaterials)
+                { entries[entries.IndexOf(existing)] = entry; changed = true; }
+                continue;
+            }
+            if (entry.preserveTreeMaterials)
+            {
+                if (!existing.preserveTreeMaterials || existing.prefab != entry.prefab ||
+                    existing.autumnPrefab != entry.autumnPrefab || existing.winterPrefab != entry.winterPrefab ||
+                    existing.label != entry.label || existing.footprint != entry.footprint)
+                {
+                    entries[entries.IndexOf(existing)] = entry;
+                    changed = true;
+                }
+                continue;
+            }
+            if (existing.nightWindowGlass != entry.nightWindowGlass)
+            {
+                existing.nightWindowGlass = entry.nightWindowGlass;
+                changed = true;
             }
             if(entry.rowGeometry!=null&&JsonUtility.ToJson(existing.rowGeometry)!=JsonUtility.ToJson(entry.rowGeometry))
             {
@@ -333,6 +361,8 @@ internal static class LotCatalogSetup
                 changed = true;
             }
         }
+        foreach (var retired in entries.Where(item => item != null && LotAssetCatalog.IsRetiredTree(item.id)))
+            if (retired.playerPlaceable) { retired.playerPlaceable = false; changed = true; }
         DeliveryCargoAssetSetup.Prepare();
         if (!changed) return;
         if (!catalog)
@@ -390,7 +420,7 @@ internal static class LotCatalogSetup
             material.SetTexture("_BaseMap", color);
             material.SetTexture("_BumpMap", normal);
             material.SetTexture("_MetallicGlossMap", surface);
-            material.SetFloat("_Smoothness", 1);
+            material.SetFloat("_Smoothness", .35f);
             material.EnableKeyword("_NORMALMAP");
             material.EnableKeyword("_METALLICSPECGLOSSMAP");
             AssetDatabase.CreateAsset(material, materialPath);
@@ -648,10 +678,11 @@ internal static class LotCatalogSetup
         float span, string normalExtension = ".jpg") =>
         FoundersResidentialHome(id, label, folder, span, LotWealth.Medium, normalExtension);
 
-    private static LotAssetCatalogEntry R3MediumWealthHome(string id, string label, string folder, float span)
+    private static LotAssetCatalogEntry R2Townhouse(string id, string label, string folder, float span)
     {
         var home = FoundersResidentialHome(id, label, folder, span, LotWealth.Medium);
-        home.growableZone = TownZone.Residential3;
+        // Preserve legacy asset IDs and art paths so existing lots keep their models.
+        home.growableZone = TownZone.Residential2;
         home.rowGeometry = id switch
         {
             "r3-mid-wealth-barn-roof" => new LotRowGeometry {leftWall=-2.95274f,rightWall=2.99400f,frontStep=-3.67522f},
@@ -682,11 +713,37 @@ internal static class LotCatalogSetup
         return home;
     }
 
-    private static LotAssetCatalogEntry FoundersCivic(string id, string label, string folder, float span)
+    private static LotAssetCatalogEntry FoundersCivic(string id, string label, string folder, float span, string subcategory = null)
     {
         var civic = V3Building(id, label, folder, "civics", "founders", span);
+        if (!string.IsNullOrEmpty(subcategory))
+        {
+            civic.subcategory = subcategory;
+            ConfigureCivicSurface(civic, $"{DirectoryPath}/V3Buildings/{folder}/MetallicSmoothness.png");
+        }
         ConfigureBuildingWindowMask(civic, $"{DirectoryPath}/V3Buildings/{folder}/Windows.png");
         return civic;
+    }
+
+    private static void ConfigureCivicSurface(LotAssetCatalogEntry building, string path)
+    {
+        if (!building.materialOverride || !File.Exists(path)) return;
+        if (AssetImporter.GetAtPath(path) is TextureImporter importer && importer.sRGBTexture)
+        {
+            importer.sRGBTexture = false;
+            importer.SaveAndReimport();
+        }
+        var map = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+        var material = building.materialOverride;
+        if (!map || (material.GetTexture("_MetallicGlossMap") == map &&
+            material.IsKeywordEnabled("_METALLICSPECGLOSSMAP") && material.GetFloat("_Smoothness") == .35f)) return;
+        material.SetTexture("_MetallicGlossMap", map);
+        material.SetFloat("_Metallic", 1);
+        material.SetFloat("_Smoothness", .35f);
+        material.SetFloat("_SmoothnessTextureChannel", 0);
+        material.EnableKeyword("_METALLICSPECGLOSSMAP");
+        EditorUtility.SetDirty(material);
+        AssetDatabase.SaveAssetIfDirty(material);
     }
 
     private static LotAssetCatalogEntry C2MediumWealthShop(string id,string label,string folder,float span)
@@ -738,6 +795,8 @@ internal static class LotCatalogSetup
 
     private static void ConfigureBuildingWindowMask(LotAssetCatalogEntry building, string maskPath)
     {
+        building.nightWindowGlass = AssetDatabase.LoadAssetAtPath<Mesh>(
+            maskPath.Substring(0, maskPath.LastIndexOf('/')) + "/NightWindowGlass.asset");
         if (AssetImporter.GetAtPath(maskPath) is TextureImporter maskImporter && maskImporter.sRGBTexture)
         {
             maskImporter.sRGBTexture = false;

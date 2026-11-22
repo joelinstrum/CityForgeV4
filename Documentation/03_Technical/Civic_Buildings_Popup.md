@@ -6,6 +6,10 @@ models are available in the Lot Editor; the game does not synthesize playable lo
 from them. Saved lots retain their authored names, dimensions, objects, requirements
 and references. Distinct saved lots may use the same building without deduplication.
 
+Additional Founder-era models include Academy, Schoolhouse and College (Education),
+Courthouse (Government), and Infirmary (Healthcare). These are catalog models;
+save a civic lot using them to add an entry here. See Civic_Building_Imports.md.
+
 The eight service categories reuse ContentCatalog IDs; Founder's Buildings map to
 Government. Chapel and Constable Station map to Culture and Public Safety. Empty
 categories remain available with a clear message and disabled Place button. Saved lots use the civic subcategory IDs from ContentCatalog.

@@ -81,7 +81,12 @@ namespace CityForge.Lots
 
         internal string BuildingFitProblem(LotDefinition lot, Rect bounds, LotAssetCatalog catalog)
         {
-            if (!Contains(lot.LandBounds, bounds.min) || !Contains(lot.LandBounds, bounds.max))
+            // Growth must share the small overhang allowance used by ordinary
+            // placement. Keep waterfront dry boundaries authoritative.
+            bool fits = lot.type == LotType.Zoning && !lot.IsWaterfront
+                ? LotRuntimeLoader.FitsPlacementBounds(lot, bounds)
+                : Contains(lot.LandBounds, bounds.min) && Contains(lot.LandBounds, bounds.max);
+            if (!fits)
                 return "Keep the building inside the dry area of the lot.";
             foreach (var item in lot.objects)
             {

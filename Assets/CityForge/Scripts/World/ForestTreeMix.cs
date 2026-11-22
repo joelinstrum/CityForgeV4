@@ -10,18 +10,29 @@ namespace CityForge.World
         public static readonly string[] SpeciesNames={"SilverMapleA","SilverMapleB","CanyonLiveOakA","CanyonLiveOakB","SouthernLiveOak","AngelOak","OakPilotSummer","OakPilotVariantBSummer"};
         static readonly Dictionary<RegionSeason,GameObject[]> palettes=new();
         public const int AllSpeciesMask=(1<<SpeciesCount)-1;
+        const int AvailableSpeciesMask=0; // All optional broadleaf experiments were removed in the tree review.
+        public static bool HasExtraSpecies => AvailableSpeciesMask != 0;
         const string SpeciesPreference="CityForge.Forest.SpeciesMask";
         static int? enabledMask;
         // Lazy: save validation also calls this class on a background worker.
-        public static int EnabledSpeciesMask=>enabledMask??=(PlayerPrefs.GetInt(SpeciesPreference,0)&AllSpeciesMask);
-        public static void SetEnabledSpecies(int mask,bool remember=false){enabledMask=mask&AllSpeciesMask;if(remember){PlayerPrefs.SetInt(SpeciesPreference,enabledMask.Value);PlayerPrefs.Save();}}
+        public static int EnabledSpeciesMask=>(enabledMask??=(PlayerPrefs.GetInt(SpeciesPreference,0)&AllSpeciesMask))&AvailableSpeciesMask;
+        public static void SetEnabledSpecies(int mask,bool remember=false){enabledMask=mask&AvailableSpeciesMask;if(remember){PlayerPrefs.SetInt(SpeciesPreference,enabledMask.Value);PlayerPrefs.Save();}}
         public static bool SpeciesEnabled(int species)=>(EnabledSpeciesMask&(1<<species))!=0;
         static GameObject LoadPrefab(int species,RegionSeason season)
         {
-            var variant=species>=2&&species<=5?RegionSeason.Summer:season;
-            if(!palettes.TryGetValue(variant,out var result))palettes[variant]=result=new GameObject[SpeciesCount];
-            if(!result[species])result[species]=Resources.Load<GameObject>("Trees/ForestBroadleaf/"+SpeciesNames[species]+"/"+variant);
-            if(!result[species])throw new InvalidOperationException("Missing forest tree: "+SpeciesNames[species]+" / "+variant);
+            if(!palettes.TryGetValue(season,out var result))palettes[season]=result=new GameObject[SpeciesCount];
+            if(!result[species])
+            {
+                string id=species==0?"silver-maple":species==1?"silver-maple-b":species%2==0?"oak-pilot-a":"oak-pilot-b";
+                if(species<2)result[species]=Resources.Load<GameObject>("Lots/Trees/PurchasedAnimatedTrees/Prepared/"+id+"/Static/"+season);
+                if(species>=6)result[species]=Resources.Load<GameObject>("Lots/Trees/NMAOak004/"+season);
+                if(!result[species]&&species<6)
+                {
+                    var variant=species>=2&&species<=5?RegionSeason.Summer:season;
+                    result[species]=Resources.Load<GameObject>("Trees/ForestBroadleaf/"+SpeciesNames[species]+"/"+variant);
+                }
+            }
+            if(!result[species])throw new InvalidOperationException("Missing forest tree: "+SpeciesNames[species]+" / "+season);
             return result[species];
         }
         public static bool IsValidPrototype(int index,bool mountain)=>index>=0&&(index<BaselineCount||(mountain&&index<BroadleafStart)||(index>=BroadleafStart&&index<PrototypeCount));

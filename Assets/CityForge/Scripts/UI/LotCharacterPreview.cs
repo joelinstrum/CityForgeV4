@@ -19,6 +19,7 @@ namespace CityForge.UI
             public Actor partner;
             public LotShopkeeper shopkeeper;
             public LotHarass harass;
+            public ChildrenAtPlay children;
             public bool talking, onDeck;
             public readonly Queue<Vector2> route = new Queue<Vector2>();
 
@@ -112,6 +113,13 @@ namespace CityForge.UI
             }
             else view.localPosition = new Vector3(position.x, 0, position.z);
             actor.animator = view.GetComponentInChildren<Animator>();
+            actor.children = view.GetComponent<ChildrenAtPlay>();
+            if (actor.children)
+            {
+                actor.children.Manual = true;
+                // Keep authored children selectable while editing at any preview time.
+                actor.children.SetClockHour(12f);
+            }
             actor.requestedAnimation = null;
             actor.shopkeeper = null;
             actor.harass = actor.settings.scriptedBehavior == LotScriptedBehavior.Harass && LotHarass.Supports(view.gameObject)
@@ -124,7 +132,7 @@ namespace CityForge.UI
                 actor.route.Clear();
                 actor.wait = 0;
             }
-            if (!paused && actor.settings.configured && actor.harass == null)
+            if (!paused && actor.settings.configured && actor.harass == null && !actor.children)
                 actor.Animate(actor.talking ? "FoldArms" : actor.idle);
         }
 
@@ -181,6 +189,11 @@ namespace CityForge.UI
             foreach (var pair in actors)
             {
                 var actor = pair.Value;
+                if (actor.children)
+                {
+                    if (dragged?.Contains(pair.Key) != true) actor.children.Tick(delta);
+                    continue;
+                }
                 if (!actor.settings.configured) continue;
                 if (actor.harass != null)
                 {

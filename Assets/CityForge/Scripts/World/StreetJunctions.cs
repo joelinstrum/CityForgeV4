@@ -8,8 +8,7 @@ namespace CityForge.World
     // Derived from saved centerlines, never from renderer overlap or enumeration order.
     internal static class StreetJunctions
     {
-        internal static bool IsStreet(string id) => id == "paved-street" || id == "founders-dirt-street" ||
-            id == "founders-cobblestone-street" || id == "founders-brick-street";
+        internal static bool IsStreet(string id) => id == "paved-street" || PrototypeRegionView.IsFoundersStreet(id);
         internal sealed class Arm
         {
             internal DistrictRoadRecord Road;

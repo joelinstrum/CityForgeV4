@@ -17,14 +17,15 @@ namespace CityForge.Lots
         const int MaxBuildings=64;
         sealed class Choice { internal LotAssetCatalogEntry Asset; internal LotRowGeometry Geometry; internal float Yaw; internal Vector2 Envelope; }
         sealed class State { internal int[] Row; internal int Cost; }
-        internal static LotRowGeometry Geometry(LotAssetCatalogEntry asset)
+        internal static LotRowGeometry Geometry(LotAssetCatalogEntry asset, bool applyDefaultScale = true)
         {
             var saved=LotBuildingInfo.Load(asset.id)?.rowGeometry;
-            if(saved?.Valid==true)return saved;
-            if(asset.rowGeometry?.Valid==true)return asset.rowGeometry;
+            if(saved?.Valid==true)return Scaled(saved);
+            if(asset.rowGeometry?.Valid==true)return Scaled(asset.rowGeometry);
             float yaw=LotGrowableBuildings.FrontageOffset(asset.id);
             var bounds=LotRuntimeLoader.Footprint(new LotObjectDefinition{assetId=asset.id,yaw=yaw},asset);
-            return new LotRowGeometry{leftWall=bounds.xMin,rightWall=bounds.xMax,frontStep=bounds.yMin};
+            return Scaled(new LotRowGeometry{leftWall=bounds.xMin,rightWall=bounds.xMax,frontStep=bounds.yMin});
+            LotRowGeometry Scaled(LotRowGeometry source){float scale=applyDefaultScale?asset.DefaultPlacementScale:1;return new LotRowGeometry{leftWall=source.leftWall*scale,rightWall=source.rightWall*scale,frontStep=source.frontStep*scale};}
         }
         internal static Rect FrontBounds(LotDefinition lot)=>LotGroundOverlay.QuarterTurn(lot.zoningLayout.BuildingSlot,-(int)lot.zoningLayout.frontage);
         internal static float FrontLine(LotDefinition lot)
@@ -38,14 +39,14 @@ namespace CityForge.Lots
             float yaw=LotGrowableBuildings.FrontageOffset(asset.id);
             var info=LotBuildingInfo.LoadEntry(asset.id);
             if(info!=null)yaw=-90*(int)info.facing;
-            var envelope=LotRuntimeLoader.Footprint(new LotObjectDefinition{assetId=asset.id,yaw=yaw},asset).size;
+            var envelope=LotRuntimeLoader.Footprint(new LotObjectDefinition{assetId=asset.id,yaw=yaw,scale=asset.DefaultPlacementScale},asset).size;
             return new Choice{Asset=asset,Geometry=geometry,Yaw=yaw,Envelope=envelope};
         }
         static LotObjectDefinition Place(LotDefinition lot,Choice profile,float wallCenter)
         {
             var layout=lot.zoningLayout;var g=profile.Geometry;
             var local=new Vector2(wallCenter-(g.leftWall+g.rightWall)*.5f,FrontLine(lot)-g.frontStep);
-            return new LotObjectDefinition{assetId=profile.Asset.id,position=LotGroundOverlay.QuarterTurn(local,(int)layout.frontage),
+            return new LotObjectDefinition{assetId=profile.Asset.id,scale=profile.Asset.DefaultPlacementScale,position=LotGroundOverlay.QuarterTurn(local,(int)layout.frontage),
                 yaw=Mathf.Repeat(profile.Yaw+90*(int)layout.frontage,360),generatedRowBuilding=true};
         }
         internal static string PlacementProblem(LotDefinition lot,LotAssetCatalogEntry asset,LotAssetCatalog catalog,out LotObjectDefinition placement)

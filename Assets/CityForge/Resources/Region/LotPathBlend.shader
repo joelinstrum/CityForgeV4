@@ -28,6 +28,9 @@ Shader "CityForge/Lot Path Blend"
         [HideInInspector] _RecessFootprint("Road boundary distances", 2D) = "black" {}
         [HideInInspector] _RecessFootprintRect("Road boundary bounds", Vector) = (0,0,1,1)
         [HideInInspector] _RecessBorder("Recess Border", Float) = 0
+        [HideInInspector] _BorderSides("Border sides", Float) = 0
+        [HideInInspector] _BorderTextured("Textured path border", Float) = 0
+        [HideInInspector] _BorderTexture("Path border texture", 2D) = "white" {}
         [HideInInspector] _RecessDirt("Dirt Lining", 2D) = "white" {}
         [HideInInspector] _RecessBrick("Brick Lining", 2D) = "white" {}
         _PathOpacity("Path Opacity", Range(0,1)) = 1
@@ -76,6 +79,9 @@ Shader "CityForge/Lot Path Blend"
             float _NaturalFootpath;
             float _RecessDepth;
             float _RecessBorder;
+            float _BorderSides, _BorderTextured;
+            TEXTURE2D(_BorderTexture);
+            SAMPLER(sampler_BorderTexture);
             TEXTURE2D(_RecessDirt);
             SAMPLER(sampler_RecessDirt);
             TEXTURE2D(_RecessBrick);
@@ -166,6 +172,8 @@ Shader "CityForge/Lot Path Blend"
                 #endif
                 float roadEdgeDistance = 1000;
                 float wall = 0;
+                float wallBorder = 1;
+                float borderSide = _BorderSides < .5 ? 1 : _BorderSides < 1.5 ? step(input.ribbon.y*.5,input.ribbon.x) : step(input.ribbon.x,input.ribbon.y*.5);
                 float2 wallUV = 0;
                 if (_RecessDepth > 0)
                 {
@@ -187,6 +195,7 @@ Shader "CityForge/Lot Path Blend"
                         uv += (ddx(uv) * pixels.x + ddy(uv) * pixels.y) * hit;
                         float2 wallPosition = ribbon + offset * hit;
                         wallUV = float2(sideHit < endHit ? wallPosition.y : wallPosition.x, hit * _RecessDepth);
+                        wallBorder=sideHit<endHit?(_BorderSides<.5?1:_BorderSides<1.5?step(input.ribbon.y*.5,wallPosition.x):step(wallPosition.x,input.ribbon.y*.5)):0;
                         wall = 1 - smoothstep(.96, 1, hit);
                     }
                 }
@@ -202,6 +211,7 @@ Shader "CityForge/Lot Path Blend"
                         lining = SAMPLE_TEXTURE2D(_RecessBrick, sampler_RecessBrick, wallUV * 2).rgb;
                     else if (_RecessBorder > .5)
                         lining = half3(.39, .38, .35);
+                    if(_BorderTextured>.5&&_RecessBorder>.5)lining=lerp(SAMPLE_TEXTURE2D(_RecessDirt,sampler_RecessDirt,wallUV*2).rgb,SAMPLE_TEXTURE2D(_BorderTexture,sampler_BorderTexture,wallUV*2).rgb,wallBorder);
                     surface.albedo = lerp(surface.albedo * .91, lining * .54, wall);
                     surface.normalTS = lerp(surface.normalTS, half3(0, 0, 1), wall);
                     surface.smoothness *= 1 - wall;
@@ -385,8 +395,9 @@ Shader "CityForge/Lot Path Blend"
                         half3 rim = _RecessBorder > 1.5
                             ? SAMPLE_TEXTURE2D(_RecessBrick, sampler_RecessBrick, input.uv * 4).rgb
                             : half3(.39, .38, .35);
-                        float rimDistance = _RecessUseFootprint > .5 ? roadEdgeDistance : edgeDistance;
-                        surface.albedo = lerp(surface.albedo, rim, 1 - smoothstep(.05, .09, rimDistance));
+                        if(_BorderTextured>.5)rim=SAMPLE_TEXTURE2D(_BorderTexture,sampler_BorderTexture,float2(input.ribbon.z*.5,input.ribbon.x*2)).rgb;
+                        float rimDistance = _RecessUseFootprint > .5 ? roadEdgeDistance : _BorderTextured>.5 ? sideDistance : edgeDistance;
+                        surface.albedo = lerp(surface.albedo, rim, (1 - smoothstep(lerp(.05,.07,_BorderTextured), lerp(.09,.13,_BorderTextured), rimDistance))*(_BorderTextured>.5?borderSide:1));
                     }
                     if (_RecessUseFootprint < .5) opacity = 1;
                 }
@@ -398,6 +409,7 @@ Shader "CityForge/Lot Path Blend"
                         lining = SAMPLE_TEXTURE2D(_RecessBrick, sampler_RecessBrick, wallUV * 2).rgb;
                     else if (_RecessBorder > .5)
                         lining = half3(.39, .38, .35);
+                    if(_BorderTextured>.5&&_RecessBorder>.5)lining=lerp(SAMPLE_TEXTURE2D(_RecessDirt,sampler_RecessDirt,wallUV*2).rgb,SAMPLE_TEXTURE2D(_BorderTexture,sampler_BorderTexture,wallUV*2).rgb,wallBorder);
                     surface.albedo = lerp(surface.albedo * .91, lining * .54, wall);
                     surface.normalTS = lerp(surface.normalTS, half3(0, 0, 1), wall);
                     surface.smoothness *= 1 - wall;

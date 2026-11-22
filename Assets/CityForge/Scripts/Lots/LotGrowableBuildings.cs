@@ -14,6 +14,9 @@ namespace CityForge.Lots
             "v3-building-frontier-log-cabin" or "v3-building-small-colonial-cabin" => 180f,
             "v3-building-plymouth-store" or "v3-building-founders-bakery" or "v3-building-founders-blacksmith"
                 or "v3-building-founders-cooperage" or "v3-building-founders-tavern" => 180f,
+            "v3-building-new-england-church" or "v3-building-founders-academy" or "v3-building-founders-courthouse" or
+                "v3-building-founders-infirmary" or "v3-building-founders-schoolhouse" or
+                "v3-building-founders-college" => 180f,
             string id when id.StartsWith("v3-building-r2-", System.StringComparison.Ordinal) ||
                 id.StartsWith("v3-building-r3-", System.StringComparison.Ordinal) ||
                 id.StartsWith("v3-building-c2-", System.StringComparison.Ordinal) ||
@@ -68,10 +71,11 @@ namespace CityForge.Lots
             var front = LotGroundOverlay.QuarterTurn(Vector2.down, -Mathf.RoundToInt(offset / 90f));
             var entrance = entry != null ? entry.entrance : Vector2.Scale(front, Vector2.Max(asset.footprint, footprint)) * .5f;
             var anchor = layout.hasEntrance
-                ? LotGroundOverlay.QuarterTurn(entrance, Mathf.RoundToInt(yaw / 90f)) : Vector2.zero;
+                ? LotGroundOverlay.QuarterTurn(entrance * asset.DefaultPlacementScale, Mathf.RoundToInt(yaw / 90f)) : Vector2.zero;
             var placement = new LotObjectDefinition
             {
                 assetId = asset.id,
+                scale = asset.DefaultPlacementScale,
                 yaw = yaw,
                 position = layout.hasEntrance ? layout.entrance - anchor : layout.buildingCenter
             };

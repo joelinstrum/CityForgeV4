@@ -12,6 +12,7 @@ namespace CityForge.World
         internal const int PathRenderQueue = 4034;
         internal const int SidewalkRenderQueue = 4040;
         private readonly List<UnityEngine.Object> assets = new();
+        internal IEnumerable<Mesh> GradingMeshes {get{foreach(var asset in assets)if(asset is Mesh mesh)yield return mesh;foreach(var path in paths)yield return path.Source;}}
         private readonly List<(Mesh Source, MeshFilter Filter)> paths = new();
         private static readonly int BaseColor = Shader.PropertyToID("_BaseColor");
         // The meadow grade lifts lot materials more than the Lot Editor's preview.

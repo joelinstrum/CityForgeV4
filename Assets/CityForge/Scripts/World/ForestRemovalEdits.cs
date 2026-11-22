@@ -20,7 +20,7 @@ namespace CityForge.World
         public bool IsForestRemoved(Vector2 point)
         {
             if(InPlayerLakeClearing(point)||InPlayerChannelClearing(point)||LotClearsForest(point))return true;
-            if(ForestAddition(point)!=null||ForestRemovals.Length==0)return false;int district=DistrictAtWorld(new Vector3(point.x,0,point.y));
+            if(ForestAddition(point)!=null)return false;foreach(var plane in ZoneGroundPlanes)if(plane.leveler&&plane.Contains(point,plane.roughEdges?32f:0f)&&GradeIncludesPoint(plane,point))return true;if(ForestRemovals.Length==0)return false;int district=DistrictAtWorld(new Vector3(point.x,0,point.y));
             foreach(var stroke in ForestRemovals){if(!stroke.Contains(point))continue;foreach(int member in stroke.districts)if(member==district)return true;}return false;
         }
         internal void RecordForestRemovals(IReadOnlyList<Vector2> points,float radius)
@@ -53,28 +53,31 @@ namespace CityForge.World
         TreeInstance[] FilterForestEdits(TreeInstance[] source)
         {
             var kept=new List<TreeInstance>(source.Length);
-            foreach(var tree in source){var point=Origin+new Vector2(tree.position.x,tree.position.z)*Side;if(!View.InPlayerLakeClearing(point)&&!View.InPlayerChannelClearing(point)&&(!ForestTree(tree.prototypeIndex)||!View.IsForestRemoved(point)))kept.Add(tree);}
+            foreach(var tree in source){var point=Origin+new Vector2(tree.position.x,tree.position.z)*Side;if(!View.LotClearsForest(point)&&!View.InPlayerLakeClearing(point)&&!View.InPlayerChannelClearing(point)&&(!ForestTree(tree.prototypeIndex)||!View.IsForestRemoved(point)))kept.Add(tree);}
             return MergePlantedForest(kept.ToArray());
         }
 
         void SetGeneratedForestTrees(List<TreeInstance> trees)
         {
             var filtered=FilterForestEdits(trees.ToArray());
-            if(View.ForestRemovals.Length>0||View.ForestAdditions.Length>0||playerLakeBaseTerrain){canopy.Clear();foreach(var tree in filtered)if(tree.prototypeIndex>=3){var point=Origin+new Vector2(tree.position.x,tree.position.z)*Side;var key=Vector2Int.FloorToInt(point/16);if(!canopy.TryGetValue(key,out var list))canopy[key]=list=new List<Vector2>();list.Add(point);}}
+            if(View.PlacedLots.Count>0||View.ForestRemovals.Length>0||View.ForestAdditions.Length>0||playerLakeBaseTerrain){canopy.Clear();foreach(var tree in filtered)if(tree.prototypeIndex>=3){var point=Origin+new Vector2(tree.position.x,tree.position.z)*Side;var key=Vector2Int.FloorToInt(point/16);if(!canopy.TryGetValue(key,out var list))canopy[key]=list=new List<Vector2>();list.Add(point);}}
             terrainData.SetTreeInstances(filtered,true);
         }
-        internal void ClearTreesUnderLot(System.Predicate<Vector2> contains)
+        internal void ClearTreesUnderLot(System.Predicate<Vector2> contains, bool includeGroundCover = false,Rect? affected=null)
         {
             var source = CanonicalTreeInstances;
-            var kept = new List<TreeInstance>(source.Length);
-            foreach (var tree in source)
+            List<TreeInstance> kept=null;
+            for(int i=0;i<source.Length;i++)
             {
-                var point = Origin + new Vector2(tree.position.x, tree.position.z) * Side;
-                if (!ForestTree(tree.prototypeIndex) || !contains(point)) kept.Add(tree);
+                var tree=source[i];var point=Origin+new Vector2(tree.position.x,tree.position.z)*Side;
+                bool remove=(!affected.HasValue||affected.Value.Contains(point))&&(includeGroundCover||ForestTree(tree.prototypeIndex))&&contains(point);
+                if(remove&&kept==null){kept=new List<TreeInstance>(source.Length);for(int j=0;j<i;j++)kept.Add(source[j]);}
+                if(!remove&&kept!=null)kept.Add(tree);
             }
-            int removed = MixedForest ? MixedForest.RemoveTrees(contains) : 0;
-            if (kept.Count == source.Length && removed == 0) return;
-            fullTreeInstances = kept.ToArray();
+            if(includeGroundCover&&groundCover){if(affected.HasValue)groundCover.InvalidateRegion(affected.Value);else groundCover.InvalidateWaterEdits();}
+            int removed = MixedForest ? MixedForest.RemoveTrees(p=>(!affected.HasValue||affected.Value.Contains(p))&&contains(p)) : 0;
+            if (kept==null && removed == 0) return;
+            if(kept!=null)fullTreeInstances = kept.ToArray();
             RefreshEditedForest();
         }
 

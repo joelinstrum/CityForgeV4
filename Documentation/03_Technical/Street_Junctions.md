@@ -1,6 +1,6 @@
 # Street junctions
 
-The four street IDs (paved-street and the three Founders streets) use PointWire's
+The street IDs (paved-street and all Founders streets) use PointWire's
 opt-in PlaceOnRelease gesture. Press/drag/release draws a street; individual clicks
 still place waypoints. Releasing at a snapped target completes a T. Continuing
 past the snap lock creates a crossing, shown by the same green square at the
@@ -23,8 +23,8 @@ sampled centerlines, without adding junction patches at every curve sample.
 
 DistrictStreetJunctions renders one terrain-following mesh per node. Quadratic inner
 corner fillets have a maximum 1.1m tangent length. Acute intersections receive longer
-approaches; neighboring nodes constrain the available length. Four original street
-albedos/tints blend by distance to the connected arms; per-surface UVs preserve
+approaches; neighboring nodes constrain the available length. Up to four connected
+surface albedos/tints blend by distance to the arms; per-surface UVs preserve
 world paving alignment and the dirt street's lengthwise wagon texture. The overlay
 fades into existing street surfaces over its final meter. It receives directional
 lighting/shadows but casts no extra shadows. Rendering uses the original authored

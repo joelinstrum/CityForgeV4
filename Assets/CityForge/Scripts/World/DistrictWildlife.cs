@@ -54,6 +54,8 @@ namespace CityForge.World
             {
             int count=Mathf.Clamp(Mathf.RoundToInt(land.Side*land.Side/12000),12,96);
             for(int i=0;i<count;i++)Spawn(library,false,false);
+            var fox=Array.Find(library.species,s=>s!=null&&s.id=="fox"&&s.prefab);
+            if(fox!=null){int existing=0;foreach(var animal in animals)if(animal.species.id=="fox")existing++;for(int i=existing;i<2;i++)Spawn(library,false,false,false,fox);}
             int fish=Mathf.Clamp(Mathf.RoundToInt(land.Side*land.Side/15000),24,80);
             for(int i=0;i<fish;i++)Spawn(library,true,false);
             for(int i=0;i<24;i++)Spawn(library,false,false,true);
@@ -97,11 +99,12 @@ namespace CityForge.World
                 var cell=Vector2Int.FloorToInt(p/4);if(!trunks.TryGetValue(cell,out var list))trunks[cell]=list=new List<Vector2>();list.Add(p);}
         }
         void OnEnable(){if(Land!=null)IndexTrees();}
-        void Spawn(WildlifeLibrary library,bool aquatic,bool birds,bool crabs=false)
+        void Spawn(WildlifeLibrary library,bool aquatic,bool birds,bool crabs=false,WildlifeSpecies forced=null)
         {
             var candidates=new List<WildlifeSpecies>();int weight=0;
             foreach(var s in library.species)if(s.prefab&&s.weight>0&&crabs==(s.habitat==WildlifeHabitat.RiverBankShallows)&&birds==(s.habitat==WildlifeHabitat.WoodlandBird||s.habitat==WildlifeHabitat.FlyingBird)&&aquatic==(s.habitat==WildlifeHabitat.Freshwater||s.habitat==WildlifeHabitat.River)){
                 candidates.Add(s);weight+=s.weight;}
+            if(forced!=null){candidates.Clear();candidates.Add(forced);weight=1;}
             if(weight==0)return;
             int pick=random.Next(weight);var species=candidates[0];foreach(var candidate in candidates){pick-=candidate.weight;if(pick<0){species=candidate;break;}}
             if(species.id=="wolf"||species.id=="bear")foreach(var a in animals)if(a.species.id==species.id)return;

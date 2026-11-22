@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using CityForge.Lots;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -11,7 +12,8 @@ namespace CityForge.UI
     {
         private TexturePaintTool texturePaintTool;
         private readonly List<RaycastResult> paintHits = new();
-        internal bool TexturePainting => texturePaintTool;
+        private int texturePaintReleaseFrame = -1;
+        internal bool TexturePainting => texturePaintTool || Time.frameCount == texturePaintReleaseFrame;
         internal void EndTexturePaint(){if(texturePaintTool)texturePaintTool.Close();}
         internal void BeginTexturePaint(Transform hud, LotDefinition lot, Action<GroundPaintData> changed, Action finished)
         {
@@ -20,7 +22,7 @@ namespace CityForge.UI
             var go=new GameObject("Lot Texturize tool");go.layer=PreviewLayer;go.transform.SetParent(stage,false);
             texturePaintTool=go.AddComponent<TexturePaintTool>();
             texturePaintTool.Initialize(hud,lot.groundPaint,Pointer,Project,_=>0,lot.LandBounds.Contains,
-                ()=>previewLot==lot,changed,()=>{texturePaintTool=null;finished();},lot.LandBounds);
+                ()=>previewLot==lot,changed,()=>{texturePaintReleaseFrame=Time.frameCount;texturePaintTool=null;finished();},lot.LandBounds);
             Vector2? Pointer()
             {
                 var canvas=image.canvas;var eventCamera=canvas.renderMode==RenderMode.ScreenSpaceOverlay?null:canvas.worldCamera;
@@ -47,8 +49,16 @@ namespace CityForge.UI
             if(PlayerMode)return;
             CloseAssetPopup();CloseChoices();StopOverlay();
             if(drawingPath)FinishGroundPath(false);if(drawingFence)FinishFencePath(false);
+            // The tool panel is a sibling under the HUD; disable other editor controls
+            // while leaving the preview surface available for brush hit testing.
+            var controls=GetComponentsInChildren<Selectable>(true);
+            var enabled=controls.Select(control=>control.interactable).ToArray();
+            foreach(var control in controls)control.interactable=false;
             viewport.BeginTexturePaint(GetComponentInParent<Canvas>().transform,session.Lot,
-                data=>session.Edit(lot=>lot.groundPaint=data),()=>Refresh());
+                data=>session.Edit(lot=>lot.groundPaint=data),()=>{
+                    for(int i=0;i<controls.Length;i++)if(controls[i])controls[i].interactable=enabled[i];
+                    Refresh();
+                });
         }
     }
 }

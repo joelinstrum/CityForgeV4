@@ -117,7 +117,7 @@ namespace CityForge.World
         internal void RefreshHarborStones()
         {
             foreach (var (position, radius, stone) in harborStones)
-                stone.SetActive(!View.HarborStoneOverlapsLot(position, radius));
+                stone.SetActive(!View.TerraformClears(position)&&!View.HarborStoneOverlapsLot(position, radius));
         }
     }
 }

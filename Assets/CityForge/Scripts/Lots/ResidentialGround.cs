@@ -80,12 +80,18 @@ namespace CityForge.Lots
                 libraries = config ? JsonUtility.FromJson<Catalog>(config.text)?.libraries : null;
                 libraries ??= Array.Empty<Library>();
             }
-            return Array.Find(libraries, item =>
+            var selected = Array.Find(libraries, item =>
                 (string.IsNullOrEmpty(item.lotCategory)
                     ? !industrial && (item.zone == TownZone.None ? residential : item.zone == zoning.zone)
                     : item.lotCategory == category) &&
                 item.wealth == wealth && item.era == era &&
                 (string.IsNullOrEmpty(lot.residentialGround.category) || item.category == lot.residentialGround.category));
+            if(selected!=null || !string.IsNullOrEmpty(lot.baseTexture))return selected;
+            // Untextured civic/ploppable lots use the same wealth grass library as homes.
+            var fallbackWealth=lot.wealth!=LotWealth.None?lot.wealth:zoning.wealth;
+            return Array.Find(libraries,item=>string.IsNullOrEmpty(item.lotCategory)&&item.zone==TownZone.None&&
+                item.wealth==fallbackWealth&&item.era==era&&
+                (string.IsNullOrEmpty(lot.residentialGround.category)||item.category==lot.residentialGround.category));
         }
 
         internal static string LotEra(LotDefinition lot) =>

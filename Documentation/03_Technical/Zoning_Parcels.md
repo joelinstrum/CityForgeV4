@@ -1,4 +1,23 @@
+# Shared growth fit allowance — November 21, 2026
+
+`LotZoningLayout.BuildingFitProblem` now uses the same placement bounds as the Lot Editor for non-waterfront zoning lots: up to5% of each lot dimension beyond each corresponding edge. This applies to all zoning enums and wealth levels, including single buildings and growable rows. The former exact dry-boundary check silently excluded otherwise accepted small-overhang candidates. Waterfront dry bounds and collisions with existing buildings remain strict. Layout/marker validity, parcel dimensions, frontage, road-pavement collision, slope, water and other normal growth rules are retained.
+
+A read-only before/after comparison of the saved zoning library found47 additional candidate placements:37 medium R1,1 low R1,1 low R2 and8 low C1, with other inspected pools unchanged. The QA fixture's stale R2 near-prefab references were repaired only in QA before both comparisons; main R2 references were already valid. No saved lot definitions or player regions were changed. Geometry regressions passed both saved college-block strips forR1/R2/R3/C1/C2/C3 and all three wealth selections; pavement and occupied neighboring lots still reject. Evidence: November20 ple/outputs/Schedules-Sunset-Growth. This removes a fit blocker; parcels still need a matching saved layout and eligible building.
+
 # Zoning parcel sizes and grid guides
+
+Commercial frontage recognizes all Founders Street surfaces, Paved Street, and
+ordinary Cobblestone Road/Brick Road. These masonry roads already have paving and
+sidewalks, so the former Road/Street name distinction no longer rejects an empty
+commercial site. The shared rule applies to commercial tiers and wealth categories;
+dirt/wagon/gravel/macadam/blacktop roads keep their existing non-frontage policy.
+Road picker descriptions and drag rejection feedback describe the accepted surfaces.
+
+The November20 college-block fix was checked against a read-only copy of Guilford's
+15:44 district35 save: both8×4 strips centered(-152,596) and(-184,596) pass with their
+original cobblestone records, saved water data and placed lot footprints. Selections
+crossing pavement or overlapping the occupied neighboring lots still fail. No road
+repaving, save migration or player map write is required.
 
 Preset 2×2, 3×3 and 4×4 blocks reserve complete square lots using saved
 `TownZoneCell` size and anchor metadata. Growth requires a saved zoning layout

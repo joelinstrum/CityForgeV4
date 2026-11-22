@@ -295,3 +295,11 @@ venv/
 # Original shared road-recess shader helper.
 !/Assets/CityForge/Resources/Region/RoadRecess.hlsl
 !/Assets/CityForge/Resources/Region/RoadRecess.hlsl.meta
+
+# Original night-only glazing shader; prepared building art stays private.
+!/Assets/CityForge/Resources/Region/NightWindowGlass.shader
+!/Assets/CityForge/Resources/Region/NightWindowGlass.shader.meta
+
+# Original leveler selection shader; no artwork.
+!/Assets/CityForge/Resources/Region/LevelerPreview.shader
+!/Assets/CityForge/Resources/Region/LevelerPreview.shader.meta

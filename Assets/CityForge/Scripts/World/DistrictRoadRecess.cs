@@ -71,6 +71,8 @@ namespace CityForge.World
         }
         private void BindRoadRecess(Material material)
         {
+            material.SetFloat("_BorderTextured",0);
+            material.SetFloat("_BorderSides",0);
             material.SetFloat("_RecessDepth", RoadRecessDepth);
             material.SetFloat("_RecessUseFootprint", roadRecessField ? 1 : 0);
             if (roadRecessField) material.SetTexture("_RecessFootprint", roadRecessField);

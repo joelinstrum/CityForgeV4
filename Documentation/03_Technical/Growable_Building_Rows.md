@@ -16,8 +16,8 @@ sets the line; its lateral coordinate does not constrain each doorway).
 
 Use Eligible buildings to choose the pool. A row needs room for at least two
 buildings; incompatible era/zone/wealth and depth/width failures remain excluded.
-Row gaps are0–4m;0 means joining walls touch. Rows always face the road, retain
-original model scale, and do not generate individual front paths across their
+Row gaps are0–4m;0 means joining walls touch. Rows always face the road, use each
+model's configured default placement scale without stretching, and do not generate individual front paths across their
 shared frontage. Single-building-only facing/path controls are disabled in row
 mode. Commercial1–3 use the same eligibility/frontage/growth pipeline and stored
 wealth, requiring actual matching content. Founders/Industrial low-wealth R3
@@ -32,13 +32,18 @@ Use selected buildings as footprint; applying removes just those selected models
 within the normal undoable editor edit. Save as a growable lot normally. Existing
 zoning parcel dimensions still apply: use Auto zoning or a matching fixed parcel.
 
-Building info / Row alignment exposes left/right wall X and front-step Z in metres
+Building Properties / Row alignment exposes left/right wall X and front-step Z in metres
 with the model rotated to face South. The supplied eight R3 homes have measured
 catalog defaults, extracted from wall-height geometry and low horizontal step
 ledges without changing art. Per-building overrides persist in the existing private
 BuildingInfo files and survive subsequent doorway-info saves. Other models fall
 back to bounding dimensions until calibrated; roof overhangs and props can make
 those defaults conservative.
+
+Markers are edited at 100% model scale. The row fitter scales a copy of those
+coordinates and the physical envelope using the catalog default, then saves the
+same scale on new row objects. Existing saved rows retain their authored object
+scales. See Building_Properties_Editor.md.
 
 ## Packing and runtime
 

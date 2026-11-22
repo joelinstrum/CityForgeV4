@@ -173,6 +173,9 @@ namespace CityForge.World
             var water = DistrictLotWater();
             var grownLots = new List<DistrictLotRecord>();
             var grownNames = new System.Collections.Generic.HashSet<string>();
+            // Developed zoning remains in the persistent grid. Do not retry growth from
+            // cells already hidden by a placed lot; their offset candidates create false overlap errors.
+            var occupiedGrowthCells = OccupiedGrowthCells();
             bool hasGrowableZoning = false;
             string blocked = null;
             foreach (var pass in passes)
@@ -181,6 +184,7 @@ namespace CityForge.World
                 if (!townZones.TryGetValue(cell, out var zone) || !SupportsLotGrowth(zone) ||
                     !InActiveDistrict(ZoneCorner(cell) +
                     Vector2.one * (DistrictGridCellMeters * .5f))) continue;
+                if(occupiedGrowthCells.Contains(cell))continue;
                 hasGrowableZoning = true;
                 var facing = residentialFacing.GetValueOrDefault(cell);
                 if (facing == TownZoneFacing.None && IsResidentialZone(zone)) continue;
@@ -189,8 +193,7 @@ namespace CityForge.World
                 if (!pass.TryGetValue(key, out var sizeGroups))
                 {
                     if (!layoutsByWealth.ContainsKey(key) && !fillersByWealth.ContainsKey(key))
-                        blocked ??= IsCommercialZone(zone) ? "Add a matching Founders-era shop and zoning layout." :
-                            $"Save a Founders-era R{(int)zone} · {new string('$', (int)wealth)} lot in the Zoning Lots library.";
+                        blocked ??= MissingGrowthContent(zone,wealth);
                     continue;
                 }
                 var requiredSize = ZonedLotSize(cell);
@@ -234,7 +237,7 @@ namespace CityForge.World
                     if (!frontageChecks.TryGetValue(frontageKey, out bool hasFrontage))
                     {
                         hasFrontage = ResidentialFrontageProblem(cells, maxDepth, out _,
-                            requiredFacing: roadFacing, commercial: IsCommercialZone(zone)) == null;
+                            requiredFacing: roadFacing, commercial: IsCommercialZone(zone), allowRoundedLotCorners: true) == null;
                         frontageChecks.Add(frontageKey, hasFrontage);
                     }
                     if (!hasFrontage)
@@ -251,7 +254,7 @@ namespace CityForge.World
                         if (!frontageChecks.TryGetValue(sideKey, out bool hasSideStreet))
                         {
                             hasSideStreet = ResidentialFrontageProblem(cells, LotDefinition.MaxTiles, out _,
-                                requiredFacing: sideFacing, commercial: IsCommercialZone(zone)) == null;
+                                requiredFacing: sideFacing, commercial: IsCommercialZone(zone), allowRoundedLotCorners: true) == null;
                             frontageChecks.Add(sideKey, hasSideStreet);
                         }
                         if (!hasSideStreet)
@@ -270,6 +273,13 @@ namespace CityForge.World
                     }
                     else
                         record.definition = LotDefinition.Parse(JsonUtility.ToJson(layout));
+                    if(GrowableBuildingsOverlapRoad(record))
+                    {
+                        blocked ??= "Keep buildings clear of the road surface.";
+                        continue;
+                    }
+                    PrepareLotGrading(record);
+                    HoldLotPopulation(record);
                     record.id = Guid.NewGuid().ToString("N");
                     LotPropStyles.Apply(record.definition, record.id, LotAssetCatalog.Load());
                     PlacedLots.Add(record);
@@ -281,6 +291,7 @@ namespace CityForge.World
             }
             if (grownNames.Count > 0)
             {
+                ClearDevelopedSites(grownLots);
                 PresentDistrictLots(grownLots);
                 foreach (var grown in grownLots) StartCoroutine(ConstructZonedLot(grown));
                 RefreshZoneOverlay();
@@ -435,6 +446,7 @@ namespace CityForge.World
             {
                 if (veil) veil.Reveal();
                 revealingLots.Remove(record);
+                ReleaseLotPopulation(record);
                 if (districtLotRoots.TryGetValue(record, out var reveal) && reveal) reveal.gameObject.SetActive(true);
                 if (site) Destroy(site.gameObject);
                 Destroy(wood);
@@ -520,6 +532,27 @@ namespace CityForge.World
                 zoneStatus.text = message;
         }
 
+        private HashSet<Vector2Int> OccupiedGrowthCells()
+        {
+            var occupied=new HashSet<Vector2Int>();var zero=ZoneCorner(Vector2Int.zero);var members=ActiveDistrictMembers;
+            foreach(var record in PlacedLots)
+            {
+                if(!members.Contains(record.district))continue;
+                var footprint=new DistrictLotFootprint(record);var bounds=footprint.Bounds;
+                var min=Vector2Int.FloorToInt((bounds.min-zero)/DistrictGridCellMeters);
+                var max=Vector2Int.CeilToInt((bounds.max-zero)/DistrictGridCellMeters);
+                for(int z=min.y;z<max.y;z++)for(int x=min.x;x<max.x;x++)
+                {var cell=new Vector2Int(x,z);if(footprint.Contains(ZoneCorner(cell)+Vector2.one*(DistrictGridCellMeters*.5f),.001f))occupied.Add(cell);}
+            }
+            return occupied;
+        }
+        private string MissingGrowthContent(TownZone zone,LotWealth wealth)
+        {
+            string label=new LotZoningLayout{zone=zone,wealth=wealth}.Label.Replace("-","");
+            var catalog=LotAssetCatalog.Load();bool models=catalog&&catalog.entries.Any(asset=>asset!=null&&asset.CanPreviewGrowable(zone,wealth,"founders"));
+            return models?$"{label}: layout missing.":
+                $"{label}: buildings missing.";
+        }
         private bool HasGrowthZoning(RectInt cells, TownZone targetZone, TownZoneFacing facing, LotWealth wealth, Vector2Int lotSize)
         {
             if (lotSize != Vector2Int.zero && cells.size != ParcelWorldSize(lotSize, facing)) return false;

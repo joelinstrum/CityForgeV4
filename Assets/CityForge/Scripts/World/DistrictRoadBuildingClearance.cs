@@ -64,48 +64,79 @@ namespace CityForge.World
             }
         }
 
-        private bool LotOverlapsDistrictRoad(DistrictLotRecord lot, float inset = 0f)
+        private const float LotRoadEdgeTolerance = .025f;
+        private readonly System.Runtime.CompilerServices.ConditionalWeakTable<Mesh,RoadGeometry> carriageways = new();
+        private RoadGeometry CarriagewayGeometry(DistrictRoadRecord road,Mesh rendered)
         {
-            var lotFootprint = new DistrictLotFootprint(lot);
-            var bounds = lotFootprint.Bounds;
-            var half = lot.definition.Size * .5f - Vector2.one * inset;
-            var corners = new[] { lotFootprint.WorldPoint(-half), lotFootprint.WorldPoint(new Vector2(-half.x, half.y)),
-                lotFootprint.WorldPoint(half), lotFootprint.WorldPoint(new Vector2(half.x, -half.y)) };
-            foreach (var filter in districtRoadMeshes.Values)
+            return carriageways.GetValue(rendered,_=>
             {
-                var mesh = filter.sharedMesh;
-                var road = mesh.bounds;
-                if (!bounds.Overlaps(Rect.MinMaxRect(road.min.x, road.min.z, road.max.x, road.max.z))) continue;
-                var geometry = frontageGeometry.GetValue(mesh, source => new RoadGeometry(source));
-                for (int i = 0; i < geometry.Triangles.Length; i += 3)
-                {
-                    var a = Planar(geometry.Vertices[geometry.Triangles[i]]);
-                    var b = Planar(geometry.Vertices[geometry.Triangles[i + 1]]);
-                    var c = Planar(geometry.Vertices[geometry.Triangles[i + 2]]);
-                    if (Overlap(Vector2.Perpendicular(corners[1] - corners[0])) &&
-                        Overlap(Vector2.Perpendicular(corners[2] - corners[1])) &&
-                        Overlap(Vector2.Perpendicular(b - a)) && Overlap(Vector2.Perpendicular(c - b)) &&
-                        Overlap(Vector2.Perpendicular(a - c))) return true;
+                // The saved guide width is pavement only; sidewalks, shoulders and presentation aprons do not reserve land.
+                var line=RoadCenterline(road);
+                var mesh=LotPathSurface.BuildMesh(new LotPathDefinition{points=System.Linq.Enumerable.ToArray(line),closed=road.closed,width=road.width},Vector2.one,0);
+                var result=new RoadGeometry(mesh);Destroy(mesh);return result;
+            });
+        }
 
+        // Empty ground at a rounded street corner may be clipped, at most one grid cell
+        // and one quarter of the lot's short side. Buildings remain strictly outside pavement.
+        private static float GrowableRoadCornerCut(LotDefinition lot) =>
+            Mathf.Min(DistrictGridCellMeters,Mathf.Min(lot.Size.x,lot.Size.y)*.25f);
+        private bool LotOverlapsDistrictRoad(DistrictLotRecord lot, float inset = 0f, float cornerCut = 0f)
+        {
+            var footprint = new DistrictLotFootprint(lot);
+            var half = lot.definition.Size * .5f - Vector2.one * LotRoadEdgeTolerance;
+            var corners = new List<Vector2>();
+            float cut = Mathf.Clamp(cornerCut,0,Mathf.Min(half.x,half.y)*.5f);
+            if (cut > 0)
+            {
+                corners.Add(footprint.WorldPoint(new Vector2(-half.x+cut,-half.y)));
+                corners.Add(footprint.WorldPoint(new Vector2(half.x-cut,-half.y)));
+                corners.Add(footprint.WorldPoint(new Vector2(half.x,-half.y+cut)));
+                corners.Add(footprint.WorldPoint(new Vector2(half.x,half.y-cut)));
+                corners.Add(footprint.WorldPoint(new Vector2(half.x-cut,half.y)));
+                corners.Add(footprint.WorldPoint(new Vector2(-half.x+cut,half.y)));
+                corners.Add(footprint.WorldPoint(new Vector2(-half.x,half.y-cut)));
+                corners.Add(footprint.WorldPoint(new Vector2(-half.x,-half.y+cut)));
+            }
+            else { corners.Add(footprint.WorldPoint(-half));corners.Add(footprint.WorldPoint(new Vector2(half.x,-half.y)));corners.Add(footprint.WorldPoint(half));corners.Add(footprint.WorldPoint(new Vector2(-half.x,half.y))); }
+            return PolygonOverlapsDistrictRoad(corners,footprint.Bounds);
+        }
+        private bool GrowableBuildingsOverlapRoad(DistrictLotRecord lot)
+        {
+            var catalog=LotAssetCatalog.Load();var footprint=new DistrictLotFootprint(lot);
+            foreach(var item in lot.definition.objects)
+            {
+                var asset=catalog.Find(item.assetId);if(asset?.category!="Buildings")continue;
+                var bounds=LotRuntimeLoader.Footprint(item,asset);
+                var corners=new[]{footprint.WorldPoint(bounds.min),footprint.WorldPoint(new Vector2(bounds.xMax,bounds.yMin)),footprint.WorldPoint(bounds.max),footprint.WorldPoint(new Vector2(bounds.xMin,bounds.yMax))};
+                if(PolygonOverlapsDistrictRoad(corners,footprint.Bounds))return true;
+            }
+            return false;
+        }
+        private bool PolygonOverlapsDistrictRoad(IReadOnlyList<Vector2> corners,Rect bounds)
+        {
+            foreach(var pair in districtRoadMeshes)
+            {
+                var mesh=pair.Value.sharedMesh;var road=mesh.bounds;
+                if(!bounds.Overlaps(Rect.MinMaxRect(road.min.x,road.min.z,road.max.x,road.max.z)))continue;
+                var geometry=CarriagewayGeometry(pair.Key,mesh);
+                for(int i=0;i<geometry.Triangles.Length;i+=3)
+                {
+                    var a=Planar(geometry.Vertices[geometry.Triangles[i]]);var b=Planar(geometry.Vertices[geometry.Triangles[i+1]]);var c=Planar(geometry.Vertices[geometry.Triangles[i+2]]);
+                    bool intersects=Overlap(Vector2.Perpendicular(b-a))&&Overlap(Vector2.Perpendicular(c-b))&&Overlap(Vector2.Perpendicular(a-c));
+                    for(int j=0;j<corners.Count&&intersects;j++)intersects=Overlap(Vector2.Perpendicular(corners[(j+1)%corners.Count]-corners[j]));
+                    if(intersects)return true;
                     bool Overlap(Vector2 axis)
                     {
-                        if (axis.sqrMagnitude < .000001f) return true;
-                        axis.Normalize();
-                        float low = float.PositiveInfinity, high = float.NegativeInfinity;
-                        foreach (var corner in corners)
-                        {
-                            float value = Vector2.Dot(corner, axis);
-                            low = Mathf.Min(low, value);
-                            high = Mathf.Max(high, value);
-                        }
-                        float p = Vector2.Dot(a, axis), q = Vector2.Dot(b, axis), r = Vector2.Dot(c, axis);
-                        return Mathf.Min(p, q, r) < high - .001f && Mathf.Max(p, q, r) > low + .001f;
+                        if(axis.sqrMagnitude<.000001f)return true;axis.Normalize();float low=float.PositiveInfinity,high=float.NegativeInfinity;
+                        foreach(var corner in corners){float value=Vector2.Dot(corner,axis);low=Mathf.Min(low,value);high=Mathf.Max(high,value);}
+                        float p=Vector2.Dot(a,axis),q=Vector2.Dot(b,axis),r=Vector2.Dot(c,axis);
+                        return Mathf.Min(p,q,r)<high-.001f&&Mathf.Max(p,q,r)>low+.001f;
                     }
                 }
             }
             return false;
-
-            static Vector2 Planar(Vector3 point) => new Vector2(point.x, point.z);
+            static Vector2 Planar(Vector3 point)=>new Vector2(point.x,point.z);
         }
 
         private bool RoadHitsBuilding(Mesh mesh, Vector3[] vertices)

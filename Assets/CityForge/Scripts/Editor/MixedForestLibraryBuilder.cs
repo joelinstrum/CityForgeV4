@@ -48,7 +48,9 @@ namespace CityForge.Editor
             }
             var library=AssetDatabase.LoadAssetAtPath<MixedForestLibrary>(Destination+"Library.asset");
             if(!library){library=ScriptableObject.CreateInstance<MixedForestLibrary>();AssetDatabase.CreateAsset(library,Destination+"Library.asset");}
-            library.prefabs=prefabs;library.weights=new[]{.112f,.112f,.112f,.112f,.112f,.16f,.21f,.07f};
+            // Retired slots remain aliases of kept trees, never removed model references.
+            prefabs[2]=prefabs[0];prefabs[5]=prefabs[3];
+            library.prefabs=prefabs;library.weights=new[]{.15384616f,.15384616f,0,.15384616f,.15384616f,0,.28846154f,.09615385f};
             library.shadowSources=new Mesh[shadowMap.Count];library.shadowReplacements=new Mesh[shadowMap.Count];int n=0;
             foreach(var pair in shadowMap){library.shadowSources[n]=pair.Key;library.shadowReplacements[n]=pair.Value;n++;}
             library.Validate();EditorUtility.SetDirty(library);AssetDatabase.SaveAssets();

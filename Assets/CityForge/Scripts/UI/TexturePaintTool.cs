@@ -34,6 +34,7 @@ namespace CityForge.UI
         private RectTransform palette;
         private Button paintButton, eraseButton;
         private Font paintHeadingFont;
+        private BrushFeedback feedback;
         internal void Initialize(Transform hud, GroundPaintData data, Func<Vector2?> getPointer, Func<Vector2, Vector2> screen,
             Func<Vector2, float> ground, Predicate<Vector2> allowed, Func<bool> editable, Action<GroundPaintData> changed,
             Action finished, Rect? clip = null)
@@ -44,7 +45,7 @@ namespace CityForge.UI
             rendering = gameObject.AddComponent<GroundPaintRenderer>(); rendering.Initialize(Data, ground, clip);
             lineMaterial = new Material(Resources.Load<Shader>("UI/ForestRemovalCircle")); lineMaterial.SetColor("_Color", new Color(1,.86f,.52f,.96f));
             outline = Line("Temporary paint boundary", .1f); brush = Line("Texture brush radius", .08f); brush.loop = true;
-            BuildPanel(hud); SetHint("Click around the area · Click the first marker to close · Backspace undoes a marker");
+            BuildPanel(hud); feedback=BrushFeedback.Create(hud); SetHint("Click around the area · Click the first marker to close · Backspace undoes a marker");
         }
         private LineRenderer Line(string title, float width)
         {
@@ -116,17 +117,17 @@ namespace CityForge.UI
         private void Update()
         {
             if(closing)return;
-            if(!canEdit()){FinishStroke();outline.enabled=brush.enabled=false;return;}
-            if(!Application.isFocused){FinishStroke();return;}
+            if(!canEdit()){FinishStroke();outline.enabled=brush.enabled=false;feedback?.Hide();return;}
+            if(!Application.isFocused){FinishStroke();feedback?.Hide();return;}
             if(Input.GetKeyDown(KeyCode.Escape)){Close();return;}
             if(Input.GetKeyDown(KeyCode.Backspace)&&!boundary.Closed)boundary.Undo();
-            if(waiting){if(!Input.GetMouseButton(0))waiting=false;return;}
+            if(waiting){if(!Input.GetMouseButton(0))waiting=false;feedback?.Hide();return;}
             var point=pointer();
-            if(!point.HasValue||!contains(point.Value)){FinishStroke();brush.enabled=false;DrawBoundary(null);return;}
+            if(!point.HasValue||!contains(point.Value)){FinishStroke();brush.enabled=false;feedback?.Hide();DrawBoundary(null);return;}
             DrawBoundary(point);
             if(!freeSpray&&!boundary.Closed)
             {
-                brush.enabled=false;
+                brush.enabled=false;feedback?.Hide();
                 if(Input.GetMouseButtonDown(0))
                 {
                     bool close=boundary.Points.Count>=3&&Vector2.Distance(project(boundary.Points[0]),project(point.Value))<=24;
@@ -169,9 +170,11 @@ namespace CityForge.UI
         private Vector3 Ground(Vector2 point,float lift)=>new(point.x,height(point)+lift,point.y);
         private void DrawBrush(Vector2 point)
         {
-            brush.enabled=true;brush.positionCount=64;
-            for(int i=0;i<64;i++){float angle=i*Mathf.PI*2/64;brush.SetPosition(i,Ground(point+new Vector2(Mathf.Cos(angle),Mathf.Sin(angle))*radius,.32f));}
+            brush.enabled=false;
+            feedback?.Show(point,radius,project,Input.mousePosition);
         }
+        private void OnDisable(){feedback?.Hide();}
+
         internal void FinishStroke()
         {
             if(!stroke)return;stroke=false;Data.PruneEmpty();Data.Flush();rendering.RemoveMissing(Data);
@@ -190,7 +193,7 @@ namespace CityForge.UI
             committed?.Invoke(Data.Copy());waiting=true;
         }
         internal void Close(){if(closing)return;FinishStroke();closing=true;gameObject.SetActive(false);if(panel)panel.gameObject.SetActive(false);closed?.Invoke();Destroy(gameObject);}
-        private void OnDestroy(){if(panel)Destroy(panel.gameObject);if(hint)Destroy(hint.gameObject);if(lineMaterial)Destroy(lineMaterial);if(paintHeadingFont)Destroy(paintHeadingFont);}
+        private void OnDestroy(){if(feedback){feedback.Hide();Destroy(feedback.gameObject);}if(panel)Destroy(panel.gameObject);if(hint)Destroy(hint.gameObject);if(lineMaterial)Destroy(lineMaterial);if(paintHeadingFont)Destroy(paintHeadingFont);}
         private void SetHint(string text){if(hint)hint.text=text;}
         private static RectTransform Rect(Transform parent,string name,Vector2 at,Vector2 size)
         {var go=new GameObject(name,typeof(RectTransform));go.transform.SetParent(parent,false);var r=(RectTransform)go.transform;r.anchorMin=r.anchorMax=r.pivot=new Vector2(0,1);r.anchoredPosition=at;r.sizeDelta=size;return r;}

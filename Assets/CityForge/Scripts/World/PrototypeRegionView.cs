@@ -215,7 +215,7 @@ namespace CityForge.World
         public void ReleaseLoadedMeadow(){LoadedMeadow=null;}
         public bool LoadedFromSnapshot {get;private set;}
         public bool IsSaving {get;private set;}
-        internal bool BlocksCameraZoom => DistrictScriptDialogOpen || founderPicker || savedLotPicker || transportModal || playerLotWorkspace ||
+        internal bool BlocksCameraZoom => parkPathOptions || DistrictScriptDialogOpen || founderPicker || savedLotPicker || transportModal || playerLotWorkspace ||
             (townPanel && townPanel.gameObject.activeInHierarchy) ||
             (afternoonLightingPanel && afternoonLightingPanel.activeInHierarchy) || RemakeBlocksInput;
         public void SaveCurrentRegion()
@@ -333,6 +333,7 @@ namespace CityForge.World
             {
                 progress?.Invoke("Preparing region",.15f);yield return null;
                 if (snapshot?.info.lots != null) view.PlacedLots.AddRange(snapshot.info.lots);
+                if (snapshot?.info.zoneGroundPlanes != null) view.ZoneGroundPlanes.AddRange(snapshot.info.zoneGroundPlanes);
                 view.RestoreReadRegionMessages(snapshot?.info.readMessages);
                 view.RestoreTownZones(snapshot?.info.townZones, snapshot?.info.townZoneGridVersion ?? 0);
                 view.RestoreDistrictRoads(snapshot?.info.districtRoads);
@@ -452,6 +453,7 @@ namespace CityForge.World
             camera.backgroundColor = new Color(.075f, .105f, .12f);
             var control=cameraObject.AddComponent<CityForgeCameraController>();control.FrameRegion(MapSide,VerticalHeight);control.enabled=false;
             cameraObject.AddComponent<DistrictHorizon>().Initialize(this, control, VerticalHeight);
+            gameObject.AddComponent<DistrictSoundscape>().Initialize(this, control);
             BuildDistrictLines();
             var surfaceMs = buildTimer.ElapsedMilliseconds;
             if(!deferLegacyTrees){legacyTreesReady=true;BuildTrees(seed);}
@@ -822,6 +824,13 @@ namespace CityForge.World
 
         private void Update()
         {
+            var rideRig = GetComponentInChildren<CityForge.CameraSystem.CityForgeCameraController>();
+            if (rideRig && rideRig.HandleRideInput(this))
+            {
+                TickDistrictClock();
+                TickPlacedPedestrians();
+                return;
+            }
             // Cancel a followed test before any modal/tool or navigation consumes Escape.
             if (Input.GetKeyDown(KeyCode.Escape) && EndHarassTest()) { CloseDistrictScripts(); return; }
             if (UpdateRegionMessage()) return;
@@ -848,6 +857,8 @@ namespace CityForge.World
             }
             TickPlacedPedestrians();
             TickDistrictEagle();
+            if(levelerNature&&levelerArmed&&UpdateLeveler())return;
+            if (DistrictPaintOwnsInput) return; // Painting owns world input until explicitly finished.
             if ((!regionHudVisibility || regionHudVisibility.alpha > 0f) && UpdateDistrictScripts()) return;
             if (armedDistrictActor != null && Input.GetKeyDown(KeyCode.Escape))
             {
@@ -880,9 +891,10 @@ namespace CityForge.World
             }
             UpdateLotGrowth();
             if (districtTexturePaint) return;
+            UpdateParkPathEditor();
             if(ParkPathArmed){UpdateParkPathPreset();return;}
             if (regionHudVisibility && regionHudVisibility.alpha == 0f) return;
-            if (UpdateDetonate() || UpdateParkTreeBrush() || UpdateStreetscape()) return;
+            if (UpdateLeveler() || UpdateDetonate() || UpdateParkTreeBrush() || UpdateStreetscape()) return;
             if (UpdateRoadPlacement() || UpdateRoadContext() || UpdateRoadPaths()) return;
             if (townTools && townTools.HandleDistrictContext()) return;
             if (UpdateLotPlacement()) return;
@@ -923,7 +935,9 @@ namespace CityForge.World
         private bool orbitingSlab;
         private void OnGUI()
         {
-            if(districtTexturePaint||ParkPathArmed||parkPathOptions||DistrictScriptDialogOpen||RemakeBlocksInput||DistrictLoading||IsSaving||playerLotWorkspace||lotPlacementDraft!=null||founderPicker||savedLotPicker||transportModal||ParkTreeBrushArmed||streetscapeAsset != null){
+            var rideRig = GetComponentInChildren<CityForge.CameraSystem.CityForgeCameraController>();
+            if (rideRig && rideRig.Riding) return;
+            if(DistrictPaintOwnsInput||ParkPathArmed||(parkPathOptions&&selectedParkPath==null)||DistrictScriptDialogOpen||RemakeBlocksInput||DistrictLoading||IsSaving||playerLotWorkspace||lotPlacementDraft!=null||founderPicker||savedLotPicker||transportModal||ParkTreeBrushArmed||streetscapeAsset != null){
                 orbitingSlab=false;
                 return;
             }
@@ -963,6 +977,7 @@ namespace CityForge.World
             if (SelectedDistrict >= 0)
             {
                 var nature = GetComponent<CityForge.UI.NatureToolbar>();
+                if((!nature || nature.Selected == CityForge.UI.NatureTool.None)&&TrySelectParkPath(ray)){pointer.Use();return;}
                 if ((!nature || nature.Selected == CityForge.UI.NatureTool.None) && TryStartRoadFromClick(position))
                 {
                     pointer.Use();
@@ -1002,7 +1017,8 @@ namespace CityForge.World
             districtLoading=true;var camera=GetComponentInChildren<CityForgeCameraController>();
             bool previousControl=camera.enabled;camera.enabled=false;enabled=false;
             string name=GridSide==2?DistrictNames[index]+" District":$"District {index%GridSide+1}–{index/GridSide+1}";
-            var overlay=CityForge.UI.RegionLoadingOverlay.Show(RegionName+" / "+name,null,true);
+            var town=TownsInDistrict(index).FirstOrDefault(t=>!string.IsNullOrWhiteSpace(t.name));
+            var overlay=CityForge.UI.RegionLoadingOverlay.Show((town?.name ?? name)+", "+RegionName,null,true);
             overlay.BeginDistrict(EnterDistrictStages(index,overlay.Report),()=>{
                 if(!this)return;districtLoading=false;enabled=true;camera.enabled=previousControl;
                 if (camera.enabled && TryDistrictFlyInFocus(out var destination))

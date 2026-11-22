@@ -67,6 +67,14 @@ namespace CityForge.World
         public int PendingTiles=>pending.Count-nextPending+(building!=null?1:0);
         Vector2Int lastCell=new(int.MinValue,int.MinValue);int lastRadius;
         public int LoadedTiles=>tiles.Count;
+        internal void InvalidateRegion(Rect bounds)
+        {
+            bool Intersects(Vector2Int cell)=>bounds.Overlaps(new Rect((Vector2)cell*TileSide,Vector2.one*TileSide));
+            if(building!=null&&Intersects(buildingCell)){(building as IDisposable)?.Dispose();building=null;}
+            expired.Clear();foreach(var tile in tiles)if(Intersects(tile.Key))expired.Add(tile.Key);
+            foreach(var cell in expired){tiles[cell].SetActive(false);Destroy(tiles[cell]);tiles.Remove(cell);}
+            lastCell=new Vector2Int(int.MinValue,int.MinValue);
+        }
         public void InvalidateWaterEdits(){
             (building as IDisposable)?.Dispose();building=null;
             foreach(var tile in tiles.Values)if(tile){tile.SetActive(false);Destroy(tile);}
@@ -141,7 +149,7 @@ namespace CityForge.World
             if(landscape.SmallPlantsEnabled)for(int k=0;k<2100;k++){
                 if(k%32==0&&BudgetSpent)yield return null;
                 var p=new Vector2((cell.x+R())*TileSide,(cell.y+R())*TileSide);
-                if(landscape.View.InPlayerChannelClearing(p)||landscape.View.InCampClearing(p)||landscape.MountainVegetation(p)<.35f||!landscape.Contains(p)||landscape.WaterDistance(p)<.3f||landscape.ExposedRiverBed(p)||landscape.Height(p)<landscape.View.SeaLevel+.12f||landscape.RoadDistance(p)<baseline.roadWidth+.4f)continue;
+                if(landscape.View.LotClearsForest(p)||landscape.View.InPlayerChannelClearing(p)||landscape.View.InCampClearing(p)||landscape.MountainVegetation(p)<.35f||!landscape.Contains(p)||landscape.WaterDistance(p)<.3f||landscape.ExposedRiverBed(p)||landscape.Height(p)<landscape.View.SeaLevel+.12f||landscape.RoadDistance(p)<baseline.roadWidth+.4f)continue;
                 if(landscape.CoastalBeachWeight(p)>.5f||roadShoulders?.CoversTraveledArea(cell,p)==true)continue;
                 if(landscape.View.Coastline&&(landscape.Height(p)<landscape.View.SeaLevel+7||landscape.MountainSlope(p)>24))continue;
                 float forest=landscape.Canopy(p),density=Mathf.Lerp(.75f,.18f,forest)*(.8f+.2f*landscape.Noise(p,31));if(R()>density)continue;
@@ -158,7 +166,7 @@ namespace CityForge.World
             if(landscape.SmallPlantsEnabled&&baseline.forestFloorPlants!=null)for(int k=0;k<180;k++){
                 if(k%32==0&&BudgetSpent)yield return null;
                 var p=new Vector2((cell.x+R())*TileSide,(cell.y+R())*TileSide);
-                if(landscape.View.InPlayerChannelClearing(p)||landscape.View.InCampClearing(p)||landscape.MountainVegetation(p)<.35f||!landscape.Contains(p)||landscape.WaterDistance(p)<.3f||landscape.ExposedRiverBed(p)||landscape.Canopy(p)<.22f||landscape.Noise(p,13,8)<.48f||landscape.Height(p)<landscape.View.SeaLevel+.15f||landscape.RoadDistance(p)<baseline.roadWidth+1)continue;
+                if(landscape.View.LotClearsForest(p)||landscape.View.InPlayerChannelClearing(p)||landscape.View.InCampClearing(p)||landscape.MountainVegetation(p)<.35f||!landscape.Contains(p)||landscape.WaterDistance(p)<.3f||landscape.ExposedRiverBed(p)||landscape.Canopy(p)<.22f||landscape.Noise(p,13,8)<.48f||landscape.Height(p)<landscape.View.SeaLevel+.15f||landscape.RoadDistance(p)<baseline.roadWidth+1)continue;
                 if(roadShoulders?.CoversTraveledArea(cell,p)==true)continue;
                 var plant=baseline.forestFloorPlants[k%baseline.forestFloorPlants.Length];var matrix=Matrix4x4.TRS(new Vector3(p.x,landscape.Height(p)+.01f,p.y),Quaternion.Euler(0,R()*360,0),Vector3.one*baseline.forestFloorScale*(.7f+R()*.5f));
                 foreach(var piece in plant.pieces){var key=(piece.mesh,piece.material,piece.submesh);if(!lists.TryGetValue(key,out var list))lists[key]=list=new List<Matrix4x4>();list.Add(matrix*piece.local);}
@@ -171,7 +179,7 @@ namespace CityForge.World
                 {
                     if (BudgetSpent) yield return null;
                     var p = detail.Point;
-                    if (!landscape.Contains(p) || landscape.View.InPlayerChannelClearing(p) ||
+                    if (!landscape.Contains(p) || landscape.View.LotClearsForest(p) || landscape.View.InPlayerChannelClearing(p) ||
                         landscape.View.InCampClearing(p) || landscape.MountainVegetation(p) < .35f ||
                         landscape.ExposedRiverBed(p)) continue;
                     float height = landscape.Height(p);

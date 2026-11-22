@@ -25,6 +25,24 @@ namespace CityForge.World
         private CityForgeCameraController founderCameraControl;
         private bool founderCameraWasEnabled, offeredFounderPicker;
         private LotDefinition lotPlacementDraft;
+        private GameObject placementTerrainChoice;
+        private DistrictLotRecord pendingTerrainPlacement;
+        private void ShowPlacementTerrainChoice(RegionTown capital,DistrictLotRecord record)
+        {
+            pendingTerrainPlacement=JsonUtility.FromJson<DistrictLotRecord>(JsonUtility.ToJson(record));
+            var overlay=FounderRect(townToolbar.parent,"Choose lot terrain",Vector2.zero,Vector2.zero);
+            overlay.anchorMin=Vector2.zero;overlay.anchorMax=Vector2.one;overlay.offsetMin=overlay.offsetMax=Vector2.zero;
+            overlay.gameObject.AddComponent<Image>().color=new Color(0,0,0,.5f);placementTerrainChoice=overlay.gameObject;
+            var panel=FounderRect(overlay,"Lot terrain",Vector2.zero,new Vector2(650,260));
+            var image=panel.gameObject.AddComponent<Image>();image.sprite=ZoneModalArtwork.Panel;image.type=Image.Type.Sliced;
+            FounderText(panel,"How should this lot meet the ground?",new Vector2(0,88),new Vector2(610,42),25).color=TownGold;
+            FounderText(panel,"Your placement is fixed. Choose the terrain before construction.",new Vector2(0,42),new Vector2(610,34),17).color=TownGold;
+            void Choose(bool level){var placed=pendingTerrainPlacement;if(placed==null)return;placed.definition.levelLot=level;pendingTerrainPlacement=null;placementTerrainChoice.SetActive(false);Destroy(placementTerrainChoice);placementTerrainChoice=null;CommitLotPlacement(capital,placed,true);}
+            var slope=TownButton(panel,lotFont,"Follow ground slope",24,-133,292,()=>Choose(false));
+            var flat=TownButton(panel,lotFont,"Level lot",334,-133,292,()=>Choose(true));
+            foreach(var button in new[]{slope,flat}){button.image.sprite=ZoneModalArtwork.Dark;button.image.type=Image.Type.Sliced;button.image.color=Color.white;}
+            var cancel=TownButton(panel,lotFont,"Cancel placement",175,-199,300,()=>CancelLotPlacement());cancel.image.sprite=ZoneModalArtwork.Dark;cancel.image.type=Image.Type.Sliced;
+        }
         private DistrictLotRecord movingDistrictLot;
         private int lotMoveRotation;
         private bool lotMoveDragging, lotMoveCursorActive;
@@ -218,7 +236,7 @@ namespace CityForge.World
             lastRepaveSurface = null;
             GetComponent<NatureToolbar>()?.Dismiss();
             SelectDistrictLot(null);
-            lotPlacementDraft = lot;
+            lotPlacementDraft = LotDefinition.Parse(JsonUtility.ToJson(lot));
             movingDistrictLot = moving;
             if (moving != null)
             {
@@ -257,6 +275,8 @@ namespace CityForge.World
 
         private void CancelLotPlacement(bool restoreUi = true)
         {
+            pendingTerrainPlacement=null;
+            if(placementTerrainChoice){placementTerrainChoice.SetActive(false);Destroy(placementTerrainChoice);placementTerrainChoice=null;}
             CloseSavedLotPicker();
             DestroySavedLotGhost();
             if(extractionSphere)extractionSphere.SetActive(false);
@@ -335,6 +355,8 @@ namespace CityForge.World
 
         private void UpdateLotCursor(RegionTown capital)
         {
+            if(pendingTerrainPlacement!=null)return;
+
             if (Input.GetKeyDown(KeyCode.Tab))
             {
                 if (movingDistrictLot != null) lotMoveRotation = (lotMoveRotation + 1) % 8;
@@ -358,9 +380,13 @@ namespace CityForge.World
             UpdateLotPointer(capital, ray, mouse, pressed, Input.GetMouseButton(0), released, overUi);
         }
 
+        private float nextLotPreviewCheck;
         private void UpdateLotPointer(RegionTown capital, Ray ray, Vector2 mouse,
             bool pressed, bool held, bool released, bool overUi)
         {
+            if(pendingTerrainPlacement!=null)return;
+            if(!pressed&&!released&&!overUi&&lotPlacementEvaluated&&Time.unscaledTime<nextLotPreviewCheck)return;
+            nextLotPreviewCheck=Time.unscaledTime+.0833f;
             if (lotGhost) lotGhost.SetActive(false);
             if(extractionSphere)extractionSphere.SetActive(false);
             lotOutline.enabled = false;
@@ -402,7 +428,8 @@ namespace CityForge.World
             };
             var origin = DistrictOrigin(district);
             record.center = SnapLotCenter(record, origin, cursor);
-            if (!fixedDistrict)
+            if(!record.definition.IsWaterfront&&!Input.GetKey(KeyCode.LeftShift)&&!Input.GetKey(KeyCode.RightShift))record.center=SnapLotToRoadEdge(record);
+            // Keep the original cell containing the lot, including inside combined districts.
             {
                 record.district = DistrictAtWorld(new Vector3(record.center.x, 0, record.center.y));
                 if (record.district < 0) return;
@@ -411,7 +438,7 @@ namespace CityForge.World
                 record.district != evaluatedLotPlacement.district ||
                 (LotExtraction.Applies(record.definition) && (captureRevision != WoodlandRevision || captureDiscoveries != RegionalResources.DiscoveryCount || captureSeason != VisualSeason)))
             {
-                var districtBounds = new Rect(origin, Vector2.one * DistrictSide);
+                var districtBounds = ActiveDistrictBounds; // Founding may use any member of the capital’s combined district.
                 if (record.definition.IsWaterfront && movingDistrictLot == null)
                     lotPlacementProblem = OrientWaterfrontPlacement(record, fixedDistrict, districtBounds);
                 else
@@ -428,12 +455,12 @@ namespace CityForge.World
             if (waterfrontGuide) waterfrontGuide.enabled = true;
             if (movingDistrictLot == null)
             {
-                SetLotFeedback((lotPlacementProblem ?? "Click to place " + lotPlacementDraft.name) + " · Tab to rotate · Esc to cancel");
+                SetLotFeedback((lotPlacementProblem ?? "Click to place " + lotPlacementDraft.name) + " · Tab to rotate · Shift bypasses road snap · Esc to cancel");
                 if (pressed && lotPlacementProblem == null) CommitLotPlacement(capital, evaluatedLotPlacement);
                 return;
             }
 
-            SetLotFeedback((lotPlacementProblem ?? "Release to place the lot") + " · Tab to rotate · Esc to cancel");
+            SetLotFeedback((lotPlacementProblem ?? "Release to place the lot") + " · Tab to rotate · Shift bypasses road snap · Esc to cancel");
             PreviewLotMove(lotPlacementProblem == null ? evaluatedLotPlacement : movingDistrictLot);
             if (!released) return;
             if (lotPlacementProblem == null) CommitLotPlacement(capital, evaluatedLotPlacement);
@@ -526,7 +553,7 @@ namespace CityForge.World
             // use grid intersections for their centers because their corners cannot align.
             var offset = record.diagonalRotation ? Vector2.zero :
                 record.definition.SizeForRotation(record.rotation) * .5f;
-            float tile = record.definition.IsWaterfront ? 2f : LotDefinition.TileMeters;
+            float tile = record.definition.IsWaterfront ? 2f : 1f;
             var local = (cursor - origin - offset) / tile;
             return origin + offset + new Vector2(Mathf.Round(local.x), Mathf.Round(local.y)) * tile;
         }
@@ -582,22 +609,30 @@ namespace CityForge.World
             }
         }
 
-        private void CommitLotPlacement(RegionTown capital, DistrictLotRecord record)
+        private void CommitLotPlacement(RegionTown capital, DistrictLotRecord record, bool terrainChosen=false)
         {
             var problem = ExtractionSiteProblem(record, force:true) ?? LotSiteProblem(record, DistrictLotWater(), editing: movingDistrictLot != null, replacing: true);
             if (problem != null)
             {
                 lotPlacementWater = DistrictLotWater();
                 lotPlacementEvaluated = false;
+                SetLotFeedback(problem);
                 return;
             }
+            if(!terrainChosen&&movingDistrictLot==null&&record.definition.type!=LotType.Zoning&&!record.definition.IsWaterfront){ShowPlacementTerrainChoice(capital,record);return;}
             ClearLotStructures(record);
             if (movingDistrictLot != null)
             {
+                movingDistrictLot.definition=LotDefinition.Parse(JsonUtility.ToJson(record.definition));
                 movingDistrictLot.center = record.center;
                 movingDistrictLot.district = record.district;
                 movingDistrictLot.RotationSteps = record.RotationSteps;
                 movingDistrictLot.waterfrontDeckHeight = record.waterfrontDeckHeight;
+                if (movingDistrictLot.cutToLowest)
+                {
+                    PrepareLotGrading(record);
+                    movingDistrictLot.cutGroundHeight = record.cutGroundHeight;
+                }
                 ClearLotVegetation(movingDistrictLot);
                 if (movingDistrictLot.definition.type == LotType.Zoning) QueueLotGrowth();
                 var movedLot = movingDistrictLot;
@@ -609,6 +644,8 @@ namespace CityForge.World
             record.id = Guid.NewGuid().ToString("N");
             record.definition = LotDefinition.Parse(JsonUtility.ToJson(record.definition));
             record.authoredElevationVersion = 1;
+            if (record.definition.type == LotType.Zoning) PrepareLotGrading(record);
+            HoldLotPopulation(record);ReleaseLotPopulation(record);
             PlacedLots.Add(record);
             RegisterDistrictTownCenter(record);
             ClearLotVegetation(record);
@@ -652,13 +689,16 @@ namespace CityForge.World
             var footprint = new DistrictLotFootprint(record);
             var half = record.definition.Size * .5f;
             Vector2[] corners = { -half, new Vector2(half.x, -half.y), half, new Vector2(-half.x, half.y) };
+            float? platform = record.definition.IsWaterfront || !record.definition.levelLot ? null :
+                LotHeight(record.center)+record.definition.elevation+record.elevation; // Full grade sampling happens on commit only.
             const int samplesPerEdge = 16;
             outline.positionCount = corners.Length * samplesPerEdge;
             for (int edge = 0; edge < corners.Length; edge++)
             for (int sample = 0; sample < samplesPerEdge; sample++)
             {
                 var local = Vector2.Lerp(corners[edge], corners[(edge + 1) % corners.Length], (float)sample / samplesPerEdge);
-                outline.SetPosition(edge * samplesPerEdge + sample, LotOutlinePoint(record, footprint.WorldPoint(local), water));
+                var world=footprint.WorldPoint(local);
+                outline.SetPosition(edge * samplesPerEdge + sample, platform.HasValue ? new Vector3(world.x,platform.Value+.35f,world.y) : LotOutlinePoint(record,world,water));
             }
         }
 

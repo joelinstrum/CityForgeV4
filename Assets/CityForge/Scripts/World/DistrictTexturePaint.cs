@@ -9,6 +9,8 @@ namespace CityForge.World
     public sealed partial class PrototypeRegionView
     {
         private bool tearingDownPaint;
+        private int paintInputReleaseFrame = -1;
+        private bool DistrictPaintOwnsInput => districtTexturePaint || Time.frameCount == paintInputReleaseFrame;
         private GroundPaintData districtGroundPaint = new();
         private TexturePaintTool districtTexturePaint;
         private GroundPaintRenderer districtPaintRendering;
@@ -37,7 +39,7 @@ namespace CityForge.World
         private void OpenTexturize()
         {
             if(!CanBuildTown||IsSaving)return;
-            CancelTexturePaint();CancelZoneDrag();CancelZonedBlock(false);zoneToolArmed=false;CloseRoadContext();SetRoadPaths(false);
+            CancelTexturePaint();CancelParkTreeBrush();CancelZoneDrag();CancelZonedBlock(false);zoneToolArmed=false;CloseRoadContext();SetRoadPaths(false);
             CloseTownSection();CancelRoadPlacement();CancelLotPlacement();CancelDistrictActor();SelectDistrictLot(null);
             if(districtPaintRendering)districtPaintRendering.gameObject.SetActive(false);
             var camera=GetComponentInChildren<CameraSystem.CityForgeCameraController>().GetComponent<Camera>();
@@ -46,7 +48,7 @@ namespace CityForge.World
             districtTexturePaint.Initialize(townToolbar.parent,districtGroundPaint,Pointer,Project,LotHeight,
                 point=>InActiveDistrict(point)&&!PaintHitsBuilding(point),
                 ()=>CanBuildTown&&TownConstructionVisible&&!IsSaving&&!DistrictLoading,
-                data=>districtGroundPaint=data,()=>{districtTexturePaint=null;RebuildGroundPaint();},ActiveDistrictBounds);
+                data=>districtGroundPaint=data,()=>{paintInputReleaseFrame=Time.frameCount;districtTexturePaint=null;RebuildGroundPaint();},ActiveDistrictBounds);
             Vector2? Pointer()
             {
                 if(EventSystem.current&&EventSystem.current.IsPointerOverGameObject())return null;

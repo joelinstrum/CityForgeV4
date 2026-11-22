@@ -11,7 +11,11 @@ namespace CityForge.World
         public static GameObject[] LoadPrefabs(){
             var result=new GameObject[SpeciesCount];
             for(int i=0;i<result.Length;i++){
-                result[i]=Resources.Load<GameObject>("Trees/MountainEvergreen/"+SpeciesNames[i]);
+                // The retired pilot slot stays valid but is not presented. Use the kept reduced
+                // Fraser/Cilician assets, rather than their separately rejected source versions.
+                string path=i==0||i==1?"Trees/MountainEvergreen/BalsamFir":
+                    "Lots/SeasonalTrees/"+(i==2?"fraser-fir":"cilician-fir")+"/Summer";
+                result[i]=Resources.Load<GameObject>(path);
                 if(!result[i])throw new InvalidOperationException("Missing mountain tree: "+SpeciesNames[i]);
             }
             return result;

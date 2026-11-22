@@ -29,6 +29,9 @@ namespace CityForge.World
         public int authoredElevationVersion;
         public float elevation;
         public float waterfrontDeckHeight;
+        // New pre-built zoning lots cut down to this saved world height. Old saves retain slope.
+        public bool cutToLowest;
+        public float cutGroundHeight;
         public LotDefinition definition;
         public LotCustomization customization;
         public string growthBuildingId;
@@ -168,7 +171,7 @@ namespace CityForge.World
 
         private void SelectDistrictLot(DistrictLotRecord record)
         {
-            if (record != null && (districtTexturePaint || ParkPathArmed)) return;
+            if (record != null && (DistrictPaintOwnsInput || ParkPathArmed)) return;
             selectedDistrictLot = record;
             if (!selectedLotPanel) return;
             selectedLotPanel.SetActive(record != null);
@@ -249,7 +252,7 @@ namespace CityForge.World
 
         private bool TrySelectDistrictLot(Ray ray)
         {
-            if (districtTexturePaint || ParkPathArmed) return false;
+            if (DistrictPaintOwnsInput || ParkPathArmed) return false;
             var nature = GetComponent<NatureToolbar>();
             if (nature && nature.Selected != NatureTool.None) return false;
             var picked = PickDistrictLot(ray);
@@ -519,7 +522,8 @@ namespace CityForge.World
                 if (!replacing && (record.id == null || record.id != other.id) && footprint.Overlaps(new DistrictLotFootprint(other)))
                     return "That lot overlaps another lot.";
 
-            if (LotOverlapsDistrictRoad(record, growing ? ResidentialRoadCornerInset : 0f)) return "Keep lots clear of roads.";
+            float cornerCut=growing&&!record.definition.levelLot&&Mathf.Abs(record.elevation+record.definition.elevation)<.001f?GrowableRoadCornerCut(record.definition):0;
+            if (LotOverlapsDistrictRoad(record, LotRoadEdgeTolerance,cornerCut)) return "Keep lots clear of roads.";
 
             if (!growing && ExtractionSiteProblem(record) is { } captureProblem) return captureProblem;
             if (record.definition.IsWaterfront)
@@ -529,7 +533,7 @@ namespace CityForge.World
             float low = float.PositiveInfinity, high = float.NegativeInfinity;
             var size = record.definition.Size;
             // Keep the grade limit comparable across different growable lot widths.
-            float maxRise = growing ? Mathf.Clamp(Mathf.Min(size.x, size.y) * .16f, 2f, 5.2f) : 2f;
+            float maxRise = DistrictLotFoundation.MaximumRise;
             int stepsX = Mathf.CeilToInt(size.x / 2);
             int stepsY = Mathf.CeilToInt(size.y / 2);
             for (int z = 0; z <= stepsY; z++)
@@ -540,10 +544,10 @@ namespace CityForge.World
                 if (!InActiveDistrict(point) || (water != null ? !water.Dry(point) :
                     !IsTownLand(point / MapSide + Vector2.one * .5f)))
                     return "Choose dry ground inside the district.";
-                float height = LotHeight(point);
+                float height = LotHeight(point); // Validate the current graded plane, not the buried original hillside.
                 low = Mathf.Min(low, height);
                 high = Mathf.Max(high, height);
-                if (!editing && high - low > maxRise) return "Choose flatter ground.";
+                if (!editing && high - low > maxRise) return "This slope needs more than 12 m of retaining wall. Choose a gentler site.";
             }
             return null;
         }
@@ -709,9 +713,24 @@ namespace CityForge.World
                 half.x * Mathf.Abs(Vector2.Dot(axis, right)) + half.y * Mathf.Abs(Vector2.Dot(axis, forward));
         }
 
-        private float LotHeight(Vector2 point)
+        private float LotHeight(Vector2 point) => TryZoneGroundHeight(point,out var level,true) ? level : TryPlatformHeight(point,out level) ? level : NaturalLotHeight(point);
+
+        private float CurrentLotTerrainHeight(Vector2 point)
         {
-            if (ApprovedDistrict && ApprovedDistrict.DisplayTerrain) return ApprovedDistrict.Height(point);
+            if(ApprovedDistrict && ApprovedDistrict.DisplayTerrain)return ApprovedDistrict.Height(point);
+            return terrain.SampleHeight(new Vector3(point.x,0,point.y))+terrain.transform.position.y;
+        }
+
+        private Terrain gradedLotTerrain;
+        private DistrictLotGrading cachedLotGrading;
+        private float NaturalLotHeight(Vector2 point)
+        {
+            if (ApprovedDistrict && ApprovedDistrict.DisplayTerrain)
+            {
+                var ground=ApprovedDistrict.DisplayTerrain;
+                if(gradedLotTerrain!=ground || !cachedLotGrading){gradedLotTerrain=ground;cachedLotGrading=ground.GetComponent<DistrictLotGrading>();}
+                return cachedLotGrading ? cachedLotGrading.NaturalHeight(point) : ApprovedDistrict.Height(point);
+            }
             return terrain.SampleHeight(new Vector3(point.x, 0, point.y)) + terrain.transform.position.y;
         }
 
@@ -731,6 +750,9 @@ namespace CityForge.World
             hasSeasonalLotTrees = false;
             RefreshZoneOverlay();
             RefreshDirtRoadEndFades();
+            var gradeTerrain = ApprovedDistrict ? ApprovedDistrict.DisplayTerrain : null;
+            if (gradeTerrain && gradeTerrain.TryGetComponent<DistrictLotGrading>(out var grading)) grading.Restore();
+            platformCells.Clear();
             districtLotRoots.Clear();
             roadBuildings.Clear();
             eagleBuildingBounds.Clear();
@@ -758,7 +780,8 @@ namespace CityForge.World
                 lotActions.SetActive(false);
                 placeLotLabel.text = PendingFounder != null ? "Founder’s Building…" : "Place saved lot";
             }
-            if (SelectedDistrict < 0 || PlacedLots.Count == 0) return;
+            if (SelectedDistrict < 0) {GetComponentInChildren<DistrictWeather>()?.RefreshGround();return;}
+            if(PlacedLots.Count==0){ApplyZoneGroundPlanes();GetComponentInChildren<DistrictWeather>()?.RefreshGround();return;}
             PresentDistrictLots(PlacedLots);
             SelectDistrictLot(selectedDistrictLot);
         }
@@ -774,13 +797,16 @@ namespace CityForge.World
                 lotInstances.SetParent(transform, false);
                 lotInstances.gameObject.AddComponent<ResidentialGroundBatches>();
             }
+            // Apply all cuts before creating any surfaces, paths or objects.
+            var presented = records.ToArray();
+            ApplyLotGrading(presented);
             var residentialGround = lotInstances.GetComponent<ResidentialGroundBatches>();
             var active = new HashSet<int>(ActiveDistrictMembers);
             var camera = GetComponentInChildren<Camera>();
             var cameraRig = camera ? camera.GetComponent<CityForgeCameraController>() : null;
             bool meadowGrade = ApprovedDistrict && camera &&
                 camera.GetUniversalAdditionalCameraData().renderPostProcessing;
-            foreach (var record in records)
+            foreach (var record in presented)
             {
                 if (!active.Contains(record.district)) continue;
                 if(record.authoredElevationVersion==0){
@@ -800,13 +826,28 @@ namespace CityForge.World
                 }
                 root.SetPositionAndRotation(new Vector3(record.center.x, 0, record.center.y),
                     Quaternion.Euler(0, record.FacingDegrees, 0));
+                var platformFootprint = new DistrictLotFootprint(record);
+                bool cutLot = record.cutToLowest && !definition.IsWaterfront;
+                bool levelLot = (cutLot || definition.levelLot) && !definition.IsWaterfront;
+                float platform = cutLot ? record.cutGroundHeight : levelLot ? DistrictLotFoundation.SampleLevel(definition.Size,
+                    platformFootprint.WorldPoint, NaturalLotHeight) : 0f;
+                float offset = definition.elevation + record.elevation;
+                if(levelLot)
+                {
+                    RegisterPlatform(record,platform+offset);
+                    // A cut lot already changed the terrain. Retaining faces must meet that current
+                    // ground, not recreate the buried hillside inside the finished block.
+                    root.gameObject.AddComponent<DistrictLotFoundation>().Build(definition,platform,offset,
+                        cutLot ? CurrentLotTerrainHeight : NaturalLotHeight,cutLot);
+                }
+                float SiteHeight(Vector2 p) => record.cutToLowest&&!definition.IsWaterfront ? record.cutGroundHeight : levelLot ? platform : NaturalLotHeight(p);
                 if (definition.groundPaint != null && definition.groundPaint.tiles.Count > 0)
                 {
                     var paintRoot = new GameObject("Lot texture paint"); paintRoot.transform.SetParent(root, false);
                     paintRoot.AddComponent<GroundPaintRenderer>().Initialize(definition.groundPaint, point =>
                     {
                         var world = root.TransformPoint(new Vector3(point.x, 0, point.y));
-                        return LotHeight(new Vector2(world.x, world.z)) - root.position.y;
+                        return SiteHeight(new Vector2(world.x, world.z)) - root.position.y;
                     }, definition.LandBounds);
                 }
                 Transform harborPorch = null;
@@ -824,10 +865,11 @@ namespace CityForge.World
                     if (dockWorker && !item.characterScript.dockStayVisible) continue;
                     hasSeasonalLotTrees |= asset.IsSeasonalTree;
                     var instance = LotRuntimeLoader.InstantiateObject(item, asset, root, VisualSeason, cameraRig).transform;
+                    if(asset.IsCharacter && !LotPopulationReady(record)) {instance.gameObject.SetActive(false);delayedLotCharacters.Add((record,instance.gameObject));}
                     if (definition.type == LotType.Zoning && asset.category == "Trees")
                         instance.localScale *= .75f;
                     var point = instance.position;
-                    point.y = LotHeight(new Vector2(point.x, point.z));
+                    point.y = SiteHeight(new Vector2(point.x, point.z));
                     if (definition.IsWaterfront && LotRuntimeLoader.Footprint(item, asset).Overlaps(definition.WaterfrontBounds))
                         point.y = Mathf.Max(point.y, record.waterfrontDeckHeight);
                     point.y += item.elevation;
@@ -891,15 +933,15 @@ namespace CityForge.World
                         runner.behavior = new LotShopkeeper(character, catalog.Find(item.assetId), door, forward, local =>
                         {
                             var world = root.TransformPoint(new Vector3(local.x, 0f, local.y));
-                            world.y = LotHeight(new Vector2(world.x, world.z));
+                            world.y = SiteHeight(new Vector2(world.x, world.z))+offset;
                             return root.InverseTransformPoint(world).y;
                         });
                     }
                 }
                 if (definition.AttractsVessels && ApprovedDistrict && ApprovedDistrict.DisplayTerrain)
                     HarborLanding.Build(root, ApprovedDistrict, record, harborPorch);
-                residentialGround.Add(definition, record.id, ResidentialGround.LotEra(definition), root, p => LotHeight(p)+definition.elevation+record.elevation);
-                root.gameObject.AddComponent<DistrictLotSurfaces>().Build(definition, LotHeight, record.waterfrontDeckHeight, meadowGrade);
+                residentialGround.Add(definition, record.id, ResidentialGround.LotEra(definition), root, p => SiteHeight(p)+definition.elevation+record.elevation);
+                root.gameObject.AddComponent<DistrictLotSurfaces>().Build(definition, SiteHeight, record.waterfrontDeckHeight, meadowGrade);
                 root.position+=Vector3.up*(definition.elevation+record.elevation);
             }
             residentialGround.Build();
@@ -944,7 +986,7 @@ namespace CityForge.World
             {
                 if (record == null || !Guid.TryParseExact(record.id, "N", out _) || !ids.Add(record.id) ||
                     record.district < 0 || record.district >= districtCount ||
-                    !float.IsFinite(record.elevation) || Mathf.Abs(record.elevation)>20 ||
+                    !float.IsFinite(record.elevation) || Mathf.Abs(record.elevation)>20 || !float.IsFinite(record.cutGroundHeight) ||
                     record.authoredElevationVersion<0 || record.authoredElevationVersion>1 ||
                     !float.IsFinite(record.center.x) || !float.IsFinite(record.center.y) ||
                     record.rotation < 0 || record.rotation > 3 || record.definition == null || !float.IsFinite(record.waterfrontDeckHeight))

@@ -18,6 +18,17 @@ namespace CityForge.World
         public int PatchCount {get;private set;}
         public int StoneCount {get;private set;}
         public int ShrubCount {get;private set;}
+        internal void ClearEarthwork(Rect area,Predicate<Vector2> contains)
+        {
+            Clear(batches);Clear(wideBatches);Clear(farBatches);
+            clusterSeats.RemoveAll(p=>area.Contains(new Vector2(p.x,p.y))&&contains(new Vector2(p.x,p.y)));PatchCount=clusterSeats.Count;
+            void Clear(List<Batch> tier){for(int i=tier.Count-1;i>=0;i--){var batch=tier[i];var b=batch.bounds;
+                if(!area.Overlaps(new Rect(new Vector2(b.min.x,b.min.z),new Vector2(b.size.x,b.size.z))))continue;
+                List<Matrix4x4> kept=null;for(int j=0;j<batch.instances.Length;j++){var matrix=batch.instances[j];var point=new Vector2(matrix.m03,matrix.m23);bool remove=area.Contains(point)&&contains(point);
+                    if(remove&&kept==null){kept=new List<Matrix4x4>(batch.instances.Length);for(int k=0;k<j;k++)kept.Add(batch.instances[k]);}if(!remove&&kept!=null)kept.Add(matrix);}
+                if(kept==null)continue;if(kept.Count==0)tier.RemoveAt(i);else{batch.instances=kept.ToArray();tier[i]=batch;}
+            }}
+        }
         public static bool Applies(PrototypeRegionView view)
         {if(view?.Data?.WaterBodies!=null)foreach(var body in view.Data.WaterBodies)if(body.isStream&&body.channelVersion>=2)return true;return false;}
         public static bool Near(PrototypeRegionView view,Vector2 world,out Vector2 studyPoint,out float distance)
@@ -127,7 +138,7 @@ namespace CityForge.World
                     if(body.playerChannel){int lo=0,hi=segments;while(hi-lo>1){int mid=(lo+hi)/2;if(stations[mid]<=station)lo=mid;else hi=mid;}i=lo;t=Mathf.InverseLerp(stations[i],stations[i+1],station);}
                     var a=body.centerline[i];var delta=body.centerline[i+1]-a;p=(a+delta*t-Vector2.one*.5f)*land.View.MapSide;normal=new Vector2(delta.y,-delta.x).normalized;
                 }
-                bool Usable(Vector2 p){if(!land.Contains(p)||land.View.InCampClearing(p,2))return false;var uv=p/land.View.MapSide+Vector2.one*.5f;foreach(var water in land.View.Data.WaterBodies)if(water.kind==WaterBodyKind.Ocean&&water.Contains(uv))return false;return true;}
+                bool Usable(Vector2 p){if(!land.Contains(p)||land.View.InCampClearing(p,2)||land.View.TerraformClears(p))return false;var uv=p/land.View.MapSide+Vector2.one*.5f;foreach(var water in land.View.Data.WaterBodies)if(water.kind==WaterBodyKind.Ocean&&water.Contains(uv))return false;return true;}
                 // Retain long irregular gaps between scanned patches, as in Pass17.
                 for(float station=7;station<length-7;station+=6.3f){
                     float s=station+(R()-.5f)*2,sign=R()<.5f?-1:1,scale=Mathf.Lerp(.60f,.98f,R()),heading=R()*360;
