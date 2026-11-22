@@ -42,6 +42,8 @@ namespace CityForge.World
         internal const string FarmerAssetId = "v3-farmer";
         internal readonly List<DistrictPlacedActor> PlacedActors = new();
         private string armedDistrictActor;
+        private string[] armedAnimalSpecies;
+        private bool armedRandomAnimals;
         private bool armedPedestrian, armedTree;
         private Transform placedTreeRoot;
         private readonly Dictionary<DistrictPlacedActor, GameObject> placedTreeViews = new();
@@ -89,6 +91,9 @@ namespace CityForge.World
         internal void ArmDistrictActor(string id, int count, bool pedestrian, bool tree = false)
         {
             if (pedestrian && id == FarmerAssetId) return;
+            CloseAnimalPlacementPreview();
+            armedRandomAnimals=false;
+            armedAnimalSpecies = null;
             armedDistrictActor = id;
             armedActorCount = count;
             armedPedestrian = pedestrian;
@@ -102,14 +107,24 @@ namespace CityForge.World
                 : "Click suitable terrain to place wildlife · Esc to cancel");
         }
 
-        internal void CancelDistrictActor() => armedDistrictActor = null;
+        internal void ArmDistrictAnimals(string[] ids, int count, bool random=false)
+        {
+            if(ids == null || ids.Length == 0)return;
+            ArmDistrictActor(ids[0], Mathf.Clamp(count,1,20), false);
+            armedAnimalSpecies = ids.Distinct().ToArray();
+            armedRandomAnimals=random;
+            OpenAnimalPlacementPreview();
+            ShowDistrictMessage("Click inside suitable habitat to place animals · 25 m radius · Hold Shift: double radius · Esc to cancel");
+        }
+
+        internal void CancelDistrictActor() { armedDistrictActor = null; armedAnimalSpecies = null; CloseAnimalPlacementPreview(); }
 
         private bool TryPlaceDistrictActor(Vector2 screen)
         {
             if (armedDistrictActor == null) return false;
             if (TownConstructionVisible || DistrictLoading || IsSaving || SelectedDistrict < 0) return true;
             if (!TryRoadGround(screen, out var point) || !InActiveDistrict(point)) return true;
-            if (PlacedActors.Count + armedActorCount > MaxPlacedActors)
+            if (PlacedActors.Count + armedActorCount * (armedRandomAnimals?1:armedAnimalSpecies?.Length ?? 1) > MaxPlacedActors)
             {
                 ShowDistrictMessage("The region has reached its placed population limit.");
                 return true;
@@ -163,26 +178,37 @@ namespace CityForge.World
             {
                 if (!ApprovedDistrict) { ShowDistrictMessage("Wildlife placement requires a landscape district."); return true; }
                 var library = Resources.Load<WildlifeLibrary>("Wildlife/TemperateWildlife");
-                var species = library ? Array.Find(library.species, animal => animal != null && animal.id == armedDistrictActor) : null;
-                if (species == null || !species.prefab) return true;
+                var ids = armedAnimalSpecies ?? new[] { armedDistrictActor };
+                var species = ids.Select(id => library ? Array.Find(library.species, animal => animal != null && animal.id == id) : null).ToArray();
+                if(species.Any(animal => animal == null || !animal.prefab))return true;
                 var wildlife = ApprovedDistrict.EnsurePlacedWildlife();
-                var sites = new List<Vector2> { point };
-                for (int i = 1; i < armedActorCount; i++)
+                var sites = new List<(WildlifeSpecies species, Vector2 point)>();
+                int total=armedActorCount*(armedRandomAnimals?1:species.Length);
+                for(int i=0;i<total;i++)
                 {
-                    float angle = i * 2.39996f;
-                    sites.Add(point + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * (1.8f * Mathf.Sqrt(i)));
+                    bool found=false;
+                    // Bounded rejection sampling, always inside the displayed circle.
+                    for(int attempt=0;attempt<32;attempt++)
+                    {
+                        var animal=armedRandomAnimals?species[UnityEngine.Random.Range(0,species.Length)]:species[i/armedActorCount];
+                        var candidate=point+UnityEngine.Random.insideUnitCircle*CurrentAnimalPlacementRadius;
+                        if(!InActiveDistrict(candidate)||!wildlife.Suitable(animal,candidate,out _)||
+                            !animal.Domesticated&&wildlife.Land.View.WildlifeDeveloped(candidate)||
+                            sites.Any(site=>(site.point-candidate).sqrMagnitude<1))continue;
+                        sites.Add((animal,candidate));found=true;break;
+                    }
+                    if(!found)
+                    {
+                        ShowDistrictMessage("Not enough suitable habitat in this circle. Move the circle or choose fewer animals.");
+                        return true;
+                    }
                 }
-                if (sites.Any(site => !InActiveDistrict(site) || !wildlife.Suitable(species, site, out _)))
+                foreach(var site in sites)
                 {
-                    ShowDistrictMessage("Choose a spot with suitable habitat for the whole group.");
-                    return true;
+                    wildlife.AddPlacedAnimal(site.species,site.point);
+                    var record=NewActor(site.point);record.assetId=site.species.id;PlacedActors.Add(record);
                 }
-                foreach (var site in sites)
-                {
-                    wildlife.AddPlacedAnimal(species, site);
-                    PlacedActors.Add(NewActor(site));
-                }
-                ShowDistrictMessage(armedActorCount == 1 ? "Animal placed." : $"Placed {armedActorCount} animals.");
+                ShowDistrictMessage(sites.Count==1?"Animal placed.":$"Placed {sites.Count} animals.");
             }
             return true;
 

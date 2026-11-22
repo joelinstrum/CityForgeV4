@@ -61,6 +61,11 @@ namespace CityForge.UI
                 Popup.Show(NatureTool.None);
                 view.ArmDistrictActor(id, count, pedestrian);
             };
+            Popup.AnimalsPlacementRequested += (ids,count,random) =>
+            {
+                Popup.Show(NatureTool.None);
+                view.ArmDistrictAnimals(ids,count,random);
+            };
             Popup.TreePlacementRequested += id =>
             {
                 Popup.Show(NatureTool.None);

@@ -2,7 +2,7 @@ using System;
 using UnityEngine;
 namespace CityForge.World
 {
-    public enum WildlifeActivity { Idle,Wandering,ApproachingWater,Drinking,ReturningHome }
+    public enum WildlifeActivity { Idle,Wandering,ApproachingWater,Drinking,ReturningHome,Grazing }
 
     /// <summary>Uses the same saved footprints and surface grades as rendered water.</summary>
     public sealed class WildlifeWaterAccess
@@ -128,6 +128,7 @@ namespace CityForge.World
         void Rest(Animal animal,float duration)
         {
             Animate(animal,false);animal.activity=WildlifeActivity.Idle;animal.wait=duration;
+            if(animal.canGraze){animal.animator.CrossFadeInFixedTime(animal.species.grazingState,.25f,0);animal.activity=WildlifeActivity.Grazing;}
         }
         bool RecoverDryGround(Animal animal)
         {
@@ -145,6 +146,34 @@ namespace CityForge.World
                 animal.root.position=new Vector3(q.x,y,q.y);animal.home=q;Rest(animal,3);animal.thirst=15;animal.root.gameObject.SetActive(true);return true;
             }
             Rest(animal,3);animal.root.gameObject.SetActive(false);return false;
+        }
+        bool TryWanderTarget(Animal animal,Vector2 current,out Vector2 destination)
+        {
+            destination=current;
+            if(animal.species.Domesticated)
+            {
+                // A fixed eight-metre home radius: cheap walking/resting, no pathfinding.
+                float angle=R()*Mathf.PI*2;float radius=Mathf.Sqrt(R())*8;
+                destination=animal.home+new Vector2(Mathf.Cos(angle),Mathf.Sin(angle))*radius;
+                return CanTravel(animal.species,current,destination);
+            }
+            bool flying=animal.species.habitat==WildlifeHabitat.FlyingBird;
+            if(!WildlifeWaterAccess.Terrestrial(animal.species)&&!flying)
+            {
+                destination=animal.home+new Vector2(R()-.5f,R()-.5f)*(flying?100:18);
+                return CanTravel(animal.species,current,destination);
+            }
+            float best=float.NegativeInfinity;bool found=false;
+            // Only six local candidates when a rest ends; no global navigation or per-frame searches.
+            for(int i=0;i<6;i++)
+            {
+                float angle=R()*Mathf.PI*2;var candidate=current+new Vector2(Mathf.Cos(angle),Mathf.Sin(angle))*(flying?12+R()*38:4+R()*12);
+                if(Land.View.WildlifeDeveloped(candidate)||!Suitable(animal.species,candidate,out _))continue;
+                float score=Land.Woodland(candidate)+R()*.3f;
+                if(score<=best||!CanTravel(animal.species,current,candidate))continue;
+                destination=candidate;best=score;found=true;
+            }
+            return found;
         }
         public void Tick(float dt)
         {
@@ -191,8 +220,7 @@ namespace CityForge.World
                     if(!animal.moving){
                         animal.wait-=dt;if(animal.wait>0||animal.species.speed<=0)continue;
                         bool flying=animal.species.habitat==WildlifeHabitat.FlyingBird;
-                        var destination=animal.home+new Vector2(R()-.5f,R()-.5f)*(flying?100:18);
-                        if(!CanTravel(animal.species,p,destination)){animal.wait=2+R()*4;continue;}
+                        if(!TryWanderTarget(animal,p,out var destination)){animal.wait=2+R()*4;continue;}
                         animal.target=destination;animal.activity=WildlifeActivity.Wandering;Animate(animal,true);
                     }
                 }

@@ -48,15 +48,15 @@ namespace CityForge.EditorTools
             File.WriteAllText(Output+"Current.txt","PASS: current region="+view.name+", district="+view.SelectedDistrict+", count="+wildlife.Animals.Count+"; zoom 0/1/2 visible, 3/5 hidden; Find Animal focuses at zoom1. Species: "+string.Join(", ",wildlife.Animals.GroupBy(a=>a.species.id).Select(g=>g.Key+"="+g.Count())));
         }
         static IEnumerator Check(){
-            var library=Resources.Load<WildlifeLibrary>("Wildlife/TemperateWildlife");Require(library&&library.species.Length==(Resources.Load<GameObject>("Wildlife/ImportedFox/fox")?25:24),"Curated local species including optional fox");
-            var allowed=new[]{"fox","deer","rabbit","boar","wolf","bear","frog","perch","pike","salmon","crab"};
+            var library=Resources.Load<WildlifeLibrary>("Wildlife/TemperateWildlife");Require(library&&library.species.Count(s=>!s.Domesticated)==(Resources.Load<GameObject>("Wildlife/ImportedFox/fox")?25:24),"Curated local species including optional fox");
+            var allowed=new[]{"goat","fox","deer","rabbit","boar","wolf","bear","frog","perch","pike","salmon","crab"};
             foreach(var species in library.species){
-                Require((allowed.Contains(species.id)||species.id.StartsWith("bird-"))&&species.prefab,"Allowlist and prefab");
+                Require((species.Domesticated||allowed.Contains(species.id)||species.id.StartsWith("bird-"))&&species.prefab,"Allowlist and prefab");
                 var animator=species.prefab.GetComponentInChildren<Animator>();Require(animator&&!animator.applyRootMotion,"Bounded code-driven movement");
                 var controller=(AnimatorController)animator.runtimeAnimatorController;Require(controller,species.id+" local controller loaded");
-                Require(controller.layers[0].stateMachine.states.All(s=>s.state.name=="Idle"||s.state.name=="Walk"||species.id=="deer"&&s.state.name=="Drink"),"No demo combat/death cycles");
+                Require(controller.layers[0].stateMachine.states.All(s=>s.state.name=="Idle"||s.state.name=="Walk"||species.id=="deer"&&s.state.name=="Drink"||species.Domesticated&&s.state.name==species.grazingState),"No demo combat/death cycles");
                 Require(controller.animationClips.All(c=>AnimationUtility.GetAnimationClipSettings(c).loopTime),"Looping authored clips");
-                foreach(var renderer in species.prefab.GetComponentsInChildren<Renderer>())foreach(var material in renderer.sharedMaterials)Require(material.shader.name=="Universal Render Pipeline/Lit"&&material.GetTexture("_BaseMap"),"URP textured animal");
+                foreach(var renderer in species.prefab.GetComponentsInChildren<Renderer>())foreach(var material in renderer.sharedMaterials)Require(material.shader.name=="Universal Render Pipeline/Lit"&&(material.GetTexture("_BaseMap")||species.Domesticated),"URP textured animal");
             }
             Require(JsonUtility.FromJson<RegionCreationSettings>("{\"version\":5}").animals==false&&JsonUtility.FromJson<SavedRegionInfo>("{}").animals==false,"Older recipes/saves default off");
             var old=UnityEngine.Object.FindFirstObjectByType<PrototypeRegionView>();if(old)old.ReturnToMenu();yield return null;yield return null;

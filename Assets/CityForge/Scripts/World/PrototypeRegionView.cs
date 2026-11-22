@@ -824,6 +824,7 @@ namespace CityForge.World
 
         private void Update()
         {
+            UpdateAnimalPlacementPreview();
             var rideRig = GetComponentInChildren<CityForge.CameraSystem.CityForgeCameraController>();
             if (rideRig && rideRig.HandleRideInput(this))
             {
@@ -1286,6 +1287,7 @@ namespace CityForge.World
         }
         private void OnDestroy()
         {
+            CloseAnimalPlacementPreview();
             CloseTransportModal();
             tearingDownPaint = true;
             CancelTexturePaint();
