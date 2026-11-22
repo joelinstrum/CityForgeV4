@@ -54,6 +54,7 @@ namespace CityForge.Lots
         public LotCapitalBonus capitalBonus;
         public int width = 6;
         public int length = 8;
+        public bool levelLot; // Missing in old saves/templates: preserve the original slope.
         public float elevation;
         public int waterfrontRows;
         public HarborVesselTraffic harborVesselTraffic;
@@ -198,7 +199,7 @@ namespace CityForge.Lots
             {
                 if (path?.points == null || path.points.Length < (path.closed ? 3 : 2) || path.points.Length > 256 ||
                     !Enum.IsDefined(typeof(LotPathUse), path.use) || path.textureRotation < 0 || path.textureRotation > 3 || path.edgeBlend < 0 || path.edgeBlend > LotPathDefinition.MaxEdgeBlend ||
-                    !Enum.IsDefined(typeof(LotPathDepth), path.depth) || !Enum.IsDefined(typeof(LotPathBorder), path.border) ||
+                    !Enum.IsDefined(typeof(LotPathDepth), path.depth) || !Enum.IsDefined(typeof(LotPathBorder), path.border) || !Enum.IsDefined(typeof(LotPathBorderSides), path.borderSides) ||
                     Array.IndexOf(LotPathSurface.Widths, path.width) < 0 || LotPathMaterial.Find(path.materialId) == null)
                     throw new InvalidDataException("Invalid lot path.");
                 var markers = new HashSet<Vector2>();
@@ -282,7 +283,7 @@ namespace CityForge.Lots
         }
     }
 
-    public enum LotScriptedBehavior { None, DockWorker, Shopkeeper, Lumberjack, Harass, Patrol, Farmer }
+    public enum LotScriptedBehavior { None, DockWorker, Shopkeeper, Lumberjack, Harass, Patrol, Farmer, ChildrenAtPlay }
 
     [Serializable]
     public struct LotCharacterScript

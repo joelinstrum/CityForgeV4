@@ -9,7 +9,7 @@ namespace CityForge.UI
         private RectTransform waterModal;
         private Font waterFont;
         public CityForge.World.StreamWidthVariation StreamWidthChoice {get; private set;} = CityForge.World.StreamWidthVariation.Gentle;
-        public bool Visible => gameObject.activeSelf || waterModal && waterModal.gameObject.activeSelf;
+        public bool Visible => gameObject.activeSelf || waterModal && waterModal.gameObject.activeSelf || terrainModal && terrainModal.gameObject.activeSelf;
         internal bool WaterModalOpen => waterModal;
         private void OpenWaterModal()
         {
@@ -97,7 +97,7 @@ namespace CityForge.UI
             if (!waterModal) return;
             waterModal.gameObject.SetActive(false); Destroy(waterModal.gameObject); waterModal = null;
         }
-        private void OnDestroy() { CloseWaterModal(); if (waterFont) Destroy(waterFont); }
+        private void OnDestroy() { CloseWaterModal();CloseTerrainModal(); if (waterFont) Destroy(waterFont); }
         private static Rect SheetRect(float x, float y, float w, float h) => new(x / 2048, 1 - (y + h) / 683, w / 2048, h / 683);
         private static RectTransform Center(Transform parent, string name, Vector2 position, Vector2 size)
         {

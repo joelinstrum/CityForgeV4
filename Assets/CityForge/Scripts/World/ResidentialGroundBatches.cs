@@ -50,6 +50,7 @@ namespace CityForge.World
             int stride = columns + 1;
             float smallLot = 1f - Mathf.InverseLerp(LotDefinition.TileMeters, 4f * LotDefinition.TileMeters,
                 Mathf.Min(area.width, area.height));
+            int lotStart=batch.Vertices.Count;
             for (int z = 0; z <= rows; z++)
             for (int x = 0; x <= columns; x++)
             {
@@ -73,8 +74,17 @@ namespace CityForge.World
                 batch.Indices.Add(index + stride);
                 batch.Indices.Add(index + stride + 1);
             }
+            batch.Lots.Add((id,lotStart,batch.Vertices.Count-lotStart));
         }
 
+        internal IEnumerable<(Mesh Mesh,List<Vector3> Vertices,IReadOnlyList<(string Id,int Start,int Count)> Lots)> GradingMeshes {get{foreach(var batch in batches.Values)if(batch.Mesh)yield return (batch.Mesh,batch.Vertices,batch.Lots);}}
+        internal void Remove(HashSet<string> ids)
+        {
+            foreach(var b in batches.Values){var removed=b.Lots.FindAll(l=>ids.Contains(l.Id));if(removed.Count==0)continue;
+                for(int i=b.Indices.Count-3;i>=0;i-=3){int index=b.Indices[i];if(removed.Exists(l=>index>=l.Start&&index<l.Start+l.Count))b.Indices.RemoveRange(i,3);}
+                b.Lots.RemoveAll(l=>ids.Contains(l.Id));if(b.Mesh)b.Mesh.SetTriangles(b.Indices,0);
+            }
+        }
         internal void Build()
         {
             foreach (var batch in dirtyBatches)
@@ -120,6 +130,7 @@ namespace CityForge.World
 
         private sealed class Batch
         {
+            public readonly List<(string Id,int Start,int Count)> Lots=new();
             public Material Material;
             public Mesh Mesh;
             public readonly List<Vector3> Vertices = new();

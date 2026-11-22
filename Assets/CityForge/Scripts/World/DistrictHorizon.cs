@@ -40,6 +40,8 @@ namespace CityForge.World
             skybox.enabled = false;
         }
 
+        internal static float StarAmount(float hour) => hour>=18.5f?Mathf.Lerp(0,.22f,Mathf.SmoothStep(0,1,Mathf.InverseLerp(18.5f,19,hour)))+Mathf.Lerp(0,.78f,Mathf.SmoothStep(0,1,Mathf.InverseLerp(19,21,hour))):hour<6.75f?1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(5,6.75f,hour)):0;
+
         void LateUpdate()
         {
             float visibility = region.SelectedDistrict >= 0 && !region.DistrictLoading
@@ -47,13 +49,13 @@ namespace CityForge.World
                 : 0f;
             if (visibility > 0f)
             {
-                if (sampledDistrict != region.SelectedDistrict)
-                    BuildSkyline();
+                // Tilted views use sky only; no projected mountain silhouettes.
                 material.SetFloat(Visibility, visibility);
-                float night=region.TimeOfDay==RegionTimeOfDay.Night?1:region.TimeOfDay==RegionTimeOfDay.Evening?.5f:0;
+                material.SetFloat("_CloudTime",Time.unscaledTime);
+
                 float hour=region.CurrentClockHour;
-                float stars=hour>=20?Mathf.SmoothStep(0,1,Mathf.InverseLerp(20,21,hour)):hour<6?1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(4,6,hour)):0;
-                material.SetFloat("_Night",Mathf.Max(night,stars));
+                float stars=StarAmount(hour);
+                material.SetFloat("_Night",PrototypeRegionView.SkyNightAmount(hour));
                 material.SetFloat("_StarVisibility",stars);material.SetFloat("_Hour",hour);
             }
 

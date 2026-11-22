@@ -86,7 +86,7 @@ namespace CityForge.World
                 if(!Contains(p)||View.InPlayerLakeClearing(p)||View.InPlayerChannelClearing(p)||View.InCampClearing(p,8)||WaterDistance(p)<9||RoadDistance(p)<5||Height(p)<View.SeaLevel+.2f||MountainSlope(p)>25)continue;
                 bool near=false;var key=Vector2Int.FloorToInt(p/separation);
                 for(int z=-1;z<=1&&!near;z++)for(int x=-1;x<=1&&!near;x++)if(occupied.TryGetValue(key+new Vector2Int(x,z),out var nearby))foreach(var other in nearby)if((other-p).sqrMagnitude<separation*separation){near=true;break;}
-                if(near)continue;uint hash=MixedDistrictForest.PointHash(p,Seed);int variant=species==1?(int)(hash%5):species==2?5:species==3?(hash%4==0?7:6):library?library.Pick(hash):(int)(hash%8);
+                if(near)continue;uint hash=MixedDistrictForest.PointHash(p,Seed);int variant=species==1?(library?library.PickChestnut(hash):new[]{0,1,3,4}[hash%4]):species>=2?(hash%4==0?7:6):library?library.Pick(hash):new[]{0,1,3,4,6,7}[hash%6];
                 var record=new ForestAdditionRecord{x=p.x,z=p.y,district=View.DistrictAtWorld(new Vector3(p.x,0,p.y)),variant=variant,prototype=ForestTreeMix.BroadleafStart+(int)(candidate.hash%8),width=Mathf.Lerp(.8f,1.12f,((candidate.hash>>8)&65535)/65535f),height=Mathf.Lerp(.8f,1.12f,((candidate.hash>>8)&65535)/65535f),rotation=(candidate.hash&65535)/65535f*Mathf.PI*2};
                 additions.Add(record);native.Add(PlantedInstance(record));Index(p);
             }

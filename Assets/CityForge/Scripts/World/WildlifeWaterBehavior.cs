@@ -42,6 +42,7 @@ namespace CityForge.World
         internal bool Wet(Vector2 p, float ground, out RegionWaterBody water, out float level, float surfaceTolerance = .025f)
         {
             RefreshBounds();
+            if(ground<=land.View.SeaLevel+surfaceTolerance&&land.TerraformOceanAt(p)){water=land.TerraformOceanBody;level=land.View.SeaLevel;return water!=null;}
             var uv = p / land.View.MapSide + Vector2.one * .5f;
             for (int i = 0; i < indexedBodies.Length; i++)
             {

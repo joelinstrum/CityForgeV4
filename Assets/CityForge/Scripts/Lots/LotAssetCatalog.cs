@@ -11,6 +11,8 @@ namespace CityForge.Lots
         public LotRowGeometry rowGeometry;
         public string id;
         public string label;
+        public string description;
+        public float defaultBuildingScale;
         public string category;
         public string group;
         public string subcategory;
@@ -25,10 +27,12 @@ namespace CityForge.Lots
             (string.IsNullOrEmpty(era) || eraId == era);
 
         public bool IsCharacter => category == "Characters";
-        internal float DefaultPlacementScale => id == LotCharacterDeck.HarborHouse ? 1.5f : 1f;
+        internal float DefaultPlacementScale => category == "Buildings" && float.IsFinite(defaultBuildingScale) && defaultBuildingScale > 0
+            ? defaultBuildingScale : id == LotCharacterDeck.HarborHouse ? 1.5f : 1f;
         public GameObject prefab;
         public GameObject distantPrefab;
         public GameObject autumnPrefab, winterPrefab;
+        public Mesh nightWindowGlass;
         internal bool IsSeasonalTree => category == "Trees" && autumnPrefab && winterPrefab;
 
         internal GameObject PrefabFor(RegionSeason season) => season switch
@@ -41,6 +45,8 @@ namespace CityForge.Lots
         // Prepared model bounds at placement scale: width (X), height (Y), depth (Z), in meters.
         public Vector3 buildingDimensionsMeters;
         public bool playerPlaceable;
+        // Prepared third-party trees keep their authored palette and model scale.
+        public bool preserveTreeMaterials;
         public int fromYear, toYear;
         public bool fitModel;
         public Material materialOverride;
@@ -63,16 +69,30 @@ namespace CityForge.Lots
 
     public sealed class LotAssetCatalog : ScriptableObject
     {
+        // Tree review, 2026-11-21: Remove choices are hidden across planting and lot rendering.
+        public static bool IsRetiredTree(string id) =>
+            id is "animated-tree-beech-2" or "animated-tree-birch-1" or "animated-tree-birch-2" or "animated-tree-birch-3" or "animated-tree-fir-1" or "animated-tree-juniper-1" or "animated-tree-juniper-2" or "animated-tree-pine-1" or "animated-tree-pine-2" or "animated-tree-pine-3" or "animated-tree-pine-4" or "animated-tree-pine-5" or "animated-tree-sycamore" or "oak-pilot-a" or "oak-pilot-b" or "plane-pack-01" or "plane-pack-02" or "plane-pack-03" or "plane-pack-04" or "plane-pack-05" or "plane-pack-06" or "silver-maple" or "silver-maple-b";
         public const string Transport = "Transport";
         public const string StreetFurniture = "Street Furniture";
 
         public LotAssetCatalogEntry[] entries = Array.Empty<LotAssetCatalogEntry>();
 
+        private static LotAssetCatalog sourceCatalog, sessionCatalog;
+        private static LotAssetCatalogEntry[] sourceEntries;
         public static LotAssetCatalog Load()
         {
             var catalog = Resources.Load<LotAssetCatalog>("Lots/LocalCatalog");
 
-            return catalog;
+            if (!catalog) return null;
+            if (!sessionCatalog || sourceCatalog != catalog || !ReferenceEquals(sourceEntries, catalog.entries))
+            {
+                sourceCatalog = catalog; sourceEntries = catalog.entries;
+                sessionCatalog = Instantiate(catalog); sessionCatalog.name = "Local catalog session";
+                sessionCatalog.hideFlags = HideFlags.DontSave;
+            }
+            LotBuildingPropertiesStore.Apply(sessionCatalog);
+            foreach(var entry in sessionCatalog.entries)if(entry!=null&&IsRetiredTree(entry.id))entry.playerPlaceable=false;
+            return sessionCatalog;
         }
 
         private LotAssetCatalogEntry[] lookupSource;
@@ -105,6 +125,7 @@ namespace CityForge.Lots
             if (asset == null || !asset.prefab) throw new InvalidOperationException("Missing lot asset: " + item.assetId);
             var wrapper = new GameObject(asset.label);
             wrapper.transform.SetParent(parent, false);
+            if(LotAssetCatalog.IsRetiredTree(asset.id))return wrapper;
             var model = UnityEngine.Object.Instantiate(asset.PrefabFor(season), wrapper.transform, false);
             if (asset.materialOverride)
                 foreach (var renderer in model.GetComponentsInChildren<Renderer>())
@@ -143,7 +164,7 @@ namespace CityForge.Lots
                     }
                 }
             }
-            if (asset.id == "silver-maple" && model.TryGetComponent<LODGroup>(out var mapleLods))
+            if (asset.id == "silver-maple" && !asset.preserveTreeMaterials && model.TryGetComponent<LODGroup>(out var mapleLods))
             {
                 var tiers = mapleLods.GetLODs();
                 if (tiers.Length > 0 && tiers[0].renderers.Length > 0)
@@ -198,13 +219,17 @@ namespace CityForge.Lots
             wrapper.transform.localPosition = new Vector3(item.position.x, item.elevation, item.position.y);
             wrapper.transform.localRotation = Quaternion.Euler(0f, item.yaw, 0f);
             wrapper.transform.localScale = Vector3.one * (item.scale * PlaceableTreeScale(asset));
-            if (districtCamera && !asset.IsCharacter)
+            if (districtCamera && (!asset.IsCharacter || ChildrenAtPlay.IsChild(asset.id)))
                 DistrictBuildingDetail.Attach(wrapper.transform, model.transform, asset, districtCamera, season);
             if(asset.id=="v3-building-lumber-mill")WaterMillWheel.Attach(wrapper);
-            if (asset.category == "Trees")
+            if (asset.category == "Trees" && !asset.preserveTreeMaterials)
                 TintPlaceableTree(wrapper, asset.id, season);
             if (item.vehicleScript.behavior != LotVehicleBehavior.None && item.vehicleScript.ResourceTask && VehicleProfile.Find(asset.id) is { } cargoProfile)
                 VehicleCargoPresentation.Attach(wrapper.transform, cargoProfile)?.SetLoad(item.vehicleScript.resource, 0, item.vehicleScript.Capacity);
+            if (ChildrenAtPlay.IsChild(asset.id) && (!item.characterScript.configured ||
+                item.characterScript.scriptedBehavior == LotScriptedBehavior.ChildrenAtPlay))
+                ChildrenAtPlay.Attach(wrapper);
+            DistrictAudioEmitter.Attach(wrapper, asset);
             return wrapper;
         }
 
@@ -250,8 +275,20 @@ namespace CityForge.Lots
         private static float PlaceableTreeScale(LotAssetCatalogEntry asset)
         {
             if(asset.id=="v3-building-lumber-mill")return 1.3f;
-            if (asset.category != "Trees" || !asset.prefab) return 1f;
-            if (!TreeDimensions.TryGetValue(asset.prefab, out var dimensions))
+            if (asset.category != "Trees" || !asset.prefab || asset.preserveTreeMaterials) return 1f;
+            var dimensions = TreeModelDimensions(asset);
+            float span = Mathf.Max(dimensions.x, dimensions.z);
+            float height = asset.fitModel && span > .001f
+                ? dimensions.y * Mathf.Max(asset.footprint.x, asset.footprint.y) / span : dimensions.y;
+            float scale = height > 12f ? .75f : 1f;
+            if (asset.id is "balsam-fir" or "london-plane-c") scale *= .75f;
+            return scale;
+        }
+
+        private static Vector3 TreeModelDimensions(LotAssetCatalogEntry asset)
+        {
+            var cache = TreeDimensions;
+            if (!cache.TryGetValue(asset.prefab, out var dimensions))
             {
                 var root = asset.prefab.transform;
                 var lod = root.GetComponentInChildren<LODGroup>();
@@ -274,14 +311,26 @@ namespace CityForge.Lots
                     }
                 }
                 dimensions = Vector3.Scale(bounds.size, root.localScale);
-                TreeDimensions[asset.prefab] = dimensions;
+                cache[asset.prefab] = dimensions;
             }
-            float span = Mathf.Max(dimensions.x, dimensions.z);
-            float height = asset.fitModel && span > .001f
-                ? dimensions.y * Mathf.Max(asset.footprint.x, asset.footprint.y) / span : dimensions.y;
-            float scale = height > 12f ? .75f : 1f;
-            if (asset.id is "balsam-fir" or "london-plane-c") scale *= .75f;
-            return scale;
+            return dimensions;
+        }
+        private static readonly System.Collections.Generic.Dictionary<GameObject,float> PlacedTreeHeights = new();
+        internal static float TreePlacementHeight(LotAssetCatalogEntry asset)
+        {
+            if (asset == null || !asset.prefab || LotAssetCatalog.IsRetiredTree(asset.id)) return 0;
+            if (PlacedTreeHeights.TryGetValue(asset.prefab,out float cached)) return cached;
+            // Authored root rotations matter: measure upright world bounds, not root-local Y.
+            var root=asset.prefab;
+            var all=root.GetComponentsInChildren<Renderer>();
+            var lod=root.GetComponentInChildren<LODGroup>();
+            var near=lod&&lod.lodCount>0?lod.GetLODs()[0].renderers:all;
+            if(all.Length==0||near.Length==0)return 0;
+            var full=all[0].bounds;foreach(var r in all)full.Encapsulate(r.bounds);
+            var close=near[0].bounds;foreach(var r in near)if(r)close.Encapsulate(r.bounds);
+            float span=Mathf.Max(full.size.x,full.size.z);
+            float fit=asset.fitModel&&span>.001f?Mathf.Max(asset.footprint.x,asset.footprint.y)/span:1;
+            return PlacedTreeHeights[asset.prefab]=close.size.y*fit*PlaceableTreeScale(asset);
         }
 
         private static void TintPlaceableTree(GameObject tree, string assetId, RegionSeason season)

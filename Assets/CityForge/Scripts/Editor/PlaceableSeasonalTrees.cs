@@ -43,6 +43,7 @@ internal static class PlaceableSeasonalTrees
         });
         foreach (var source in Sources.Concat(poplars))
         {
+            if (PurchasedTreeCatalog.HasReplacement(source.Id) || CityForge.EditorTools.FoxOakPreparation.HasOak && (source.Id is "oak-pilot-a" or "oak-pilot-b")) continue;
             string folder = $"{Output}/{source.Id}";
             var summer = LoadOutput(folder, "Summer");
             var fall = LoadOutput(folder, "Fall");

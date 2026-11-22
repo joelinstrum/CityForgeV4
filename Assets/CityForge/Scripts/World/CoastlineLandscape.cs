@@ -50,7 +50,7 @@ public sealed partial class MeadowDistrictLandscape {
  if(needsTerrainHoles&&!Contains(point))clipValue=1;
  pixels[z*maskSize+x]=new Color(clipValue,clipValue,clipValue,1);
  }
- var mask=Own(new Texture2D(maskSize,maskSize,TextureFormat.RHalf,false,true){name="Coastal ocean inclusion mask",wrapMode=TextureWrapMode.Clamp,filterMode=FilterMode.Bilinear});mask.SetPixels(pixels);mask.Apply(false,true);
+ var mask=Own(new Texture2D(maskSize,maskSize,TextureFormat.RHalf,false,true){name="Coastal ocean inclusion mask",wrapMode=TextureWrapMode.Clamp,filterMode=FilterMode.Bilinear});mask.SetPixels(pixels);mask.Apply(false,false);terraformOceanClip=mask;
  var maskObject=new GameObject("Coastal shoreline clipping");maskObject.transform.SetParent(holder.transform,false);maskObject.transform.position=new Vector3(Origin.x+Side/2,View.SeaLevel,Origin.y+Side/2);maskObject.transform.localScale=new Vector3(Side,1,Side);
  var clip=WaveHarmonic.Crest._Extensions.AddComponent<ClipLodInput>(maskObject,LodInputMode.Texture);clip.GetData<ClipTextureLodInputData>().Texture=mask;
  Water.Reflections.UseObliqueMatrix=!groundFollowing;
@@ -92,7 +92,7 @@ public sealed partial class MeadowDistrictLandscape {
  var tropicalColors=BuildTropicalDepthInput(holder.transform);
  var harborColors=BuildHarborWaterColors(holder.transform,groundFollowing);
  root.AddComponent<CoastalWaterPresentation>().Initialize(Water.Viewer,mat,tropicalColors,harborColors,calmHarbor);
- root.SetActive(true);holder.SetActive(true);StartCoroutine(RefreshDepth(probe));
+ terraformOceanProbe=probe;root.SetActive(true);holder.SetActive(true);StartCoroutine(RefreshDepth(probe));
  }
  Vector2 BuildOceanOutlineSurf(Transform holder,float foamStrength){
  var shoreward=Vector2.zero;

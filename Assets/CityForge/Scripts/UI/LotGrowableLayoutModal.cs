@@ -17,6 +17,7 @@ namespace CityForge.UI
             CloseChoices();
             var lot = session.Lot;
             var layout = lot.zoningLayout;
+            bool levelLot=lot.levelLot;
             int zone = layout.Configured ? (int)layout.zone - 1 : 0;
             int use = zone / 3, density = zone % 3, wealth = layout.wealth != LotWealth.None ? (int)layout.wealth - 1 : 0;
             var slot = layout.Configured ? layout.BuildingSlot : new Rect(lot.LandBounds.center - lot.LandBounds.size * .25f,
@@ -26,11 +27,11 @@ namespace CityForge.UI
             var selectedBuildings=lot.objects.Where(item=>(item==building||selectedGroup.Contains(item.id))&&catalog.Find(item.assetId)?.category=="Buildings").ToArray();
             const float modalWidth=1000;
             float extra=selectedBuildings.Length>0?42:0;
-            var frame=CreateModal("Growable Lot Layout",modalWidth,1060+extra);
+            var frame=CreateModal("Growable Lot Layout",modalWidth,1156+extra);
             var background=frame.GetComponent<Image>();
             background.sprite=ZoneModalArtwork.Panel;background.type=Image.Type.Sliced;background.color=new Color(.66f,.85f,1f);
             foreach(var outline in frame.GetComponents<Outline>())outline.enabled=false;
-            frame.gameObject.AddComponent<GrowableModalFit>().Initialize(new Vector2(modalWidth,1060+extra));
+            frame.gameObject.AddComponent<GrowableModalFit>().Initialize(new Vector2(modalWidth,1156+extra));
             var title=frame.GetComponentsInChildren<Text>().First(text=>text.text=="Growable Lot Layout");
             At(title.rectTransform,36,13,740,48);title.fontSize=35;title.color=new Color32(247,234,205,255);
             var close=frame.GetComponentsInChildren<Button>().First(button=>button.name=="Close");
@@ -117,13 +118,15 @@ namespace CityForge.UI
             foreach(var button in rowGap.GetComponentsInChildren<Button>())rowOnly.Add(button);
             var gapHint=Label(frame,"Space between buildings in a row\n(0 = buildings touch).",620,optional+92,330,17);
             At(gapHint.rectTransform,620,optional+92,330,55);
-            error=Label(frame,"",36,951+extra,928,16);At(error.rectTransform,36,951+extra,928,42);error.color=Gold;
-            LayoutButton("Eligible Buildings…",54,994+extra,470,52,()=>
+            Label(frame,"Lot terrain",48,968+extra,145,21);
+            Choices(new[]{"Follow ground slope","Level lot"},206,960+extra,new[]{346,382},levelLot?1:0,value=>levelLot=value==1);
+            error=Label(frame,"",36,1047+extra,928,16);At(error.rectTransform,36,1047+extra,928,42);error.color=Gold;
+            LayoutButton("Eligible Buildings…",54,1090+extra,470,52,()=>
             {
                 if(string.IsNullOrEmpty(lot.firstEraId)){error.text="Set the lot’s era in the Lot Editor before choosing buildings.";return;}
                 ApplyLayout(openBuildingChoices:true);
             },LotGlyph.Catalog,22);
-            StyleButton(LayoutButton("Apply Layout",656,994+extra,296,52,()=>ApplyLayout(),LotGlyph.Check,22),true,22);
+            StyleButton(LayoutButton("Apply Layout",656,1090+extra,296,52,()=>ApplyLayout(),LotGlyph.Check,22),true,22);
             RefreshMode();
 
             void RefreshMode()
@@ -232,6 +235,7 @@ namespace CityForge.UI
                 session.Edit(item =>
                 {
                     item.zoningLayout = next;
+                    item.levelLot=levelLot;
                     if (replaceBuilding) item.objects.RemoveAll(value=>selectedBuildings.Any(selectedBuilding=>selectedBuilding.id==value.id));
                 });
                 if (replaceBuilding) {selected = null;selectedGroup.Clear();}

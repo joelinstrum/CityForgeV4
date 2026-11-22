@@ -16,6 +16,15 @@ districts keep individual member choices; do not apply the legacy10m thinning to
 coverage-version-one mixed trees. Read
 Documentation/03_Technical/Approved_Mixed_Forest.md before changing this integration.
 
+Tree review, November21,2026: the user's exported Keep/Undecided/Remove choices
+supersede the earlier palette membership. Chestnut03 and Locust are retired; summer
+mixed woodland uses Chestnut01/02/04/05 and both larches. Native juvenile poplars,
+maple bushes, small willows and the experimental fir pilot are removed. Retain mature
+poplars and the specifically kept reduced London Plane/Fraser/Cilician versions.
+See the current tree-review note in Approved_Mixed_Forest.md. Do not restore removed
+models as fallbacks or through asset regeneration. Test maps/lots are disposable at
+the user's direction; keep references valid and the application functional.
+
 The Git repository is public and source-only. Do not add licensed artwork, imported asset packs, Crest package source, builds, or saved maps.
 
 ## Building imports

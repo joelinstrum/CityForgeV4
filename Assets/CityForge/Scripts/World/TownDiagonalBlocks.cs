@@ -129,7 +129,9 @@ namespace CityForge.World
             }
             problem = CommitNewRoadPieces(streets);
             if (problem != null) return problem;
-            PlacedLots.AddRange(lots); PresentDistrictLots(lots);
+            CommitBlockGroundPlane(plan,streets,true);
+            foreach(var lot in lots){PrepareLotGrading(lot);HoldLotPopulation(lot);}
+            PlacedLots.AddRange(lots); ClearDevelopedSites(lots); PresentDistrictLots(lots);
             foreach (var record in lots) AddLotStreetlamps(record);
             foreach (var record in lots) StartCoroutine(ConstructZonedLot(record));
             RefreshZoneOverlay(); RefreshDirtRoadEndFades();

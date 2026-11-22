@@ -32,13 +32,19 @@ namespace CityForge.World
             ("wagon", "Wagon Road", "packed-earth", "A rural road with wheel ruts from wagon traffic."),
             ("gravel", "Gravel Road", "gravel", "A compacted gravel surface for rural connections."),
             ("macadam", "Macadam Road", "gravel", "A road built up from layers of crushed stone."),
-            ("cobblestone", "Cobblestone Road", "cobblestone-road-9", "A one-tile road paved with rounded stone setts and soft shoulders."),
-            ("brick", "Brick Road", "damaged-brick", "A one-tile road paved with weathered brick and soft shoulders."),
+            ("cobblestone", "Cobblestone Road", "cobblestone-road-9", "A one-tile road paved with rounded stone setts and soft shoulders. Supports commercial frontage."),
+            ("brick", "Brick Road", "damaged-brick", "A one-tile road paved with weathered brick and soft shoulders. Supports commercial frontage."),
             ("blacktop", "Blacktop Road", "concrete", "An asphalt surface for motor traffic."),
             ("paved-street", "Paved Street", "concrete", "A paved street for built-up districts."),
             (FoundersStreetId, "Dirt Street", "packed-earth", "A one-tile (4 m) street using worn wagon-trail dirt. Supports commercial frontage."),
             (FoundersCobblestoneStreetId, "Cobblestone Street", "cobblestone-road-9", "A one-tile (4 m) street paved with rounded cobblestone. Supports commercial frontage."),
-            (FoundersBrickStreetId, "Weathered Brick Street", "damaged-brick", "A one-tile (4 m) street paved with weathered brick. Supports commercial frontage.")
+            (FoundersBrickStreetId, "Weathered Brick Street", "damaged-brick", "A one-tile (4 m) street paved with weathered brick. Supports commercial frontage."),
+            ("founders-early-macadam-gravel-street", "Macadam Gravel Street", "early-macadam-gravel", "A one-tile (4 m) street with macadam gravel paving. Supports commercial frontage at every wealth level."),
+            ("founders-mossy-fieldstone-street", "Mossy Fieldstone Street", "mossy-fieldstone", "A one-tile (4 m) street with mossy fieldstone paving. Supports commercial frontage at every wealth level."),
+            ("founders-weathered-herringbone-pavement-street", "Herringbone Brick Street", "weathered-herringbone-pavement", "A one-tile (4 m) street with herringbone brick paving. Supports commercial frontage at every wealth level."),
+            ("founders-irregular-flagstone-pavement-street", "Irregular Flagstone Street", "irregular-flagstone-pavement", "A one-tile (4 m) street with irregular flagstone paving. Supports commercial frontage at every wealth level."),
+            ("founders-weathered-red-brick-pavement-street", "Weathered Red Brick Street", "weathered-red-brick-pavement", "A one-tile (4 m) street with weathered red brick paving. Supports commercial frontage at every wealth level."),
+            ("founders-rustic-wood-pavement-street", "Rustic Wood Planks Street", "rustic-wood-pavement", "A one-tile (4 m) street with rustic wood planks paving. Supports commercial frontage at every wealth level.")
         };
 
         private const int HistoricalRoadSurfaceCount = 6;
@@ -48,10 +54,17 @@ namespace CityForge.World
         private const string FoundersCobblestoneStreetId = "founders-cobblestone-street";
         private const string FoundersBrickStreetId = "founders-brick-street";
 
-        private static bool IsFoundersStreet(string id) => id is FoundersStreetId or FoundersCobblestoneStreetId or FoundersBrickStreetId;
+        internal static bool IsFoundersStreet(string id) => FoundersStreetSlot(id) >= 0;
         private static int FoundersStreetSlot(string id) => id switch
         {
-            FoundersStreetId => 0, FoundersCobblestoneStreetId => 1, FoundersBrickStreetId => 2, _ => -1
+            FoundersStreetId => 0, FoundersCobblestoneStreetId => 1, FoundersBrickStreetId => 2,
+            "founders-early-macadam-gravel-street" => 3,
+            "founders-mossy-fieldstone-street" => 4,
+            "founders-weathered-herringbone-pavement-street" => 5,
+            "founders-irregular-flagstone-pavement-street" => 6,
+            "founders-weathered-red-brick-pavement-street" => 7,
+            "founders-rustic-wood-pavement-street" => 8,
+            _ => -1
         };
         private const int RoadWidth = 3;
         private const int OneTileRoadWidth = (int)DistrictGridCellMeters;
@@ -115,11 +128,14 @@ namespace CityForge.World
 
         private static int FindRoadSurface(string id) => Array.FindIndex(RoadSurfaces, surface => surface.Id == id);
 
-        private static bool IsMasonryRoad(string id) => id is "brick" or "cobblestone" or FoundersCobblestoneStreetId or FoundersBrickStreetId;
+        private static bool IsMasonryRoad(string id) => id is "brick" or "cobblestone" or FoundersCobblestoneStreetId or FoundersBrickStreetId or
+            "founders-mossy-fieldstone-street" or "founders-weathered-herringbone-pavement-street" or
+            "founders-irregular-flagstone-pavement-street" or "founders-weathered-red-brick-pavement-street";
 
-        private static bool HasSidewalks(string id) => IsMasonryRoad(id) || id == FoundersStreetId;
+        private static bool HasSidewalks(string id) => IsMasonryRoad(id) || IsFoundersStreet(id);
 
-        private static bool SupportsCommercialFrontage(string id) => IsFoundersStreet(id) || id == "paved-street";
+        // Masonry roads already have the same pavement and sidewalks as streets.
+        private static bool SupportsCommercialFrontage(string id) => HasSidewalks(id) || id == "paved-street";
 
         private static int DefaultRoadWidth(string id) => HasSidewalks(id) ? OneTileRoadWidth : RoadWidth;
 
@@ -699,6 +715,7 @@ namespace CityForge.World
         {
             ClearDistrictRoadPresentation();
             if (SelectedDistrict < 0) return;
+            ApplyZoneGroundPlanes();
             var active = new HashSet<int>(ActiveDistrictMembers);
             for (int i = 0; i < districtRoads.Count; i++)
             {

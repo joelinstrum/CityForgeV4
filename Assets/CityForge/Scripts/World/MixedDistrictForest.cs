@@ -37,7 +37,7 @@ namespace CityForge.World
             holder=new GameObject("Approved mixed woodland");holder.transform.SetParent(transform,false);holder.SetActive(false);
             long started=System.Diagnostics.Stopwatch.GetTimestamp();ulong signature=1469598103934665603UL;
             foreach(var candidate in candidates){
-                int variant=land.View.ForestAddition(candidate.point)?.variant??library.Pick(candidate.hash);var template=library.prefabs[variant];
+                int variant=library.ResolveVariant(land.View.ForestAddition(candidate.point)?.variant??-1,candidate.hash);var template=library.prefabs[variant];
                 var tree=Instantiate(template,holder.transform,false);tree.name=template.name;
                 tree.transform.SetPositionAndRotation(new Vector3(candidate.point.x,land.Height(candidate.point),candidate.point.y),
                     Quaternion.Euler(0,candidate.native.rotation*Mathf.Rad2Deg,0)*template.transform.localRotation);
@@ -57,7 +57,7 @@ namespace CityForge.World
             if(!holder)return 0;var library=MixedForestLibrary.Load();var roots=new List<Transform>();
             foreach(var native in source){
                 var point=land.Origin+new Vector2(native.position.x,native.position.z)*land.Side;uint hash=PointHash(point,land.Seed);
-                int variant=land.View.ForestAddition(point)?.variant??library.Pick(hash);var template=library.prefabs[variant];var tree=Instantiate(template,holder.transform,false);tree.name=template.name;
+                int variant=library.ResolveVariant(land.View.ForestAddition(point)?.variant??-1,hash);var template=library.prefabs[variant];var tree=Instantiate(template,holder.transform,false);tree.name=template.name;
                 tree.transform.position=new Vector3(point.x,land.Height(point),point.y);tree.transform.rotation=Quaternion.Euler(0,native.rotation*Mathf.Rad2Deg,0)*template.transform.localRotation;
                 tree.transform.localScale=template.transform.localScale*Mathf.Lerp(.88f,1.12f,((hash>>8)&65535)/65535f);placements.Add((tree.transform,hash,variant));roots.Add(tree.transform);
             }

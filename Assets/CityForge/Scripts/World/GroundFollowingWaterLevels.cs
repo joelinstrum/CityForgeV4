@@ -8,6 +8,16 @@ namespace CityForge.World
         Texture2D levels,foamLimit;
         Mesh foamMesh;
         Material foamMaterial;
+        Color[] terraformLevelPixels;
+        internal void RefreshTerraformOcean(MeadowDistrictLandscape land,Rect area)
+        {
+            if(!levels)return;int n=levels.width;terraformLevelPixels??=levels.GetPixels();bool changed=false;
+            // Zero a small halo of level samples, not only the wet pixel itself:
+            // bilinear Crest levels must not lift a new bay toward the old hillside.
+            foreach(var p in land.TerraformOceanPoints()){var c=Vector2Int.FloorToInt((p-land.Origin)/land.Side*n-Vector2.one*.5f);
+                for(int z=Mathf.Max(0,c.y-1);z<=Mathf.Min(n-1,c.y+2);z++)for(int x=Mathf.Max(0,c.x-1);x<=Mathf.Min(n-1,c.x+2);x++){int i=z*n+x;if(terraformLevelPixels[i].r==0)continue;terraformLevelPixels[i]=Color.clear;changed=true;}}
+            if(changed){levels.SetPixels(terraformLevelPixels);levels.Apply(false,false);}
+        }
         public void Initialize(MeadowDistrictLandscape land,WaterRenderer water,float datum,bool applyLevels=true,bool limitFoam=true)
         {
             bool ocean=false;foreach(var body in land.View.Data.WaterBodies)if(body.kind==WaterBodyKind.Ocean)ocean=true;
@@ -45,7 +55,7 @@ namespace CityForge.World
             transform.localScale=new Vector3(land.Side,1,land.Side);
             if(applyLevels){
                 levels=new Texture2D(n,n,TextureFormat.RFloat,false,true){name="Ground-following channel water levels",wrapMode=TextureWrapMode.Clamp,filterMode=FilterMode.Bilinear};
-                levels.SetPixels(pixels);levels.Apply(false,true);
+                levels.SetPixels(pixels);levels.Apply(false,false);
                 water.LevelLod.Enabled=true;water.LevelLod.Resolution=512;
                 // Crest packs local levels into this buffer even when there are no wave inputs.
                 water.AnimatedWavesLod.Enabled=true;

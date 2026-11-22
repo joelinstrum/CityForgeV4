@@ -21,6 +21,7 @@ namespace CityForge.World
         ParticleSystem precipitation;
         Material flakes, snow;
         Mesh snowMesh;
+        Vector3[] snowVertices,snowNormals;
         Texture2D landMask;
         GameObject snowSurface, menu;
         Button rainButton, snowButton;
@@ -124,6 +125,22 @@ namespace CityForge.World
                 RenderSettings.fog=true;RenderSettings.fogMode=FogMode.ExponentialSquared;RenderSettings.fogColor=new Color(.68f,.74f,.8f);RenderSettings.fogDensity=.6f/Mathf.Max(150,fogDistance)*Mathf.SmoothStep(0,1,FogAmount);
             }else RestoreFog();
         }
+        internal void RefreshGround(Rect? affected=null)
+        {
+            if(!snowSurface)return;
+            if(affected.HasValue&&snowVertices!=null)
+            {
+                var terrain=landscape.DisplayTerrain;var data=terrain.terrainData;int n=data.heightmapResolution;var origin=terrain.transform.position;var size=data.size;
+                var lo=Vector2Int.Max(Vector2Int.zero,Vector2Int.FloorToInt(new Vector2((affected.Value.xMin-origin.x)/size.x,(affected.Value.yMin-origin.z)/size.z)*(n-1)));
+                var hi=Vector2Int.Min(Vector2Int.one*(n-1),Vector2Int.CeilToInt(new Vector2((affected.Value.xMax-origin.x)/size.x,(affected.Value.yMax-origin.z)/size.z)*(n-1)));
+                for(int z=lo.y;z<=hi.y;z++)for(int x=lo.x;x<=hi.x;x++){int i=z*n+x;snowVertices[i].y=data.GetHeight(x,z)+.035f;snowNormals[i]=data.GetInterpolatedNormal(x/(float)(n-1),z/(float)(n-1));}
+                snowMesh.SetVertices(snowVertices);snowMesh.SetNormals(snowNormals);snowMesh.RecalculateBounds();return;
+            }
+            Destroy(snowSurface);Destroy(snowMesh);Destroy(snow);Destroy(landMask);
+            snowSurface=null;snowMesh=null;snow=null;landMask=null;
+            if(SnowCoverage>0 || Current==WeatherKind.Snow) {BuildSnow();snow.SetFloat("_Coverage",SnowCoverage);}
+        }
+
         void BuildSnow()
         {
             var terrain=landscape.DisplayTerrain;var data=terrain.terrainData;int n=data.heightmapResolution;
@@ -136,7 +153,7 @@ namespace CityForge.World
                 if(x<n-1&&z<n-1){triangles.Add(i);triangles.Add(i+n);triangles.Add(i+1);triangles.Add(i+1);triangles.Add(i+n);triangles.Add(i+n+1);}
             }
             landMask=new Texture2D(n,n,TextureFormat.R8,false,true){name="Temporary snow dry-land mask",wrapMode=TextureWrapMode.Clamp};landMask.SetPixels(colors);landMask.Apply();
-            snowMesh=new Mesh{name="Temporary terrain-conforming snow",indexFormat=IndexFormat.UInt32};snowMesh.vertices=vertices;snowMesh.uv=uvs;snowMesh.SetTriangles(triangles,0);snowMesh.RecalculateNormals();snowMesh.RecalculateBounds();
+            snowMesh=new Mesh{name="Temporary terrain-conforming snow",indexFormat=IndexFormat.UInt32};snowMesh.vertices=vertices;snowMesh.uv=uvs;snowMesh.SetTriangles(triangles,0);snowMesh.RecalculateNormals();snowMesh.RecalculateBounds();snowVertices=vertices;snowNormals=snowMesh.normals;
             snow=new Material(Resources.Load<Shader>("Weather/DistrictSnow"));snow.SetTexture("_Land",landMask);
             snowSurface=new GameObject("Accumulated snow",typeof(MeshFilter),typeof(MeshRenderer));snowSurface.transform.SetParent(transform,false);snowSurface.transform.position=terrain.transform.position;snowSurface.GetComponent<MeshFilter>().sharedMesh=snowMesh;
             var renderer=snowSurface.GetComponent<MeshRenderer>();renderer.sharedMaterial=snow;renderer.shadowCastingMode=ShadowCastingMode.Off;renderer.receiveShadows=true;

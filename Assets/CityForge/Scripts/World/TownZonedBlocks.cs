@@ -14,7 +14,7 @@ namespace CityForge.World
         private Vector2Int? zonedBlockHover;
         private ZonedBlockPlan zonedBlockPreview;
         private string zonedBlockProblem;
-        private NavigationState zonedBlockNavigation;
+        private float nextBlockPreviewCheck;
         private Transform zonedBlockRoadPreview;
         private Mesh zonedBlockRoadMesh;
         private Material zonedBlockRoadMaterial;
@@ -71,10 +71,13 @@ namespace CityForge.World
                 if (zonedBlockRoadPreview) zonedBlockRoadPreview.gameObject.SetActive(false);
                 return false;
             }
-            var navigation = new NavigationState(this);
-            if (zonedBlockHover != cell || rotated || !navigation.Equals(zonedBlockNavigation))
+            bool commit=Input.GetMouseButtonDown(0);
+            // Camera navigation does not change world geometry. Recheck moving previews at most8Hz;
+            // clicks and rotation always validate immediately, including the same hovered cell.
+            if(!commit && !rotated && Time.unscaledTime<nextBlockPreviewCheck)return false;
+            if (zonedBlockHover != cell || rotated || commit)
             {
-                zonedBlockHover = cell; zonedBlockNavigation = navigation;
+                zonedBlockHover = cell; nextBlockPreviewCheck=Time.unscaledTime+.125f;
                 int rowLength=Mathf.CeilToInt(ZonedBlockPlan.RowTiles/(float)zonedBlockSize)*zonedBlockSize;
                 var dimensions = (zonedBlockTurns / 2) % 2 == 0 ? new Vector2Int(rowLength, zonedBlockDepth * 2)
                     : new Vector2Int(zonedBlockDepth * 2, rowLength);
@@ -283,6 +286,7 @@ namespace CityForge.World
                 zoneLotSizes[key] = ParcelWorldSize(new Vector2Int(cell.lotWidth, cell.lotDepth), cell.facing);
                 zoneLotAnchors[key] = new Vector2Int(cell.lotAnchorX, cell.lotAnchorZ);
             }
+            CommitBlockGroundPlane(plan,pieces,false);
             AddZoningStreetlamps();
             QueueZoningGrowth(plan.Bounds); RefreshZoneOverlay();
             return null;

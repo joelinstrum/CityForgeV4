@@ -45,7 +45,7 @@ namespace CityForge.EditorTools
             var library=AssetDatabase.LoadAssetAtPath<WildlifeLibrary>(Output+"TemperateWildlife.asset");if(!library){library=ScriptableObject.CreateInstance<WildlifeLibrary>();AssetDatabase.CreateAsset(library,Output+"TemperateWildlife.asset");}
             File.WriteAllText(Output+"Available.txt","Temperate wildlife assets installed locally.\n");
             foreach(var entry in entries)AssetDatabase.ImportAsset(AssetDatabase.GetAssetPath(entry.prefab),ImportAssetOptions.ForceUpdate);
-            library.species=entries.ToArray();EditorUtility.SetDirty(library);AssetDatabase.SaveAssets();AssetDatabase.Refresh();
+            FoxOakPreparation.AppendFox(entries);library.species=entries.ToArray();EditorUtility.SetDirty(library);AssetDatabase.SaveAssets();AssetDatabase.Refresh();
             void Add(string id,string prefab,string idle,string walk,WildlifeHabitat habitat,int weight,float size,float speed,bool length=false,string pack=Pack,bool bird=false){
                 var source=AssetDatabase.LoadAssetAtPath<GameObject>(pack+(bird?"resources/":"Prefabs/")+prefab+".prefab");if(!source)throw new FileNotFoundException(prefab);
                 var instance=UnityEngine.Object.Instantiate(source);instance.name=id;

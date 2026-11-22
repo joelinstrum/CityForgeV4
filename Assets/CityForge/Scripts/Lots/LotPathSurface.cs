@@ -6,7 +6,8 @@ namespace CityForge.Lots
 {
     public enum LotPathUse { Pedestrian, Vehicle }
     public enum LotPathDepth { Flat, HalfFoot, OneFoot }
-    public enum LotPathBorder { None, Curb, Brick }
+    public enum LotPathBorder { None, Curb, Brick, Fieldstone, Timber, Limestone, Earth }
+    public enum LotPathBorderSides { Both, Left, Right }
 
     [Serializable]
     public sealed class LotPathDefinition
@@ -22,6 +23,7 @@ namespace CityForge.Lots
         public bool generatedResidentialEntry;
         public LotPathDepth depth;
         public LotPathBorder border;
+        public LotPathBorderSides borderSides;
 
         internal bool HasRecess => recessed || depth != LotPathDepth.Flat;
         internal float DepthMeters => depth switch
@@ -61,6 +63,18 @@ namespace CityForge.Lots
             new LotPathMaterial("brick", "Red Brick", "Paving", new Color32(151, 84, 61, 255), 2f),
             new LotPathMaterial("damaged-brick", "Damaged Brick", "Paving",
                 new Color32(139, 83, 65, 255), 4f, requiresPbr: true),
+            new LotPathMaterial("early-macadam-gravel", "Macadam Gravel", "Paving",
+                new Color32(127, 116, 104, 255), 4f, requiresTexture: true),
+            new LotPathMaterial("mossy-fieldstone", "Mossy Fieldstone", "Paving",
+                new Color32(127, 116, 104, 255), 3f, requiresTexture: true),
+            new LotPathMaterial("weathered-herringbone-pavement", "Herringbone Brick", "Paving",
+                new Color32(127, 116, 104, 255), 3f, requiresTexture: true),
+            new LotPathMaterial("irregular-flagstone-pavement", "Irregular Flagstone", "Paving",
+                new Color32(127, 116, 104, 255), 3f, requiresTexture: true),
+            new LotPathMaterial("weathered-red-brick-pavement", "Weathered Red Brick", "Paving",
+                new Color32(127, 116, 104, 255), 3f, requiresTexture: true),
+            new LotPathMaterial("rustic-wood-pavement", "Rustic Wood Planks", "Paving",
+                new Color32(127, 116, 104, 255), 4f, requiresTexture: true),
             new LotPathMaterial("timber-deck", "Timber Deck", "Paving", new Color32(111, 79, 50, 255), 4f),
             new LotPathMaterial("concrete", "Concrete", "Paving", new Color32(168, 167, 159, 255), 3f),
             new LotPathMaterial("weathered-red-brick-herringbone", "Weathered Red Brick Herringbone", "Paving",
@@ -192,7 +206,11 @@ namespace CityForge.Lots
             material.SetFloat("_PathOpacity", path.materialId == ResidentialFootpath ? .58f : 1f);
             material.SetFloat("_Recessed", path.recessed ? 1f : 0f);
             material.SetFloat("_RecessDepth", path.DepthMeters);
-            material.SetFloat("_RecessBorder", (int)path.border);
+            material.SetFloat("_RecessBorder", path.depth==LotPathDepth.Flat?0:(int)path.border);
+            material.SetFloat("_BorderSides", (int)path.borderSides);
+            var borderTexture=LotPathBorders.Texture(path.border);
+            material.SetFloat("_BorderTextured",borderTexture?1:0);
+            if(borderTexture)material.SetTexture("_BorderTexture",borderTexture);
             if (path.depth != LotPathDepth.Flat)
             {
                 var dirt = Resources.Load<Texture2D>("Lots/PathMaterials/DirtRoadEarth");
@@ -212,7 +230,7 @@ namespace CityForge.Lots
     internal static class LotPathSurface
     {
         internal const int ResidentialSidewalkWidth = 1;
-        public static readonly int[] Widths = { 1, 3, 6, 9, 12 };
+        public static readonly int[] Widths = { 1, 2, 3, 6, 9, 12 };
 
         // Shared by the editor guide and the paved mesh. The optional last point is the live mouse preview.
         public static Vector2 RibbonSide(IReadOnlyList<Vector2> points, Vector2? end, bool loop, int index, float width)

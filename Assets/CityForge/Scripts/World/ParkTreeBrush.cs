@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using CityForge.Lots;
+using CityForge.UI;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -13,7 +14,12 @@ namespace CityForge.World
         private const float ParkTreeInterval = .18f;
         private readonly List<Vector2> lotTreePositions = new();
         private readonly System.Random parkTreeRandom = new();
-        private LotAssetCatalogEntry[] parkTreeAssets;
+        private LotAssetCatalogEntry[] parkTreeAssets, zoneSafeParkTreeAssets;
+        private BrushFeedback parkSprayFeedback;
+        private const float ZoneSafeTreeHeight = 20f;
+        private bool ParkTreeNeedsZoneLimit(Vector2 point) =>
+            townZones.TryGetValue(DistrictGridCell(point), out var zone) && zone != TownZone.None ||
+            PlacedLots.Any(lot => lot.definition.type == LotType.Zoning && new DistrictLotFootprint(lot).Contains(point));
         private bool parkTreeStroke, removingParkTrees, savedParkCursor;
         private LotAssetCatalogEntry selectedParkTree;
         private Vector2 lastParkTreePoint;
@@ -141,6 +147,9 @@ namespace CityForge.World
             CancelDistrictActor();
             SelectDistrictLot(null);
             parkTreeAssets = assets;
+            zoneSafeParkTreeAssets = assets?.Where(asset => LotRuntimeLoader.TreePlacementHeight(asset) > 0 &&
+                LotRuntimeLoader.TreePlacementHeight(asset) <= ZoneSafeTreeHeight).ToArray();
+            if (!remove && !parkSprayFeedback) parkSprayFeedback=BrushFeedback.Create(townToolbar.parent);
             selectedParkTree = selected;
             removingParkTrees = remove;
             if (remove)
@@ -181,7 +190,9 @@ namespace CityForge.World
                 if (parkRemoveCursor) parkRemoveCursor.gameObject.SetActive(false);
                 if (parkRemoveRing) parkRemoveRing.enabled = false;
             }
+            parkSprayFeedback?.Hide();
             removingParkTrees = false;
+            zoneSafeParkTreeAssets = null;
             parkTreeAssets = null;
             selectedParkTree = null;
             parkTreeStroke = false;
@@ -201,6 +212,14 @@ namespace CityForge.World
                 UpdateParkTreeRemoval();
                 return true;
             }
+            var brushScreen=(Vector2)Input.mousePosition;
+            if(Application.isFocused&&!RoadContextOverUi(brushScreen)&&TryRoadGround(brushScreen,out var preview)&&InActiveDistrict(preview))
+            {
+                var camera=GetComponentInChildren<CameraSystem.CityForgeCameraController>().GetComponent<Camera>();
+                Vector2 Project(Vector2 p){var screen=camera.WorldToScreenPoint(new Vector3(p.x,LotHeight(p),p.y));return new Vector2(screen.x,screen.y);}
+                parkSprayFeedback?.Show(preview,selectedParkTree!=null?ParkTreeSpacing*.5f:ParkTreeRadius,Project,brushScreen);
+            }
+            else parkSprayFeedback?.Hide();
             if (!Application.isFocused || !Input.GetMouseButton(0))
             {
                 parkTreeStroke = false;
@@ -321,7 +340,10 @@ namespace CityForge.World
             foreach (var actor in PlacedActors)
                 if (actor.tree && (actor.position - point).sqrMagnitude < spacingSquared) return false;
 
-            var asset = parkTreeAssets[parkTreeRandom.Next(parkTreeAssets.Length)];
+            // Prefer naturally small/medium models on zoned ground; no duplicate meshes/materials.
+            var choices = ParkTreeNeedsZoneLimit(point) && selectedParkTree == null && zoneSafeParkTreeAssets?.Length > 0
+                ? zoneSafeParkTreeAssets : parkTreeAssets;
+            var asset = choices[parkTreeRandom.Next(choices.Length)];
             var record = new DistrictPlacedActor
             {
                 assetId = asset.id,

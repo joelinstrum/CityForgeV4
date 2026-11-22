@@ -87,7 +87,10 @@ namespace CityForge.World
             {
                 var p = Vector2.Lerp(from, to, (float)i / steps);
                 float height = land.Height(p);
-                if (!water.Dry(p, clearance) || height < SeaLevel + .1f || Mathf.Abs(height - previous) > .35f || (orientedObjects ? OrientedWorkObstacle(p, clearance) : LumberjackObstacle(p, clearance))) return false;
+                // Shared grading can create valid dry streets only centimetres above the
+                // regional sea datum. Actual water footprints remain authoritative there.
+                bool gradedGround=TryZoneGroundHeight(p,out _);
+                if (!water.Dry(p, clearance) || (!gradedGround && height < SeaLevel + .1f) || Mathf.Abs(height - previous) > .35f || (orientedObjects ? OrientedWorkObstacle(p, clearance) : LumberjackObstacle(p, clearance))) return false;
                 previous = height;
             }
             return land.TimberRouteClear(from, to);

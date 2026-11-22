@@ -48,7 +48,7 @@ namespace CityForge.World
             SkinTownButton(natureModeButton, new Rect(740, 462, 347, 112), 44);
             SkinTownButton(townModeButton, new Rect(1087, 462, 349, 112), 44);
 
-            townToolbar = BottomPanel(hud, "Town construction toolbar", 117, 1264, 82);
+            townToolbar = BottomPanel(hud, "Town construction toolbar", 117, 1336, 82);
             string[] labels = { "Transport", "Zones", "Civic Lots", "Utilities", "Parks", "Town Info" };
             int[] edges = { 409, 752, 1090, 1435, 1778, 2121 };
             for (int i = 0; i < labels.Length; i++)
@@ -69,6 +69,7 @@ namespace CityForge.World
             townCategories[6] = industry;
             SkinTownButton(industry, new Rect(72, 100, 1007, 512), 82, darkIndustryButtons, preserveAspect: true);
             BuildDetonateButton(font);
+            BuildLevelerButton(font);
             RefreshTownConstruction();
 
             RectTransform BottomPanel(Transform parent, string title, float bottom, float width, float height)
@@ -155,6 +156,7 @@ namespace CityForge.World
 
         private void SetTownConstruction(bool town)
         {
+            if (districtTexturePaint) return;
             if (TownConstructionVisible == town || (town && !CanOpenCityMenu) || IsSaving) return;
             CancelRoadPlacement();
             CancelLotPlacement();
@@ -174,6 +176,7 @@ namespace CityForge.World
             CancelParkTreeBrush();
             CancelStreetscape();
             SetDetonate(false);
+            SetLeveler(false);
             CloseRoadContext();
             CloseTransportModal();
             CloseZoning();
@@ -223,6 +226,7 @@ namespace CityForge.World
 
         private void ShowTownSection(TownSection section)
         {
+            if (districtTexturePaint) return;
             if (!TownConstructionVisible || !CanOpenCityMenu || IsSaving) return;
             if (!CanBuildTown && section != TownSection.CivicLots)
             { ShowDistrictMessage("Place a Town Center from Civics → Government first."); return; }
@@ -248,6 +252,8 @@ namespace CityForge.World
                 BuildCivicSelectionModal();
                 return;
             }
+
+            if(section==TownSection.Parks){BuildParksOverview();return;}
 
             float width = section switch
             {

@@ -33,6 +33,7 @@ namespace CityForge.World
         public ForestRemovalStroke[] forestRemovals;
         public ForestAdditionRecord[] forestAdditions;
         public DistrictLotRecord[] lots;
+        public ZoneGroundPlane[] zoneGroundPlanes;
         public TownZoneCell[] townZones;
         public int townZoneGridVersion;
         public DistrictRoadRecord[] districtRoads;
@@ -108,6 +109,7 @@ namespace CityForge.World
             info.townZoneGridVersion = PrototypeRegionView.TownZoneGridVersion;
             info.districtRoads = view.CaptureDistrictRoads();
             info.parkPaths = view.CaptureParkPaths();
+            info.zoneGroundPlanes = view.ZoneGroundPlanes.ToArray();
             info.groundPaint = view.CaptureGroundPaint();
             info.placedActors = view.PlacedActors.ToArray();
             if (view.PlacedLots.Count != 0) info.lots = view.PlacedLots.ToArray();
@@ -153,6 +155,7 @@ namespace CityForge.World
             ForestRemovalValidation.Validate(snapshot.info.forestRemovals,snapshot.info.creation?.GridSide??2);
             DistrictConnections.Validate(snapshot.info.combinedDistricts,snapshot.info.creation?.GridSide??2);
             NativeCampPlanner.Validate(snapshot.info.nativeCamps,snapshot.info.creation?.GridSide??2,NativeCampPlanner.MapSide(snapshot.info.size,snapshot.info.creation?.GridSide??2));
+            ZoneGroundPlane.Validate(snapshot.info.zoneGroundPlanes,districtGrid*districtGrid);
             string temp=path+".tmp";Directory.CreateDirectory(Path.GetDirectoryName(path));
             try{
                 using(var stream=File.Create(temp))using(var gzip=new GZipStream(stream,System.IO.Compression.CompressionLevel.Fastest))using(var writer=new BinaryWriter(gzip)){
@@ -209,6 +212,7 @@ namespace CityForge.World
             info.resources?.Validate();
             int gridSide = info.creation?.GridSide ?? 2;
             PrototypeRegionView.ValidateLotRecords(info.lots, gridSide * gridSide);
+            ZoneGroundPlane.Validate(info.zoneGroundPlanes,gridSide*gridSide);
             PrototypeRegionView.ValidateDeepHarbors(info.deepHarborDistricts, gridSide * gridSide);
             ValidateZones(info, gridSide);
             CityForge.Lots.GroundPaintData.Validate(info.groundPaint);

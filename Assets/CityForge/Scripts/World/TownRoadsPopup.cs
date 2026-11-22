@@ -163,19 +163,26 @@ namespace CityForge.World
                     : streets ? "Local streets for built-up districts."
                     : "No construction options are available for this category in this era.";
 
-                int columns = (roads || streets) && laterEra ? 4 : 3;
+                int columns = streets || (roads && laterEra) ? 4 : 3;
                 float width = columns == 4 ? 163 : 219;
-                float height = columns == 4 ? 194 : 247;
+                float height = streets ? 154 : columns == 4 ? 194 : 247;
                 for (int i = 0; i < surfaceButtons.Length; i++)
                 {
                     bool visible = (roads && i < roadCount) || (streets && (IsFoundersStreet(RoadSurfaces[i].Id) || (laterEra && i == PavedStreetIndex)));
                     surfaceButtons[i].gameObject.SetActive(visible);
                     if (!visible) continue;
-                    int slot = streets ? (i == PavedStreetIndex ? 3 : FoundersStreetSlot(RoadSurfaces[i].Id)) : i;
+                    int slot = streets ? (i == PavedStreetIndex ? 9 : FoundersStreetSlot(RoadSurfaces[i].Id)) : i;
                     var rect = (RectTransform)surfaceButtons[i].transform;
                     rect.anchoredPosition = new Vector2(322 + slot % columns * (720 / columns),
                         -199 - slot / columns * (height + 20));
                     rect.sizeDelta = new Vector2(width, height);
+                    if (streets)
+                    {
+                        var caption = surfaceButtons[i].GetComponentInChildren<Text>();
+                        caption.resizeTextForBestFit = true;
+                        caption.resizeTextMinSize = 14;
+                        caption.resizeTextMaxSize = 18;
+                    }
                     if (surfaceFaces[i]) surfaceFaces[i].rectTransform.sizeDelta = rect.sizeDelta;
                 }
 

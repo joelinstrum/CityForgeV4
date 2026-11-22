@@ -48,8 +48,8 @@ namespace CityForge.EditorTools
             File.WriteAllText(Output+"Current.txt","PASS: current region="+view.name+", district="+view.SelectedDistrict+", count="+wildlife.Animals.Count+"; zoom 0/1/2 visible, 3/5 hidden; Find Animal focuses at zoom1. Species: "+string.Join(", ",wildlife.Animals.GroupBy(a=>a.species.id).Select(g=>g.Key+"="+g.Count())));
         }
         static IEnumerator Check(){
-            var library=Resources.Load<WildlifeLibrary>("Wildlife/TemperateWildlife");Require(library&&library.species.Length==24,"Twenty-three curated local species/flight variants");
-            var allowed=new[]{"deer","rabbit","boar","wolf","bear","frog","perch","pike","salmon","crab"};
+            var library=Resources.Load<WildlifeLibrary>("Wildlife/TemperateWildlife");Require(library&&library.species.Length==(Resources.Load<GameObject>("Wildlife/ImportedFox/fox")?25:24),"Curated local species including optional fox");
+            var allowed=new[]{"fox","deer","rabbit","boar","wolf","bear","frog","perch","pike","salmon","crab"};
             foreach(var species in library.species){
                 Require((allowed.Contains(species.id)||species.id.StartsWith("bird-"))&&species.prefab,"Allowlist and prefab");
                 var animator=species.prefab.GetComponentInChildren<Animator>();Require(animator&&!animator.applyRootMotion,"Bounded code-driven movement");

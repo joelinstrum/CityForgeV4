@@ -109,6 +109,15 @@ namespace CityForge.World
             return ForestTreeMix.Prototypes(prefabs,mountainEvergreens,treeSeason);
         }
         public TropicalPalmForest Palms {get;private set;}
+        internal static TreeInstance[] ReviewedNativeTrees(TreeInstance[] source)
+        {
+            // Removed juvenile poplars, maple bushes, willows and the experimental fir.
+            // Keep prototype slots intact so all seasonal libraries remain valid.
+            var kept = new List<TreeInstance>(source.Length);
+            foreach (var tree in source)
+                if (!(tree.prototypeIndex < 3 || tree.prototypeIndex >= 11 && tree.prototypeIndex <= 15)) kept.Add(tree);
+            return kept.ToArray();
+        }
         void SetNativePresentation(TreeInstance[] source){
             if(PanningTestDistricts.TryGetPercent(View.SavedRegionId,out int percent)){
                 // Keep exactly the same mature trees when understory is toggled for a controlled comparison.
@@ -120,7 +129,7 @@ namespace CityForge.World
             if(approved)source=approved.NativePresentation(source);
             if(MixedForest)source=MixedForest.NativePresentation(source);
             if(Palms)source=Palms.PresentNative(source);
-            terrainData.SetTreeInstances(ForestTreeMix.Presentation(source,Baseline),false);
+            terrainData.SetTreeInstances(ReviewedNativeTrees(ForestTreeMix.Presentation(source,Baseline)),false);
         }
         public void SetSmallPlantsEnabled(bool enabled,bool remember=false)
         {
@@ -433,7 +442,8 @@ namespace CityForge.World
             if(!ApprovedForestAssets.CheckpointReplay&&!IsRegionOverview&&View.Climate==RegionClimate.Tropical){
                 Palms=gameObject.AddComponent<TropicalPalmForest>();Palms.Initialize(this);
             }
-            fullTreeInstances=terrainData.treeInstances;
+            fullTreeInstances=ReviewedNativeTrees(terrainData.treeInstances);
+            terrainData.SetTreeInstances(fullTreeInstances,false);
             var mature=new List<TreeInstance>();foreach(var tree in fullTreeInstances)if(!IsSmallPlant(tree.prototypeIndex))mature.Add(tree);matureTreeInstances=mature.ToArray();
             // Initial full data remains canonical for painting, snapshots and comparison.
             SmallPlantsEnabled=false;SetSmallPlantsEnabled(StreamRockTestRegion.Applies(View)||View.SavedRegionId=="pan-test-coast-50"||(!PanningTestDistricts.TryGetPercent(View.SavedRegionId,out _)&&PlayerPrefs.GetInt(SmallPlantsPreference,0)==1));
@@ -565,6 +575,7 @@ namespace CityForge.World
         public float Height(Vector2 p) => DisplayTerrain.SampleHeight(new Vector3(p.x,0,p.y));
         public float WaterDistance(Vector2 p)
         {
+            if(TerraformShore(p,out float editedShore))return editedShore;
             float lake=Mathf.Min(PlayerLakeGeometry.Distance(View.Data,p,View.MapSide),PlayerChannelGeometry.Distance(View.Data,p,View.MapSide));if(lake<20)return Mathf.Min(lake,BaseWaterDistance(p));return BaseWaterDistance(p);
         }
         float BaseWaterDistance(Vector2 p)
@@ -588,6 +599,7 @@ namespace CityForge.World
         }
         public float ShoreDistance(Vector2 p)
         {
+            if(TerraformShore(p,out float editedShore))return editedShore;
             if(RegionalRiverNetwork.HasContinuousChannels(View.Data)&&!View.Coastline)return WaterDistance(p);
             int last=shore.GetLength(0)-1;float gx=Mathf.Clamp((p.x-Origin.x)/Side*last,0,last-.001f),gz=Mathf.Clamp((p.y-Origin.y)/Side*last,0,last-.001f);int x=(int)gx,z=(int)gz;
             return Mathf.Lerp(Mathf.Lerp(shore[z,x],shore[z,x+1],gx-x),Mathf.Lerp(shore[z+1,x],shore[z+1,x+1],gx-x),gz-z);

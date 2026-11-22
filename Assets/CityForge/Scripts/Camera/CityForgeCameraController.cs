@@ -6,7 +6,7 @@ namespace CityForge.CameraSystem
 {
     [DisallowMultipleComponent]
     [RequireComponent(typeof(Camera))]
-    public sealed class CityForgeCameraController : MonoBehaviour
+    public sealed partial class CityForgeCameraController : MonoBehaviour
     {
         public const float IsometricPitch = 35.26439f;
         private const float PointerTiltSensitivity = .06f;
@@ -26,7 +26,7 @@ namespace CityForge.CameraSystem
         [SerializeField] private float viewTilt=-1;
         [SerializeField] private float perspectiveFieldOfView=60;
         public float ViewTilt => viewTilt<0?(lowerView?0:1):viewTilt;
-        public float ViewPitch => Mathf.Lerp(12,Mathf.Clamp(pitch,MinimumPitch,MaximumPitch),ViewTilt);
+        public float ViewPitch => Riding ? 0f : Mathf.Lerp(12,Mathf.Clamp(pitch,MinimumPitch,MaximumPitch),ViewTilt);
         public void SetViewTilt(float value){viewTilt=Mathf.Clamp01(value);lowerView=viewTilt<1;viewCamera=GetComponent<Camera>();viewCamera.orthographic=!lowerView;ApplyPose();}
         public bool LowerView => lowerView;
         public float OrthographicSetback {get;private set;}
@@ -134,7 +134,8 @@ namespace CityForge.CameraSystem
         {
             var dt = Time.unscaledDeltaTime;
             var region = GetComponentInParent<World.PrototypeRegionView>();
-            if (region && region.DistrictScriptDialogOpen) return;
+            if (Riding) { AdvanceRide(dt, region); return; }
+            if (region && (region.DistrictScriptDialogOpen || region.DistrictPathTextInputActive)) return;
             if (FollowDistrictActor(region)) return;
             if (flyingIntoDistrict)
             {
@@ -270,7 +271,7 @@ namespace CityForge.CameraSystem
             SetViewTilt(1f);
         }
 
-        public World.RegionCameraState CaptureRegionState()=>new World.RegionCameraState{focus=focus,pitch=pitch,yaw=yaw,distance=distance,size=orthographicSize,zoom=ZoomLevel,lowerView=lowerView,hasViewTilt=true,viewTilt=ViewTilt};
+        public World.RegionCameraState CaptureRegionState()=>Riding ? rideReturnState : new World.RegionCameraState{focus=focus,pitch=pitch,yaw=yaw,distance=distance,size=orthographicSize,zoom=ZoomLevel,lowerView=lowerView,hasViewTilt=true,viewTilt=ViewTilt};
         public void RestoreRegionState(World.RegionCameraState state)
         {
             flyingIntoDistrict = false;
@@ -315,6 +316,7 @@ namespace CityForge.CameraSystem
         public void ApplyPose()
         {
             if (viewCamera == null) viewCamera = GetComponent<Camera>();
+            if (Riding) { ApplyRidePose(); return; }
             pitch=Mathf.Clamp(pitch,MinimumPitch,MaximumPitch);
             if(viewCamera.orthographicSize!=orthographicSize)viewCamera.orthographicSize=orthographicSize;
             float tilt=ViewTilt;
@@ -360,21 +362,17 @@ namespace CityForge.CameraSystem
             var position=focus-orientation*Vector3.forward*poseDistance;
             if(lowerView)
             {
-                // Back away along the viewing ray when a mountain occupies the camera position.
-                // This retains the focus in the center of the image.
-                for(int attempt=0;attempt<16;attempt++)
+                // Lift over terrain without changing perspective distance or zoom.
+                // Dolly clearance at the exact 12-degree endpoint caused a visible jump.
+                float ground = float.NegativeInfinity;
+                foreach (var terrain in Terrain.activeTerrains)
                 {
-                    float ground=float.NegativeInfinity;
-                    foreach(var terrain in Terrain.activeTerrains)
-                    {
-                        var local=position-terrain.transform.position;var size=terrain.terrainData.size;
-                        if(local.x>=0&&local.z>=0&&local.x<=size.x&&local.z<=size.z)
-                            ground=Mathf.Max(ground,terrain.SampleHeight(position)+terrain.transform.position.y);
-                    }
-                    if(position.y>=ground+8f)break;
-                    poseDistance+=(ground+8f-position.y)/Mathf.Sin(posePitch*Mathf.Deg2Rad);
-                    position=focus-orientation*Vector3.forward*poseDistance;
+                    var local = position - terrain.transform.position;
+                    var size = terrain.terrainData.size;
+                    if (local.x >= 0 && local.z >= 0 && local.x <= size.x && local.z <= size.z)
+                        ground = Mathf.Max(ground, terrain.SampleHeight(position) + terrain.transform.position.y);
                 }
+                position.y = Mathf.Max(position.y, ground + 8f);
             }
             float near=lowerView ? .5f : viewCamera.nearClipPlane,far=Mathf.Max(1500f,poseDistance*2f+500f);
             if (regionSide > 0f)
@@ -418,6 +416,7 @@ namespace CityForge.CameraSystem
 
         public void FrameMeadowComparison(float side,float height,Vector3 center,float size=40)
         {
+            if (Riding) EndRide();
             lowerView=false;viewTilt=-1;
             reliefFraming=false;
             meadowFraming=true;meadowStartSize=size;
@@ -428,6 +427,7 @@ namespace CityForge.CameraSystem
 
         public void FrameRegion(float side, float height = 1200f, float heading = 335f)
         {
+            if (Riding) EndRide();
             FrameArea(side, height, Vector3.zero);
             var map=GetComponentInParent<World.PrototypeRegionView>()?.GetComponentInChildren<World.RegionReliefMap>(true);
             if(!map)return;
@@ -464,6 +464,7 @@ namespace CityForge.CameraSystem
 
         public void FrameDistrictUnion(float side,float absoluteHeight,float low,float high,Vector3 center)
         {
+            if (Riding) EndRide();
             float span=high-low;
             FrameArea(side,span,new Vector3(center.x,(low+high)/2-span*.0375f,center.z));
             regionHeight=absoluteHeight;yaw=315;distance=Mathf.Max(side*1.6f,span*2+200);ApplyPose();
@@ -471,6 +472,7 @@ namespace CityForge.CameraSystem
 
         public void FrameArea(float side, float height, Vector3 center)
         {
+            if (Riding) EndRide();
             lowerView=false;viewTilt=-1;
             reliefFraming=false;
             meadowFraming=false;

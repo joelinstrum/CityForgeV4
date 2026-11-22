@@ -61,8 +61,9 @@ namespace CityForge.UI
         }
         public void Show(NatureTool tool)
         {
-            CloseWaterModal();
+            CloseWaterModal();CloseTerrainModal();
             Category=tool;gameObject.SetActive(tool!=NatureTool.None);if(tool==NatureTool.None)return;
+            if(tool==NatureTool.Terrain){gameObject.SetActive(false);OpenTerrainModal();return;}
             if (tool == NatureTool.Water) { gameObject.SetActive(false); OpenWaterModal(); return; }
             foreach(var old in optionObjects){old.SetActive(false);Destroy(old);}optionObjects.Clear();
             heading.text=tool switch{NatureTool.Terrain=>"Terraforming",NatureTool.Water=>"Water",NatureTool.Trees=>"Forests",NatureTool.Animals=>"Animals & characters",_=>"Weather & seasons"};
@@ -110,7 +111,7 @@ namespace CityForge.UI
                     Label(content,"RemovalHint","Click or drag to remove trees.\nTab switches between 200 m and 400 m.",new Vector2(0,-36),new Vector2(400,56),17,Muted);
                 }else if(index==0){
                     Label(content,"PlantingSize","200 m circumference",new Vector2(0,0),new Vector2(400,28),20,Gold);
-                    var view=GetComponentInParent<PrototypeRegionView>();bool mixed=view&&view.ApprovedDistrict&&view.ApprovedDistrict.MixedForest;Choice("Species","Tree type",mixed?new[]{"Mixed woodland","Chestnut","Locust","Larch"}:new[]{"Native woodland"},32);
+                    var view=GetComponentInParent<PrototypeRegionView>();bool mixed=view&&view.ApprovedDistrict&&view.ApprovedDistrict.MixedForest;Choice("Species","Tree type",mixed?new[]{"Mixed woodland","Chestnut","Larch"}:new[]{"Native woodland"},32);
                 }else{
                     var catalog = LotAssetCatalog.Load();
                     var trees = catalog ? catalog.entries.Where(asset => asset != null && asset.prefab && asset.IsSeasonalTree).ToArray()

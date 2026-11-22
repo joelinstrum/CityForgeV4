@@ -144,6 +144,12 @@ namespace CityForge.World
                 }
                 var record = NewActor(point);
                 PlacedActors.Add(record);
+                if (ChildrenAtPlay.IsChild(asset.id))
+                {
+                    PresentPlacedChild(record, asset);
+                    ShowDistrictMessage("Child placed · Children at play.");
+                    return true;
+                }
                 var walker = CreatePedestrian(record, asset);
                 if (pedestrianRoutesDirty)
                 {
@@ -187,6 +193,8 @@ namespace CityForge.World
             };
         }
 
+        private Transform placedChildrenRoot;
+
         private void RebuildPlacedPedestrians()
         {
             CancelDistrictActor();
@@ -195,6 +203,8 @@ namespace CityForge.World
             if (pedestrianRoot) { pedestrianRoot.gameObject.SetActive(false); Destroy(pedestrianRoot.gameObject); }
             pedestrianRoot = null;
             pedestrians.Clear();
+            if (placedChildrenRoot) { placedChildrenRoot.gameObject.SetActive(false); Destroy(placedChildrenRoot.gameObject); }
+            placedChildrenRoot = null;
             populatedTrafficLots.Clear();
             pedestrianRoutes.Clear();
             pedestrianRoutesDirty = true;
@@ -206,8 +216,26 @@ namespace CityForge.World
             foreach (var record in PlacedActors)
                 if (record.pedestrian && record.assetId != FarmerAssetId && active.Contains(record.district) && catalog.Find(record.assetId) is { } asset &&
                     asset.prefab && asset.IsCharacter)
-                    SetPedestrianRoute(CreatePedestrian(record, asset));
+                {
+                    if (ChildrenAtPlay.IsChild(asset.id))
+                    {
+                        PresentPlacedChild(record, asset);
+                    }
+                    else SetPedestrianRoute(CreatePedestrian(record, asset));
+                }
             RebuildAmbientTraffic(catalog);
+        }
+
+        private void PresentPlacedChild(DistrictPlacedActor record, LotAssetCatalogEntry asset)
+        {
+            if (!placedChildrenRoot)
+            {
+                placedChildrenRoot = new GameObject("Schoolyard children").transform;
+                placedChildrenRoot.SetParent(transform, false);
+            }
+            var child = LotRuntimeLoader.InstantiateObject(new LotObjectDefinition { assetId = asset.id, scale = 1f },
+                asset, placedChildrenRoot, VisualSeason, GetComponentInChildren<CityForgeCameraController>());
+            child.transform.position = PedestrianGround(record.position);
         }
 
         private void RebuildPlacedTrees()
@@ -239,6 +267,15 @@ namespace CityForge.World
             }
             var instance = LotRuntimeLoader.InstantiateObject(new LotObjectDefinition { assetId = asset.id, scale = 1f },
                 asset, placedTreeRoot, VisualSeason);
+            // Apply the cap to actual rendered bounds, including seasonal variants and explicit picks.
+            // Recomputed from the saved position on reload, so no new save fields are needed.
+            if (ParkTreeNeedsZoneLimit(record.position))
+            {
+                var groups=instance.GetComponentsInChildren<LODGroup>();
+                var renderers=groups.Length>0?groups.SelectMany(g=>g.GetLODs().Take(1).SelectMany(l=>l.renderers)).Where(r=>r).ToArray():instance.GetComponentsInChildren<Renderer>();
+                if(renderers.Length>0){var bounds=renderers[0].bounds;foreach(var renderer in renderers.Skip(1))bounds.Encapsulate(renderer.bounds);
+                    if(bounds.size.y>ZoneSafeTreeHeight)instance.transform.localScale*=ZoneSafeTreeHeight/bounds.size.y;}
+            }
             instance.transform.position = new Vector3(record.position.x, LotHeight(record.position), record.position.y);
             placedTreeViews.Add(record, instance);
         }
@@ -271,7 +308,7 @@ namespace CityForge.World
             }
             var walker = new Pedestrian
             {
-                Body = body, Animator = animator,
+                Body = body, Animator = animator, VisualWakePending = true,
                 IdleState = definition ? definition.idleState : string.IsNullOrEmpty(asset.idleState) ? "Idle" : asset.idleState,
                 WalkState = definition ? definition.walkState : "Walk",
                 Speed = definition ? definition.walkSpeed : 1.15f
@@ -295,21 +332,11 @@ namespace CityForge.World
             // Industrial actors and delivery vehicles are authored on their lot. A tent is
             // not a residential/commercial traffic generator.
             var buildings = districtLotRoots.Keys.Where(lot =>
-                LotClassification.FindCategory(lot.definition.category)?.id != "industrial" &&
+                LotPopulationReady(lot) && LotClassification.FindCategory(lot.definition.category)?.id != "industrial" &&
                 lot.definition.objects.Any(item => catalog && catalog.Find(item.assetId)?.category == "Buildings"))
                 .OrderBy(lot => lot.center.y).ThenBy(lot => lot.center.x).ToArray();
             if (!catalog || buildings.Length == 0) return;
             var blocks = pedestrianBlockCircuits;
-            var pools = new Dictionary<LotWealth, LotAssetCatalogEntry[]>
-            {
-                [LotWealth.Low] = Pool("v3-hooligan"),
-                [LotWealth.Medium] = Pool("v3-dock-worker"),
-                [LotWealth.High] = Pool("v3-victorian-gentleman")
-            };
-            var foundersLow = Pool("v3-founders-cook", "v3-founders-stout-townsperson",
-                "v3-founders-townsperson", "v3-founders-privateer");
-            var foundersHigh = Pool("v3-founders-gentleman-black", "v3-founders-gentleman-blue",
-                "v3-founders-lady-gray", "v3-founders-lady-red");
             int districtYear = TownYear(SelectedDistrict);
             string vehicleEra = CityForgeTimeline.Eras.FirstOrDefault(era =>
                 districtYear >= era.FirstYear && districtYear <= era.LastYear)?.id;
@@ -346,15 +373,7 @@ namespace CityForge.World
                 var eligibleVehicles = vehicleGroups.Select(group => group.choices
                     .Where(entry => entry.profile.AllowsTraffic(vehicleEra, zone, wealth)).ToArray()).ToArray();
                 var era = ResidentialGround.LotEra(lot.definition);
-                var pool = pools.GetValueOrDefault(wealth) ?? pools[LotWealth.Low];
-                if (era == "founders")
-                {
-                    if (wealth == LotWealth.High && foundersHigh.Length > 0) pool = foundersHigh;
-                    if (wealth == LotWealth.Low && foundersLow.Length > 0 &&
-                        (IsResidentialZone(zone) || zone == TownZone.Commercial1))
-                        pool = foundersLow;
-                }
-                if (pool.Length == 0) pool = pools.Values.SelectMany(entries => entries).ToArray();
+                var pool = AmbientPedestrianPool(catalog, wealth, era, zone);
                 var root = districtLotRoots[lot];
                 foreach (var item in lot.definition.objects.Where(item => catalog.Find(item.assetId)?.category == "Buildings"))
                 {
@@ -410,10 +429,27 @@ namespace CityForge.World
             for (int i = 0; i < traffic.Length; i++) traffic[i].TrafficRank = i;
             RefreshTrafficVisibility();
 
+        }
+
+        internal static LotAssetCatalogEntry[] AmbientPedestrianPool(LotAssetCatalog catalog,
+            LotWealth wealth, string era, TownZone zone)
+        {
             LotAssetCatalogEntry[] Pool(params string[] ids) => ids.Select(catalog.Find).Where(asset =>
                 asset != null && asset.prefab && asset.prefab.GetComponentInChildren<Animator>() is { } animator &&
                 animator.runtimeAnimatorController && animator.runtimeAnimatorController.animationClips.Any(clip =>
                     clip.name.Contains("walk", StringComparison.OrdinalIgnoreCase))).ToArray();
+            var low = Pool("v3-hooligan");
+            var high = era == "founders"
+                ? Pool("v3-founders-gentleman-black", "v3-founders-gentleman-blue", "v3-founders-lady-gray", "v3-founders-lady-red")
+                : Pool("v3-victorian-gentleman");
+            var medium = Pool("v3-dock-worker").Concat(high).Distinct().ToArray();
+            if (era == "founders" && wealth == LotWealth.Low && (IsResidentialZone(zone) || zone == TownZone.Commercial1))
+            {
+                var foundersLow = Pool("v3-founders-cook", "v3-founders-stout-townsperson", "v3-founders-townsperson", "v3-founders-privateer");
+                if (foundersLow.Length > 0) low = foundersLow;
+            }
+            var pool = wealth == LotWealth.High ? high : wealth == LotWealth.Medium ? medium : low;
+            return pool.Length > 0 ? pool : low.Concat(medium).Concat(high).Distinct().ToArray();
         }
 
         private List<Vector2[]> ResidentialBlockRoutes()
@@ -742,9 +778,17 @@ namespace CityForge.World
             if (animator.GetCurrentAnimatorStateInfo(0).fullPathHash == state && !animator.IsInTransition(0))
                 return true;
             if (!animator.HasState(0, state)) return false;
-            animator.Play(state, 0, 0f);
-            animator.Update(0f);
-            return animator.GetCurrentAnimatorStateInfo(0).fullPathHash == state;
+            // Culled animators can postpone a requested state indefinitely. Evaluate
+            // the state change once without culling; movement never waits for rendering.
+            var culling=animator.cullingMode;
+            try
+            {
+                animator.cullingMode=AnimatorCullingMode.AlwaysAnimate;
+                animator.Play(state, 0, 0f);
+                animator.Update(0f);
+                return animator.GetCurrentAnimatorStateInfo(0).fullPathHash == state;
+            }
+            finally {animator.cullingMode=culling;}
         }
 
         private void RebuildPedestrianRoutes()
@@ -852,6 +896,7 @@ namespace CityForge.World
         private void TickPlacedPedestrians()
         {
             if (SelectedDistrict < 0 || DistrictLoading || IsSaving) return;
+            TickLotPopulation();
             if (pedestrianRoutesDirty)
             {
                 RebuildPedestrianRoutes();
@@ -906,7 +951,7 @@ namespace CityForge.World
                 float simulationTime = walker.Cadence.Step(elapsed, nearCamera, walker.Body.GetInstanceID());
                 if (simulationTime <= 0f) continue;
                 // A culled Animator may still report its previous state as it returns to view.
-                if (nearCamera && !walker.Vehicle && !SetPedestrianAnimation(walker, true)) continue;
+                if (nearCamera && !walker.Vehicle) SetPedestrianAnimation(walker, true);
                 var current = new Vector2(p.x, p.z) - walker.PassingOffset;
                 if (walker.Vehicle)
                     walker.CornerSpeed = VehicleCornering.Speed(walker.Route, current, walker.Next, walker.Direction,

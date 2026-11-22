@@ -130,13 +130,15 @@ namespace CityForge.World
             ghostPlacement = placement;
             lotGhost.transform.SetPositionAndRotation(new Vector3(placement.center.x, 0, placement.center.y),
                 Quaternion.Euler(0, placement.FacingDegrees, 0));
+            var footprint = new DistrictLotFootprint(placement);
+            float level = !placement.definition.levelLot || placement.definition.IsWaterfront ? 0 : DistrictLotFoundation.SampleLevel(placement.definition.Size,footprint.WorldPoint,NaturalLotHeight);
             var assets = LotAssetCatalog.Load();
             var objects = placement.definition.objects.Where(item => assets.Find(item.assetId)?.prefab).ToArray();
             for(int i=0;i<lotGhost.transform.childCount&&i<objects.Length;i++)
             {
                 var item=lotGhost.transform.GetChild(i);var authored=objects[i];
                 var position=item.position;
-                position.y=LotHeight(new Vector2(position.x,position.z));
+                position.y=!placement.definition.levelLot||placement.definition.IsWaterfront?NaturalLotHeight(new Vector2(position.x,position.z)):level;
                 if(placement.definition.IsWaterfront&&LotRuntimeLoader.Footprint(authored,assets.Find(authored.assetId)).Overlaps(placement.definition.WaterfrontBounds))
                     position.y=Mathf.Max(position.y,placement.waterfrontDeckHeight);
                 position.y+=authored.elevation+placement.definition.elevation+placement.elevation;
@@ -155,13 +157,6 @@ namespace CityForge.World
             ghostPlacement = null;
             foreach (var material in lotGhostMaterials.Values) Destroy(material);
             lotGhostMaterials.Clear();
-        }
-
-        internal bool LotClearsForest(Vector2 point)
-        {
-            foreach (var lot in PlacedLots)
-                if (lot.definition.type != LotType.Zoning && new DistrictLotFootprint(lot).Contains(point)) return true;
-            return false;
         }
 
         private void ClearLotStructures(DistrictLotRecord record)
@@ -199,21 +194,7 @@ namespace CityForge.World
             }
         }
 
-        private void ClearLotVegetation(DistrictLotRecord record)
-        {
-            var footprint = new DistrictLotFootprint(record);
-            if (ApprovedDistrict) ApprovedDistrict.ClearTreesUnderLot(point => footprint.Contains(point));
-            PlacedActors.RemoveAll(actor =>
-            {
-                if (!actor.tree || !footprint.Contains(actor.position)) return false;
-                if (placedTreeViews.Remove(actor, out var tree) && tree)
-                {
-                    tree.SetActive(false);
-                    Destroy(tree);
-                }
-                return true;
-            });
-        }
+        private void ClearLotVegetation(DistrictLotRecord record) => ClearDevelopedSites(new[] { record });
 
         private void UpdateRegionDistrictHover()
         {

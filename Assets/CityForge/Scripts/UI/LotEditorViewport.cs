@@ -82,7 +82,34 @@ namespace CityForge.UI
         private LotAssetCatalogEntry ghostAsset;
         private LotDefinition previewLot;
         private readonly HashSet<string> previewCharacters = new();
-        private GameObject placementGhost;
+        private GameObject placementGhost, ghostFootprint;
+        private Material ghostFootprintMaterial;
+        private Func<Vector2,bool> ghostFits;
+        private string hiddenItem;
+        internal bool HandTool {get;set;}
+        private bool panningHand;
+        internal void ToggleHiddenItem(string selected)
+        {
+            if(hiddenItem!=null){hiddenItem=null;ApplyHiddenItem();return;}
+            if(selected!=null&&instances.ContainsKey(selected)){hiddenItem=selected;ApplyHiddenItem();}
+        }
+        private void ApplyHiddenItem()
+        {
+            foreach(var pair in instances)if(pair.Value)pair.Value.gameObject.SetActive(pair.Key!=hiddenItem);
+            foreach(var pair in selectionFootprints)if(pair.Value)pair.Value.gameObject.SetActive(pair.Key!=hiddenItem);
+        }
+        internal bool PanWithArrows()
+        {
+            float x=(Input.GetKey(KeyCode.RightArrow)?1:0)-(Input.GetKey(KeyCode.LeftArrow)?1:0);
+            float y=(Input.GetKey(KeyCode.UpArrow)?1:0)-(Input.GetKey(KeyCode.DownArrow)?1:0);
+            if(x==0&&y==0)return false;
+            PanView(new Vector2(-x,-y)*Time.unscaledDeltaTime*200);return true;
+        }
+        private void PanView(Vector2 delta)
+        {
+            float step=2*cameraView.orthographicSize/Mathf.Max(1,target?target.height:Screen.height);
+            focus-=(cameraView.transform.right*delta.x+cameraView.transform.up*delta.y)*step;ApplyPose();
+        }
         private readonly Dictionary<Material, Material> ghostMaterials = new Dictionary<Material, Material>();
         private Func<Vector2, Vector2?> ghostPosition;
         private Vector2? ghostPointer;
@@ -321,6 +348,7 @@ namespace CityForge.UI
             LotPathDefinition selectedPath, bool grid, Rect? selectedTile, LotObjectDefinition growablePreview, LotObjectDefinition[] rowPreview = null)
         {
             selectedObject = selected;
+            if(hiddenItem!=null&&!lot.objects.Exists(o=>o.id==hiddenItem))hiddenItem=null;
             footprintRoot = null;
             footprintPreview = null;
             previewLot = lot;
@@ -482,7 +510,7 @@ namespace CityForge.UI
             foreach (var item in lot.objects)
             {
                 var asset = catalog ? catalog.Find(item.assetId) : null;
-                if (asset == null || !asset.prefab) continue;
+                if (asset == null || !asset.prefab || LotAssetCatalog.IsRetiredTree(asset.id)) continue;
                 var instance = LotRuntimeLoader.InstantiateObject(item, asset, content);
                 PrototypeRegionView.SetVehicleMotion(instance.transform, asset.id, false);
                 foreach (var child in instance.GetComponentsInChildren<Transform>(true))
@@ -726,8 +754,9 @@ namespace CityForge.UI
                 image.canvas.scaleFactor <= 24;
         }
 
-        public void SetPlacementGhost(LotAssetCatalogEntry asset, Func<Vector2, Vector2?> position, float yaw = 0f, float scale = 1f)
+        public void SetPlacementGhost(LotAssetCatalogEntry asset, Func<Vector2, Vector2?> position, float yaw = 0f, float scale = 1f, Func<Vector2,bool> fits = null)
         {
+            ghostFits = fits;
             ghostPosition = position;
             if (ghostAsset == asset)
             {
@@ -765,7 +794,7 @@ namespace CityForge.UI
                         }
                         transparent = new Material(original);
                         var color = transparent.GetColor("_BaseColor");
-                        color.a *= asset.category == "Landscaping" ? .82f : .48f;
+                        color.a = .5f;
                         transparent.SetColor("_BaseColor", color);
                         transparent.DisableKeyword("_ALPHAPREMULTIPLY_ON");
                         LotGroundTexture.ConfigureTransparentLayer(transparent, LotGroundOverlay.MaxCount + 3);
@@ -775,6 +804,8 @@ namespace CityForge.UI
                 }
                 renderer.sharedMaterials = slots;
             }
+            ghostFootprint=GameObject.CreatePrimitive(PrimitiveType.Cube);ghostFootprint.name="Placement fit indicator";ghostFootprint.transform.SetParent(stage,false);ghostFootprint.layer=PreviewLayer;Destroy(ghostFootprint.GetComponent<Collider>());
+            ghostFootprintMaterial=new Material(Shader.Find("Universal Render Pipeline/Unlit"));LotGroundTexture.ConfigureTransparentLayer(ghostFootprintMaterial,LotGroundOverlay.MaxCount+2);ghostFootprint.GetComponent<Renderer>().sharedMaterial=ghostFootprintMaterial;ghostFootprint.GetComponent<Renderer>().shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off;ghostFootprint.SetActive(false);
             PauseAnimations(placementGhost.transform);
             placementGhost.SetActive(false);
         }
@@ -787,6 +818,7 @@ namespace CityForge.UI
                 placementGhost.SetActive(false);
                 Destroy(placementGhost);
             }
+            if(ghostFootprint)Destroy(ghostFootprint);if(ghostFootprintMaterial)Destroy(ghostFootprintMaterial);ghostFootprint=null;ghostFootprintMaterial=null;
             placementGhost = null;
             ghostAsset = null;
             ghostPointer = null;
@@ -806,6 +838,8 @@ namespace CityForge.UI
                 placementGhost.transform.localPosition = new Vector3(position.Value.x, height, position.Value.y);
             }
             placementGhost.SetActive(position.HasValue);
+            if(ghostFootprint){ghostFootprint.SetActive(position.HasValue);if(position.HasValue){var size=LotRuntimeLoader.PlacementFootprint(ghostAsset)*placementGhost.transform.localScale.x;ghostFootprint.transform.localPosition=new Vector3(position.Value.x,.025f,position.Value.y);ghostFootprint.transform.localRotation=placementGhost.transform.localRotation;ghostFootprint.transform.localScale=new Vector3(size.x,.035f,size.y);bool valid=ghostFits?.Invoke(position.Value)??true;ghostFootprintMaterial.SetColor("_BaseColor",valid?new Color(.12f,.9f,.28f,.35f):new Color(1,.08f,.06f,.4f));}}
+
         }
 
         public void OnPointerEnter(PointerEventData eventData) => OnPointerMove(eventData);
@@ -991,6 +1025,7 @@ namespace CityForge.UI
         private void LateUpdate()
         {
             if (!image) return;
+            ApplyHiddenItem();
             if (!animationsPaused)
             {
                 characterPreview.Tick(Time.unscaledDeltaTime, draggedObject == null ? null : selectionFootprints.Keys, PreviewTime == RegionTimeOfDay.Evening);
@@ -1100,6 +1135,7 @@ namespace CityForge.UI
         public void OnBeginDrag(PointerEventData eventData)
         {
             if (texturePaintTool) return;
+            if (HandTool && eventData.button == PointerEventData.InputButton.Left){panningHand=true;eventData.eligibleForClick=false;return;}
             if (PickingEntryMarker || eventData.button != PointerEventData.InputButton.Left ||
                 !TryRay(eventData.pressPosition, eventData.pressEventCamera, out var ray)) return;
             if (TryBeginPathWidthDrag(eventData)) return;
@@ -1139,6 +1175,7 @@ namespace CityForge.UI
 
         public void OnEndDrag(PointerEventData eventData)
         {
+            if(panningHand){panningHand=false;return;}
             if (eventData.button != PointerEventData.InputButton.Left) return;
             if (draggingPathWidth)
             {
@@ -1209,6 +1246,7 @@ namespace CityForge.UI
         public void OnDrag(PointerEventData eventData)
         {
             if (texturePaintTool && eventData.button == PointerEventData.InputButton.Left) return;
+            if(panningHand&&eventData.button==PointerEventData.InputButton.Left){PanView(eventData.delta);return;}
             if (eventData.button == PointerEventData.InputButton.Left)
             {
                 if (draggingPathWidth)
@@ -1330,7 +1368,7 @@ namespace CityForge.UI
             bool pickedCharacter = false;
             foreach (var target in pickTargets)
             {
-                if (!target.renderer || !target.renderer.enabled) continue;
+                if (!target.renderer || !target.renderer.enabled || !target.renderer.gameObject.activeInHierarchy) continue;
                 bool character = characterFocus && previewCharacters.Contains(target.id);
                 if (pickedCharacter && !character) continue;
                 var matrix = target.renderer.transform.worldToLocalMatrix;
@@ -1348,7 +1386,7 @@ namespace CityForge.UI
             {
                 foreach (var (treeId, trunk) in treePickTargets)
                 {
-                    if (!trunk) continue;
+                    if (!trunk || !trunk.gameObject.activeInHierarchy) continue;
                     float width = TreePickWidth(trunk);
                     var bounds = new Bounds(trunk.position + Vector3.up * .55f, new Vector3(width, 1.1f, width));
                     if (!bounds.IntersectRay(ray, out var distance) || distance >= nearest) continue;
@@ -1440,7 +1478,7 @@ namespace CityForge.UI
 
         public void OnPointerClick(PointerEventData eventData)
         {
-            if (texturePaintTool) return;
+            if (HandTool || texturePaintTool) return;
             if (scaleFigure && scaleFigure.gameObject.activeSelf && eventData.button == PointerEventData.InputButton.Left)
             {
                 if (TryRay(eventData.position, eventData.pressEventCamera, out var figureRay) &&

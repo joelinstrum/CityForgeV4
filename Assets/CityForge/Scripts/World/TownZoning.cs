@@ -331,7 +331,7 @@ namespace CityForge.World
                 RefreshZonePreview(bounds);
             }
             else if (rotated) RefreshZonePreview(bounds);
-            ShowDistrictMessage($"{bounds.width} × {bounds.height} tiles");
+            ShowDistrictMessage(zoneProblem ?? $"{bounds.width} × {bounds.height} tiles");
             if (!up) return;
             var problem = zoneProblem ?? ApplyTownZone(bounds, activeZone);
             if (problem == null)
@@ -426,6 +426,12 @@ namespace CityForge.World
                     }
                 }
                 if (dryCells != null) dryCells[cell] = true;
+            }
+            if(zone!=TownZone.None)
+            {
+                var parcel=new DistrictLotRecord{center=(ZoneCorner(bounds.min)+ZoneCorner(bounds.max))*.5f,
+                    definition=new LotDefinition{width=bounds.width,length=bounds.height,type=LotType.Zoning}};
+                if(LotOverlapsDistrictRoad(parcel))return "Keep zoning clear of the paved road surface. Sidewalks are allowed.";
             }
             return null;
         }

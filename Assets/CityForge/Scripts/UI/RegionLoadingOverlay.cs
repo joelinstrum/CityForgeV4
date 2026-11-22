@@ -39,7 +39,7 @@ namespace CityForge.UI
             var shade=Box(root.transform,"Backdrop",new Color(.035f,.05f,.04f,.98f));Stretch(shade);
             var panel=Box(root.transform,"Panel",new Color(.08f,.1f,.085f,1));panel.anchorMin=panel.anchorMax=panel.pivot=new Vector2(.5f,.5f);panel.sizeDelta=new Vector2(850,290);
             var border=panel.gameObject.AddComponent<Outline>();border.effectColor=new Color(.62f,.52f,.32f,.8f);border.effectDistance=Vector2.one;
-            Label(panel,"Title","OPENING “"+regionName+"”",font,30,new Vector2(35,-28),new Vector2(780,76));
+            Label(panel,"Title",district?"Opening "+regionName:"OPENING “"+regionName+"”",font,30,new Vector2(35,-28),new Vector2(780,76));
             loader.stageLabel=Label(panel,"Stage",district?"Preparing to open district":"Preparing to open region",font,23,new Vector2(35,-114),new Vector2(780,40));
             var track=Box(panel,"Track",new Color(.025f,.04f,.03f,1));track.anchorMin=track.anchorMax=track.pivot=new Vector2(0,1);track.anchoredPosition=new Vector2(35,-173);track.sizeDelta=new Vector2(780,20);
             loader.fill=Box(track,"Fill",new Color(.58f,.65f,.38f,1));Stretch(loader.fill);loader.fill.anchorMax=new Vector2(0,1);

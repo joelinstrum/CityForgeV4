@@ -7,7 +7,6 @@ namespace CityForge.World
     public sealed partial class PrototypeRegionView
     {
         // Road edits replace their mesh, so cached arrays follow the mesh lifetime.
-        private readonly System.Runtime.CompilerServices.ConditionalWeakTable<Mesh, RoadGeometry> frontageGeometry = new();
 
         private sealed class RoadGeometry
         {
@@ -39,16 +38,16 @@ namespace CityForge.World
                 ? (TownZoneFacing)(1 + ((int)frontage - 1 + 4 - residentialFacingTurns % 4) % 4)
                 : frontage;
 
-        private const float ResidentialRoadCornerInset = .85f;
+        private const float ResidentialRoadCornerInset = LotRoadEdgeTolerance;
 
         private string ResidentialFrontageProblem(RectInt cells, int maxDepth, out TownZoneFacing frontage,
             bool? frontageAlongX = null, bool allowEnclosedBlock = false,
-            TownZoneFacing requiredFacing = TownZoneFacing.None, bool commercial = false)
+            TownZoneFacing requiredFacing = TownZoneFacing.None, bool commercial = false, bool allowRoundedLotCorners = false)
         {
             frontage = TownZoneFacing.None;
             const float edgeTolerance = .15f;
             // Rounded grid-aligned corners can clip a small part of the outside cells.
-            const float cornerInset = ResidentialRoadCornerInset;
+            const float cornerInset = LotRoadEdgeTolerance;
             string depthProblem = $"This zone allows up to {maxDepth} cells deep from the road.";
             bool enclosedBlock = !commercial && allowEnclosedBlock && cells.width > maxDepth && cells.height > maxDepth;
             if (!enclosedBlock && Mathf.Min(cells.width, cells.height) > maxDepth) return depthProblem;
@@ -59,7 +58,13 @@ namespace CityForge.World
 
             var min = ZoneCorner(cells.min);
             var max = ZoneCorner(cells.max);
-            float reach = commercial ? .65f : DistrictGridCellMeters + edgeTolerance;
+            if(allowRoundedLotCorners)
+            {
+                var outline=new DistrictLotRecord{center=(min+max)*.5f,definition=new LotDefinition{width=cells.width,length=cells.height}};
+                if(LotOverlapsDistrictRoad(outline,LotRoadEdgeTolerance,GrowableRoadCornerCut(outline.definition)))
+                    return "Keep zoning clear of the road surface.";
+            }
+            float reach = commercial ? LotPathSurface.ResidentialSidewalkWidth + .65f : DistrictGridCellMeters + edgeTolerance;
             var search = new Rect(min - Vector2.one * reach, max - min + Vector2.one * (2 * reach));
             float bestGap = reach;
             int bestDepth = int.MaxValue;
@@ -71,7 +76,7 @@ namespace CityForge.World
                 var mesh = filter.sharedMesh;
                 var bounds = mesh.bounds;
                 if (!search.Overlaps(Rect.MinMaxRect(bounds.min.x, bounds.min.z, bounds.max.x, bounds.max.z))) continue;
-                var geometry = frontageGeometry.GetValue(mesh, source => new RoadGeometry(source));
+                var geometry = CarriagewayGeometry(road,mesh);
                 var vertices = geometry.Vertices;
                 var triangles = geometry.Triangles;
                 for (int i = 0; i < triangles.Length; i += 3)
@@ -79,7 +84,7 @@ namespace CityForge.World
                     var a = vertices[triangles[i]];
                     var b = vertices[triangles[i + 1]];
                     var c = vertices[triangles[i + 2]];
-                    if (RoadTriangleSpan(a, b, c, min.y + cornerInset, max.y - cornerInset, false,
+                    if (!allowRoundedLotCorners && RoadTriangleSpan(a, b, c, min.y + cornerInset, max.y - cornerInset, false,
                             out float innerWest, out float innerEast) &&
                         innerWest < max.x - cornerInset && innerEast > min.x + cornerInset)
                         return "Keep zoning clear of the road surface.";
@@ -124,7 +129,7 @@ namespace CityForge.World
                 }
             }
 
-            const string commercialFrontageProblem = "Commercial I needs street frontage along the full edge. Use a street surface.";
+            const string commercialFrontageProblem = "Commercial zoning needs a street, cobblestone road, or brick road along its full edge.";
             bool Covers(List<(float start, float end)> spans, TownZoneFacing side)
             {
                 bool eastOrWest = side is TownZoneFacing.East or TownZoneFacing.West;
@@ -221,13 +226,14 @@ namespace CityForge.World
             float across = alongZ ? edge.x : edge.y;
             float edgeAlong = (alongZ ? edge.y : edge.x) * sign;
             float gap = DistrictGridCellMeters + .15f;
-            foreach (var filter in districtRoadMeshes.Values)
+            foreach (var pair in districtRoadMeshes)
             {
+                var filter=pair.Value;
                 var mesh = filter.sharedMesh;
                 var bounds = mesh.bounds;
                 var near = new Vector3(edge.x, bounds.center.y, edge.y);
                 if (bounds.SqrDistance(near) > DistrictGridCellMeters * DistrictGridCellMeters) continue;
-                var geometry = frontageGeometry.GetValue(mesh, source => new RoadGeometry(source));
+                var geometry = CarriagewayGeometry(pair.Key,mesh);
                 var vertices = geometry.Vertices;
                 var triangles = geometry.Triangles;
                 for (int i = 0; i < triangles.Length; i += 3)

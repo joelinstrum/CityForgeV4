@@ -260,19 +260,8 @@ namespace CityForge.World
             if (clockPaused || SelectedDistrict < 0 || DistrictLoading || IsSaving) return;
             int phase = Array.IndexOf(DaylightChoices, TimeOfDay);
             if (phase < 0) return;
-            float phaseSpeed = ClockPhaseSpeed(TimeOfDay);
-            float elapsed = daylightPhaseElapsed + Time.unscaledDeltaTime * phaseSpeed;
-            if (elapsed >= DaylightPhaseSeconds)
-            {
-                // Carry real time into the next phase at its own speed.
-                float nextPhaseSpeed = ClockPhaseSpeed(DaylightChoices[(phase + 1) % DaylightChoices.Length]);
-                elapsed = (elapsed - DaylightPhaseSeconds) / phaseSpeed * nextPhaseSpeed;
-                daylightPhaseElapsed = elapsed;
-                phase = (phase + 1) % DaylightChoices.Length;
-                ApplyTimeOfDay(DaylightChoices[phase], resetHistory: false);
-            }
-
-            daylightPhaseElapsed = elapsed;
+            AdvanceDistrictClock(Time.unscaledDeltaTime);
+            phase = Array.IndexOf(DaylightChoices, TimeOfDay);
             var next = DaylightChoices[(phase + 1) % DaylightChoices.Length];
             float phaseProgress = daylightPhaseElapsed / DaylightPhaseSeconds;
             UpdateClockHand(phase, phaseProgress);
@@ -283,6 +272,35 @@ namespace CityForge.World
                 if (!clockRegionSun) clockRegionSun = transform.Find("RegionSun");
                 if (clockRegionSun)
                     clockRegionSun.rotation = BlendSunRotation(TimeOfDay, SunRotation(HeldDaylight(TimeOfDay), 32f), SunRotation(next, 32f), phaseProgress);
+            }
+        }
+
+        // Consume real seconds at exact phase / 21:00 boundaries, including long frames.
+        internal void AdvanceDistrictClock(float seconds)
+        {
+            while (seconds > .000001f)
+            {
+                int phase = Array.IndexOf(DaylightChoices, TimeOfDay);
+                if (phase < 0) return;
+                float start = ClockHours[phase];
+                float end = phase + 1 < ClockHours.Length ? ClockHours[phase + 1] : 30f;
+                float hour = Mathf.Lerp(start, end, daylightPhaseElapsed / DaylightPhaseSeconds);
+                bool overnight = hour >= 21f;
+                float rate = overnight ? 12f / 60f : (end - start) * ClockPhaseSpeed(TimeOfDay) / DaylightPhaseSeconds;
+                float boundary = !overnight && end > 21f ? 21f : end;
+                float available = Mathf.Max(0f, (boundary - hour) / rate);
+                float step = Mathf.Min(seconds, available);
+                daylightPhaseElapsed += step * rate / (end - start) * DaylightPhaseSeconds;
+                seconds -= step;
+                if (step + .00001f >= available)
+                {
+                    if (boundary == end)
+                    {
+                        daylightPhaseElapsed = 0f;
+                        ApplyTimeOfDay(DaylightChoices[(phase + 1) % DaylightChoices.Length], resetHistory: false);
+                    }
+                    else daylightPhaseElapsed = (boundary - start) / (end - start) * DaylightPhaseSeconds;
+                }
             }
         }
 
@@ -298,7 +316,12 @@ namespace CityForge.World
 
         internal static float LateAfternoonProgress(float progress) => Mathf.InverseLerp(.8f, 1f, progress);
 
-        internal static float MorningLightingProgress(float progress) => 1f - Mathf.Pow(1f - progress, 3f);
+        internal static float MorningLightingProgress(float progress) => Mathf.SmoothStep(0f, 1f, progress);
+
+        internal static float SunriseProgress(float hour) => Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(5f, 8f, hour));
+        internal static float SkyNightAmount(float hour) => hour >= 12f
+            ? Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(19f, 22f, hour))
+            : 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(5f, 7.5f, hour));
 
         private void UpdateClockHand(int phase, float blend)
         {
@@ -413,7 +436,7 @@ namespace CityForge.World
             if (phase != RegionTimeOfDay.Morning)
                 return Quaternion.Slerp(from, to, Mathf.SmoothStep(0f, 1f, progress));
 
-            // Climb rapidly after sunrise while the heading follows the clock.
+            // Ease the sun upward through the morning while its heading follows the clock.
             var start = from.eulerAngles;
             var end = to.eulerAngles;
             float rise = MorningLightingProgress(progress);
@@ -465,7 +488,7 @@ namespace CityForge.World
             return probe;
         }
 
-        private static (float level, Color tint) AmbientPreset(RegionTimeOfDay time) => time switch
+        internal static (float level, Color tint) AmbientPreset(RegionTimeOfDay time) => time switch
             {
                 RegionTimeOfDay.Morning => (1.05f, new Color(1f, .97f, .94f)),
                 RegionTimeOfDay.Evening => (.83f, new Color(.85f, .92f, 1f)),
@@ -569,6 +592,9 @@ namespace CityForge.World
             }
             if (current == RegionTimeOfDay.Afternoon && afternoonCalibrationVolume)
                 afternoonCalibrationVolume.weight = 1f - Mathf.SmoothStep(0f, 1f, PrototypeRegionView.LateAfternoonProgress(progress));
+            float hour = View.CurrentClockHour;
+            bool dawn = current is RegionTimeOfDay.Night or RegionTimeOfDay.Morning;
+            if (dawn) ApplyDawnAmbient(hour);
             foreach (var sun in districtSuns)
             {
                 var from = Rotation(PrototypeRegionView.HeldDaylight(current), sun.rotation.eulerAngles.x);
@@ -577,9 +603,15 @@ namespace CityForge.World
                 if (morning)
                 {
                     float noonIntensity = View.AfternoonSunlight * (linear ? .70f : .76f);
-                    sun.light.intensity = sun.intensity * Mathf.Lerp(.85f, noonIntensity, morningBlend);
-                    sun.light.color = Color.Lerp(new Color(1f, .84f, .66f),
+                    sun.light.intensity = sun.intensity * Mathf.Lerp(Mathf.Lerp(.35f, .85f, PrototypeRegionView.SunriseProgress(hour)), noonIntensity, morningBlend);
+                    sun.light.color = Color.Lerp(Color.Lerp(new Color(.71f, .81f, 1f), new Color(1f, .84f, .66f), PrototypeRegionView.SunriseProgress(hour)),
                         new Color(1f, .99f, .965f), morningBlend);
+                }
+                else if (current == RegionTimeOfDay.Night)
+                {
+                    float rise = PrototypeRegionView.SunriseProgress(hour);
+                    sun.light.intensity = sun.intensity * Mathf.Lerp(.35f, .85f, rise);
+                    sun.light.color = Color.Lerp(new Color(.71f, .81f, 1f), new Color(1f, .84f, .66f), rise);
                 }
                 else if (current is RegionTimeOfDay.Afternoon or RegionTimeOfDay.Evening)
                 {
@@ -600,6 +632,26 @@ namespace CityForge.World
                     calibrated ? View.AfternoonElevation : baselineElevation,
                     calibrated && QualitySettings.activeColorSpace == ColorSpace.Linear ? 25f : 65f);
             }
+        }
+
+        private void ApplyDawnAmbient(float hour)
+        {
+            if (!settingsApplied) return;
+            float rise = PrototypeRegionView.SunriseProgress(hour);
+            var night = PrototypeRegionView.AmbientPreset(RegionTimeOfDay.Night);
+            var morning = PrototypeRegionView.AmbientPreset(RegionTimeOfDay.Morning);
+            float noon = hour >= 6f ? PrototypeRegionView.MorningLightingProgress(Mathf.InverseLerp(6f, 12f, hour)) : 0f;
+            float level = Mathf.Lerp(Mathf.Lerp(night.level, morning.level, rise), 1f, noon);
+            var tint = Color.Lerp(Color.Lerp(night.tint, morning.tint, rise), Color.white, noon) * DistrictAmbientTint;
+            RenderSettings.ambientSkyColor = Baseline.ambientSky * tint;
+            RenderSettings.ambientEquatorColor = Baseline.ambientEquator * tint;
+            RenderSettings.ambientGroundColor = Baseline.ambientGround * tint;
+            RenderSettings.ambientIntensity = Baseline.ambientIntensity * 1.20f * level * .90f * DistrictAmbientScale;
+            var probe = new SphericalHarmonicsL2();
+            for (int c = 0; c < 3; c++)
+            for (int k = 0; k < 9; k++)
+                probe[c, k] = Baseline.ambientSH[c * 9 + k] * (c == 2 ? 1.28f : 1.20f) * level * tint[c] * .90f * DistrictAmbientScale;
+            RenderSettings.ambientProbe = probe;
         }
 
         internal void ApplyDistrictSun()
