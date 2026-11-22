@@ -54,7 +54,7 @@ namespace CityForge.World
             if(zones)RefreshZoneOverlay();
             if(paint){districtGroundPaint.PruneEmpty();RebuildGroundPaint();}
             if(actors)RebuildPlacedPedestrians();
-            if(ApprovedDistrict)ApprovedDistrict.FlushTerraformCoast();
+            if(ApprovedDistrict&&!ApprovedDistrict.TerraformCoastDeferred)ApprovedDistrict.FlushTerraformCoast();
         }
     }
 }

@@ -16,10 +16,12 @@ namespace CityForge.World
 
         RegionWaterBody[] coastalOceans=Array.Empty<RegionWaterBody>();
         RegionTerrainLayout coastalLayout;
+        bool coastalGradedRivers;
 
         void PrepareCoastalShore()
         {
             if(IsRegionOverview||View.Coastline)return;
+            coastalGradedRivers=Array.Exists(View.Data.WaterBodies,b=>!b.playerChannel&&b.kind==WaterBodyKind.River&&b.channelVersion>=2);
             if(HasOcean())coastalOceans=Array.FindAll(View.Data.WaterBodies,b=>b.kind==WaterBodyKind.Ocean);
             var settings=View.CreationSettings;
             if(settings?.version>=6&&(coastalOceans.Length>0||settings.terrainShape==RegionTerrainShape.RiverAndBay))
@@ -158,6 +160,8 @@ namespace CityForge.World
             float edge=RiverBayLayout.RoundedMouthDistance(coast,river);
             if(edge>.004f)return height;
             float datum=estuaryRiver.surfaceLevelNormalized;
+            if(edge>=0&&estuaryRiver.bankClearanceMeters>0)
+                return Mathf.Max(height,datum+estuaryRiver.bankClearanceMeters/PrototypeRegionData.Height);
             // Sink the original shallow shelf through the opening. A depth profile
             // measured from the old coast leaves a sand ridge under the water,
             // even when the rounded shoreline looks correct above the surface.
@@ -190,7 +194,7 @@ namespace CityForge.World
             float mapSide=View.MapSide;
             var area=new Rect(Origin/mapSide+Vector2.one*.5f,Vector2.one*Side/mapSide);
             var rivers=Array.ConvertAll(Array.FindAll(View.Data.WaterBodies,b=>
-                b.kind==WaterBodyKind.River&&b.centerline?.Length>1&&b.Bounds.Overlaps(area)),
+                !b.playerChannel&&b.kind==WaterBodyKind.River&&b.centerline?.Length>1&&b.Bounds.Overlaps(area)),
                 b=>(body:b,bounds:b.Bounds));
             var riverOnly=rivers.Length==0?null:new bool[n,n];
             coastalBeachDistances=new float[n,n];
@@ -222,8 +226,8 @@ namespace CityForge.World
                             riverOnly[z,x]=wet[z,x]=true;
                             break;
                         }
-                        // Keep the riverbed upstream, but treat the rounded
-                        // corners as coastal shelf.
+                        // The connected tidal bed and rounded corners share the coastal
+                        // sand floor; graded upstream channels keep their own palette.
                         wet[z,x]|=RoundedEstuaryDistance(uv)<0;
                     }
                 }
@@ -237,11 +241,17 @@ namespace CityForge.World
             }
             for(int z=1;z<n;z++)for(int x=1;x<n;x++)coastalBeachDistances[z,x]=Mathf.Min(coastalBeachDistances[z,x],Mathf.Min(coastalBeachDistances[z,x-1]+pixel,Mathf.Min(coastalBeachDistances[z-1,x]+pixel,coastalBeachDistances[z-1,x-1]+pixel*1.41421356f)));
             for(int z=n-2;z>=0;z--)for(int x=n-2;x>=0;x--)coastalBeachDistances[z,x]=Mathf.Min(coastalBeachDistances[z,x],Mathf.Min(coastalBeachDistances[z,x+1]+pixel,Mathf.Min(coastalBeachDistances[z+1,x]+pixel,coastalBeachDistances[z+1,x+1]+pixel*1.41421356f)));
-            for(int z=0;z<n;z++)for(int x=0;x<n;x++)if(wet[z,x])coastalBeachDistances[z,x]=riverOnly!=null&&riverOnly[z,x]?-4*Side:-coastalBeachDistances[z,x];
+            for(int z=0;z<n;z++)for(int x=0;x<n;x++)if(wet[z,x])coastalBeachDistances[z,x]=-coastalBeachDistances[z,x];
         }
 
         float CoastalBeachDistance(Vector2 p)
         {
+            if(TerraformShore(p,out float edited))return edited;
+            return OriginalCoastalBeachDistance(p);
+        }
+        float OriginalCoastalBeachDistance(Vector2 p)
+        {
+            if(coastalBeachDistances==null)return Side;
             int last=coastalBeachDistances.GetLength(0)-1;
             float gx=Mathf.Clamp((p.x-Origin.x)/Side*last,0,last-.001f),gz=Mathf.Clamp((p.y-Origin.y)/Side*last,0,last-.001f);int x=(int)gx,z=(int)gz;
             return Mathf.Lerp(Mathf.Lerp(coastalBeachDistances[z,x],coastalBeachDistances[z,x+1],gx-x),Mathf.Lerp(coastalBeachDistances[z+1,x],coastalBeachDistances[z+1,x+1],gx-x),gz-z);
@@ -257,19 +267,41 @@ namespace CityForge.World
             return Mathf.Max(sand, HarborDryCover(p, distance).x);
         }
 
+        // A sea-connected river mouth shares the ocean floor. Graded rivers
+        // recover their original bed palette gradually upstream, never at a box edge.
+        float CoastalFloorWeight(Vector2 p)
+        {
+            if(!coastalGradedRivers||coastalLayout==null)return 1;
+            float landward=coastalLayout.LandDistance(p/View.MapSide+Vector2.one*.5f)*View.MapSide;
+            return 1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(12,96,landward));
+        }
+
         float CoastalBeachWeight(Vector2 p,float d,bool checkFootprint=true)
         {
             if(d>44||d<-Side||(checkFootprint&&!Contains(p)))return 0;
             // The ocean floor stays sand at every depth. Fading the submerged
             // apron back to canonical meadow makes grass show through the water.
-            if(d<=0)return 1;
+            if(d<=0)return Mathf.Lerp(CoastalFloorWeight(p),1,TerraformGroundBlend(p));
+            // A narrow textured bank feathers into detailed meadow on sculpted ground.
+            float edited=TerraformGroundBlend(p);
+            float bank=ShoreMaterialCoverage(p,d,Mathf.Lerp(5,14,Noise(p,43,717)));
+            if(edited>=.999f)return bank;
             if(View.InCampClearing(p)||RoadDistance(p)<=Baseline.roadWidth)return 0;
-            float width=26+10*Noise(p,55,712)+4*Noise(p,11,714);
-            float rough=(Noise(p,5,715)-.5f)*3;
-            float edge=1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(width*.28f,width,d+rough));
+            float width=30+6*Noise(p,100,712);
+            // Keep the boundary broad and gradual; grain belongs inside the texture.
+            float edge=ShoreMaterialCoverage(p,d,width);
             float high=1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(3,7,Height(p)-View.SeaLevel));
             float steep=1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(20,35,MountainSlope(p)));
-            return edge*high*steep*(1-DeepHarborWeight(p));
+            return Mathf.Lerp(edge*high*steep*(1-DeepHarborWeight(p)),bank,edited);
+        }
+
+        // Irregular MATERIAL coverage only: never displace terrain or its waterline.
+        float ShoreMaterialCoverage(Vector2 p,float distance,float width)
+        {
+            float patches=.65f*Noise(p,7,721)+.35f*Noise(p,21,722);
+            patches=Mathf.SmoothStep(0,1,Mathf.InverseLerp(.32f,.68f,patches));
+            float breakup=(patches-.5f)*.65f*Mathf.SmoothStep(0,1,distance/2);
+            return 1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(.15f,.85f,distance/width+breakup));
         }
 
         float CoastalBeachDirtWeight(Vector2 p,float beach,float d)
@@ -277,7 +309,101 @@ namespace CityForge.World
             if(beach<=0)return 0;
             if(d<=0)return 0;
             float dry=Mathf.SmoothStep(0,1,Mathf.InverseLerp(3,12,d));
-            return beach*dry*(.10f+.25f*Noise(p,12,716))*Mathf.Lerp(.5f,1,1-beach);
+            // Reuse the approved dirt grain, with a broad continuous blend rather
+            // than a flat sand strip. Keep the submerged floor sand.
+            float edited=TerraformGroundBlend(p);
+            float soil=Mathf.Lerp(dry*(.16f+.22f*Noise(p,12,716)),dry*(.18f+.26f*Noise(p,8,718)),edited);
+            return beach*soil;
+        }
+
+        int[,] coastalDefaultSources;
+        internal Vector2 TerraformGroundSource(Vector2 p)
+        {
+            if(coastalBaseAlphamaps==null||TerraformGroundBlend(p)<=0)return p;
+            int n=coastalBaseAlphamaps.GetLength(0);
+            int localX=Mathf.Clamp(Mathf.RoundToInt((p.x-Origin.x)/Side*(n-1)),0,n-1),localZ=Mathf.Clamp(Mathf.RoundToInt((p.y-Origin.y)/Side*(n-1)),0,n-1);
+            float localGrass=0;for(int i=1;i<Mathf.Min(View.RiverBedVersion==0?5:4,coastalBaseAlphamaps.GetLength(2));i++)localGrass+=coastalBaseAlphamaps[localZ,localX,i];
+            // Beach painting scales down the pre-existing grass but does not erase
+            // its spatial pattern. Recover that exact world-position mixture first.
+            if(localGrass>.0001f)return p;
+            if(coastalDefaultSources==null){
+                int m=Mathf.Min(n,257);
+                coastalDefaultSources=new int[m,m];
+                // Canonical dry meadow samples, outside the old beach. Build once;
+                // only coverage weights move, never the source textures or their UVs.
+                for(int z=0;z<m;z++)for(int x=0;x<m;x++){
+                    int sx=Mathf.RoundToInt(x/(float)(m-1)*(n-1)),sz=Mathf.RoundToInt(z/(float)(m-1)*(n-1));
+                    var q=Origin+new Vector2(sx/(float)(n-1),sz/(float)(n-1))*Side;
+                    float grass=coastalBaseAlphamaps[sz,sx,1]+coastalBaseAlphamaps[sz,sx,2]+coastalBaseAlphamaps[sz,sx,3];
+                    if(View.RiverBedVersion==0&&coastalBaseAlphamaps.GetLength(2)>4)grass+=coastalBaseAlphamaps[sz,sx,4];
+                    coastalDefaultSources[z,x]=Contains(q)&&TerraformGroundBlend(q)<.001f&&OriginalCoastalBeachDistance(q)>40&&grass>.75f&&coastalBaseAlphamaps[sz,sx,0]<.18f&&(!Geography||Geography.IsDryGrassReference(q))?sz*n+sx:-1;
+                }
+                void Relax(int x,int z,int xx,int zz){
+                    if(xx<0||zz<0||xx>=m||zz>=m)return;int source=coastalDefaultSources[zz,xx];if(source<0)return;
+                    int old=coastalDefaultSources[z,x];
+                    long Distance(int key){long dx=key%n-Mathf.RoundToInt(x/(float)(m-1)*(n-1)),dz=key/n-Mathf.RoundToInt(z/(float)(m-1)*(n-1));return dx*dx+dz*dz;}
+                    if(old<0||Distance(source)<Distance(old))coastalDefaultSources[z,x]=source;
+                }
+                for(int z=0;z<m;z++)for(int x=0;x<m;x++){Relax(x,z,x-1,z);Relax(x,z,x-1,z-1);Relax(x,z,x,z-1);Relax(x,z,x+1,z-1);}
+                for(int z=m-1;z>=0;z--)for(int x=m-1;x>=0;x--){Relax(x,z,x+1,z);Relax(x,z,x-1,z+1);Relax(x,z,x,z+1);Relax(x,z,x+1,z+1);}
+            }
+            int size=coastalDefaultSources.GetLength(0);
+            int px=Mathf.Clamp(Mathf.RoundToInt((p.x-Origin.x)/Side*(size-1)),0,size-1),pz=Mathf.Clamp(Mathf.RoundToInt((p.y-Origin.y)/Side*(size-1)),0,size-1);
+            int key=coastalDefaultSources[pz,px];if(key<0)return p;
+            var nearest=Origin+new Vector2(key%n/(float)(n-1),key/n/(float)(n-1))*Side;
+            // Continue a two-dimensional swath of the existing meadow. Reusing
+            // only the nearest boundary pixel extrudes one row into a flat band.
+            var reflected=nearest*2-p;
+            int rx=Mathf.Clamp(Mathf.RoundToInt((reflected.x-Origin.x)/Side*(size-1)),0,size-1),rz=Mathf.Clamp(Mathf.RoundToInt((reflected.y-Origin.y)/Side*(size-1)),0,size-1);
+            int donor=coastalDefaultSources[rz,rx];
+            return donor<0?nearest:Origin+new Vector2(donor%n/(float)(n-1),donor/n/(float)(n-1))*Side;
+        }
+
+        // Reuse the original ground weights and existing layers; only repaint edited coast.
+        void RefreshTerraformBeach(Rect area)
+        {
+            if(coastalBaseAlphamaps==null||CoastalBeachLayer<0)return;
+            int n=terrainData.alphamapResolution,count=CoastalBeachLayer,layers=terrainData.alphamapLayers;
+            var lo=Vector2Int.Max(Vector2Int.zero,Vector2Int.FloorToInt((area.min-Origin)/Side*(n-1)));
+            var hi=Vector2Int.Min(Vector2Int.one*(n-1),Vector2Int.CeilToInt((area.max-Origin)/Side*(n-1)));
+            if(hi.x<lo.x||hi.y<lo.y)return;
+            var maps=terrainData.GetAlphamaps(lo.x,lo.y,hi.x-lo.x+1,hi.y-lo.y+1);
+            for(int z=lo.y;z<=hi.y;z++)for(int x=lo.x;x<=hi.x;x++){
+                var p=Origin+new Vector2(x/(float)(n-1),z/(float)(n-1))*Side;
+                if(!View.InActiveDistrict(p)||!TerraformShore(p,out float distance))continue;
+                float beach=CoastalBeachWeight(p,distance),dirt=CoastalBeachDirtWeight(p,beach,distance);
+                var cover=Vector2.zero;
+                if(layers>count+1){
+                    if(distance<=0&&distance>=-12)cover.x=HarborWetRock(p,distance);
+                    else if(distance>0&&distance<=10&&!View.InCampClearing(p)&&RoadDistance(p)>Baseline.roadWidth)cover=HarborDryCover(p,distance);
+                    if(layers<=count+2)cover.y=0;
+                }
+                float edited=distance>0?TerraformGroundBlend(p):0;
+                cover*=1-edited;
+                float weight=Mathf.Clamp01(beach+cover.x+cover.y),sum=0;
+                for(int i=0;i<layers;i++)maps[z-lo.y,x-lo.x,i]=0;
+                for(int i=0;i<count;i++)maps[z-lo.y,x-lo.x,i]=coastalBaseAlphamaps[z,x,i]*(1-weight);
+                if(edited>0){
+                    // Extend the actual approved ground mixture, including its coarse
+                    // fifth layer. Texture assets, tiling and world coordinates stay shared.
+                    var source=TerraformGroundSource(p);
+                    int sx=Mathf.Clamp(Mathf.RoundToInt((source.x-Origin.x)/Side*(n-1)),0,n-1);
+                    int sz=Mathf.Clamp(Mathf.RoundToInt((source.y-Origin.y)/Side*(n-1)),0,n-1);
+                    int grassLayers=Mathf.Min(View.RiverBedVersion==0?5:4,count);float grassMass=0;
+                    for(int i=1;i<grassLayers;i++)grassMass+=coastalBaseAlphamaps[sz,sx,i];
+                    for(int i=0;i<count;i++){
+                        float native=grassMass>.00001f?(i>0&&i<grassLayers?coastalBaseAlphamaps[sz,sx,i]/grassMass:0):(i==1?1:0);
+                        maps[z-lo.y,x-lo.x,i]=Mathf.Lerp(maps[z-lo.y,x-lo.x,i],native*(1-weight),edited);
+                    }
+                }
+                maps[z-lo.y,x-lo.x,0]+=dirt;
+                maps[z-lo.y,x-lo.x,count]=Mathf.Max(0,weight-dirt-cover.x-cover.y);
+                if(layers>count+1)maps[z-lo.y,x-lo.x,count+1]=cover.x;
+                if(layers>count+2)maps[z-lo.y,x-lo.x,count+2]=cover.y;
+                for(int i=0;i<layers;i++)sum+=maps[z-lo.y,x-lo.x,i];
+                if(sum>0)for(int i=0;i<layers;i++)maps[z-lo.y,x-lo.x,i]/=sum;
+            }
+            terrainData.SetAlphamaps(lo.x,lo.y,maps);
         }
 
         IEnumerator PaintCoastalBeachStages(float[,,] baseMaps,float[,] districtHeights)
@@ -287,7 +413,7 @@ namespace CityForge.World
             if (coastalBeachDistances == null) yield return BuildCoastalBeachDistances(districtHeights);
             var layer=Own(Instantiate(source));layer.name="Coastal beach sand";
             layer.diffuseTexture=Own(MatteStreamSoil(source.diffuseTexture));
-            layer.specular=new Color(.025f,.025f,.025f);layer.smoothness=0;layer.normalScale=.45f;
+            layer.specular=new Color(.025f,.025f,.025f);layer.smoothness=0;layer.normalScale=.65f;layer.tileSize=new Vector2(5,5);
             int n=terrainData.alphamapResolution,count=terrainData.terrainLayers.Length;
             coastalBaseAlphamaps=baseMaps;
             var harborLayer = CreateHarborRockLayer();
@@ -328,7 +454,7 @@ namespace CityForge.World
                     if(distance>44||distance<-side)continue;
                     if(distance<=0)
                     {
-                        weights[z,x]=Vector2.right;
+                        weights[z,x]=Vector2.right*CoastalFloorWeight(origin+new Vector2(x/(float)(n-1),z/(float)(n-1))*side);
                         wetCounts[z]++;
                         if (harborCover != null && distance >= -12)
                             harborCover[z,x] = new Vector2(HarborWetRock(origin +

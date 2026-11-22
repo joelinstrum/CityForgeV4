@@ -2,7 +2,7 @@
 #define CITYFORGE_TERRAIN_GEOGRAPHY
 
 TEXTURE2D(_GeographyWeights0);
-SAMPLER(sampler_GeographyWeights0);
+SAMPLER(sampler_GeographyWeights1);
 TEXTURE2D(_GeographyWeights1);
 float4 _GeographyGrid;
 float _GeographyMode;
@@ -10,7 +10,6 @@ float _GeographyMode;
 TEXTURE2D(_GeographyAlbedo0); TEXTURE2D(_GeographyNormal0); float4 _GeographySurface0; half3 _GeographyAlbedoBias0; half3 _GeographyAlbedoMean0;
 TEXTURE2D(_GeographyAlbedo1); TEXTURE2D(_GeographyNormal1); float4 _GeographySurface1; half3 _GeographyAlbedoBias1; half3 _GeographyAlbedoMean1;
 TEXTURE2D(_GeographyAlbedo2); TEXTURE2D(_GeographyNormal2); float4 _GeographySurface2; half3 _GeographyAlbedoBias2; half3 _GeographyAlbedoMean2;
-TEXTURE2D(_GeographyAlbedo3); TEXTURE2D(_GeographyNormal3); float4 _GeographySurface3; half3 _GeographyAlbedoBias3; half3 _GeographyAlbedoMean3;
 TEXTURE2D(_GeographyAlbedo4); TEXTURE2D(_GeographyNormal4); float4 _GeographySurface4; half3 _GeographyAlbedoBias4; half3 _GeographyAlbedoMean4;
 TEXTURE2D(_GeographyAlbedo5); TEXTURE2D(_GeographyNormal5); float4 _GeographySurface5; half3 _GeographyAlbedoBias5; half3 _GeographyAlbedoMean5;
 
@@ -35,6 +34,22 @@ TEXTURE2D(_GeographyAlbedo5); TEXTURE2D(_GeographyNormal5); float4 _GeographySur
         } \
     }
 
+// Existing control texture BA: signed distance and coastal sand coverage.
+// No new texture or geometry. Grain remains in the authored sand texture.
+void ApplyShoreDamp(half4 controls, inout half3 albedo, inout half smoothness)
+{
+    float shore=(controls.b-.5)*64;
+    half wet=(1-smoothstep(.8,6.0,shore))*smoothstep(-7,-2,shore)*controls.a;
+    albedo *= lerp(half3(1,1,1),half3(.55,.60,.65),wet);
+    smoothness=lerp(smoothness,max(smoothness,.09h),wet);
+}
+void ApplyTerrainShore(float2 world,inout half3 albedo,inout half smoothness)
+{
+    if(_GeographyMode<.5)return;
+    float2 uv=(world-_GeographyGrid.xy)*_GeographyGrid.z+_GeographyGrid.w;
+    ApplyShoreDamp(SAMPLE_TEXTURE2D(_GeographyWeights1,sampler_GeographyWeights1,uv),albedo,smoothness);
+}
+
 void ApplyTerrainGeography(float2 world, half coverage, inout half3 albedo, inout half3 normalTS, inout half smoothness)
 {
     float2 worldDx = ddx(world), worldDy = ddy(world);
@@ -43,10 +58,17 @@ void ApplyTerrainGeography(float2 world, half coverage, inout half3 albedo, inou
     half textureDetail = lerp(1,.26,smoothstep(.06,.24,footprint));
     // Preserve more detail at the closest zoom without adding an overlay sample.
     float albedoMipScale = lerp(.80,1,smoothstep(.045,.12,footprint));
-    if (_GeographyMode < 1 || coverage <= .001) return;
+    if (_GeographyMode < 1) return;
     float2 uv = (world - _GeographyGrid.xy) * _GeographyGrid.z + _GeographyGrid.w;
-    half4 a = SAMPLE_TEXTURE2D(_GeographyWeights0,sampler_GeographyWeights0,uv);
-    half2 b = SAMPLE_TEXTURE2D(_GeographyWeights1,sampler_GeographyWeights0,uv).rg;
+    half4 shoreControls = SAMPLE_TEXTURE2D(_GeographyWeights1,sampler_GeographyWeights1,uv);
+    ApplyShoreDamp(shoreControls,albedo,smoothness);
+    if(coverage<=.001)return;
+    half4 a = SAMPLE_TEXTURE2D(_GeographyWeights0,sampler_GeographyWeights1,uv);
+    half2 b = shoreControls.rg;
+    // Old cached/uploaded controls may still contain the retired wet-grass
+    // channel. Render that coverage with the detailed meadow surface too.
+    a.x += a.w;
+    a.w = 0;
     half sum = dot(a,half4(1,1,1,1)) + b.x + b.y;
     if (sum <= .001) return;
     a /= sum;
@@ -55,7 +77,7 @@ void ApplyTerrainGeography(float2 world, half coverage, inout half3 albedo, inou
     if (_GeographyMode > 1.5)
     {
         half3 mapColor = a.x*half3(.19,.72,.13) + a.y*half3(.88,.58,.065) +
-            a.z*half3(.39,.10,.63) + a.w*half3(.025,.64,.84) +
+            a.z*half3(.39,.10,.63) +
             b.x*half3(.80,.22,.08) + b.y*half3(.54,.55,.56);
         albedo = lerp(albedo,mapColor,coverage);
         return;
@@ -67,7 +89,6 @@ void ApplyTerrainGeography(float2 world, half coverage, inout half3 albedo, inou
     CITYFORGE_GEOGRAPHY_SURFACE(0,a.x,grassDetail)
     CITYFORGE_GEOGRAPHY_SURFACE(1,a.y,grassDetail)
     CITYFORGE_GEOGRAPHY_SURFACE(2,a.z,textureDetail)
-    CITYFORGE_GEOGRAPHY_SURFACE(3,a.w,textureDetail)
     CITYFORGE_GEOGRAPHY_SURFACE(4,b.x,textureDetail)
     CITYFORGE_GEOGRAPHY_SURFACE(5,b.y,textureDetail)
     half remaining = saturate(1 - blended * coverage);

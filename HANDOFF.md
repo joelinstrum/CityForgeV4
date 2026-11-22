@@ -1,3 +1,318 @@
+# Terrain shoreline review checkpoint — November22,2026
+
+Source branch: feature/terrain-shoreline-polish, based on main after merged PR28.
+This follow-up contains the completed manual terrain refresh, shoreline/material
+polish, new-region clearance and continuous-estuary work documented below. Unity
+compilation and the isolated regression/render checks passed. Private assets,
+normal player saves, builds and local QA captures remain outside Git. Historical
+"no commit/push" notes below describe the earlier validation checkpoints.
+
+# Continuous estuary seafloor — November22,2026
+
+Final main verification: tested source matches QA; Unity compile exited0 and domain reload completed outside Play. Focused native/graded floor, bounded repaint, binary reopen and full Nature regression checks pass. Height arrays unchanged; no player save written.
+
+User screenshot exposed a straight underwater wedge and stair-stepped green patch
+where the native river meets the bay. Reproduced the same join from saved Greenbank.
+The river-only coastal-distance sentinel(-4*Side) skipped native bed painting, while
+bounded Nature refreshes painted sand. Clearer water exposed that material boundary
+as an apparent depth jump. This was actual grass/base terrain paint on a submerged
+bed, not the retired moist-grass overlay.
+
+BuildCoastalBeachDistances now keeps a normal negative distance for ALL native wet
+cells instead of suppressing river cells. Preserve river-edge seed exclusion so
+native upstream banks do not get a broad coastal beach. Native shared-sea-level
+river/ocean floors receive one continuous sand palette. Player channels remain
+excluded from this native path.
+
+Graded rivers blend coastal sand back into the existing native upstream bed over
+12–96m landward of the analytic coastline. No hard river/ocean footprint boundary.
+Initial paint and repaint use the same floor-weight rule. Under sculpted water,
+blend toward sand by TerraformGroundBlend; do NOT use the whole rectangular pending
+area/connected-water footprint to override graded-bed paint (that recreates seams).
+Existing bathymetry and terrain targets remain untouched; no extra geometry,
+textures, draw passes or renderer objects.
+
+Before:71,251 wet samples,52,688 lacked coastal floor. After:zero missing floor.
+Graded palette continuity tested over1,180 probes; fresh binary save/reopen retains
+floor weights. Matched mouth/close renders reviewed. Height arrays are byte-identical
+before/after. Full Nature regression passes: all sculpt modes, dry isolated pit, connected
+ocean, raised/lowered shore, repeat update, combined scope and saved heights. No player save written.
+
+Bounded repaint test preserves graded floor weight0.932 outside the sculpted
+mask; the pending rectangle cannot overwrite it. Fresh reopen and all regression
+checks pass. Evidence: November22 ple/outputs/Continuous-Estuary. One guarded
+source synced; no player save written; no commit/push.
+
+# Patchy shore materials, damp sand and clearer shallows — November22,2026
+
+Main project verification: all seven source/shader files match tested QA; Unity compilation exited0 and domain reload completed outside Play. No shader errors reported in the latest reload. Full Nature regression, GPU wet/dry comparison, height identity and save/reopen checks pass.
+
+User supplied a concept and explicitly distinguished its six swatches from usable
+seamless assets. Priorities: irregular grass/sand coverage, darker wet sand driven
+by waterline distance, readable sandy shallows, very subtle foam, and no added
+shore geometry/objects. Do not import/crop the concept or recreate its swatches.
+
+This supersedes the earlier constant-width/fully uniform MATERIAL-bank rule.
+Geometry retains the tested monotonic Nature bank curves; only coverage is patchy.
+CoastalBeachSurface combines broad width variation with remapped7/21m noise for
+sand/grass patches. Source sand, dirt and detailed grass remain. Owned coastal sand tiling is5m
+to retain readable grain from above; the source asset is not changed.
+Existing base-layer weights still drive sparse-grass transitions. Lower dirt mass
+keeps dry sand readable rather than making the entire bank a soil ribbon.
+
+TerrainGeography reuses existing control1 BA (previously spare) for signed distance
+encoded as clamp(.5+d/64) and sand coverage. RG remain normalized soil/rock weights;
+BA must NEVER be included in terrain material-weight normalization. The existing
+first control alpha remains reserved zero; retired moist grass stays retired.
+The shared shader shades a narrow shore-distance damp zone with a muted darker
+sand color, retaining the source grain and restrained smoothness. Base terrain
+reuses its control read; add/basemap passes use one existing-map sample so sand
+in later terrain passes receives the treatment. Sampler belongs to texture1 so
+Metal does not optimize away the paired texture in add passes.
+
+Owned coastal water material scales absorption AND scattering by the same factor
+(.42 temperate/.70 tropical), keeping their deep-color ratio while revealing the
+sandy bed in shallows. Minimum transparency alpha.015. Existing bathymetry/depth
+input, waves, reflections, levels and special harbor inputs remain authoritative.
+Foam intensity.18, global crest foam strength.06 and shoreline.035; existing ocean
+outline input strength.22 (harbor swash.10). Calm river/lake renderer routing keeps
+its existing foam-free profiles. No new shoreline meshes, objects, textures,
+materials or draw passes; two spare control channels and one add-pass map read.
+
+First Metal compile exposed an optimized sampler mismatch in the hidden add pass;
+fixed by pairing its sampler with the actually sampled second control texture.
+Checks must include hidden terrain add-pass shaders, not just parent material.
+
+Final isolated checks: seven source/shader files; all loaded CityForge terrain and
+hidden add shaders compile without errors. GPU wet-vs-dry comparison darkens21,826
+pixels by>8RGB total.637 control texels carry near-shore data; no extra texture
+allocation. Repeat update byte-identical. Fresh binary save/reopen controls match
+after draining their normal deferred chunk refresh. Full Nature regression passes.
+Terrain heights are byte-identical to the saved-bank baseline. Renders reviewed in
+orthographic and lower views. Evidence: November22 ple/outputs/Shore-Material-Pass.
+No player save written; no commit/push.
+
+# Smooth sculpted bank curves — November22,2026
+
+Main verification: both source files match tested QA; Unity compile exited0 and domain reload completed outside Play. Full Nature regression and saved-bank render checks pass; no player save written.
+
+User rejected repeated W-shaped indentations in the shoreline. A replay of the
+current saved Greenbank (district19,68 saved grading planes) reproduced the
+short-wavelength bank fluctuations. Nature LevelerEdgeBlend now uses a single
+monotonic smoothstep across the existing feather; its world-noise reach/detail
+perturbations were making small repeated notches. Non-Nature/lot grading retains
+its original behavior. Flat cores/targets, stroke metadata and water levels remain.
+
+The edited material band is a constant6m transition, and native beach width varies
+only at the broad100m scale. Remove the5m boundary jitter and11m width noise;
+texture grain/approved dirt/sand/default-grass assets are retained. These changes
+apply when saved edits replay on district opening; no resculpting or save rewrite.
+
+Matched-camera before/after renders of the actual saved bank reviewed. All29
+latest-stroke core centers remain unchanged within1mm. Full Nature regression passes (all modes, isolated pit, connected river/ocean,
+raise/lower, save/reopen, repeat Update Terrain); final top-view replay capture reviewed. Work isolated in reserved terrain QA project.
+
+# Shore blend and new-region bank clearance — November22,2026
+
+Final: six main source files match tested QA; Unity compilation exited0 and reload completed outside Play. Full Nature regression, new-region binary persistence, both climates, native bank clearance and rendered shore checks pass. No player save written. Git diff --check passed.
+
+User approved the river fix and requested softer grass/sand transitions, textured
+banks, and1m land clearance for NEW REGIONS ONLY (explicit clarification).
+Existing saved heights and explicit Nature targets are not raised.
+
+TerraformShore bilinearly interpolates its signed grid instead of returning a
+single floor-cell distance. Edited dry banks retain a narrow5–7m transition that
+mixes existing dirt, sand and detailed default grass. Native beaches start their
+fade at the shore rather than carrying a fully sandy inner plateau. Dirt coverage
+uses the approved shared dirt layer, not retired moist grass. The owned coastal
+sand normal scale is.65. No new art, source texture or water-material changes.
+
+Default recipes are now version13. Coast composition starts dry land at sea+1m
+(sea12 temperate /30 tropical). New native river records persist bankClearanceMeters1.
+Fixed-level channel shoulders use that clearance; ground-following channels place
+their water1m under the original ground. Rounded estuary dry banks retain the same
+clearance. Missing/zero body metadata retains legacy.08m fixed/.20m graded rules.
+Recipe versions1–12, stored heightfields, manual level offsets and player-created
+waterways retain their original behavior. Tropical shelf and mountain forms remain.
+
+Isolated Greenbank test found1239 positions blending dirt/sand/grass and checked
+5cm continuity steps. New coast checks sampled194,934 dry points in each climate;
+all at least1m above water. Fixed and graded channel checks pass, and an actual
+MapMagic River&Bay with native water clearance survives binary save/load.
+
+Full Nature regression passes: all modes, connected native water, isolated inland pit, raised/lowered ocean, combined scope, explicit button deferral, repeat-update idempotency, save/fresh reopen.
+
+# Greenbank river shoreline refresh — November 22, 2026
+
+Final verification: focused Greenbank river, full Nature regression, raised-river texture checks and visual captures passed. Main Unity compilation exited 0; domain reload completed outside Play. Main source matches QA; git diff --check passed. Player save unchanged.
+
+The user's Lowest Point edit exposed a broad rectangular sand shelf at the native
+tidal river after Update Terrain. Reproduced on a disposable copy of their region,
+Greenbank district19 near(-408,-1344): edited bed about2m at sea12m, but the
+shore field returned +1024 (no connected water), and the Crest mask hid the river.
+This was a separate defect from the retired wet-grass material.
+
+TerrainCoastEdits originally seeded its shared Crest connectivity only from saved
+ocean polygons. Include native non-player river footprints in both original-cell
+seeds and untouched-neighbor seeds. This preserves the actual river/bay network;
+connectivity remains required, so unconnected low pits are not automatically flooded.
+Water renderer/material settings, source geometry and terrain targets are unchanged.
+Saved Nature edits replay through the corrected rule, so no resculpting/migration is
+required. Player-channel/lake renderers remain separate and are not seed sources.
+
+Greenbank Lowest Point fixture now has negative shore distance and physically wet
+connected river across the cut. Before/after captures reviewed; save/fresh reopen
+and repeat-update clipping pass. Full Nature regression and raised-river checks pass: detailed default grass, no beach or physical water on raised Greenbank ground; ocean cuts/raises, isolated low pit, all sculpt modes, district scope and save/reopen remain correct.
+
+Final main-project verification: all seven runtime/shader files match the tested QA copies; Unity compilation exited 0 and domain reload completed. Git whitespace check passed.
+
+# Smooth wet grass retired globally — November 22, 2026
+
+User explicitly rejected smooth moist grass everywhere, including bright-green
+river margins. This supersedes the earlier scoped overlay transfer below.
+TerrainGeography no longer generates the moist slot, applies its forest
+attenuation or indexes freshwater for a44m halo. Coverage normalizes across the
+existing meadow/dry/woodland/soil/rock surfaces. Native lake/channel invalidation
+remains, with obsolete RefreshWater calls removed.
+
+The shared geography shader never samples the wet surface. It folds any legacy
+geography-alpha wet weight into detailed meadow before normalization. Palette
+slot3 remains reserved (and is skipped when binding) so local assets keep their
+indices. This is NOT terrain layer3, which remains authored leaf litter.
+Water geometry, levels, actual wetness, bank paint and canonical ecology remain.
+The prior per-edit geographic donor transfer/warming is removed; base terrain
+texture restoration retains its existing canonical mixture/fallback. AGENTS.md
+records the user preference so this material cannot return as a fallback.
+
+Isolated untouched Augusta:66,049 uploaded control samples and16,641 independent
+positions all have zero wet weight and normalized active surfaces; four native
+rivers and one ocean retained. GPU legacy100%-wet vs meadow controls differ by
+~.49RGB byte levels on the ground sample, confirming shader redirection; shader
+reports no errors. Native shore and edited close/wide captures inspected.
+Save/fresh reopen/repeated-update material checks and full Nature regression
+pass. Evidence: November22 ple/outputs/Wet-Grass-Retired. Seven guarded runtime/
+shader files synced. Normal player save unchanged. No commit/push requested.
+
+# Grass overlay band — November 22, 2026
+
+This supersedes the earlier claim that the remaining green band was lighting.
+Isolated layer/plant/geography/rebind renders identified the geographic material
+overlay: old freshwater geometry gave the dry edited surface up to 86% smooth
+moist-grass coverage, overriding otherwise correct default terrain textures.
+Correct alphamap weights alone did not fix that overlay.
+
+TerrainGeography now separates native classification from edited classification.
+Edited grass extends the complete native material mixture from unmodified dry
+grass reference sites (not moist grass or forest floor), retaining real exposed
+rock on steep edits and the existing edge feather. Native terrain outside edits
+uses its original classification. Original texture assets/tiling, ocean settings
+and canonical water records remain unchanged. Base terrain layer ratios remain
+world-aligned. A capped 257-square reference lookup builds during explicit
+Update Terrain/startup replay; source eligibility reads native inputs directly
+so it cannot depend on stale uploaded textures. Lookup invalidates after edits.
+
+Augusta repro passes a semantic check rejecting wet/forest-dominated overlays
+on fully edited dry ground, original base-layer ratios, fresh binary save/load,
+and identical overlay samples before save, after reopening and after repeated
+Update Terrain. Rendered at two scales and inspected. Repeat explicit update
+measured ~949ms in this isolated Editor fixture; not a brush-stamp or FPS figure.
+The lookup is warmed inside the explicit operation, not a later streaming frame.
+All-mode Nature, connected ocean/inland pit, original seabed raise/lower, combined
+district scope, repeat clip idempotency and save/reopen regressions pass.
+Evidence: November22 ple/outputs/Grass-Overlay. Three guarded scripts synced;
+normal player save unchanged. Main reload compiled successfully outside Play at
+MainMenu; all three source hashes match QA and git diff --check passes.
+No commit/push requested.
+
+# Completed terrain texture continuity follow-up — November 22, 2026
+
+The nearest-source transfer documented below still extruded a narrow reference
+strip into a broad band. Final coastal repaint first recovers the actual grass
+weights retained underneath the canonical beach/soil, at the SAME world position.
+Normalize the original approved grass/coarse channels after removing old beach
+soil; preserve their original two-dimensional spatial pattern. Nearby dry
+meadow is only a fallback for samples with no grass mass, using a 2D reflected
+swath instead of extruding the nearest row. No palette, texture, UV/tiling or
+material edits. Geography avoids duplicate canopy queries on untouched ground.
+
+Coast clip samples encode the terrain's sea crossing and retain a one-cell dry
+overlap under the shoreline, matching native harbor practice so the terrain
+intersection defines the edge. Physical wetness still uses actual sea level and
+connected-ocean cells. Ground-cover refresh is bounded to the affected area.
+The Level operation still preserves its flat authored core/target; lighting
+can differ from unlevelled slopes. Native terrain-grid precision is unchanged.
+
+Iterated Augusta renders reviewed at two scales, plus matched-height and
+neutral-light diagnostic captures. Canonical grass ratios compare per sample
+within .015; secondary/coarse layers persist after fresh reopening. Final full
+Nature regression checks actual button deferral, all modes, ocean-connected and
+isolated cuts, original seabed raise/lower, combined scope, low green land,
+repeat-update idempotency and binary save/fresh reopen. Evidence: November22
+ple/outputs/Terrain-Final. Player save unchanged. Three guarded sources synced;
+main reload compiled successfully outside Play at MainMenu. All three source
+hashes match tested QA and git diff --check passes. No commit/push requested.
+
+# Default texture continuity on edited coasts — November 22, 2026
+
+User rejected the single-green fill from the earlier low-plateau repair. The
+coastal painter now extends the actual nearby canonical dry-ground layer
+mixture, including both approved grass layers and the fifth coarse layer. A
+lazy two-pass nearest-source field uses eligible dry meadow outside the old
+beach; existing texture references, tiling, grading and world UVs remain.
+TerrainGeography uses the same source ecology/canopy on edited ground, with the
+existing edge feather. No new palette/art/shader or canonical geography changes.
+
+Isolated Augusta low-sea+20cm shelf QA compares every base-layer weight against
+its canonical source (within .015), checks secondary grass and coarse layers
+after actual binary save/fresh reopening, and verifies coast updates stay
+deferred until the real Update Terrain button. Inspected final render shows
+default detail throughout the extended ground. Evidence: November22
+ple/outputs/Default-Grass. Two guarded scripts synced; normal save unchanged.
+Main reload compiled successfully at MainMenu; both hashes match tested QA
+and git diff --check passed.
+No commit/push requested.
+
+# Low coastal plateau texture repair — November 22, 2026
+
+User's Augusta screenshot exposed a gap in the previous Update Terrain QA: high
+raised seabed passed, but low dry land retained the canonical beach's heavy tan
+base soil even after its appended sand was removed. Native beach rules also
+kept painting sand near the new shore. Edited dry terrain now restores the local
+meadow/grass mix through the brush and banks, feathering over the outer 8m.
+Sparse ground-blend cells build during explicit Update Terrain/startup replay,
+not during drag. Untouched beaches and submerged sand retain their normal rules.
+Water level input clears old raised levels over edited dry ground as well as wet
+cells. Stranded old shoreline plants hide locally. No canonical geography, ocean
+material/datum, native forest art or save schema changes.
+
+Read-only Augusta copy reproduced the tan shelf; matched before/after images
+reviewed. Full Nature regression passes deferred actual button dispatch, all
+modes, low sea+20cm green ground, original seabed raise/lower, isolated pit,
+combined-district scope and save/fresh reopen with matching green ground and
+zero old water level offset. Evidence: November22 ple/outputs/Shore-Repair.
+Five guarded source files synced; player save hash unchanged. Main reload
+compiled successfully outside Play at MainMenu; five source hashes match QA
+and git diff --check passes. No commit/push.
+
+# Manual Update Terrain — November 22, 2026
+
+Nature → Terrain now has Update Terrain beside Sculpt Terrain. Coast water and
+sand wait for this explicit refresh across strokes/cancel; height edits and
+destructive clearing remain immediate. Original seabed raised above sea now
+clips ocean correctly instead of retaining its original zero mask. Beach/harbor
+weights repaint from original ground using edited shore distances and heights.
+Startup replay still refreshes automatically; existing saved Nature edits are
+included by the button. Regional relief/resource geography remains unchanged.
+
+Isolated Unity QA passed actual button dispatch, deferred clip through release
+and cancel, raised ORIGINAL seabed water exclusion and sand removal, lowered
+seabed water/sand restoration, all Nature modes, ocean-connected vs inland cuts,
+combined-district scope, save/fresh reopen. Modal and final shoreline renders
+inspected. Evidence: November22 ple/outputs/Terrain-Update. No player saves or
+private assets modified. Main script reload passed compilation and stayed outside Play at its menu.
+All seven source hashes match tested QA; git diff --check passes.
+Changes local; no commit/push requested.
+
 # Source checkpoint — November 22, 2026
 
 Current delivery branch: `feature/terrain-and-city-editing`, based on the source

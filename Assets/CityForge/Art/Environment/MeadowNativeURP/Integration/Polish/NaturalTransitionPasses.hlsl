@@ -493,6 +493,9 @@ void SplatmapFragment(
 #if !defined(TERRAIN_SPLAT_BASEPASS) && !defined(TERRAIN_SPLAT_ADDPASS)
     ApplyTerrainGeography(IN.positionWS.xz,saturate(splatControl.g+splatControl.b+splatControl.a),albedo,normalTS,smoothness);
 #endif
+#if defined(TERRAIN_SPLAT_BASEPASS) || defined(TERRAIN_SPLAT_ADDPASS)
+    ApplyTerrainShore(IN.positionWS.xz,albedo,smoothness);
+#endif
     InputData inputData;
     InitializeInputData(IN, normalTS, inputData);
     SetupTerrainDebugTextureData(inputData, IN.uvMainAndLM.xy);

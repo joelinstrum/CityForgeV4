@@ -114,13 +114,13 @@ namespace CityForge.World
                     // Preserve adjacent ground. Only a shallow wetted ribbon is cut;
                     // the surface follows the original ground rather than sea level.
                     if(distance>body.halfWidthNormalized)continue;
-                    float localLevel=height-.20f/PrototypeRegionData.Height;
+                    float localLevel=height-(body.bankClearanceMeters>0?body.bankClearanceMeters:.20f)/PrototypeRegionData.Height;
                     foreach(var ocean in data.WaterBodies)if(ocean.kind==WaterBodyKind.Ocean&&ocean.hasSurfaceLevel)localLevel=Mathf.Max(localLevel,ocean.surfaceLevelNormalized);
                     float localBed=localLevel-(body.isStream?.45f:2f)/PrototypeRegionData.Height;
                     height=Mathf.Lerp(localBed,height,Mathf.Pow(Mathf.Clamp01(distance/body.halfWidthNormalized),4));
                     continue;
                 }
-                float level=body.surfaceLevelNormalized,edge=level+.08f/PrototypeRegionData.Height;
+                float level=body.surfaceLevelNormalized,edge=level+(body.bankClearanceMeters>0?body.bankClearanceMeters:.08f)/PrototypeRegionData.Height;
                 float bed=level-(body.isStream?.65f:7f)/PrototypeRegionData.Height;
                 float channel=Mathf.Lerp(bed,edge,Mathf.Pow(Mathf.Clamp01(distance/body.halfWidthNormalized),4));
                 float bank=Mathf.Lerp(edge,Mathf.Max(height,edge),Mathf.SmoothStep(0,1,Mathf.InverseLerp(body.halfWidthNormalized,reach,distance)));
@@ -132,7 +132,9 @@ namespace CityForge.World
         {if(data.WaterBodies!=null)foreach(var body in data.WaterBodies)if(body.channelVersion>=2)return true;return false;}
         public static float GroundWaterLevel(PrototypeRegionData data,float u,float v)
         {
-            float level=SmoothRiverSurface.Sample(data.Heights,u,v)*PrototypeRegionData.Height-.20f;
+            float clearance=.20f;
+            if(data.WaterBodies!=null)foreach(var body in data.WaterBodies)if(!body.playerChannel&&body.channelVersion>=2&&body.bankClearanceMeters>0){clearance=body.bankClearanceMeters;break;}
+            float level=SmoothRiverSurface.Sample(data.Heights,u,v)*PrototypeRegionData.Height-clearance;
             if(data.WaterBodies!=null)foreach(var body in data.WaterBodies)if(body.kind==WaterBodyKind.Ocean&&body.hasSurfaceLevel)return Mathf.Max(level,body.surfaceLevelNormalized*PrototypeRegionData.Height);
             return level;
         }

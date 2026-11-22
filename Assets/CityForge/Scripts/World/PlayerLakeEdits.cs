@@ -95,7 +95,6 @@ namespace CityForge.World
             if(removed.Count>0){View.RemoveForestAdditions(removed,.6f);if(MixedForest)MixedForest.RemoveWithin(removed,.6f);fullTreeInstances=kept.ToArray();RefreshEditedForest();}
             if (Geography)
             {
-                Geography.RefreshWater();
                 var bounds = body.Bounds;
                 Geography.Invalidate(TerrainGeography.Pad(new Rect(
                     (bounds.min - Vector2.one * .5f) * View.MapSide, bounds.size * View.MapSide), 55f));

@@ -1,3 +1,4 @@
+using System.Linq;
 using UnityEngine;
 using WaveHarmonic.Crest;
 namespace CityForge.World
@@ -14,7 +15,7 @@ namespace CityForge.World
             if(!levels)return;int n=levels.width;terraformLevelPixels??=levels.GetPixels();bool changed=false;
             // Zero a small halo of level samples, not only the wet pixel itself:
             // bilinear Crest levels must not lift a new bay toward the old hillside.
-            foreach(var p in land.TerraformOceanPoints()){var c=Vector2Int.FloorToInt((p-land.Origin)/land.Side*n-Vector2.one*.5f);
+            foreach(var p in land.TerraformOceanPoints().Concat(land.TerraformGroundPoints())){var c=Vector2Int.FloorToInt((p-land.Origin)/land.Side*n-Vector2.one*.5f);
                 for(int z=Mathf.Max(0,c.y-1);z<=Mathf.Min(n-1,c.y+2);z++)for(int x=Mathf.Max(0,c.x-1);x<=Mathf.Min(n-1,c.x+2);x++){int i=z*n+x;if(terraformLevelPixels[i].r==0)continue;terraformLevelPixels[i]=Color.clear;changed=true;}}
             if(changed){levels.SetPixels(terraformLevelPixels);levels.Apply(false,false);}
         }

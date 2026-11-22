@@ -15,7 +15,7 @@ namespace CityForge.World
     /// <summary>Versioned recipe; saved samples remain authoritative when opening a region.</summary>
     [Serializable] public sealed class RegionCreationSettings
     {
-        public int version=12, seed=PrototypeRegionData.DefaultSeed, topography, rivers, streams;
+        public int version=13, seed=PrototypeRegionData.DefaultSeed, topography, rivers, streams;
         public int districtGrid=8;
         public ResourceAbundance resourceAbundance;
         public ResourceDistribution resourceDistribution;
@@ -46,7 +46,7 @@ namespace CityForge.World
         public bool animals;
         public void Validate()
         {
-            if((version!=1&&version!=2&&version!=3&&version!=4&&version!=5&&version!=6&&version!=7&&version!=8&&version!=9&&version!=10&&version!=11&&version!=12)||(int)terrainShape<0||(int)terrainShape>8||topography<0||topography>4||rivers<0||rivers>3||streams<0||streams>2||(int)climate<0||(int)climate>1||(int)moisture<0||(int)moisture>2||(int)vegetation<0||(int)vegetation>2)
+            if((version!=1&&version!=2&&version!=3&&version!=4&&version!=5&&version!=6&&version!=7&&version!=8&&version!=9&&version!=10&&version!=11&&version!=12&&version!=13)||(int)terrainShape<0||(int)terrainShape>8||topography<0||topography>4||rivers<0||rivers>3||streams<0||streams>2||(int)climate<0||(int)climate>1||(int)moisture<0||(int)moisture>2||(int)vegetation<0||(int)vegetation>2)
                 throw new ArgumentException("Unsupported region creation settings.");
             if ((uint)riverBayVariant > RiverBayLayout.RemakeVariantCount)
                 throw new ArgumentException("Unsupported River & Bay layout variant.");
@@ -118,6 +118,7 @@ namespace CityForge.World
                 layout.RiverBay.AddWaterways(recipe, side, bodies);
             }
             else if(recipe.version>=5)bodies=recipe.waterwayVersion>=1?RegionalRiverNetwork.CreateSeparated(recipe,side):RegionalRiverNetwork.Create(recipe);
+            if(recipe.version>=13)foreach(var body in bodies)body.bankClearanceMeters=1;
             var ocean=layout?.CreateOcean();bool deepOcean=TropicalOceanDepth.DeepRecipe(recipe);
             void FillTerrainRow(int z)
             {
@@ -156,7 +157,7 @@ namespace CityForge.World
                 if(bodies.Count>0&&recipe.waterwayVersion==0&&layout?.RiverBay==null){float blend=Mathf.SmoothStep(0,1,Mathf.InverseLerp(recipe.version>=5?0:-.003f,recipe.version>=5?.065f:.025f,bank));h=Mathf.Lerp(5,h,blend);}
                 float shore=ocean!=null?layout.LandDistance(new Vector2(u,v)):1;
                 if(ocean!=null){
-                    h=shore>=0?Mathf.Lerp(12,h,Mathf.SmoothStep(0,1,shore/.055f)):Mathf.Lerp(12,2,Mathf.SmoothStep(0,1,-shore/.045f));
+                    h=shore>=0?Mathf.Lerp(recipe.version>=13?13:12,h,Mathf.SmoothStep(0,1,shore/.055f)):Mathf.Lerp(12,2,Mathf.SmoothStep(0,1,-shore/.045f));
                     bank=Mathf.Min(bank,shore);
                 }
                 // Reserve vertical room below sea without changing the relative land relief.

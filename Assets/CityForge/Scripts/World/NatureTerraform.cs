@@ -27,6 +27,18 @@ namespace CityForge.World
             levelerNature=true;terraformCollider=ApprovedDistrict.DisplayTerrain.GetComponent<TerrainCollider>();terraformColliderEnabled=terraformCollider.enabled;terraformCollider.enabled=true;
             SetLeveler(true);
         }
+        internal void UpdateTerraformTerrain()
+        {
+            if(SelectedDistrict<0||DistrictLoading||IsSaving||!ApprovedDistrict)return;
+            CancelTerraform();
+            // Include earlier saved edits so Update Terrain also repairs existing shores.
+            foreach(var plane in ZoneGroundPlanes.Where(p=>p.nature&&ActiveDistrictMembers.Contains(p.district))){
+                var area=plane.Bounds;float margin=GroundPlaneBlend(plane);area.min-=Vector2.one*margin;area.max+=Vector2.one*margin;
+                ApprovedDistrict.QueueTerraformCoast(area,true,plane);
+            }
+            ApprovedDistrict.FlushTerraformCoast();
+            ShowDistrictMessage("Terrain updated · Water and shoreline refreshed");
+        }
         internal void CancelTerraform(){if(levelerNature)SetLeveler(false);}
         void ConfigureTerraformPlane(ZoneGroundPlane plane)
         {

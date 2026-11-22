@@ -10,6 +10,15 @@ public sealed class CoastalWaterPresentation:MonoBehaviour {
  surface.SetColor("_Crest_Absorption",new Color(.32f,.065f,.035f,0));
  surface.SetColor("_Crest_Scattering",new Color(.035f,.24f,.30f,1));
  }
+ // Lower optical density reveals sand in shallow water; scaling both
+ // coefficients preserves the deep-water scattering/absorption color ratio.
+ public static void ApplyShoreClarity(Material surface,RegionClimate climate){
+ float clarity=climate==RegionClimate.Tropical?.70f:.42f;
+ foreach(var property in new[]{"_Crest_Absorption","_Crest_Scattering"})if(surface.HasProperty(property)){
+ var value=surface.GetColor(property);value.r*=clarity;value.g*=clarity;value.b*=clarity;surface.SetColor(property,value);
+ }
+ if(surface.HasProperty("_Crest_TransparencyMinimumAlpha"))surface.SetFloat("_Crest_TransparencyMinimumAlpha",.015f);
+ }
  WaveHarmonic.Crest.ScatteringTextureLodInputData depthColors,harborColors;
  bool calmHarbor, linearTemperate;
  Camera viewer;Material material;Light sunlight;bool applied,lastOrtho;float lastGlare=-1;

@@ -22,6 +22,8 @@ namespace CityForge.World
         // New mountain-border routes advance along x, parallel to the rear range.
         public bool channelAlongX;
         public float bankWidthNormalized;
+        // New native recipes only; zero preserves the original saved bank profile.
+        public float bankClearanceMeters;
         public bool hasSurfaceLevel;public float surfaceLevelNormalized;
         public string appearanceProfile;
         public bool playerChannel;public float[] playerChannelLevels;public Vector2[] playerChannelGuides;public float playerChannelDepth;

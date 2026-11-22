@@ -35,7 +35,7 @@ namespace CityForge.Editor
             var previous=UnityEngine.Object.FindFirstObjectByType<PrototypeRegionView>();if(previous)previous.ReturnToMenu();yield return null;yield return null;
             var report=new System.Text.StringBuilder();var recipe=new RegionCreationSettings{version=5,seed=730421,topography=3,rivers=0,streams=0,climate=RegionClimate.Tropical,animals=false,peninsulaNorthToSouth=true};
             float[,] geography;using(var source=new MapMagicRegionGeography(recipe,RegionSize.Small))geography=source.Generate();
-            var legacy=RegionMapGenerator.Generate("Legacy v5 check",RegionSize.Small,recipe,geography);Require(new RegionCreationSettings().version==12,"New default version12");
+            var legacy=RegionMapGenerator.Generate("Legacy v5 check",RegionSize.Small,recipe,geography);Require(new RegionCreationSettings().version==13,"New default version13");
             foreach(RegionTerrainShape shape in Enum.GetValues(typeof(RegionTerrainShape))){
                 recipe.version=6;recipe.terrainShape=shape;var layout=new RegionTerrainLayout(recipe);float[,] field=geography;
                 if(shape==RegionTerrainShape.MountainBorder){using var source=new MapMagicRegionGeography(recipe,RegionSize.Small);field=source.Generate();}

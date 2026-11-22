@@ -206,6 +206,9 @@ float r=Mathf.Clamp(cornerRadius,0,Mathf.Min(size.x,size.y)*.5f);var d=new Vecto
         }
         internal static float LevelerEdgeBlend(ZoneGroundPlane plane,Vector2 p,float distance)
         {
+            // Nature banks use one monotonic falloff. Short-wavelength reach/detail
+            // noise creates repeated W-shaped indentations along otherwise smooth edits.
+            if(plane.nature)return Mathf.SmoothStep(0,1,distance/GroundPlaneBlend(plane));
             if(!plane.roughEdges)return Mathf.SmoothStep(0,1,distance/ZoneGradeBlend);
             // World-anchored noise makes adjacent swept segments share the same bank.
             // The entire selected core stays level; only its outer feather varies.
@@ -239,7 +242,7 @@ float r=Mathf.Clamp(cornerRadius,0,Mathf.Min(size.x,size.y)*.5f);var d=new Vecto
             var g=terrain.GetComponent<DistrictLotGrading>()??terrain.gameObject.AddComponent<DistrictLotGrading>();bool changed=false;
             float margin=new Vector2(terrain.terrainData.size.x,terrain.terrainData.size.z).magnitude/(terrain.terrainData.heightmapResolution-1);
             foreach(var plane in planes)if(g.AppliedPlanes.Add(plane)){var bounds=plane.Bounds;float feather=GroundPlaneBlend(plane);bounds.min-=Vector2.one*feather;bounds.max+=Vector2.one*feather;
-                g.CutPlanes(bounds,plane,InActiveDistrict);if(plane.nature){ApprovedDistrict.ClearTerraformObjects(plane,bounds);ApprovedDistrict.QueueTerraformCoast(bounds);}changed=true;}
+                g.CutPlanes(bounds,plane,InActiveDistrict);if(plane.nature){ApprovedDistrict.ClearTerraformObjects(plane,bounds);ApprovedDistrict.QueueTerraformCoast(bounds,affected.HasValue,plane);}changed=true;}
             if(changed&&g.Finish())GetComponentInChildren<DistrictWeather>()?.RefreshGround(affected);
         }
         readonly Dictionary<DistrictLotRecord,float> lotPopulationAfter=new();
