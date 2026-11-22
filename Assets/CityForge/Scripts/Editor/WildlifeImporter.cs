@@ -15,7 +15,7 @@ namespace CityForge.EditorTools
         const string Output="Assets/CityForge/Resources/Wildlife/";
         static readonly Dictionary<Material,Material> materials=new();
         static WildlifeImporter(){EditorApplication.update+=Poll;}
-        static void Poll(){const string request="Library/WildlifeImport.request";if(EditorApplication.isCompiling||EditorApplication.isUpdating||!File.Exists(request))return;
+        static void Poll(){if(!EditorApplication.isPlaying&&!EditorApplication.isCompiling&&!EditorApplication.isUpdating&&File.Exists("Library/DomesticGoat.request")){File.Delete("Library/DomesticGoat.request");try{PrepareDomesticGoat();File.WriteAllText("Library/DomesticGoat.result","PASS");}catch(Exception e){File.WriteAllText("Library/DomesticGoat.result",e.ToString());Debug.LogException(e);}return;}const string request="Library/WildlifeImport.request";if(EditorApplication.isCompiling||EditorApplication.isUpdating||!File.Exists(request))return;
             if(EditorApplication.isPlaying){EditorApplication.isPlaying=false;return;}File.Delete(request);
             try{Build();File.WriteAllText("Library/WildlifeImport.result","PASS: curated temperate mammals, fish and Living Birds; local URP materials; idle/walk and deer drinking looping controllers; original licensed assets unchanged.");}
             catch(Exception e){File.WriteAllText("Library/WildlifeImport.result","FAIL: "+e);Debug.LogException(e);}}
@@ -45,7 +45,7 @@ namespace CityForge.EditorTools
             var library=AssetDatabase.LoadAssetAtPath<WildlifeLibrary>(Output+"TemperateWildlife.asset");if(!library){library=ScriptableObject.CreateInstance<WildlifeLibrary>();AssetDatabase.CreateAsset(library,Output+"TemperateWildlife.asset");}
             File.WriteAllText(Output+"Available.txt","Temperate wildlife assets installed locally.\n");
             foreach(var entry in entries)AssetDatabase.ImportAsset(AssetDatabase.GetAssetPath(entry.prefab),ImportAssetOptions.ForceUpdate);
-            FoxOakPreparation.AppendFox(entries);library.species=entries.ToArray();EditorUtility.SetDirty(library);AssetDatabase.SaveAssets();AssetDatabase.Refresh();
+            FoxOakPreparation.AppendFox(entries);entries.AddRange(library.species.Where(s=>s!=null&&s.Domesticated&&s.id!="goat"&&s.prefab));library.species=entries.ToArray();EditorUtility.SetDirty(library);AssetDatabase.SaveAssets();PrepareDomesticGoat();AssetDatabase.Refresh();
             void Add(string id,string prefab,string idle,string walk,WildlifeHabitat habitat,int weight,float size,float speed,bool length=false,string pack=Pack,bool bird=false){
                 var source=AssetDatabase.LoadAssetAtPath<GameObject>(pack+(bird?"resources/":"Prefabs/")+prefab+".prefab");if(!source)throw new FileNotFoundException(prefab);
                 var instance=UnityEngine.Object.Instantiate(source);instance.name=id;
@@ -77,6 +77,40 @@ namespace CityForge.EditorTools
                     finally{UnityEngine.Object.DestroyImmediate(wrapper);instance=null;}
                 }finally{if(instance)UnityEngine.Object.DestroyImmediate(instance);}
             }
+        }
+        [MenuItem("CityForge/Animals/Add Local Domesticated Goat")]
+        public static void PrepareDomesticGoat()
+        {
+            if(EditorApplication.isPlaying)throw new InvalidOperationException("Stop play before preparing livestock.");
+            var library=AssetDatabase.LoadAssetAtPath<WildlifeLibrary>(Output+"TemperateWildlife.asset");
+            var source=AssetDatabase.LoadAssetAtPath<GameObject>(Pack+"Prefabs/goat_prefab.prefab");
+            if(!library||!source)throw new FileNotFoundException("Local wildlife library or licensed goat is missing.");
+            materials.Clear();
+            var body=UnityEngine.Object.Instantiate(source);var wrapper=new GameObject("goat");
+            try
+            {
+                foreach(var script in body.GetComponentsInChildren<MonoBehaviour>(true))UnityEngine.Object.DestroyImmediate(script);
+                foreach(var collider in body.GetComponentsInChildren<Collider>(true))UnityEngine.Object.DestroyImmediate(collider);
+                foreach(var rigidbody in body.GetComponentsInChildren<Rigidbody>(true))UnityEngine.Object.DestroyImmediate(rigidbody);
+                foreach(var renderer in body.GetComponentsInChildren<Renderer>(true))renderer.sharedMaterials=renderer.sharedMaterials.Select(ConvertMaterial).ToArray();
+                string path=Output+"goat.controller";
+                var controller=AssetDatabase.LoadAssetAtPath<AnimatorController>(path);
+                if(!controller)controller=AnimatorController.CreateAnimatorControllerAtPath(path);
+                controller.parameters=Array.Empty<AnimatorControllerParameter>();controller.AddParameter("Moving",AnimatorControllerParameterType.Bool);
+                var machine=controller.layers[0].stateMachine;foreach(var state in machine.states)machine.RemoveState(state.state);
+                var idle=machine.AddState("Idle");idle.motion=Clip("goat-idle","Goat_Idle.fbx",Pack);
+                var walk=machine.AddState("Walk");walk.motion=Clip("goat-walk","Goat_Walk.fbx",Pack);
+                var graze=machine.AddState("Graze");graze.motion=Clip("goat-graze","Goat_Eat.fbx",Pack);machine.defaultState=idle;
+                foreach(var state in new[]{idle,graze}){var transition=state.AddTransition(walk);transition.hasExitTime=false;transition.duration=.2f;transition.AddCondition(AnimatorConditionMode.If,0,"Moving");}
+                var stop=walk.AddTransition(idle);stop.hasExitTime=false;stop.duration=.2f;stop.AddCondition(AnimatorConditionMode.IfNot,0,"Moving");
+                var animator=body.GetComponentInChildren<Animator>();if(!animator)throw new Exception("Goat lacks an animator.");animator.runtimeAnimatorController=controller;animator.applyRootMotion=false;
+                var renderers=body.GetComponentsInChildren<Renderer>(true);var bounds=renderers[0].bounds;foreach(var renderer in renderers)bounds.Encapsulate(renderer.bounds);
+                float scale=.85f/Mathf.Max(.001f,bounds.size.y);body.transform.SetParent(wrapper.transform,false);body.transform.localScale*=scale;body.transform.localPosition-=Vector3.up*bounds.min.y*scale;
+                var prefab=PrefabUtility.SaveAsPrefabAsset(wrapper,Output+"goat.prefab");
+                var entries=library.species.Where(s=>s.id!="goat").ToList();entries.Add(new WildlifeSpecies{id="goat",prefab=prefab,habitat=WildlifeHabitat.WoodlandEdge,disposition=AnimalDisposition.Domesticated,weight=0,speed=.45f,grazingState="Graze"});
+                library.species=entries.ToArray();EditorUtility.SetDirty(controller);EditorUtility.SetDirty(library);AssetDatabase.SaveAssets();
+            }
+            finally{if(wrapper)UnityEngine.Object.DestroyImmediate(wrapper);if(body)UnityEngine.Object.DestroyImmediate(body);}
         }
         [MenuItem("CityForge/Animals/Add Local Deer Drinking Animation")]
         public static void PrepareDeerDrinking(){

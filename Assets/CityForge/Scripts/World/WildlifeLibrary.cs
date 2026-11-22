@@ -3,9 +3,13 @@ using UnityEngine;
 namespace CityForge.World
 {
     public enum WildlifeHabitat { Woodland, WoodlandEdge, Freshwater, River, FreshwaterBank, WoodlandBird, FlyingBird, RiverBankShallows }
+    public enum AnimalDisposition { Wild, Domesticated }
     [Serializable] public sealed class WildlifeSpecies
     {
         public string id;public GameObject prefab;public WildlifeHabitat habitat;
+        public AnimalDisposition disposition;
+        public string grazingState="Graze";
+        public bool Domesticated => disposition==AnimalDisposition.Domesticated;
         public int weight=1;public float speed=.6f;
     }
     /// <summary>Local licensed prefabs; the public project ships only the integration code.</summary>

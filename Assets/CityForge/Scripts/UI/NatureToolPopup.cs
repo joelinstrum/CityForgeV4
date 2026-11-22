@@ -61,9 +61,10 @@ namespace CityForge.UI
         }
         public void Show(NatureTool tool)
         {
-            CloseWaterModal();CloseTerrainModal();
+            CloseWaterModal();CloseTerrainModal();CloseAnimalsModal();
             Category=tool;gameObject.SetActive(tool!=NatureTool.None);if(tool==NatureTool.None)return;
             if(tool==NatureTool.Terrain){gameObject.SetActive(false);OpenTerrainModal();return;}
+            if(tool==NatureTool.Animals){gameObject.SetActive(false);OpenAnimalsModal();return;}
             if (tool == NatureTool.Water) { gameObject.SetActive(false); OpenWaterModal(); return; }
             foreach(var old in optionObjects){old.SetActive(false);Destroy(old);}optionObjects.Clear();
             heading.text=tool switch{NatureTool.Terrain=>"Terraforming",NatureTool.Water=>"Water",NatureTool.Trees=>"Forests",NatureTool.Animals=>"Animals & characters",_=>"Weather & seasons"};

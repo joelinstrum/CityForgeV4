@@ -12,6 +12,7 @@ namespace CityForge.World
             public Vector2 home,target;public float wait;public bool moving;
             public WildlifeActivity activity;public float thirst;public Vector2 drinkOrigin,waterFacing;
             public bool canDrink;
+            public bool canGraze;
             internal Vector2? lastDryPosition;
         }
         [SerializeField] List<Animal> animals=new();
@@ -87,6 +88,7 @@ namespace CityForge.World
             }
             animals.Add(new Animal { species = species, root = body.transform, animator = animator, home = point,
                 target = point, wait = 2f + R() * 6f, thirst = 30f,
+                canGraze = species.Domesticated && animator && animator.HasState(0, Animator.StringToHash("Base Layer."+species.grazingState)),
                 canDrink = species.id == "deer" && animator && animator.HasState(0, Animator.StringToHash("Base Layer.Drink")) });
             renderers = GetComponentsInChildren<Renderer>();
             shown = true;
@@ -150,9 +152,10 @@ namespace CityForge.World
             if (ground <= Land.View.SeaLevel + .12f || (!waterVisit && Land.ShoreDistance(p) < 2) ||
                 Land.RoadDistance(p) < Land.Baseline.roadWidth + 4 || Land.MountainSlope(p) > 23 ||
                 !WaterAccess.DryFootprint(p, ground)) return false;
+            if(Land.View.WildlifeObstructed(p))return false;
             float woodland=Land.Woodland(p);
-            if(!waterVisit&&species.habitat==WildlifeHabitat.WoodlandBird&&(woodland<.1f||Land.Canopy(p)>.35f))return false;
-            if(!waterVisit&&(species.habitat==WildlifeHabitat.Woodland&&woodland<.4f||species.habitat==WildlifeHabitat.WoodlandEdge&&(woodland<.15f||woodland>.8f)))return false;
+            if(!waterVisit&&!species.Domesticated&&species.habitat==WildlifeHabitat.WoodlandBird&&(woodland<.1f||Land.Canopy(p)>.35f))return false;
+            if(!waterVisit&&!species.Domesticated&&(species.habitat==WildlifeHabitat.Woodland&&woodland<.4f||species.habitat==WildlifeHabitat.WoodlandEdge&&(woodland<.15f||woodland>.8f)))return false;
             if(species.habitat==WildlifeHabitat.FreshwaterBank){
                 if(Land.ShoreDistance(p)>10)return false;
                 bool nearby=false;foreach(var body in Land.View.Data.WaterBodies){if(body.kind!=WaterBodyKind.River&&body.kind!=WaterBodyKind.Lake&&body.kind!=WaterBodyKind.Pond)continue;
