@@ -13,7 +13,7 @@ namespace CityForge.World
         GameObject remakeWarning;
         bool remaking, skipPresentationCleanup;
         bool RemakeBlocksInput => remaking || remakeWarning;
-        bool CanRemake => SelectedDistrict < 0 && CreationSettings != null && Towns.Length == 0
+        bool CanRemake => SelectedDistrict < 0 && CreationSettings != null && CreationSettings.terrainImport?.Active != true && Towns.Length == 0
             && !IsSaving && !DistrictLoading && !returning && !RemakeBlocksInput;
 
         void BuildRemakeButton(Transform hud, Font font)
@@ -28,7 +28,7 @@ namespace CityForge.World
         void RefreshRemakeButton()
         {
             if (!remakeButton) return;
-            remakeButton.gameObject.SetActive(SelectedDistrict < 0 && CreationSettings != null && Towns.Length == 0);
+            remakeButton.gameObject.SetActive(SelectedDistrict < 0 && CreationSettings != null && CreationSettings.terrainImport?.Active != true && Towns.Length == 0);
             remakeButton.interactable = CanRemake;
         }
 

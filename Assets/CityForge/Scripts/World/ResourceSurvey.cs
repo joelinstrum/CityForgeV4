@@ -8,6 +8,7 @@ namespace CityForge.World
     internal static class ResourceSurvey
     {
         const int Resolution = 64;
+        static float RegionBiomeMapWaterDistance(PrototypeRegionData data,Vector2 p)=>SmoothRiverSurface.Sample(data.WaterDistance,Mathf.Clamp01(p.x),Mathf.Clamp01(p.y));
 
         internal static RegionalResourceData Generate(PrototypeRegionData data, RegionCreationSettings recipe, int size, RegionTerrainLayout layout)
         {
@@ -19,13 +20,13 @@ namespace CityForge.World
             float offset = random.Next(100, 9000);
             float side = NativeCampPlanner.MapSide(size, recipe.GridSide);
             float legacyScale = side / (recipe.GridSide / 2f) / PrototypeRegionData.Side;
-            float heightScale = PrototypeRegionData.Height * (recipe.version >= 5 ? 1 : legacyScale);
-            float sea = TropicalOceanDepth.DeepRecipe(recipe) ? TropicalOceanDepth.Sea : 12;
+            float heightScale = data.Import?.Settings.heightRange ?? PrototypeRegionData.Height * (recipe.version >= 5 ? 1 : legacyScale);
+            float sea = data.Import?.Settings.GameSea ?? (TropicalOceanDepth.DeepRecipe(recipe) ? TropicalOceanDepth.Sea : 12);
             if (recipe.version < 5) sea *= legacyScale;
             var waters = data.WaterBodies.Where(body => body.kind != WaterBodyKind.Ocean)
                 .Select(body => (body, bounds: body.Bounds)).ToArray();
 
-            float Height(Vector2 p) => SmoothRiverSurface.Sample(data.Heights, Mathf.Clamp01(p.x), Mathf.Clamp01(p.y)) * heightScale;
+            float Height(Vector2 p) => data.Import != null ? data.Import.HeightMeters(p) : SmoothRiverSurface.Sample(data.Heights, Mathf.Clamp01(p.x), Mathf.Clamp01(p.y)) * heightScale;
 
             (float fresh, float coast) WaterDistances(Vector2 p)
             {
@@ -44,7 +45,7 @@ namespace CityForge.World
                 return (fresh, CoastDistance(p));
             }
 
-            float CoastDistance(Vector2 point) => layout != null && layout.HasOcean ? layout.LandDistance(point) * side : 700;
+            float CoastDistance(Vector2 point) => data.Import!=null?RegionBiomeMapWaterDistance(data,point)*side/PrototypeRegionData.Side:layout != null && layout.HasOcean ? layout.LandDistance(point) * side : 700;
 
             float abundanceScale = recipe.resourceAbundance switch
             {
@@ -83,7 +84,7 @@ namespace CityForge.World
                 float water = Mathf.Min(fresh, coast);
                 float fish = 1 - Mathf.InverseLerp(0, 420, Mathf.Abs(water));
                 Set(2, index, point, fish);
-                if (water < 0) continue;
+                if (data.Import != null ? data.Import.TidalAt(point) : water < 0) continue;
 
                 float height = Height(point);
                 float probe = 40 / side;

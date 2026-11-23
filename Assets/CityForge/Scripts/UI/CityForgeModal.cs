@@ -6,7 +6,7 @@ using UnityEngine.UI;
 namespace CityForge.UI
 {
     /// <summary>A reusable, screen-relative modal shell with a clipped scrolling body.</summary>
-    public sealed class CityForgeModal : MonoBehaviour
+    public sealed partial class CityForgeModal : MonoBehaviour
     {
         [SerializeField] private Button backdropButton;
         [SerializeField] private Button closeButton;
@@ -463,6 +463,7 @@ namespace CityForge.UI
 
         public void CreatePrototypeRegion()
         {
+            if(terrainShapeChoice&&terrainShapeChoice.value>=TerrainShapes.Length){if(terrainShapeChoice.value==TerrainShapes.Length)OpenPrebuiltMaps();else OpenTerrainImport();return;}
             if (!Application.isPlaying || !BasicSettingsComplete || (generationSeed && !int.TryParse(generationSeed.text,out _))) return;
             var controller = FindFirstObjectByType<MainMenuController>();
             if (controller != null) controller.CreatePrototypeRegion(RegionName, SelectedSize, ReadCreationSettings());
@@ -478,7 +479,7 @@ namespace CityForge.UI
                 resourceAbundance=resourceAbundance?(World.ResourceAbundance)resourceAbundance.value:World.ResourceAbundance.Normal,
                 resourceDistribution=resourceDistribution?(World.ResourceDistribution)resourceDistribution.value:World.ResourceDistribution.DistinctDistricts,
                 resourceDiscovery=resourceDiscovery?(World.ResourceDiscovery)resourceDiscovery.value:World.ResourceDiscovery.HistoricalProgressive,
-                terrainShape=terrainShapeChoice?TerrainShapes[terrainShapeChoice.value]:World.RegionTerrainShape.Land,peninsulaNorthToSouth=true,
+                terrainShape=terrainShapeChoice&&terrainShapeChoice.value<TerrainShapes.Length?TerrainShapes[terrainShapeChoice.value]:World.RegionTerrainShape.Land,peninsulaNorthToSouth=true,
                 climate=TerrainChoice("Climate").value==3?World.RegionClimate.Tropical:World.RegionClimate.Temperate,
                 moisture=TerrainChoice("Climate").value==3?World.RegionMoisture.Balanced:(World.RegionMoisture)TerrainChoice("Climate").value,vegetation=(World.RegionVegetation)TerrainChoice("Land Type").value,
                 topography=TerrainChoice("Topography").value,rivers=TerrainChoice("Rivers").value,streams=TerrainChoice("Streams").value,
@@ -553,7 +554,7 @@ namespace CityForge.UI
             CopyText("SectionTitle","SectionTitle","TERRAIN",Vector2.zero,new Vector2(300,38));
             CopyText("SectionDescription","SectionDescription","Choose the outline of your region. Each map contains 64 connected districts.",new Vector2(0,-42),new Vector2(775,42));
             CopyText("StreamsLabel","ShapeLabel","REGION SHAPE",new Vector2(0,-100),new Vector2(350,30));
-            terrainShapeChoice=Instantiate(TerrainChoice("Land Type"),terrainShapePanel.transform);terrainShapeChoice.name="RegionShapeDropdown";terrainShapeChoice.gameObject.SetActive(true);terrainShapeChoice.GetComponent<RectTransform>().anchoredPosition=new Vector2(0,-134);terrainShapeChoice.onValueChanged=new Dropdown.DropdownEvent();terrainShapeChoice.ClearOptions();terrainShapeChoice.AddOptions(new System.Collections.Generic.List<string>{"Peninsula","Land","Coast","Mountain Border","Pangea","Archipelago","River & Bay"});terrainShapeChoice.value=1;terrainShapeChoice.onValueChanged.AddListener(_=>RefreshTerrainPreview());
+            terrainShapeChoice=Instantiate(TerrainChoice("Land Type"),terrainShapePanel.transform);terrainShapeChoice.name="RegionShapeDropdown";terrainShapeChoice.gameObject.SetActive(true);terrainShapeChoice.GetComponent<RectTransform>().anchoredPosition=new Vector2(0,-134);terrainShapeChoice.onValueChanged=new Dropdown.DropdownEvent();terrainShapeChoice.ClearOptions();terrainShapeChoice.AddOptions(new System.Collections.Generic.List<string>{"Peninsula","Land","Coast","Mountain Border","Pangea","Archipelago","River & Bay","Pre-built Maps","Terrain Import"});terrainShapeChoice.value=1;terrainShapeChoice.onValueChanged.AddListener(_=>RefreshTerrainPreview());
             terrainShapeDescription=CopyText("SectionDescription","ShapeDescription","",new Vector2(0,-202),new Vector2(350,140));terrainShapeDescription.alignment=TextAnchor.UpperLeft;terrainShapeDescription.fontSize=19;
             var preview=new GameObject("ShapePreview",typeof(RectTransform),typeof(RawImage));preview.transform.SetParent(terrainShapePanel.transform,false);terrainShapePreview=preview.GetComponent<RawImage>();var rect=preview.GetComponent<RectTransform>();rect.anchorMin=rect.anchorMax=rect.pivot=new Vector2(0,1);rect.anchoredPosition=new Vector2(425,-100);rect.sizeDelta=new Vector2(280,280);terrainShapePreview.raycastTarget=false;
             terrainContinueButton=Instantiate(terrainNextButton,terrainShapePanel.transform);
@@ -561,6 +562,7 @@ namespace CityForge.UI
             terrainContinueButton.onClick=new Button.ButtonClickedEvent();
             terrainContinueButton.onClick.AddListener(() => SelectCreateRegionSection(ResourcesSection));
             ConfigureTreeCoverage();
+            ConfigureImportOption();
             terrainContinueButton.GetComponent<RectTransform>().anchoredPosition=new Vector2(0,-820);
             terrainShapePanel.SetActive(false);
             ConfigureResourcesStep();
@@ -678,6 +680,9 @@ namespace CityForge.UI
         void RefreshTerrainPreview()
         {
             if(!terrainShapeChoice||!terrainShapePreview)return;
+            if(terrainShapeChoice.value==TerrainShapes.Length){terrainShapePanel.transform.Find("SectionDescription").GetComponent<Text>().text="Start with a ready-made map. No files or technical setup needed.";terrainShapeDescription.text="Choose Manhattan, preview the terrain, and create your region. You can adjust orientation and elevation scale before creating it.";return;}
+            if(terrainShapeChoice.value==TerrainShapes.Length+1){terrainShapePanel.transform.Find("SectionDescription").GetComponent<Text>().text="Import your own geography. The preview shows the source footprint and padded region.";terrainShapeDescription.text="Import a16-bit height PNG and optional tidal-water mask. Preview proportions, elevations and shoreline warnings before creating the region.";return;}
+            terrainShapePanel.transform.Find("SectionDescription").GetComponent<Text>().text="Choose the outline of your region. Each map contains 64 connected districts.";
             var recipe=ReadCreationSettings();var layout=new World.RegionTerrainLayout(recipe);
             terrainShapeDescription.text=recipe.terrainShape switch{
                 World.RegionTerrainShape.Peninsula=>"Land extending south from a northern mainland, with water on the other three sides.",
@@ -697,7 +702,7 @@ namespace CityForge.UI
                 if(x%20==0||z%20==0)color*=.85f;colors[z*n+x]=color;}
             terrainShapeTexture.SetPixels(colors);terrainShapeTexture.Apply();
         }
-        void OnDestroy(){if(terrainShapeTexture)Destroy(terrainShapeTexture);}
+        void OnDestroy(){CloseTerrainImport();if(terrainShapeTexture)Destroy(terrainShapeTexture);}
 
         private void SetCreateRegionNavigationVisible(bool visible)
         {
@@ -719,6 +724,7 @@ namespace CityForge.UI
 
         public void Close()
         {
+            CloseTerrainImport();
             gameObject.SetActive(false);
         }
     }

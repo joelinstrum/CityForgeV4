@@ -24,15 +24,15 @@ namespace CityForge.World
             int grid=recipe.GridSide;
             int target=recipe.nativeCampCount>0?recipe.nativeCampCount:2+new System.Random(recipe.seed^0x51c42).Next(2);
             float side=MapSide(size,grid),cell=side/grid;
-            float sea=TropicalOceanDepth.DeepRecipe(recipe)?TropicalOceanDepth.Sea:12;
+            float sea=data.Import?.Settings.GameSea??(TropicalOceanDepth.DeepRecipe(recipe)?TropicalOceanDepth.Sea:12);
             var random=new System.Random(recipe.seed^0x63a27);var order=Enumerable.Range(0,grid*grid).ToArray();
             for(int i=order.Length-1;i>0;i--){int j=random.Next(i+1);(order[i],order[j])=(order[j],order[i]);}
             var wet=new Dictionary<Vector2Int,List<Vector2>>();
-            if(data.WaterBodies?.Length>0)for(int z=0;z<513;z++)for(int x=0;x<513;x++)if(data.Heights[z,x]*PrototypeRegionData.Height<sea-.02f){
+            if(data.WaterBodies?.Length>0)for(int z=0;z<513;z++)for(int x=0;x<513;x++)if(data.Import!=null?data.Import.TidalAt(new Vector2(x/512f,z/512f)):data.Heights[z,x]*PrototypeRegionData.Height<sea-.02f){
                 var p=new Vector2((x/512f-.5f)*side,(z/512f-.5f)*side);var key=Vector2Int.FloorToInt(p/64);
                 if(!wet.TryGetValue(key,out var list))wet[key]=list=new List<Vector2>();list.Add(p);
             }
-            float Height(Vector2 p)=>data.SmoothHeight(p.x/side+.5f,p.y/side+.5f)*PrototypeRegionData.Height;
+            float Height(Vector2 p)=>data.SmoothHeight(p.x/side+.5f,p.y/side+.5f)*(data.Import?.Settings.heightRange??PrototypeRegionData.Height);
             bool Water(Vector2 p,out Vector2 point){float best=120*120;point=p;var key=Vector2Int.FloorToInt(p/64);
                 for(int z=-2;z<=2;z++)for(int x=-2;x<=2;x++)if(wet.TryGetValue(key+new Vector2Int(x,z),out var list))foreach(var q in list){float d=(q-p).sqrMagnitude;if(d<best){best=d;point=q;}}
                 return best<120*120;

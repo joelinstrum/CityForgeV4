@@ -294,7 +294,7 @@ namespace CityForge.World
         public RegionSize Size { get; private set; }
         public float MapSide => 1024f * Mathf.Pow(2f, (int)Size)*(GridSide/2f);
         public float MapScale => MapSide / PrototypeRegionData.Side;
-        public float SeaLevel => Coastline?CoastlineTestRegion.Sea:CreationSettings?.version>=5?(TropicalOceanDepth.DeepRecipe(CreationSettings)?TropicalOceanDepth.Sea:12f):12f * (MapScale/(GridSide/2f));
+        public float SeaLevel => Data?.Import!=null?Data.Import.Settings.GameSea:Coastline?CoastlineTestRegion.Sea:CreationSettings?.version>=5?(TropicalOceanDepth.DeepRecipe(CreationSettings)?TropicalOceanDepth.Sea:12f):12f * (MapScale/(GridSide/2f));
         public float TerrainHeightRange {get;private set;}
         public bool MountainTest => SavedRegionId==HillsMountainTestRegion.Id;
         private float VerticalHeight => TerrainHeightRange>0?TerrainHeightRange:PrototypeRegionData.Height * (MapScale/(GridSide/2f));
@@ -380,7 +380,7 @@ namespace CityForge.World
         {
             var buildTimer = System.Diagnostics.Stopwatch.StartNew();
             districtMeshes=new Mesh[DistrictCount];
-            Data = savedData??new PrototypeRegionData(seed);if(Data.WaterBodies==null)Data.WaterBodies=RegionWaterBody.Generate(Data,RiverBedVersion,Waterless,MapSide);Data.SmoothRiverHeights=RiverBedVersion>=4;if(RiverBedVersion>=5)Data.ConfigureContinuousRiver(MapSide);
+            Data = savedData??new PrototypeRegionData(seed);if(Data.WaterBodies==null)Data.WaterBodies=RegionWaterBody.Generate(Data,RiverBedVersion,Waterless,MapSide);Data.SmoothRiverHeights=RiverBedVersion>=4;if(RiverBedVersion>=5&&Data.Import==null)Data.ConfigureContinuousRiver(MapSide);
             if(CreationSettings!=null&&CreationSettings.version>=2){Data.Biomes=new RegionBiomeMap(CreationSettings,Data);Districts=Data.Biomes.DescribeDistricts();}
             loadingProgress?.Invoke("Creating shared terrain",.19f);yield return null;
             var dataMs = buildTimer.ElapsedMilliseconds;

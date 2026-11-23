@@ -5,7 +5,7 @@ namespace CityForge.World
     /// <summary>Terrain-derived cartography. Exaggerated relief is presentation only; district heights stay authoritative.</summary>
     public sealed class RegionReliefMap : MonoBehaviour
     {
-        Mesh slabMesh;Material slabMaterial;
+        Mesh slabMesh;Material slabMaterial,importFootprintMaterial;
         Vector3[] slabRim;
         float slabBottom;
         Mesh mesh;Material material;Texture2D atlas;MeshCollider picker;PrototypeRegionView view;
@@ -66,6 +66,7 @@ namespace CityForge.World
             }
             float Surface(Vector2 point,float h,float river,RegionWaterBody nearest)
             {
+                if(source.Data.Import!=null)return source.Data.Import.TidalAt(point)?Mathf.Max(h,sea):h;
                 foreach(var body in standingWater)
                     if(body.Bounds.Contains(point)&&body.Contains(point))
                     {
@@ -114,7 +115,7 @@ namespace CityForge.World
                         }
                     }
                 }
-                vertices[i]=new Vector3((u-.5f)*source.MapSide,sea+(h-sea)*1.68f+1,(v-.5f)*source.MapSide);uv[i]=new Vector2(u,v);
+                vertices[i]=new Vector3((u-.5f)*source.MapSide,sea+(h-sea)*(source.Data.Import!=null?1:1.68f)+1,(v-.5f)*source.MapSide);uv[i]=new Vector2(u,v);
             }
             progress?.Invoke("Shading regional relief atlas",.30f);yield return null;
             const int pixels=1025;var colors=new Color[pixels*pixels];float seed=source.Data.Seed%997;
@@ -134,6 +135,7 @@ namespace CityForge.World
                     bank=Mathf.Min(bank,SmoothRiverSurface.Sample(data.WaterDistance,u,v)/PrototypeRegionData.Side);
                 bool ocean=coastal?coastalDistance<0:IsOcean(bodies,point);
                 bool water=!waterless&&(bank<0||ocean||(!riverRecipe&&!hasStreams&&h<sea+.1f));
+                if(data.Import!=null)water=data.Import.TidalAt(point);
                 foreach(var body in standingWater)if(body.Bounds.Contains(point)&&body.Contains(point)){water=true;break;}
                 if(water){
                     float offshore=coastal?Mathf.Max(0,-coastalDistance):Mathf.Max(0,-bank);
@@ -209,6 +211,12 @@ namespace CityForge.World
             surfaceVertices = vertices;
             picker=gameObject.AddComponent<MeshCollider>();picker.sharedMesh=mesh;
             BuildSlab(vertices,n,source.MapSide);
+            if(source.Data.Import!=null){
+                var imported=source.Data.Import;var go=new GameObject("Original imported footprint");go.transform.SetParent(transform,false);var ring=go.AddComponent<LineRenderer>();ring.useWorldSpace=false;ring.loop=true;ring.positionCount=128;ring.widthMultiplier=source.MapSide/1500;
+                importFootprintMaterial=new Material(Resources.Load<Shader>("UI/ForestRemovalCircle"));importFootprintMaterial.SetColor("_Color",new Color(1,.65f,.2f,.85f));ring.sharedMaterial=importFootprintMaterial;
+                var corners=new[]{Vector2.zero,Vector2.right,Vector2.one,Vector2.up};
+                for(int i=0;i<128;i++){var p=imported.SourceToWorld(Vector2.Lerp(corners[i/32],corners[(i/32+1)%4],(i%32)/32f));ring.SetPosition(i,new Vector3(p.x,imported.HeightMeters(p/source.MapSide+Vector2.one*.5f)+3,p.y));}
+            }
         }
         static bool IsOcean(RegionWaterBody[] bodies,Vector2 p){foreach(var body in bodies)if(body.kind==WaterBodyKind.Ocean&&body.Bounds.Contains(p)&&body.Contains(p))return true;return false;}
         // Only semantic ocean outlines receive a beach. Map boundary edges are not shorelines.
@@ -304,6 +312,6 @@ namespace CityForge.World
             district = view.DistrictAtWorld(point);
             return district >= 0;
         }
-        void OnDestroy(){if(slabMesh)Destroy(slabMesh);if(slabMaterial)Destroy(slabMaterial);if(mesh)Destroy(mesh);if(material)Destroy(material);if(atlas)Destroy(atlas);}
+        void OnDestroy(){if(importFootprintMaterial)Destroy(importFootprintMaterial);if(slabMesh)Destroy(slabMesh);if(slabMaterial)Destroy(slabMaterial);if(mesh)Destroy(mesh);if(material)Destroy(material);if(atlas)Destroy(atlas);}
     }
 }
