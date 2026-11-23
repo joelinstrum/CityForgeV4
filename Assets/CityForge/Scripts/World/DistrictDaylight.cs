@@ -319,7 +319,13 @@ namespace CityForge.World
 
         internal static float MorningLightingProgress(float progress) => Mathf.SmoothStep(0f, 1f, progress);
 
-        internal static float SunriseProgress(float hour) => Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(5f, 8f, hour));
+        // The approved late-night warmth used to appear accidentally: 22–24h
+        // evaluated as completed sunrise, then snapped cold at midnight. Keep that
+        // warm illumination as the night baseline and evaluate dawn only before noon.
+        internal const float NightSunIntensity = .85f;
+        internal static readonly Color NightSunColor = new(1f, .84f, .66f);
+        internal static float SunriseProgress(float hour) => hour >= 12f ? 0f
+            : Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(5f, 8f, hour));
         internal static float SkyNightAmount(float hour) => hour >= 12f
             ? Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(19f, 22f, hour))
             : 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(5f, 7.5f, hour));
@@ -416,7 +422,7 @@ namespace CityForge.World
                 RegionTimeOfDay.Morning => (.85f, new Color(1f, .84f, .66f)),
                 RegionTimeOfDay.Noon => (.76f, NoonSunColor),
                 RegionTimeOfDay.Evening => (.58f, new Color(.80f, .88f, 1f)),
-                RegionTimeOfDay.Night => (.35f, new Color(.71f, .81f, 1f)),
+                RegionTimeOfDay.Night => (NightSunIntensity, NightSunColor),
                 _ => (1f, afternoonColor)
             };
             light.transform.rotation = SunRotation(time, afternoonRotation.eulerAngles.x);
@@ -493,7 +499,7 @@ namespace CityForge.World
             {
                 RegionTimeOfDay.Morning => (1.05f, new Color(1f, .97f, .94f)),
                 RegionTimeOfDay.Evening => (.83f, new Color(.85f, .92f, 1f)),
-                RegionTimeOfDay.Night => (.54f, new Color(.73f, .83f, 1f)),
+                RegionTimeOfDay.Night => (1f, Color.white),
                 _ => (1f, Color.white)
             };
     }
@@ -604,15 +610,15 @@ namespace CityForge.World
                 if (morning)
                 {
                     float noonIntensity = View.AfternoonSunlight * (linear ? .70f : .76f);
-                    sun.light.intensity = sun.intensity * Mathf.Lerp(Mathf.Lerp(.35f, .85f, PrototypeRegionView.SunriseProgress(hour)), noonIntensity, morningBlend);
-                    sun.light.color = Color.Lerp(Color.Lerp(new Color(.71f, .81f, 1f), new Color(1f, .84f, .66f), PrototypeRegionView.SunriseProgress(hour)),
+                    sun.light.intensity = sun.intensity * Mathf.Lerp(Mathf.Lerp(PrototypeRegionView.NightSunIntensity, .85f, PrototypeRegionView.SunriseProgress(hour)), noonIntensity, morningBlend);
+                    sun.light.color = Color.Lerp(Color.Lerp(PrototypeRegionView.NightSunColor, new Color(1f, .84f, .66f), PrototypeRegionView.SunriseProgress(hour)),
                         new Color(1f, .99f, .965f), morningBlend);
                 }
                 else if (current == RegionTimeOfDay.Night)
                 {
                     float rise = PrototypeRegionView.SunriseProgress(hour);
-                    sun.light.intensity = sun.intensity * Mathf.Lerp(.35f, .85f, rise);
-                    sun.light.color = Color.Lerp(new Color(.71f, .81f, 1f), new Color(1f, .84f, .66f), rise);
+                    sun.light.intensity = sun.intensity * Mathf.Lerp(PrototypeRegionView.NightSunIntensity, .85f, rise);
+                    sun.light.color = Color.Lerp(PrototypeRegionView.NightSunColor, new Color(1f, .84f, .66f), rise);
                 }
                 else if (current is RegionTimeOfDay.Afternoon or RegionTimeOfDay.Evening)
                 {
@@ -620,9 +626,9 @@ namespace CityForge.World
                     float fromIntensity = afternoon ? View.AfternoonSunlight * (linear ? .70f : .76f) : .58f;
                     var fromColor = afternoon ? new Color(1f, .99f, .965f) : new Color(.80f, .88f, 1f);
                     float blend = Mathf.SmoothStep(0f, 1f, afternoon ? PrototypeRegionView.LateAfternoonProgress(progress) : progress);
-                    sun.light.intensity = sun.intensity * Mathf.Lerp(fromIntensity, afternoon ? .58f : .35f, blend);
+                    sun.light.intensity = sun.intensity * Mathf.Lerp(fromIntensity, afternoon ? .58f : PrototypeRegionView.NightSunIntensity, blend);
                     sun.light.color = Color.Lerp(fromColor,
-                        afternoon ? new Color(.80f, .88f, 1f) : new Color(.71f, .81f, 1f), blend);
+                        afternoon ? new Color(.80f, .88f, 1f) : PrototypeRegionView.NightSunColor, blend);
                 }
             }
 
@@ -641,7 +647,7 @@ namespace CityForge.World
             float rise = PrototypeRegionView.SunriseProgress(hour);
             var night = PrototypeRegionView.AmbientPreset(RegionTimeOfDay.Night);
             var morning = PrototypeRegionView.AmbientPreset(RegionTimeOfDay.Morning);
-            float noon = hour >= 6f ? PrototypeRegionView.MorningLightingProgress(Mathf.InverseLerp(6f, 12f, hour)) : 0f;
+            float noon = hour >= 6f && hour < 12f ? PrototypeRegionView.MorningLightingProgress(Mathf.InverseLerp(6f, 12f, hour)) : 0f;
             float level = Mathf.Lerp(Mathf.Lerp(night.level, morning.level, rise), 1f, noon);
             var tint = Color.Lerp(Color.Lerp(night.tint, morning.tint, rise), Color.white, noon) * DistrictAmbientTint;
             RenderSettings.ambientSkyColor = Baseline.ambientSky * tint;

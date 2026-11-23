@@ -2,28 +2,36 @@
 
 ## Pre-built maps
 
-Creation → Terrain → Region Shape → Pre-built Maps opens Manhattan directly, with
+Creation → Terrain → Region Shape → Pre-built Maps opens Lower Manhattan circa1609 directly, with
 automatic preview, orientation/elevation options and Create Region. No JSON or file
 selection is exposed in that flow. Terrain Import remains the separate advanced
 file workflow. Both use the same decoder, preview, generation and embedded native
 persistence. Manhattan is explicitly labeled synthetic/illustrative.
 
-The private starter triplet is installed at
-Assets/StreamingAssets/TerrainPresets/Manhattan/ (Manhattan_Metadata.json,
-Manhattan_Height.png, Manhattan_Water.png). StreamingAssets packages these inputs
-with desktop builds; saved regions remain independent of them. The source-only
-Git repository excludes these assets. Other worktrees need that same folder copied
-from the private asset workflow; missing installation shows a clear message.
+The new private default is installed at
+Assets/StreamingAssets/TerrainPresets/Manhattan1609/ with
+Manhattan_1609_CityForge.json, Manhattan_1609_Height.png and
+Manhattan_1609_Water.png. It is a12×12km,2048² synthetic historical-inspired
+schematic, not GIS or a verified1609 reconstruction. The supplied metadata uses
+a different schema; the separate CityForge JSON maps field names only and includes
+all original metadata values. Original JSON/PNGs are retained unchanged. Select the
+CityForge JSON for advanced imports. The former17×28km private Manhattan folder
+remains available through advanced import; existing native saves retain their own
+embedded rasters and settings. StreamingAssets and private .meta GUIDs are excluded
+from the public source repository; copy them separately to another installation.
 
 
 Creation → Terrain → Region Shape → Terrain Import → Import terrain files opens
 an import panel with metadata, height PNG and optional water PNG paths. Choosing
 metadata fills matching PNG paths. Browse is supported inside the Unity Editor;
 standalone builds accept pasted absolute paths without an additional file-dialog
-plugin. Preview validates and prepares data off the main thread. The preview shows
-native Terrain geometry, tidal footprint, an orange original-footprint boundary,
-source/encoding elevations, datum offset, source provenance and warnings. No source
-file is modified. Create Imported Region uses the normal generation/open pipeline.
+plugin. Preview validates and prepares data off the main thread. The existing wizard shows a flat north-up texture derived from the actual import,
+with elevation color, authoritative tidal footprint, an orange source boundary,
+source/encoding elevations, datum offset, source provenance and warnings. Preview
+pixels are prepared on the existing worker; no separate3D scene/camera is created.
+The crop includes nearby generated padding; the summary states the full32.768km
+region size. Actual playable districts remain native3D Terrain/Crest. No source file
+is modified. Create Imported Region uses the normal generation/open pipeline.
 Cancel is available during preview and imported-region creation, including Escape
 on the loading overlay. The import panel is also cleaned up when its parent closes.
 
@@ -51,7 +59,7 @@ Samples use endpoint/vertex alignment: spacing width/(W−1), height/(H−1), wi
 half-pixel shift. Heights use bilinear interpolation; labels use nearest-neighbor.
 
 For v1 imports, the existing Large-size/16×16-district infrastructure supplies a
-32.768km square; each district remains2048m. The17×28km sample is centered without
+32.768km square; each district remains2048m. Each input footprint (currently12×12km for the1609 schematic) is centered without
 rescaling. Original footprint dimensions and rotation persist in metadata and the
 orange boundary appears in preview and regional overview. Padding matches edge
 heights and slopes, easing the slope to a flat apron over500m; it does not create a
@@ -99,7 +107,10 @@ scale. These preview quality settings are local to its temporary Terrain.
 
 ## Native persistence and compatibility
 
-Small TerrainImportSettings metadata lives in the existing creation recipe. A tagged
+Small TerrainImportSettings metadata lives in the existing creation recipe.
+New imports additionally retain the complete import JSON in optional
+sourceMetadataJson (including source_metadata in an adapted dataset); older saves
+with this field absent remain valid. A tagged
 binary tail after the existing terrain/meadow data embeds original U16 samples and
 water labels in the native compressed .cfregion. No original path is needed on load.
 The saved native513 grids remain byte-identical; loaded raster data rebinds the ocean
@@ -122,3 +133,30 @@ fresh district reopening, existing Crest water, below-sea dry land, and procedur
 legacy/current-climate regressions. Source images in the starter kit are synthetic,
 not a measured Manhattan DEM/coastline/bathymetry and are not shipped as production
 geographic presets. They remain in the private import workflow.
+
+
+## Lower Manhattan1609 validation and water coverage
+
+Source encoding -40…80m, sea0m, actual -20.63264…25.96292m; game offset+41m.
+Zero original water-above-sea / land-below-sea warnings; repair OFF, north-up,1×.
+Original U16/labels/metadata round trip exactly in native payloads while both input
+and installed-preset directories are absent. Real wizard Create and native menu
+reopen passed;625 native combined-district height samples differed by at most
+0.26683m, with77 mask-land samples dry and548 tidal samples. This is a sampled
+check, not a full-raster terrain interpolation error bound. Native cached district
+save/load passed. Procedural v3/v13 × temperate/tropical generation/save tests passed.
+
+Visual QA caught incomplete ocean coverage at wide district zoom: the small river
+prefab range and camera-centered simulation left seabed exposed. Imported coasts
+now reuse CoastalWaterClock's ground-focus helper and set ScaleRange's maximum to
+max(32, Side/32). Rides use the actual viewer position. Existing procedural-water
+configuration, source heights, ocean material/waves and categorical clipping remain.
+Rendered before/after inspection confirmed the tidal surface covers the viewed area.
+
+The dataset has long straight coast segments, an angular island and source shoreline
+height steps up to about10.05m over5.86m. Preserve and disclose these limitations;
+do not add fictitious docks or smooth the input into an implied accurate map.
+Outside the12km source footprint, padding is generated continuation. Accurate future
+inputs need explicit CRS/georeferencing, a vertical/tidal datum, documented historical
+shoreline and DEM/bathymetry provenance/uncertainty, and registration conventions.
+Freshwater import remains deferred; this kit uses no cyan/green labels.

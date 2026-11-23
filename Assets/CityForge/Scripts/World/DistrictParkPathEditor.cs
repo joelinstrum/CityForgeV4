@@ -56,7 +56,7 @@ namespace CityForge.World
             if(parkPathOptions){Destroy(parkPathOptions);parkPathOptions=null;}
             var go=new GameObject("Park path drawing");go.transform.SetParent(transform,false);parkPathWire=go.AddComponent<PointWireTool>();
             parkPathWire.Initialize(GetComponentInChildren<CameraSystem.CityForgeCameraController>().GetComponent<Camera>(),townToolbar.parent,new ParkPathSurface(this),new Color(1,.8f,.35f));
-            parkPathWire.OpenPath=true;parkPathWire.RibbonWidth=width;parkPathWire.Label="Path";parkPathWire.AllowClosedUndo=false;
+            parkPathWire.OpenPath=true;parkPathWire.FinishOverUi=true;parkPathWire.RibbonWidth=width;parkPathWire.Label="Path";parkPathWire.AllowClosedUndo=false;
             parkPathWire.DrawingHint=parkPathShape>0?"Click to place the center · Esc cancels":"Click to add markers · Enter to finish · First marker closes loop · Backspace undoes marker · Esc cancels";
             parkPathWire.CompletionRequested=p=>CreateParkPath(p,false,id,width,curved);parkPathWire.LoopCompletionRequested=p=>CreateParkPath(p,true,id,width,curved);parkPathWire.Completed+=_=>CancelParkPath();parkPathWire.Arm();
         }
@@ -64,7 +64,7 @@ namespace CityForge.World
         {
             var before=JsonUtility.ToJson(selected.path);var candidate=JsonUtility.FromJson<LotPathDefinition>(before);
             candidate.materialId=parkPathMaterial;candidate.width=pathDraftWidth;candidate.edgeBlend=pathDraftFeather;candidate.textureRotation=pathDraftRotation;candidate.curved=pathDraftCurved;candidate.depth=pathDraftDepth;candidate.recessed=false;candidate.border=pathDraftBorder;candidate.borderSides=pathDraftSides;
-            var mesh=LotPathSurface.BuildMesh(candidate,LotPathMaterial.Find(candidate.materialId).TileSize,.065f,LotHeight);var problem=RoadSiteProblem(mesh);Destroy(mesh);
+            var problem=ParkPathSiteProblem(candidate);
             if(problem!=null){ShowDistrictMessage(problem);return;}
             bool geometry=selected.path.width!=candidate.width||selected.path.curved!=candidate.curved;
             selected.path=candidate;RecordPathUndo(()=>selected.path=JsonUtility.FromJson<LotPathDefinition>(before));RebuildParkPaths();ShowPathSelection(candidate);
