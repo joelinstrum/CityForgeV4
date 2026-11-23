@@ -299,7 +299,7 @@ namespace CityForge.World
                 districtRoads.Add(pieces[i]);
             }
             if (pieces.Count == 0) return null;
-            RefreshRoadShoulderDetails();
+            RefreshRoadShoulderDetails(true);
             RefreshDirtRoadEndFades();
             RefreshDirtJunctionWear();
             QueueLotGrowth();
@@ -701,7 +701,7 @@ namespace CityForge.World
             road.transform.SetParent(districtRoadRoot, false);
             var filter = road.GetComponent<MeshFilter>();
             filter.sharedMesh = mesh;
-            districtRoadMeshes.Add(record, filter); FreightRoadRevision++;
+            districtRoadMeshes.Add(record, filter); FreightRoadRevision++; MarkImmigrationSitesChanged();
             var renderer = road.GetComponent<MeshRenderer>();
             renderer.sharedMaterial = material;
             renderer.sortingOrder = order;
@@ -757,20 +757,65 @@ namespace CityForge.World
             return false;
         }
 
-        private void RefreshRoadShoulderDetails()
+        private void RefreshRoadShoulderDetails(bool deferSidewalks=false)
         {
             RefreshConnectedRoadCorners();
             pedestrianRoutesDirty = true;
             if (ApprovedDistrict) ApprovedDistrict.RefreshRoadShoulders(districtRoads);
-            RefreshDistrictSidewalks();
+            if(deferSidewalks)QueueDistrictSidewalkRefresh();else RefreshDistrictSidewalks();
         }
 
+        private readonly HashSet<DistrictLotSurfaces> deferredLotStreetMasks=new();
+        private Coroutine queuedSidewalkJob;
+        private bool queuedSidewalkDirty;
+        private Transform oldSidewalkRoot;
+        private UnityEngine.Object[] oldSidewalkAssets;
+        private StreetSurfaceMask cachedPavementMask,cachedLotPathMask;
+        private int sidewalkMaskRoadRevision=-1;
+        private void DisposeOldSidewalks()
+        {
+            if(oldSidewalkRoot){oldSidewalkRoot.gameObject.SetActive(false);Destroy(oldSidewalkRoot.gameObject);}oldSidewalkRoot=null;
+            if(oldSidewalkAssets!=null)foreach(var asset in oldSidewalkAssets)if(asset)Destroy(asset);oldSidewalkAssets=null;
+        }
+        private void CancelQueuedSidewalks()
+        {
+            if(queuedSidewalkJob!=null)StopCoroutine(queuedSidewalkJob);
+            queuedSidewalkJob=null;queuedSidewalkDirty=false;DisposeOldSidewalks();
+        }
+        private void QueueDistrictSidewalkRefresh()
+        {
+            queuedSidewalkDirty=true;
+            if(queuedSidewalkJob==null)queuedSidewalkJob=StartCoroutine(RebuildQueuedSidewalks());
+        }
+        private System.Collections.IEnumerator RebuildQueuedSidewalks()
+        {
+            yield return null;
+            while(queuedSidewalkDirty)
+            {
+                queuedSidewalkDirty=false;
+                oldSidewalkRoot=districtSidewalkRoot;oldSidewalkAssets=sidewalkAssets.ToArray();
+                districtSidewalkRoot=null;sidewalkAssets.Clear();
+                var work=BuildDistrictSidewalks(true);while(work.MoveNext())yield return work.Current;
+                if(districtSidewalkRoot)districtSidewalkRoot.gameObject.SetActive(true);
+                DisposeOldSidewalks();pedestrianRoutesDirty=true;
+            }
+            queuedSidewalkJob=null;
+        }
         private void RefreshDistrictSidewalks()
         {
+            CancelQueuedSidewalks();
+            var work=BuildDistrictSidewalks(false);while(work.MoveNext()){}
+        }
+        private System.Collections.IEnumerator BuildDistrictSidewalks(bool paced)
+        {
             ClearDistrictSidewalks();
-            var pavementMask = new StreetSurfaceMask();
-            var lotPathMask = new StreetSurfaceMask();
             var visibleRoads = districtRoadMeshes.Keys.ToArray();
+            var pavementMask = paced&&sidewalkMaskRoadRevision==FreightRoadRevision?cachedPavementMask:null;
+            var lotPathMask = paced&&sidewalkMaskRoadRevision==FreightRoadRevision?cachedLotPathMask:null;
+            bool roadMasksChanged=pavementMask==null||lotPathMask==null;
+            if(roadMasksChanged)
+            {
+            pavementMask=new StreetSurfaceMask();lotPathMask=new StreetSurfaceMask();
             foreach (var road in visibleRoads)
             {
                 var centerline = RoadCenterline(road);
@@ -787,21 +832,37 @@ namespace CityForge.World
                     lotPathMask.AddTriangle(node.Point, outline[i], outline[(i + 1) % outline.Count]);
                 }
             }
+            cachedPavementMask=pavementMask;cachedLotPathMask=lotPathMask;sidewalkMaskRoadRevision=FreightRoadRevision;
+            }
+            if(paced){
+                // A previous paced job may have been cancelled after caching its masks.
+                // Finish the matching recess field even when those masks are reused.
+                ulong previousRecess=roadRecessSignature;
+                var recess=BuildRoadRecess(pavementMask,visibleRoads,true);while(recess.MoveNext())yield return recess.Current;
+                if(roadMasksChanged||previousRecess!=roadRecessSignature)RebuildParkPaths(lotPathMask);
+            }
+            if(paced){foreach(var surface in deferredLotStreetMasks)if(surface)surface.ApplyStreetMask(lotPathMask);deferredLotStreetMasks.Clear();}
+            if(!paced)
+            {
+            deferredLotStreetMasks.Clear();
             RefreshRoadRecess(pavementMask, visibleRoads);
             RebuildParkPaths(lotPathMask);
             if (lotInstances)
                 foreach (var surface in lotInstances.GetComponentsInChildren<DistrictLotSurfaces>(true)) surface.ApplyStreetMask(lotPathMask);
-            if (!districtRoadRoot) return;
+            }
+            if (!districtRoadRoot) yield break;
             var frontages = NeighborhoodFootpaths.Collect(districtLotRoots.Keys);
             var shopFrontages = NeighborhoodFootpaths.Collect(districtLotRoots.Keys, commercial: true);
             var roads = districtRoadMeshes.Keys.Where(road => HasSidewalks(road.surfaceId) || frontages.Count > 0).ToArray();
-            if (roads.Length == 0) return;
+            if (roads.Length == 0) yield break;
             districtSidewalkRoot = new GameObject("District sidewalks").transform;
             districtSidewalkRoot.SetParent(districtRoadRoot, false);
+            if(paced)districtSidewalkRoot.gameObject.SetActive(false);
             var materials = new Dictionary<string, Material>();
             const int width = LotPathSurface.ResidentialSidewalkWidth;
             foreach (var road in roads)
             {
+                if(paced)yield return null;
                 bool paved = HasSidewalks(road.surfaceId);
                 bool plank = road.surfaceId == FoundersStreetId;
                 string styleId = plank ? LotPathMaterial.Plankboard : LotPathMaterial.Bluestone;
@@ -922,6 +983,7 @@ namespace CityForge.World
 
         private void ClearDistrictRoadPresentation()
         {
+            CancelQueuedSidewalks();
             ClearRoadRecess();
             ClearStreetJunctionPresentation();
             ClearRoadPathGuides();
@@ -935,7 +997,7 @@ namespace CityForge.World
             foreach (var asset in roadPresentationAssets) Destroy(asset);
             roadPresentationAssets.Clear();
             districtRoadMaterials.Clear();
-            districtRoadMeshes.Clear(); FreightRoadRevision++;
+            districtRoadMeshes.Clear(); FreightRoadRevision++; MarkImmigrationSitesChanged();
         }
 
         private sealed class RoadWireSurface : PointWireSurface

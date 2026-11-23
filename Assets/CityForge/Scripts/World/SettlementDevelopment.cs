@@ -16,7 +16,7 @@ namespace CityForge.World
     [Serializable]
     public sealed class TownDevelopmentState
     {
-        public int population;
+        public long population;
     }
 
     public interface ITownSpecializationCalculator

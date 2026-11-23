@@ -257,6 +257,7 @@ namespace CityForge.World
 
         private void TickDistrictClock()
         {
+            if(ZoningSimulationPaused)return;
             if (clockPaused || SelectedDistrict < 0 || DistrictLoading || IsSaving) return;
             int phase = Array.IndexOf(DaylightChoices, TimeOfDay);
             if (phase < 0) return;

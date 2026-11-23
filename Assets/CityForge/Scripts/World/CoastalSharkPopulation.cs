@@ -45,6 +45,7 @@ namespace CityForge.World
         }
         void Update()
         {
+            if(PrototypeRegionView.ZoningSimulationPaused)return;
             if(!shark||!land||habitat==null||land.View.Data==null)return;
             accumulator+=Mathf.Min(Time.deltaTime,.25f);float step=visible?.05f:.2f;if(accumulator<step)return;float dt=Mathf.Min(accumulator,.25f);accumulator=0;
             var p=Position;if(Vector2.Distance(p,target)<3)PickPatrolTarget();

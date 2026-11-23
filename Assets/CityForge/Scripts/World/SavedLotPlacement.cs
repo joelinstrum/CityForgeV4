@@ -165,7 +165,7 @@ namespace CityForge.World
             var removed = PlacedLots.Where(other => other != movingDistrictLot &&
                 other.id != record.id && footprint.Overlaps(new DistrictLotFootprint(other))).ToHashSet();
             PlacedLots.RemoveAll(removed.Contains);
-            if (removed.Count > 0) QueueDemolitionGrowth(removed);
+            if (removed.Count > 0){QueueDemolitionGrowth(removed);RemoveDistrictLotViews(removed);}
             PlacedActors.RemoveAll(actor =>
             {
                 if (actor.zoningStreetlamp || actor.streetscape == null || !footprint.Contains(actor.position)) return false;

@@ -1,0 +1,27 @@
+{
+  "events": [
+    {
+      "id": "immigrant-first-wave",
+      "name": "Harbor immigration",
+      "trigger": "galleon-docked",
+      "sourceAssetId": "harbor-council-house",
+      "firstYear": 1,
+      "lastYear": 9999,
+      "maxOccurrences": 0,
+      "immigrantsPerArrival": 12,
+      "wealth": "low",
+      "destinationCategories": [
+        "residential",
+        "commercial"
+      ],
+      "actorAssetIds": [
+        "v3-founders-cook",
+        "v3-founders-stout-townsperson",
+        "v3-founders-townsperson",
+        "v3-founders-privateer"
+      ],
+      "arrivalMessage": "Immigrants arrive at {town}",
+      "populationPerRepresentative": 10
+    }
+  ]
+}

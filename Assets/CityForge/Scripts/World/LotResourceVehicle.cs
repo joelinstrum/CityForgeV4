@@ -47,6 +47,7 @@ namespace CityForge.World
 
         private void Update()
         {
+            if(PrototypeRegionView.ZoningSimulationPaused)return;
             if (!view || job == null || view.DistrictLoading || view.IsSaving || !view.ApprovedDistrict || view.SelectedDistrict < 0) return;
             if (job.phase is LotFreightPhase.Waiting or LotFreightPhase.Loading or LotFreightPhase.Unloading)
             {

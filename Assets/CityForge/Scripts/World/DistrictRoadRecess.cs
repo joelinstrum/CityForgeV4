@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -13,7 +14,10 @@ namespace CityForge.World
         private double roadRecessBuildMilliseconds;
 
         private void RefreshRoadRecess(StreetSurfaceMask footprint, DistrictRoadRecord[] roads)
+        {var work=BuildRoadRecess(footprint,roads,false);while(work.MoveNext()){} }
+        private IEnumerator BuildRoadRecess(StreetSurfaceMask footprint,DistrictRoadRecord[] roads,bool paced)
         {
+            var slice=System.Diagnostics.Stopwatch.StartNew();
             ulong signature = 1469598103934665603UL;
             void Hash(int value) { signature = unchecked((signature ^ (uint)value) * 1099511628211UL); }
             foreach (var road in roads)
@@ -22,11 +26,11 @@ namespace CityForge.World
                 foreach (char c in road.surfaceId) Hash(c);
                 foreach (var point in road.points) { Hash(point.x.GetHashCode()); Hash(point.y.GetHashCode()); }
             }
-            if (roadRecessField && signature == roadRecessSignature) return;
-            ClearRoadRecess(); roadRecessSignature = signature;
+            if (roadRecessField && signature == roadRecessSignature) yield break;
+
             var timer = System.Diagnostics.Stopwatch.StartNew();
             var edges = footprint.BoundaryEdges();
-            if (edges.Count == 0) return;
+            if (edges.Count == 0){ClearRoadRecess();roadRecessSignature=signature;yield break;}
             var min = edges[0].A; var max = min;
             var index = new Dictionary<Vector2Int, List<(Vector2 A, Vector2 B)>>();
             const float range = 2f, cellSize = 8f;
@@ -47,7 +51,9 @@ namespace CityForge.World
             int width = Mathf.Clamp(Mathf.CeilToInt(size.x * 2), 8, 1024);
             int height = Mathf.Clamp(Mathf.CeilToInt(size.y * 2), 8, 1024);
             var values = new float[width * height];
-            for (int y = 0; y < height; y++) for (int x = 0; x < width; x++)
+            for (int y = 0; y < height; y++) {
+            if(paced&&slice.Elapsed.TotalMilliseconds>=4){timer.Stop();yield return null;timer.Start();slice.Restart();}
+            for (int x = 0; x < width; x++)
             {
                 var p = min + Vector2.Scale(size, new Vector2((x + .5f) / width, (y + .5f) / height));
                 float distance = range * range;
@@ -60,6 +66,9 @@ namespace CityForge.World
                     }
                 values[y * width + x] = Mathf.Sqrt(distance) * (footprint.Contains(p) ? 1 : -1);
             }
+            }
+            var previous=roadRecessField;
+            roadRecessSignature=signature;
             roadRecessField = new Texture2D(width, height, TextureFormat.RFloat, false, true)
             { name = "Shared road recess boundary", filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
             roadRecessField.SetPixelData(values, 0); roadRecessField.Apply(false, true);
@@ -67,6 +76,7 @@ namespace CityForge.World
             foreach (var material in districtRoadMaterials.Values) BindRoadRecess(material);
             foreach (var asset in streetJunctionAssets)
                 if (asset is Material material) BindRoadRecess(material);
+            if(previous)Destroy(previous);
             timer.Stop(); roadRecessBuildMilliseconds = timer.Elapsed.TotalMilliseconds;
         }
         private void BindRoadRecess(Material material)

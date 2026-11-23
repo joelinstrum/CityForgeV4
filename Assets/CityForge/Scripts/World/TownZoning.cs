@@ -233,6 +233,7 @@ namespace CityForge.World
             RefreshZoneLotSizes();
             residentialFacingTurns = 0;
             zoneToolArmed = true;
+            SetZoningGameplayPause(true);
             for (int i = 0; i < zoneButtons.Length; i++) MarkTownButton(zoneButtons[i], i == (int)zone);
             zoneStatus.text = zone == TownZone.None ? "Drag over cells to erase their zoning." :
                 ResidentialDepth(zone) > 0 ? ResidentialDragHint(zone) :
@@ -441,6 +442,9 @@ namespace CityForge.World
             if (!CanBuildTown || IsSaving) return "Establish the town center before zoning.";
             var problem = ZoneSiteProblem(bounds, zone, DistrictLotWater(), out var frontage);
             if (problem != null) return problem;
+            if(zone==TownZone.None)
+                PendingPlayerLots.RemoveAll(l=>new DistrictLotFootprint(l).Overlaps(new DistrictLotFootprint(
+                    (ZoneCorner(bounds.min)+ZoneCorner(bounds.max))*.5f,(Vector2)bounds.size*(DistrictGridCellMeters*.5f))));
             var facing = IsCommercialZone(zone) ? frontage : ResidentialFacing(frontage);
             bool enclosed = ResidentialDepth(zone) > 0 && frontage == TownZoneFacing.None;
             bool affectsGrowth = SupportsLotGrowth(zone);
@@ -545,7 +549,7 @@ namespace CityForge.World
         private void RefreshZoneOverlay()
         {
             RefreshDistrictGrid();
-            if (!zoneRenderer && (SelectedDistrict < 0 || townZones.Count == 0)) return;
+            if (!zoneRenderer && (SelectedDistrict < 0 || townZones.Count == 0 && PendingPlayerLots.Count==0)) return;
             EnsureZoneSurfaces();
             zoneRenderer.enabled = SelectedDistrict >= 0;
             if (!zoneRenderer.enabled) return;
@@ -558,6 +562,7 @@ namespace CityForge.World
                 var center = ZoneCorner(pair.Key) + Vector2.one * (DistrictGridCellMeters * .5f);
                 return InActiveDistrict(center) && !developed.Any(lot => lot.Contains(center, .001f));
             }), .15f);
+            AppendPendingPlayerZones(zoneMesh);
         }
 
         private void FillZoneMesh(Mesh mesh, IEnumerable<KeyValuePair<Vector2Int, TownZone>> cells, float lift,

@@ -61,11 +61,11 @@ namespace CityForge.World
             }
             if(changed){d.SetHeightsDelayLOD(rect.x,rect.y,heights);patches.Add(rect);dirty=true;}
         }
-        internal (float Min,float Mean) Statistics(Rect bounds,Func<Vector2,bool> contains,float fallback)
+        internal (float Min,float Mean,float Max) Statistics(Rect bounds,Func<Vector2,bool> contains,float fallback)
         {
-            var rect=Samples(bounds);var heights=Data.GetHeights(rect.x,rect.y,rect.width,rect.height);float low=float.PositiveInfinity;double sum=0;int count=0;
-            for(int z=rect.yMin;z<rect.yMax;z++)for(int x=rect.xMin;x<rect.xMax;x++)if(contains(World(x,z))){float h=heights[z-rect.y,x-rect.x]*vertical+originY;low=Mathf.Min(low,h);sum+=h;count++;}
-            return count>0?(low,(float)(sum/count)):(fallback,fallback);
+            var rect=Samples(bounds);var heights=Data.GetHeights(rect.x,rect.y,rect.width,rect.height);float low=float.PositiveInfinity,high=float.NegativeInfinity;double sum=0;int count=0;
+            for(int z=rect.yMin;z<rect.yMax;z++)for(int x=rect.xMin;x<rect.xMax;x++)if(contains(World(x,z))){float h=heights[z-rect.y,x-rect.x]*vertical+originY;low=Mathf.Min(low,h);high=Mathf.Max(high,h);sum+=h;count++;}
+            return count>0?(low,(float)(sum/count),high):(fallback,fallback,fallback);
         }
         struct PlaneSample { internal float Distance,Height,Start;internal int Stroke;internal bool Core,Nature; }
         readonly Dictionary<Vector2Int,PlaneSample> planeSamples=new();bool hasNatureSamples;
@@ -83,12 +83,16 @@ namespace CityForge.World
                 bool core=distance<=0;bool sameStroke=known&&sample.Stroke==stamp.stroke;
                 bool reuse=!core&&(stamp.nature?sameStroke:known)&&(sample.Core||distance>=sample.Distance);
                 int lx=x-rect.x,lz=z-rect.y;float source=original.TryGetValue(key,out float old)?old:heights[lz,lx];
-                float start=stamp.nature?(sameStroke?sample.Start:heights[lz,lx]*vertical+originY):source*vertical+originY;
+                // Source is the undo baseline, not the bank to blend into. Using it here
+                // resurrects pre-terraform contours around a zone on prepared flat ground.
+                float start=stamp.nature&&sameStroke?sample.Start:heights[lz,lx]*vertical+originY;
                 float weight=(core?1:1-PrototypeRegionView.LevelerEdgeBlend(stamp,p,distance))*(stamp.strength>0?stamp.strength:1);
                 float target=reuse?sample.Height:stamp.nature?Mathf.Lerp(start,stamp.height,weight):core?stamp.height:Mathf.Lerp(stamp.height,start,PrototypeRegionView.LevelerEdgeBlend(stamp,p,distance));
                 if(!reuse)planeSamples[key]=new PlaneSample{Core=core,Distance=distance,Height=target,Start=start,Stroke=stamp.stroke,Nature=stamp.nature||known&&sample.Nature};
                 float h=Mathf.Clamp01((target-originY)/vertical);
-                if(Mathf.Abs(heights[lz,lx]-h)<.000001f)continue;
+                // Terrain height storage rounds normalized samples. Do not sync the
+                // heightmap (and rebuild the district) for an unrepresentable delta.
+                if(Mathf.Abs(heights[lz,lx]-h)<1f/32766f)continue;
                 original.TryAdd(key,source);heights[lz,lx]=h;changed=true;
             }
             if(changed){Data.SetHeightsDelayLOD(rect.x,rect.y,heights);patches.Add(rect);dirty=true;}
@@ -132,7 +136,7 @@ namespace CityForge.World
             var ground=ApprovedDistrict?ApprovedDistrict.DisplayTerrain:null;
             if(!ground)return;
             var cuts=records.Where(r=>r.cutToLowest&&!r.definition.IsWaterfront&&ActiveDistrictMembers.Contains(r.district)).ToArray();
-            if(cuts.Length==0){GetComponentInChildren<DistrictWeather>()?.RefreshGround();return;}
+            if(cuts.Length==0)return;
             var grading=ground.GetComponent<DistrictLotGrading>()??ground.gameObject.AddComponent<DistrictLotGrading>();
             float margin=new Vector2(ground.terrainData.size.x,ground.terrainData.size.z).magnitude/(ground.terrainData.heightmapResolution-1);
             foreach(var record in cuts)
@@ -140,8 +144,14 @@ namespace CityForge.World
                 var footprint=new DistrictLotFootprint(record);
                 grading.Cut(footprint.Bounds,p=>footprint.Contains(p,-margin),record.cutGroundHeight,p=>LotGradeRoadPoint(p)||TryZoneGroundHeight(p,out _));
             }
-            grading.Finish();
-            GetComponentInChildren<DistrictWeather>()?.RefreshGround();
+            if(grading.Finish())
+            {
+                var bounds=cuts.Select(r=>new DistrictLotFootprint(r).Bounds).ToArray();
+                var area=Rect.MinMaxRect(bounds.Min(b=>b.xMin)-margin,bounds.Min(b=>b.yMin)-margin,
+                    bounds.Max(b=>b.xMax)+margin,bounds.Max(b=>b.yMax)+margin);
+                InvalidateDistrictGridHeights(area);
+                GetComponentInChildren<DistrictWeather>()?.RefreshGround(area);
+            }
         }
         bool LotGradeRoadPoint(Vector2 p)
         {
@@ -229,27 +239,47 @@ float r=Mathf.Clamp(cornerRadius,0,Mathf.Min(size.x,size.y)*.5f);var d=new Vecto
             var plane=new ZoneGroundPlane{center=(a+b)*.5f,size=b-a+Vector2.one*(apron*2),rotation=diagonal?45:0,district=SelectedDistrict};
             DistrictLotFoundation.SampleLevel(plane.size,plane.World,LotHeight,out float low);
             var terrain=ApprovedDistrict?ApprovedDistrict.DisplayTerrain:null;
-            if(terrain){var g=terrain.GetComponent<DistrictLotGrading>()??terrain.gameObject.AddComponent<DistrictLotGrading>();low=g.Minimum(plane.Bounds,p=>plane.Contains(p),low);}
+            bool flatPreparedGround=false;
+            if(terrain){
+                var g=terrain.GetComponent<DistrictLotGrading>()??terrain.gameObject.AddComponent<DistrictLotGrading>();
+                var current=g.Statistics(plane.Bounds,p=>plane.Contains(p),low);
+                flatPreparedGround=current.Max-current.Min<.0001f;
+                low=flatPreparedGround?current.Mean:g.Minimum(plane.Bounds,p=>plane.Contains(p),low);
+            }
             // An adjoining drop extends the existing plane instead of introducing a new step.
             var adjoining=ZoneGroundPlanes.LastOrDefault(p=>(!p.nature||p.strength>=.999f)&&p.Bounds.Overlaps(plane.Bounds));
-            plane.height=Mathf.Max(SeaLevel+.2f,adjoining?.height??low);ZoneGroundPlanes.Add(plane);
-            ApplyZoneGroundPlanes();RebuildDistrictRoads();RebuildGroundPaint();RebuildParkPaths();
+            plane.height=Mathf.Max(SeaLevel+.2f,flatPreparedGround?low:adjoining?.height??low);ZoneGroundPlanes.Add(plane);
+            if(ApplyZoneGroundPlanes()){RebuildDistrictRoads();RebuildGroundPaint();RebuildParkPaths();}
+            else
+            {
+                // The new streets were already presented by CommitNewRoadPieces.
+                // On prepared flat land, retain every existing road/paint/path instance.
+                // Only resample the new ribbons against the committed block datum.
+                foreach(var road in roads)if(districtRoadMeshes.TryGetValue(road,out var filter)&&filter){
+                    var old=filter.sharedMesh;var mesh=BuildDistrictRoadMesh(road);filter.sharedMesh=mesh;
+                    roadPresentationAssets.Remove(old);roadPresentationAssets.Add(mesh);Destroy(old);
+                    if(showRoadPaths)RefreshRoadPathGuide(road);
+                }
+            }
         }
-        void ApplyZoneGroundPlanes(Rect? affected=null)
+        bool ApplyZoneGroundPlanes(Rect? affected=null)
         {
-            var terrain=ApprovedDistrict?ApprovedDistrict.DisplayTerrain:null;if(!terrain)return;
-            var planes=ZoneGroundPlanes.Where(p=>ActiveDistrictMembers.Contains(p.district)).ToArray();if(planes.Length==0)return;
-            var g=terrain.GetComponent<DistrictLotGrading>()??terrain.gameObject.AddComponent<DistrictLotGrading>();bool changed=false;
+            var terrain=ApprovedDistrict?ApprovedDistrict.DisplayTerrain:null;if(!terrain)return false;
+            var planes=ZoneGroundPlanes.Where(p=>ActiveDistrictMembers.Contains(p.district)).ToArray();if(planes.Length==0)return false;
+            var g=terrain.GetComponent<DistrictLotGrading>()??terrain.gameObject.AddComponent<DistrictLotGrading>();bool changed=false;Rect? gridArea=null;
             float margin=new Vector2(terrain.terrainData.size.x,terrain.terrainData.size.z).magnitude/(terrain.terrainData.heightmapResolution-1);
             foreach(var plane in planes)if(g.AppliedPlanes.Add(plane)){var bounds=plane.Bounds;float feather=GroundPlaneBlend(plane);bounds.min-=Vector2.one*feather;bounds.max+=Vector2.one*feather;
+                gridArea=gridArea.HasValue?Rect.MinMaxRect(Mathf.Min(gridArea.Value.xMin,bounds.xMin),Mathf.Min(gridArea.Value.yMin,bounds.yMin),Mathf.Max(gridArea.Value.xMax,bounds.xMax),Mathf.Max(gridArea.Value.yMax,bounds.yMax)):bounds;
                 g.CutPlanes(bounds,plane,InActiveDistrict);if(plane.nature){ApprovedDistrict.ClearTerraformObjects(plane,bounds);ApprovedDistrict.QueueTerraformCoast(bounds,affected.HasValue,plane);}changed=true;}
-            if(changed&&g.Finish())GetComponentInChildren<DistrictWeather>()?.RefreshGround(affected);
+            bool terrainChanged=changed&&g.Finish();
+            if(terrainChanged){InvalidateDistrictGridHeights(gridArea);GetComponentInChildren<DistrictWeather>()?.RefreshGround(affected);}
+            return terrainChanged;
         }
         readonly Dictionary<DistrictLotRecord,float> lotPopulationAfter=new();
         readonly List<(DistrictLotRecord lot,GameObject body)> delayedLotCharacters=new();
         void HoldLotPopulation(DistrictLotRecord lot)=>lotPopulationAfter[lot]=float.PositiveInfinity;
-        void ReleaseLotPopulation(DistrictLotRecord lot)=>lotPopulationAfter[lot]=Time.unscaledTime+10f;
-        bool LotPopulationReady(DistrictLotRecord lot)=>!lotPopulationAfter.TryGetValue(lot,out float at)||Time.unscaledTime>=at;
+        void ReleaseLotPopulation(DistrictLotRecord lot){if(!PlacedLots.Contains(lot)){lotPopulationAfter.Remove(lot);return;}lotPopulationAfter[lot]=Time.time;nextEventTick=0;}
+        bool LotPopulationReady(DistrictLotRecord lot)=>!lotPopulationAfter.TryGetValue(lot,out float at)||Time.time>=at;
         void TickLotPopulation()
         {
             if(lotPopulationAfter.Count==0&&delayedLotCharacters.Count==0)return;

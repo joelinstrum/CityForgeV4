@@ -11,6 +11,7 @@ namespace CityForge.World
 
         private void LateUpdate()
         {
+            if(PrototypeRegionView.ZoningSimulationPaused)return;
             if (behavior == null) return;
             bool nearCamera = ActorSimulationVisibility.NearCamera(districtCamera, transform.position);
             float elapsed = cadence.Step(Mathf.Min(Time.deltaTime, .1f), nearCamera, GetInstanceID());

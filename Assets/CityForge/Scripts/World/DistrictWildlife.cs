@@ -150,9 +150,9 @@ namespace CityForge.World
                 y=water-.22f;return true;
             }
             if (ground <= Land.View.SeaLevel + .12f || (!waterVisit && Land.ShoreDistance(p) < 2) ||
-                Land.RoadDistance(p) < Land.Baseline.roadWidth + 4 || Land.MountainSlope(p) > 23 ||
+                Land.RoadDistance(p) < (species.Domesticated ? Land.Baseline.roadWidth * .5f + .6f : Land.Baseline.roadWidth + 4) || Land.MountainSlope(p) > 23 ||
                 !WaterAccess.DryFootprint(p, ground)) return false;
-            if(Land.View.WildlifeObstructed(p))return false;
+            if(species.Domesticated ? Land.View.DomesticAnimalObstructed(p) : Land.View.WildlifeObstructed(p))return false;
             float woodland=Land.Woodland(p);
             if(!waterVisit&&!species.Domesticated&&species.habitat==WildlifeHabitat.WoodlandBird&&(woodland<.1f||Land.Canopy(p)>.35f))return false;
             if(!waterVisit&&!species.Domesticated&&(species.habitat==WildlifeHabitat.Woodland&&woodland<.4f||species.habitat==WildlifeHabitat.WoodlandEdge&&(woodland<.15f||woodland>.8f)))return false;
@@ -168,6 +168,7 @@ namespace CityForge.World
         }
         void Update()
         {
+            if(PrototypeRegionView.ZoningSimulationPaused)return;
             if(!Land)return;
             UpdateVisibility();if(!shown)return;
             Tick(Mathf.Min(Time.deltaTime,.1f));

@@ -140,3 +140,32 @@ flying exceptions, and close-zoom simulation pause. Deer freshwater visits use t
 head-down Drink clip, dry bank targets, stationary drinking and return-to-roaming states.
 Do not let habitat exceptions for drinking bypass water or tree/road safety. See
 Documentation/03_Technical/Wildlife_Water_Behavior.md. No persistent animal activity schema.
+
+Zoning is a gameplay pause boundary: menu open, zone brush armed or repeat block stamp
+attached must freeze background simulation until zoning ends. Preserve camera/UI/
+authoring input. Acquire/release the pause through tool/menu transitions, not recurring
+scene scans. Use scaled simulation deadlines or explicit pause guards for gameplay;
+unscaled UI preview throttles may continue. Preserve previous manual pause/speed and
+restore owned animator/particle/audio states on exit and teardown. See
+ZoningGameplayPause.cs and the current HANDOFF checkpoint.
+
+Immigrant destination discovery is event-driven: one cohort assignment at docking,
+initial load and actual zoning/road/terrain/building mutations. Never restore timed
+vacancy scans, periodic reassignment or growth retries. Reserve whole home parcels
+exclusively (one representative household per parcel), then commercial refuge, then
+harbor waiting. Commercial refuge stays unhoused. Route retries use the saved assigned
+target only and must not rediscover or reshuffle destinations. Housing counts come
+from the persistent event ledger. See Region_Events.md and ImmigrationAssignments.cs.
+
+Interactive deletion must remove affected lot views in place; do not call a full
+RebuildDistrictLots for a single/area delete. Retain surviving instance IDs and grades.
+Queue/coalesce sidewalk repairs while keeping old geometry visible; cancel on road
+replacement/teardown. District-grid toggles must reuse cached geometry; terrain and
+parcel changes invalidate finite, time-sliced builds rather than blocking UI input.
+Preserve native terrain appearance, parcel clipping and combined-district gaps.
+
+Normal lot placement/movement must present only the new/moved lot, preserving other
+lot instance IDs. Explicitly register town-center/harbor side effects; do not rely on
+RebuildDistrictLots. Harbor ship profiles load asynchronously. Deferred sidewalk
+repair applies masks to newly created lot surfaces without rebuilding every survivor.
+Skip ground-paint/snow refresh where placement did not change that underlying data.

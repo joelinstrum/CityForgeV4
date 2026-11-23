@@ -68,7 +68,7 @@ namespace CityForge.World
         }
         internal void Register(DistrictAudioEmitter emitter) { if (!emitters.Contains(emitter)) emitters.Add(emitter); }
         internal void Unregister(DistrictAudioEmitter emitter) { emitters.Remove(emitter); }
-        private void LateUpdate() { Tick(Mathf.Min(Time.unscaledDeltaTime, .1f)); }
+        private void LateUpdate() { if(PrototypeRegionView.ZoningSimulationPaused)return; Tick(Mathf.Min(Time.unscaledDeltaTime, .1f)); }
         public static float DistanceGain(float distance, float radius)
         { return 1f - Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(distance / radius)); }
         public static bool DetailEnabled(int zoom, bool riding) => zoom <= 1 || riding;

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections;
 using CityForge.Lots;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -10,6 +11,29 @@ namespace CityForge.World
     {
         internal const float DistrictGridCellMeters = LotDefinition.TileMeters;
         private bool showDistrictGrid;
+        private bool districtGridDirty=true,districtGridReady;
+        private int districtGridVersion,gridHeightDistrict=-1;
+        private Coroutine districtGridJob;
+        private readonly Dictionary<Vector2Int,float> districtGridHeights=new();
+        internal int DistrictGridBuilds {get;private set;}
+        private void InvalidateDistrictGridHeights(Rect? area=null)
+        {
+            if(area.HasValue)
+            {
+                var bounds=area.Value;bounds.min-=Vector2.one*.01f;bounds.max+=Vector2.one*.01f;
+                var keys=new List<Vector2Int>();foreach(var key in districtGridHeights.Keys)
+                    if(bounds.Contains((Vector2)key/1000f))keys.Add(key);
+                foreach(var key in keys)districtGridHeights.Remove(key);
+            }
+            else districtGridHeights.Clear();
+            RefreshDistrictGrid();
+        }
+        private float GridHeight(Vector2 point)
+        {
+            var key=Vector2Int.RoundToInt(point*1000);
+            if(!districtGridHeights.TryGetValue(key,out var height))districtGridHeights[key]=height=LotHeight(point);
+            return height;
+        }
         private MeshFilter districtGrid;
         private MeshFilter roadStartTile;
         private Vector2Int? highlightedRoadCell;
@@ -69,17 +93,52 @@ namespace CityForge.World
         private void ToggleDistrictGrid()
         {
             showDistrictGrid = !showDistrictGrid;
+            if(!showDistrictGrid){if(districtGrid)districtGrid.gameObject.SetActive(false);return;}
+            if(districtGridReady&&!districtGridDirty&&gridHeightDistrict==SelectedDistrict)
+            {districtGrid.gameObject.SetActive(true);return;}
             RefreshDistrictGrid();
         }
 
         private void RefreshDistrictGrid()
         {
-            if (SelectedDistrict < 0 || !showDistrictGrid)
+            districtGridDirty=true;districtGridVersion++;
+            if(gridHeightDistrict!=SelectedDistrict)
             {
-                if (districtGrid) districtGrid.gameObject.SetActive(false);
-                return;
+                gridHeightDistrict=SelectedDistrict;districtGridHeights.Clear();districtGridReady=false;
+                if(districtGrid)districtGrid.gameObject.SetActive(false);
             }
+            if(SelectedDistrict<0){if(districtGrid)districtGrid.gameObject.SetActive(false);return;}
+            // Prewarm once after district loading; hidden preview changes only dirty
+            // the cache. No terrain sampling or whole-mesh rebuild on a cached toggle.
+            if(districtGridJob==null && (showDistrictGrid||!districtGridReady))
+                districtGridJob=StartCoroutine(BuildDistrictGridQueue());
+        }
 
+        private IEnumerator PrepareDistrictGridStages()
+        {
+            // Finish first-use work under the district loading overlay, so the first
+            // G press is a cached visibility change too, not just subsequent presses.
+            if(districtGridJob!=null){StopCoroutine(districtGridJob);districtGridJob=null;}
+            if(SelectedDistrict<0 || districtGridReady&&!districtGridDirty)yield break;
+            districtGridDirty=false;
+            yield return BuildDistrictGridMesh(districtGridVersion);
+        }
+
+        private IEnumerator BuildDistrictGridQueue()
+        {
+            yield return null;
+            while(districtGridDirty && SelectedDistrict>=0)
+            {
+                while(DistrictLoading)yield return null;
+                districtGridDirty=false;
+                yield return BuildDistrictGridMesh(districtGridVersion);
+            }
+            districtGridJob=null;
+        }
+
+        private IEnumerator BuildDistrictGridMesh(int version)
+        {
+            var timer=System.Diagnostics.Stopwatch.StartNew();
             if (!districtGrid)
             {
                 var root = new GameObject("District construction grid", typeof(MeshFilter), typeof(MeshRenderer));
@@ -125,8 +184,10 @@ namespace CityForge.World
                 for (int line = 0; line <= cells; line++)
                 {
                     float offset = line * spacing;
-                    if (line < cells || !eastNeighbor) AddLine(origin + Vector2.right * offset, Vector2.up);
-                    if (line < cells || !northNeighbor) AddLine(origin + Vector2.up * offset, Vector2.right);
+                    if (line < cells || !eastNeighbor){var work=AddLine(origin+Vector2.right*offset,Vector2.up);while(work.MoveNext())yield return work.Current;}
+                    if(version!=districtGridVersion)yield break;
+                    if (line < cells || !northNeighbor){var work=AddLine(origin+Vector2.up*offset,Vector2.right);while(work.MoveNext())yield return work.Current;}
+                    if(version!=districtGridVersion)yield break;
                 }
             }
 
@@ -146,16 +207,19 @@ namespace CityForge.World
                             AddSegment(Vector2.Lerp(a, b, (float)step / steps), Vector2.Lerp(a, b, (float)(step + 1) / steps));
                     }
 
+            if(version!=districtGridVersion)yield break;
             var mesh = districtGrid.sharedMesh;
             mesh.Clear();
             mesh.SetVertices(vertices);
             mesh.SetIndices(indices, MeshTopology.Lines, 0);
-            districtGrid.gameObject.SetActive(true);
+            districtGridReady=true;DistrictGridBuilds++;
+            districtGrid.gameObject.SetActive(showDistrictGrid);
 
-            void AddLine(Vector2 start, Vector2 direction)
+            IEnumerator AddLine(Vector2 start, Vector2 direction)
             {
                 for (int sample = 0; sample < cells; sample++)
                 {
+                    if(timer.Elapsed.TotalMilliseconds>=4){yield return null;timer.Restart();if(version!=districtGridVersion)yield break;}
                     var a = start + direction * (sample * spacing);
                     var b = a + direction * spacing;
                     intervals.Clear();
@@ -175,8 +239,8 @@ namespace CityForge.World
             void AddSegment(Vector2 a, Vector2 b)
             {
                 int index = vertices.Count;
-                vertices.Add(new Vector3(a.x, LotHeight(a) + .24f, a.y));
-                vertices.Add(new Vector3(b.x, LotHeight(b) + .24f, b.y));
+                vertices.Add(new Vector3(a.x, GridHeight(a) + .24f, a.y));
+                vertices.Add(new Vector3(b.x, GridHeight(b) + .24f, b.y));
                 indices.Add(index); indices.Add(index + 1);
             }
         }

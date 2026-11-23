@@ -102,6 +102,7 @@ namespace CityForge.World
 
         private void Update()
         {
+            if(PrototypeRegionView.ZoningSimulationPaused)return;
             elapsed += Time.deltaTime;
             foreach (var worker in workers) UpdateWorker(worker);
         }

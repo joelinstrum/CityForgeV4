@@ -51,15 +51,16 @@ namespace CityForge.World
             });
             ForestAdditions=ForestAdditions.Where(t=>!Contains(new Vector2(t.x,t.z))).ToArray();additionIndex=null;WoodlandRevision++;
             // Clear district paint and path segments within the developed parcel; authored lot details live separately.
+            bool paintChanged=false;
             foreach(var tile in districtGroundPaint.tiles)
             {
                 if(!footprints.Any(f=>f.Bounds.Overlaps(new Rect(tile.Minimum,Vector2.one*GroundPaintData.TileMeters))))continue;
                 var bytes=tile.Read();bool dirty=false;
                 for(int z=0;z<GroundPaintData.Resolution;z++)for(int x=0;x<GroundPaintData.Resolution;x++)
                 {var p=tile.Minimum+new Vector2(x+.5f,z+.5f)*GroundPaintData.PixelMeters;if(!Contains(p))continue;Array.Clear(bytes,(z*GroundPaintData.Resolution+x)*GroundPaintData.Layers,GroundPaintData.Layers);dirty=true;}
-                if(dirty){tile.editing=bytes;tile.Flush();}
+                if(dirty){tile.editing=bytes;tile.Flush();paintChanged=true;}
             }
-            districtGroundPaint.PruneEmpty();RebuildGroundPaint();
+            if(paintChanged){districtGroundPaint.PruneEmpty();RebuildGroundPaint();}
             bool pathsChanged=false;
             foreach(var lot in records)
             {

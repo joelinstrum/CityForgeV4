@@ -54,22 +54,30 @@ namespace CityForge.World
         {
             land = landscape;
             water = new WildlifeWaterAccess(land);
-            AddVessel(HarborVesselKind.Galleon, "Galleon/GalleonVisit", 12f, 9f, 3.15f, 2.2f, 8f);
-            AddVessel(HarborVesselKind.CargoBarge, "WoodenBargeV01", 5.25f, 5f, 1.65f, .65f, 10f);
-            AddVessel(HarborVesselKind.PirateShip, "PirateShip/PirateShipVisit", 11f, 8.5f, 2.65f, 1.8f, 9f);
-            if (vessels.Count > 0 && isActiveAndEnabled) visits = StartCoroutine(VisitPorts());
+            if(isActiveAndEnabled)visits=StartCoroutine(LoadVesselsAndVisit());
         }
 
-        private void AddVessel(HarborVesselKind kind, string resource, float clearance, float halfLength, float halfBeam,
-            float draft, float speed)
+        private IEnumerator LoadVesselsAndVisit()
         {
-            var prefab = Resources.Load<GameObject>("Lots/HarborTraffic/" + resource);
-            if (prefab) vessels.Add(new VesselProfile(kind, prefab, clearance, halfLength, halfBeam, draft, speed));
+            yield return LoadVessel(HarborVesselKind.Galleon,"Galleon/GalleonVisit",12f,9f,3.15f,2.2f,8f);
+            yield return LoadVessel(HarborVesselKind.CargoBarge,"WoodenBargeV01",5.25f,5f,1.65f,.65f,10f);
+            yield return LoadVessel(HarborVesselKind.PirateShip,"PirateShip/PirateShipVisit",11f,8.5f,2.65f,1.8f,9f);
+            if(vessels.Count>0)yield return VisitPorts();
+            visits=null;
+        }
+
+        private IEnumerator LoadVessel(HarborVesselKind kind,string resource,float clearance,float halfLength,float halfBeam,float draft,float speed)
+        {
+            if(vessels.Exists(v=>v.Kind==kind))yield break;
+            while(PrototypeRegionView.ZoningSimulationPaused)yield return null;
+            var request=Resources.LoadAsync<GameObject>("Lots/HarborTraffic/"+resource);
+            yield return request;
+            if(request.asset is GameObject prefab)vessels.Add(new VesselProfile(kind,prefab,clearance,halfLength,halfBeam,draft,speed));
         }
 
         private void OnEnable()
         {
-            if (vessels.Count > 0 && visits == null) visits = StartCoroutine(VisitPorts());
+            if(land&&visits==null)visits=StartCoroutine(LoadVesselsAndVisit());
         }
 
         private void OnDisable()
@@ -91,6 +99,7 @@ namespace CityForge.World
             var route = new List<Vector2>();
             while (true)
             {
+                while(PrototypeRegionView.ZoningSimulationPaused)yield return null;
                 ports.Clear();
                 foreach (var lot in land.View.PlacedLots)
                     if (land.Contains(lot.center) && lot.definition.AttractsVessels) ports.Add(lot);
@@ -135,6 +144,7 @@ namespace CityForge.World
                     var position = vessel.transform.position;
                     bool berthed = PortStillValid() &&
                         Vector2.Distance(new Vector2(position.x, position.z), berth.Position) < .1f;
+                    if (berthed) land.View.HarborVesselArrived(port, profile.Kind);
                     var landing = berthed ? land.View.HarborLandingFor(port) : null;
                     var gangway = landing ? landing.Connect(vessel.transform, profile.Kind) : null;
                     var crew = berthed ? HarborDockWorkers.Begin(vessel.transform, land.View, port, profile.Kind) : null;
@@ -278,6 +288,7 @@ namespace CityForge.World
             var rotation = Heading(alongside);
             while (portStillValid() && Quaternion.Angle(vessel.transform.rotation, rotation) > .5f)
             {
+                while(PrototypeRegionView.ZoningSimulationPaused)yield return null;
                 vessel.transform.rotation = Quaternion.RotateTowards(vessel.transform.rotation, rotation, 50f * Time.deltaTime);
                 yield return null;
             }
@@ -285,6 +296,7 @@ namespace CityForge.World
             float length = Vector2.Distance(from, to);
             for (float distance = 0; distance < length && portStillValid();)
             {
+                while(PrototypeRegionView.ZoningSimulationPaused)yield return null;
                 distance += Time.deltaTime * 2f;
                 var point = Vector2.Lerp(from, to, distance / length);
                 if (!water.Wet(point, out _, out float level)) yield break;
@@ -316,6 +328,7 @@ namespace CityForge.World
             int visited = 0;
             while (open.Count > 0)
             {
+                while(PrototypeRegionView.ZoningSimulationPaused)yield return null;
                 int index = open.Dequeue();
                 Vector2 point = Point(index);
                 int x = index % side, y = index / side;
@@ -389,6 +402,7 @@ namespace CityForge.World
                 float length = Vector2.Distance(from, to);
                 for (float travelled = 0; travelled < length && portStillValid();)
                 {
+                    while(PrototypeRegionView.ZoningSimulationPaused)yield return null;
                     travelled += Time.deltaTime * speed;
                     Vector2 point = Vector2.Lerp(from, to, travelled / length);
                     if (!water.Wet(point, out _, out float level)) yield break;

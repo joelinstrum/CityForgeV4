@@ -109,6 +109,7 @@ namespace CityForge.World
         }
         void Update()
         {
+            if(PrototypeRegionView.ZoningSimulationPaused)return;
             if(!initialized)return;
             if((Current==WeatherKind.Snow&&!Winter)||(Current==WeatherKind.Rain&&Winter))SetWeather(WeatherKind.Clear);
             RefreshMenu();if(Current==WeatherKind.Clear&&!IsClearing)return;

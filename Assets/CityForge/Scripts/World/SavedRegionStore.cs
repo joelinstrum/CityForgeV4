@@ -21,6 +21,9 @@ namespace CityForge.World
         public bool hasClockHour, clockPaused;public float clockHour;
         public bool animals;
         public string[] readMessages;
+        public RegionEventState[] events;
+        public bool immigrationPaused, developerMode;
+        public DistrictLotRecord[] pendingPlayerLots;
         // Also supports climate on legacy coastal maps without inventing a creation recipe.
         public RegionClimate climate;
         public RegionCreationSettings creation;
@@ -105,6 +108,10 @@ namespace CityForge.World
             var info=new SavedRegionInfo{animals=view.AnimalsEnabled,id=id??view.SavedRegionId??Guid.NewGuid().ToString("N"),name=name??view.RegionName,season=(int)view.Season,timeOfDay=view.TimeOfDay,hasClockHour=true,clockHour=view.CurrentClockHour,clockPaused=view.ClockPaused,terrainHeightRange=view.TerrainHeightRange,seed=view.Data.Seed,size=(int)view.Size,district=view.SelectedDistrict,meadow=view.PrefersMeadow,waterBodies=view.Data.WaterBodies,waterless=view.Waterless,coastline=view.Coastline,coastVersion=view.CoastVersion,minimalRiverCrest=view.MinimalRiverCrest,stillWater=false,lakeWaterVersion=LakeWaterRenderer.UsesCalmWater(view)?1:-1,riverBedVersion=view.RiverBedVersion,savedUtc=DateTime.UtcNow.ToString("O"),baselineVersion=baseline?baseline.generationVersion:0,camera=view.GetComponentInChildren<CameraSystem.CityForgeCameraController>().CaptureRegionState()};
             info.deepHarborDistricts = view.DeepHarborDistricts;
             info.readMessages = view.CaptureReadRegionMessages();
+            info.events = view.CaptureRegionEvents();
+            info.immigrationPaused = view.ImmigrationPaused;
+            info.developerMode = view.DeveloperMode;
+            info.pendingPlayerLots = view.PendingPlayerLots.ToArray();
             info.townZones = view.CaptureTownZones();
             info.townZoneGridVersion = PrototypeRegionView.TownZoneGridVersion;
             info.districtRoads = view.CaptureDistrictRoads();
@@ -146,6 +153,8 @@ namespace CityForge.World
             PrototypeRegionView.ValidateParkPaths(snapshot.info.parkPaths,(snapshot.info.creation?.GridSide??2)*(snapshot.info.creation?.GridSide??2),NativeCampPlanner.MapSide(snapshot.info.size,snapshot.info.creation?.GridSide??2));
             RegionTown.Validate(snapshot.info.towns);
             int districtGrid = snapshot.info.creation?.GridSide ?? 2;
+            PrototypeRegionView.ValidateLotRecords(snapshot.info.pendingPlayerLots,districtGrid*districtGrid);
+            RegionEventState.Validate(snapshot.info.events, districtGrid * districtGrid, NativeCampPlanner.MapSide(snapshot.info.size, districtGrid));
             PrototypeRegionView.ValidateDeepHarbors(snapshot.info.deepHarborDistricts, districtGrid * districtGrid);
             ValidateZones(snapshot.info, districtGrid);
             snapshot.info.resources?.Validate();
@@ -225,9 +234,11 @@ namespace CityForge.World
             if(info!=null&&!json.Contains("\"meadowCacheDistrict\""))info.meadowCacheDistrict=info.district>=0?info.district:3;if(info==null||info.schema!=1||(int)info.climate<0||(int)info.climate>1||info.season<0||info.season>2||info.size<0||info.size>2||!Finite(info.terrainHeightRange)||info.terrainHeightRange<0||info.terrainHeightRange>10000||info.district< -1||info.district>=(info.creation?.GridSide??2)*(info.creation?.GridSide??2)||string.IsNullOrWhiteSpace(info.name))throw new InvalidDataException("Unsupported region metadata.");if(info.creation!=null)info.creation.Validate();PlayerLakeGeometry.Validate(info.waterBodies);PlayerChannelGeometry.Validate(info.waterBodies);ForestAdditionValidation.Validate(info.forestAdditions,info.creation?.GridSide??2,NativeCampPlanner.MapSide(info.size,info.creation?.GridSide??2));ForestRemovalValidation.Validate(info.forestRemovals,info.creation?.GridSide??2);DistrictConnections.Validate(info.combinedDistricts,info.creation?.GridSide??2);NativeCampPlanner.Validate(info.nativeCamps,info.creation?.GridSide??2,NativeCampPlanner.MapSide(info.size,info.creation?.GridSide??2));RegionTown.Validate(info.towns);
             // Unity may materialize an absent inline object with zeroed fields.
             if (info.resources?.resolution == 0) info.resources = null;
+            RegionEventState.Validate(info.events, (info.creation?.GridSide??2)*(info.creation?.GridSide??2), NativeCampPlanner.MapSide(info.size, info.creation?.GridSide??2));
             info.resources?.Validate();
             int gridSide = info.creation?.GridSide ?? 2;
             PrototypeRegionView.ValidateLotRecords(info.lots, gridSide * gridSide);
+            PrototypeRegionView.ValidateLotRecords(info.pendingPlayerLots, gridSide * gridSide);
             ZoneGroundPlane.Validate(info.zoneGroundPlanes,gridSide*gridSide);
             PrototypeRegionView.ValidateDeepHarbors(info.deepHarborDistricts, gridSide * gridSide);
             ValidateZones(info, gridSide);

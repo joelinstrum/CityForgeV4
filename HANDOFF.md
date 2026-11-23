@@ -1,3 +1,370 @@
+# Repeated zoning stress test — November22,2026
+
+A24-block test reproduces progressive click latency:8x3 blocks (96 parcels),12 R2
+medium-wealth/cobblestone then12 R1 low-wealth/dirt. Before the fix, clicks8/10/24
+cost406/482/1316ms; earlier road objects were replaced on every later placement.
+
+CutPlanes must tolerate one native normalized terrain-height storage step (1/32766).
+Requested13m and sampled13.00128m previously caused false dirty/sync reports even
+when the stored heightmap was unchanged; this triggered whole-road rebuilds. The
+PreparedGroundChecks regression now requires Finish=false for unchanged flat grades,
+in addition to exact before/after height samples and retained undo baselines.
+
+CommitNewRoadPieces calls RefreshRoadShoulderDetails(deferSidewalks:true). Queue and
+coalesce sidewalk repairs instead of synchronously rebuilding all sidewalks/recess
+on each click. BuildRoadRecess is a finite row-sliced job (~4ms CPU budget), retaining
+the old texture until its replacement is complete and rebinding road/junction materials.
+Loading/real terrain-change paths retain the synchronous wrapper. A canceled paced
+job must finish its matching recess field on restart even when masks were already
+cached; do not gate that recovery solely on roadMasksChanged. Existing road objects
+survive flat-ground placement. No periodic gameplay scans were introduced.
+Final24-block run: click8/10/24 now21.5/25.4/68.2ms (last19.3× faster).
+All surviving road object IDs retained; all1050625 height samples unchanged; zoning
+pause retained. Final queued sidewalk job drained; recess covers every road and all
+road materials bind the finished texture. Final-drain max rendered frame33ms. First
+post-placement frame still had a411ms cold-start delay; do not claim every frame is
+under70ms. This tests96 unbuilt parcels, not96 inhabited homes. Prepared-ground,
+event, Player growth and selective deletion checks all passed. Outputs in this chat:
+Zone-Stress-Test/{Results.txt,Before.csv,Timings.csv,24-Blocks.png,Deferred-Repair.txt}.
+
+# Flat-ground zone placement work — November22,2026
+
+User reports2–3s on clicking the ground to commit an8×3 block (not stamp selection).
+Isolated small fixture: full legal R2 commit88.99ms, prepare5.11ms, creating roads38.98ms,
+CommitBlockGroundPlane40.06ms, lamps0.93ms, growth queue0.30ms, overlay1.62ms.
+The full reported stall is NOT reproduced by this fixture; do not claim it solved.
+
+ApplyZoneGroundPlanes now returns whether actual terrain samples changed. When none
+changed, CommitBlockGroundPlane retains existing road presentation, ground paint and
+park paths instead of destroying/rebuilding the whole district. New road ribbons alone
+are resampled against the committed datum. CommitNewRoadPieces already presented roads
+and queued sidewalk repairs. Real height changes retain the existing refresh path.
+Post-change legal commit80.12ms; the1050625-sample comparison still has zero changes.
+This is a limited redundant-work fix, not proof of the cause of the full2–3s pause.
+
+# Preserve prepared ground during zoning — November22,2026
+
+DistrictLotGrading.CutPlanes blends new zone banks from CURRENT terrain samples,
+not the original undo baseline. The old path could resurrect pre-terraform contours
+in a new block's feather. Keep original[] for reversal only. Same nature-stroke
+start/union behavior remains. CommitBlockGroundPlane detects an already flat current
+platform and uses that actual height rather than a stale overlapping plane's datum.
+Existing nonflat adjoining rules and the legacy water safety floor remain.
+PreparedGroundChecks exercises rectangular/diagonal banks over land normalized to
+sea+1 with a different retained native baseline: all16641 samples must stay exactly
+unchanged, and Restore must still recover the native heights. Do not substitute a
+check of plane.height for a comparison of actual surrounding terrain samples.
+Full isolated runtime CommitZonedBlock passed with medium-wealth R2 8×3 parcels:
+all1050625 terrain samples unchanged, zero height delta after actual placement.
+PreparedGroundChecks plus event/Player/deletion regressions passed. Native Terrain
+height quantization is retained; flat target uses the actual sampled platform level.
+Primary Play session and saves untouched; restart Play then re-level affected ground
+with Lots & Zones to remove previously authored ripples before fresh placement.
+
+# Lots & Zones leveling preset — November22,2026
+
+Terraforming defaults to Lots & Zones (appended enum value4, preserving legacy mode
+values). Its fixed datum is SeaLevel +1m +Offset: zero adjustment is labelled Ideal
+for lots and zones. The centered slider has an Ideal marker, live water-clearance
+caption and Reset to ideal. Selecting legacy modes retains their relative behavior.
+The fixed preset skips terrain statistics and remains consistent across strokes.
+Existing prebuilt block grading extends the prepared plane; keep its adjoining-plane
+rule and legacy sea+.2m safety floor. No saved terrain or old leveling targets are
+raised automatically. Tropical water datums use the same relative clearance.
+Isolated runtime QA passed exact target/offset, rectangular and diagonal prebuilt
+block grading at the prepared height, centered slider/live label/reset and UI render.
+
+# Government & Policies dashboard — November22,2026
+
+The courthouse Game icon now opens a1600×900 responsive Government & Policies modal
+using the user's supplied dashboard panorama and two icon/illustration atlases.
+Native Unity UI builds all text, cards and controls; artwork is private/ignored in
+Resources/UI/Gameplay/Government/{Dashboard,Icons,Illustrations}.png. Originals were
+copied unchanged from Downloads; normalized UV crops avoid import-size dependence.
+Preload art/font with HUD loading; no synchronous image imports on the modal click.
+
+Overview has the six policy cards, live immigration toggle, Game Mode switch, actual
+population/unhoused/available/reserved counts, and Policies/Events tabs. Sidebar adds
+a dedicated Game Mode page with explicit Player/Developer choices and active styling.
+Choices use existing setters/save flags; no new mode semantics or save schema.
+Immigration has its existing running/paused control and real JSON arrival/housing
+figures. Events displays saved per-council arrival and housed totals with scrolling.
+Treasury/Taxes/Labor & Rights/Trade/Public Services are labelled Not yet available:
+no invented budgets, tax rates, happiness, wealth or enabled labor policies from the
+reference painting. Future mechanics require implementation before enabling settings.
+
+GovernmentModalFit responds to viewport dimension changes, not polling. Close/Escape
+restores camera state. HUD/stat labels refresh on actual state changes. Existing
+simulation behavior behind Game remains; zoning's separate all-freeze lease persists.
+Private art is not shared through Git; copy the ignored folder through the normal
+private-asset workflow for other Unity instances. Source-only fallback stays usable.
+
+Isolated UI QA passed overview/detail immigration toggles, explicit Player/Developer
+choices/active states, actual SavedRegionStore.Capture settings, real saved event
+history, all eight sidebar destinations, compact1000×650 fit, close/camera restoration
+and reopening. Modal creation39.84ms with preloaded art. Existing event/Player checks
+passed. Final screenshots and Verification.txt are in this chat's Government-Dashboard
+outputs. Primary session and normal saves untouched. One Play restart loads this UI
+and the preceding Harbor placement fixes together.
+
+# Incremental Harbor Council placement — November22,2026
+
+CommitLotPlacement no longer calls RebuildDistrictLots for new or moved lots. Add only
+the new lot through PresentDistrictLotBatch(...,deferSidewalks:true); moving removes
+and replaces only its own view while preserving record/event identity. Clear replaced
+lot views selectively as well. Queue shared sidewalk repair; only newly created lot
+surfaces need deferred street-mask application. Preserve all neighboring root IDs,
+materials, grading and live actors. Register town-center state and harbor traffic
+explicitly since these previously depended on the full rebuild's side effects.
+
+HarborVesselVisits initializes its three vessel profiles using Resources.LoadAsync,
+then starts the unchanged visit/docking loop. Do not restore synchronous ship prefab
+loads inside placement. Disable stops the initialization/visit coroutine; enable
+resumes missing profiles without duplicates. Zoning pause is respected. Actual
+confirmed berth arrival remains the only immigration trigger.
+
+ClearDevelopedSites rebuilds district ground paint only when touched paint changed.
+ApplyLotGrading skips snow-ground refresh when no terrain cut changed; actual cuts
+update the affected snow/grid bounds rather than rebuilding the district-wide snow
+surface. Native materials and shoreline appearance are retained.
+
+Isolated legal-waterfront runtime: Harbor Council placement35.84ms, move/recommit
+24.44ms; all24 preexisting lot roots kept exact IDs and the council retained its own
+record ID on move. All3 ship profiles loaded asynchronously in0.18s while editor
+updates continued. Screenshot/verification outputs are under Harbor-Placement in
+this chat. Main Play and normal player saves were untouched.
+
+# Responsive demolition and cached grid — November22,2026
+
+Selected-lot and rectangle demolition now remove affected views in place instead of
+RebuildDistrictLots destroying/reinstantiating every survivor. Preserve root IDs,
+materials, live neighboring actors and foundation data. Remove owned building/eagle/
+tree/platform/worker registrations, population holds and residential ground indices;
+queue housing updates. Restore standalone cuts locally while protecting surviving
+lots, roads and shared zone/terraform grades. Shared block grades survive home deletion.
+ResidentialGroundBatches.Remove compacts triangle indices once, not RemoveRange per
+triangle. Area clears avoid unrelated road and lot rebuilds; explicit actor clears
+still rebuild their actor presentation where needed.
+
+Deletion queues one coalesced, paced sidewalk rebuild. Keep old sidewalks visible
+until the replacement is ready. Reuse unchanged pavement masks and leave other lot
+surface masks / park paths / road recess unchanged. Road edits and teardown cancel
+queued work safely and dispose old assets. Navigation gets a completion notification.
+
+District grid toggles reuse completed geometry. Initial preparation and dirty rebuilds
+are finite event-driven coroutine jobs with4ms CPU slices, never a blocking full-
+district rebuild inside a toggle or hover callback. Shared grid-vertex heights cache
+terrain samples; actual lot/ground/district changes invalidate them, including feather
+bounds and edge samples. Preview changes coalesce; hidden previews only dirty ready
+geometry. First preparation finishes under the district loading overlay through
+PrepareDistrictGridStages, so even the first toggle does no terrain sampling. Preserve parcel interior clipping, diagonal edges and combined-district gaps.
+
+Isolated24-home runtime:1000 cached toggles11.67ms total, selected deletion18.87ms,
+one-parcel area deletion15.86ms. All24 neighboring lot roots retained exact instance
+IDs. Queued grid/sidewalk repairs completed; screenshots/Verification.txt in this
+chat's Interaction-Performance outputs. Initial grid preparation is included in district loading; QA verified only0.1ms
+additional wait before the first interaction. Dirty rebuilds remain time-sliced.
+InteractionPerformanceChecks checks local grading restoration, protected neighbors
+and shared grades, plus event/Player regressions. Main session/player saves untouched.
+
+# Event-driven immigration / whole-parcel reservations — November22,2026
+
+Docking discovers destinations once and reserves one whole residential parcel per
+representative household (normally10 actual people). Authored4×4 parcels count once,
+not once per painted cell. Auto paint is partitioned into fitting layout footprints.
+Occupied and reserved homes are excluded globally across source councils. Saved
+assignment IDs/cells/points are retained while route planning/walking; no rediscovery
+or destination reshuffling in route retries. Existing safety and shortest-road rules
+remain. Blocked pedestrians explicitly queue a retry to the same assigned lot.
+
+Overflow uses commercial lots/zones as temporary refuge, otherwise waits at the harbor.
+Commercial arrivals retain awaitingHousing and stay in the persistent pending ledger
+after fading; they do not count as housed or create residential/shop demand. New housing
+can receive existing harbor/commercial waiters when that actual edit updates the ledger.
+Unhoused includes reserved/en-route/construction groups until physical home entry.
+Game shows unhoused population and available/reserved residential parcel counts.
+Occupied-home demolition returns its associated population to waiting, preserving totals.
+
+Removed timed vacancy refreshes, periodic destination validation/reassignment and8-second
+growth retries. MarkImmigrationSitesChanged coalesces real zoning/road/terrain/building
+mutations (deferred by zoning pause); one initial load and docking also rebuild the
+snapshot. Once all queued route work is done, nextEventTick is infinity until a new
+event. Route retry timers schedule movement work only. Construction completion wakes
+assigned residents immediately; the redundant10-second post-construction hold is gone.
+The zoning all-freeze contract and manual pause restoration remain intact.
+
+Runtime QA passed24 unique reservations/two boats,24 homes/240 people moved in, and a
+third120-person boatload staying unhoused at the harbor when no space/refuge existed.
+100 routing ticks after assignment and100 harbor-wait ticks performed zero destination
+scans. Save/reopen retained Player mode and120 unhoused people. Rule checks cover
+commercial overflow, pending commercial settlement and saved awaitingHousing. Test
+neighborhood uses connected streets on a cleared pad; tree/water/slope safety remains
+mandatory. Screenshots and Runtime-Verification.txt are in this chat's
+Immigration-Assignments outputs. Primary session and normal saves untouched.
+
+# Zoning pauses gameplay — November22,2026
+
+Opening Zones acquires an event-driven pause lease. Time.timeScale0 plus explicit
+clock/event/growth/pedestrian/worker/wildlife/NPC guards stops background gameplay.
+Enabled world animators and playing particles are snapshotted once at entry and
+paused; gameplay audio pauses. No per-frame scene discovery. Camera, UI, authoring
+and rendering remain usable. Hiding the menu to paint/place does NOT release pause.
+Repeated prebuilt stamps retain it after commit while the next stamp stays armed.
+Cancelling the last stamp with no menu visible, closing Zones or leaving the section
+releases it. ArmZone/ArmRectangularZonedBlock also acquire pause explicitly.
+Restore exact prior time scale/audio state and only animation/particle states owned
+by the lease. Previously disabled/paused effects remain so. OnDisable/OnDestroy
+release the lease. Manual clockPaused is never overwritten. Do not persist the
+transient editing pause in a save.
+
+Simulation deadlines in immigration, growth, lot readiness and construction dust
+use scaled Time.time, preventing timers expiring behind zoning and catch-up after
+resume. UI preview throttles keep real time. Ship route search/sailing/docking yields
+while paused. Leave camera-dependent render/LOD updates running for authoring.
+Crest presentation and native terrain appearance are unchanged.
+
+Isolated actual-menu QA passed frozen simulation time, clock, scaled coroutine,
+animators, particles and audio; committing a stamp while armed; manual zone brush;
+cancelling/closing and restoring prior0.75 speed; preserved manual clock pause and
+previously disabled/paused effects; view destruction restoring global state.
+Screenshots and Verification.txt are in this chat's Zoning-Pause outputs. Primary
+session, normal saves and other Unity instance were untouched. Restart Play to load.
+
+# Harbor / Player-growth performance correction — November22,2026
+
+A council with no unsettled immigrants used to rebuild destination sites every2s,
+including per-cell road-triangle frontage checks. Skip idle councils entirely.
+Vacant goals now use cached spatial street segments, cheap street-side points and a
+bounded256-result cache (revision invalidation/10s refresh); construction retains
+full authoritative site/frontage validation. Avoid CaptureTownZones sorting/record
+allocation in discovery. Pending diagonal home growth is behind the scheduler, not
+every frame; Player candidates are filtered by actual arrivals before layout searches.
+
+Road search supports resumable Search.Step() while preserving the synchronous
+TryRoute API and shortest-path rules. Immigrant planning uses8ms slices, retained
+road-search state and bounded8192-entry-per-live-person clearance memoization in2m
+sections. Short-budget failures retry quickly; genuinely blocked paths back off.
+Preserve target preference across interrupted attempts and invalidate cached work on
+road/lot/presentation changes and QueueLotGrowth. Do not replace this with a hard
+restart timeout: QA proved that stranded all passengers on some valid paths.
+
+Final isolated acceptance passed existing event/Player rules, resumable graph checks,
+zero-population/physical-arrival construction gates and all120 represented residents
+moving in. Measured100 idle council ticks8.83ms total with zero site rebuilds;
+16,384-cell initial discovery20.09ms;100 cache reads1.13ms total. These are subsystem
+benchmarks, not measured FPS for the user's affected capital. The affected capital
+state has not yet been identified for an exact reproduction. Primary Play and normal saves were untouched.
+Machine showed roughly15GB swap in use; concurrent editor memory may compound stalls.
+See this chat's Player-Growth/Runtime-Verification.txt and Region_Events.md.
+
+# Player growth and residential domestic animals — November22,2026
+
+Player is now the default for new/legacy regions without mode metadata. The private
+courthouse Game icon opens saved per-region Player/Developer and immigration controls.
+Developer bypasses population/arrival growth gates; Player keeps zero-population
+private zoning empty. Existing buildings remain. Low-wealth settlers can target
+vacant road-served residential zoning, physically arrive, unlock one home parcel,
+wait for construction and enter/fade. Pending diagonal templates follow the same gate.
+Commercial starter demand is one shop per120 moved-in people; this is not a full
+housing/employment economy or demand-meter implementation. Save developerMode and
+pendingPlayerLots through capture/open/remake; preserve event arrival flags/cells.
+
+Fixed actual zoned-home category/wealth detection, fragile construction model lookup
+and unreleased population holds. Street-side goals avoid trapping residents inside
+future homes; blocked plots retry and can fall back to eligible completed homes.
+Domesticated species may occupy R1 yards while actual buildings/fences/roads/water
+remain blocked; wild animals retain whole-lot exclusion. Private icon/farm art stays
+ignored. See Region_Events.md and PlayerGrowthChecks.Run.
+
+Isolated runtime QA passed zero-population empty zoning, no construction on harbor
+arrival alone, physical arrival -> construction -> all120 people moved in, actual
+cow placement in a newly built R1 yard, UI mode switches and binary Player save.
+Main Play session and normal player saves were untouched. Screenshots are in this
+chat's Player-Growth outputs. Save and restart primary Play to load these changes.
+
+# Ongoing representative immigration — November22,2026
+
+Harbor immigration now continues indefinitely while enabled:12 visible immigrants
+represent120 actual people per galleon. JSON uses populationPerRepresentative10 and
+maxOccurrences0 (unlimited), retaining the legacy event ID. Gameplay control in the
+top-left pauses/resumes immigration per region; the flag is saved and carried through
+remakes. Pausing does not stop ships or people ashore and does not queue missed visits.
+Counts/population use64-bit values. Existing population is never retroactively scaled.
+
+To support indefinite arrivals, completed representatives compact into settled and
+per-lot population totals; crowded waiting groups acquire additional population
+weight rather than creating unlimited actors. Pending slots and live presentation
+are bounded at96; total population remains exact. Existing moving-in, random balanced
+lot assignment, shortest street routes and source deletion/movement rules remain.
+
+Focused isolated checks passed104 consecutive arrivals (12,480 people), gameplay
+pause/resume, saved pause metadata, legacy defaults, pending-ledger bounds and all
+previous event/move-in regressions. Running Greenbank QA also verified the actual
+Gameplay toggle, saved pause state, resume without catch-up, and two boatloads:
+24 representatives moved in and compacted into240 people with no leftover avatar
+records. The final Gameplay menu screenshots are in Ongoing-Immigration outputs.
+Source/JSON remain separate from private art;
+normal player saves and the primary Play session are untouched. See the current
+Documentation/03_Technical/Region_Events.md and this chat's Ongoing-Immigration outputs.
+
+# Immigrant move-in presentation — November22,2026
+
+Immigrants now choose actual developed low-wealth residential/commercial lots,
+balance reservations across them and randomize nearby alternatives. Empty zones
+keep arrivals waiting until buildings exist. Destination lot IDs persist, and the
+shortest usable connected street/road/sidewalk route is selected before ground
+fallback. They reach0.8m outside the building facade, revalidate the target, then
+fade out over1.2seconds using private material clones and leave the live pedestrian
+list. The town population and settled event record remain; district reload and
+save/reopen do not respawn moved-in bodies. Deleted/moved/ineligible destinations
+are reconsidered; deleting the source still only cancels future waves.
+
+Expanded RegionEventChecks covers balanced12-to-three-lot allocation, vacant-zone
+waiting, residential/commercial and wealth filtering, shortest connected street
+routing, deleted destination rejection and moved-in/assigned-lot save persistence.
+Runtime QA checks all four avatars fade, source materials remain opaque and all12
+bodies are removed while settlement/population records remain. Test captures and
+harnesses are outside Git; main Play and normal saves remain untouched.
+
+# Immigrant first wave — November22,2026
+
+Added JSON regional-event definitions and saved per-lot event progress. Confirmed
+galleon docking at a Harbor Council triggers12 low-wealth arrivals for its first
+three visits. Cargo barges, pirates and unsuccessful approaches do not count.
+Moving preserves progress; demolition cancels remaining waves. Replacements get
+new event identities. Arrived passengers and town population persist across saves;
+passengers wait for reachable low-wealth residential/commercial zoning and follow
+safe one-way routes, then stop. A14-second named-town arrival notice informs the
+player without a modal. Event configuration includes inclusive year eligibility.
+No general calendar trigger is implemented yet; future triggers use dispatch adapters.
+
+Isolated Unity compilation, low-wealth pedestrian regression checks and the focused
+JSON/event/binary-save/navigation lifecycle checks passed. A running Greenbank
+fixture also confirmed all twelve avatars complete their one-way low-wealth-zone
+trips and stop. Spawn points remain connected to the saved landing contact; bounded
+ground navigation can detour around a council without roads. Private art and player
+saves are unchanged. Main Play session remains open; next Play restart loads source.
+See Documentation/03_Technical/Region_Events.md for configuration, behavior and checks.
+
+# Town Center recovery — November22,2026
+
+Added a persistent “Add Town Center” action below the district toolbar whenever
+an established town lacks its center. The capital reopens the original Founder’s
+Building picker (including saved Harbor Council choices); secondary towns open
+Civic Lots. “Choose later” leaves recovery available. Missing capital founders
+are detected from actual placed lots as well as the legacy initial-founding flag,
+so already-saved deletions recover without changing the save schema. Replacement
+placement hides the button. Deletion does not force an automatic modal; initial
+founding retains its existing one-time prompt. Existing resource/era/asset and
+placement validation still apply. Recovery closes conflicting construction tools.
+
+Isolated Unity QA compiled the modified source and passed11 state/UI checks:
+defer/reopen, legacy completed-flag deletion, no forced replacement popup,
+placed/remove visibility and secondary-town civic reopen/replacement. Tests used
+a disposable snapshot and wrote no normal player save. Main Unity was observed
+running the Augusta overview; its active Play session was left untouched. Source
+changes load on the next Play session. Local test harness/captures remain outside Git.
+
 # Terrain shoreline review checkpoint — November22,2026
 
 Source branch: feature/terrain-shoreline-polish, based on main after merged PR28.

@@ -29,11 +29,23 @@ namespace CityForge.UI
             TextLabel(panel,description,new Vector2(175,145),new Vector2(1020,74),24);
             if(terrainSettings.Action==TerraformAction.Level){
                 TextLabel(panel,"Level Mode",new Vector2(170,76),new Vector2(1000,40),27,true);
-                string[] modes={"Lowest Point","Brush Average","Clicked Height","Sea Level"};
-                for(int i=0;i<4;i++){int mode=i;var b=Action(panel,modes[i],modes[i],new Vector2(-206+i*239,22),new Vector2(227,49),()=>{terrainSettings.Level=(TerraformLevel)mode;terrainSettings.Offset=mode==3?.2f:0;Reopen();});b.GetComponentInChildren<Text>().fontSize=21;b.image.sprite=i==(int)terrainSettings.Level?ZoneModalArtwork.Gold:ZoneModalArtwork.Dark;}
+                string[] modes={"Lots & Zones","Lowest Point","Brush Average","Clicked Height","Sea Level"};
+                TerraformLevel[] levels={TerraformLevel.LotsAndZones,TerraformLevel.Lowest,TerraformLevel.Average,TerraformLevel.Clicked,TerraformLevel.Sea};
+                for(int i=0;i<modes.Length;i++){var mode=levels[i];var b=Action(panel,modes[i],modes[i],new Vector2(-232+i*204,22),new Vector2(194,49),()=>{terrainSettings.Level=mode;terrainSettings.Offset=mode==TerraformLevel.Sea?.2f:0;Reopen();});b.GetComponentInChildren<Text>().fontSize=19;b.image.sprite=mode==terrainSettings.Level?ZoneModalArtwork.Gold:ZoneModalArtwork.Dark;}
             }
             SliderRow("Brush size",-64,8,128,terrainSettings.Size," m",v=>terrainSettings.Size=Mathf.Round(v/4)*4,()=>terrainSettings.Size);
-            if(terrainSettings.Action==TerraformAction.Level)SliderRow("Height offset",-156,-12,12,terrainSettings.Offset," m",v=>terrainSettings.Offset=Mathf.Round(v*10)/10,()=>terrainSettings.Offset);
+            if(terrainSettings.Action==TerraformAction.Level){
+                bool ideal=terrainSettings.Level==TerraformLevel.LotsAndZones;
+                var note=TextLabel(panel,"",new Vector2(100,-195),new Vector2(850,28),18);
+                void RefreshNote(){note.text=ideal?(Mathf.Abs(terrainSettings.Offset)<.05f?"Ideal for lots and zones · 1 m above water":$"Building level adjusted · {1f+terrainSettings.Offset:0.#} m above water"):"Height is relative to the selected level mode.";}
+                RefreshNote();
+                SliderRow(ideal?"Height adjustment":"Height offset",-156,-12,12,terrainSettings.Offset," m",v=>{terrainSettings.Offset=Mathf.Round(v*10)/10;RefreshNote();},()=>terrainSettings.Offset);
+                if(ideal){
+                    var tick=Center(panel,"Ideal height marker",new Vector2(310,-130),new Vector2(2,10)).gameObject.AddComponent<Image>();tick.color=Gold;tick.raycastTarget=false;
+                    var marker=TextLabel(panel,"Ideal",new Vector2(310,-112),new Vector2(90,24),16);marker.alignment=TextAnchor.MiddleCenter;marker.color=Gold;
+                }
+                var reset=Action(panel,"Reset ideal terrain height","Reset to ideal",new Vector2(606,-195),new Vector2(160,30),()=>{terrainSettings.Level=TerraformLevel.LotsAndZones;terrainSettings.Offset=0;Reopen();});reset.GetComponentInChildren<Text>().fontSize=17;
+            }
             else if(terrainSettings.Action==TerraformAction.Smooth)SliderRow("Smoothing",-156,.1f,1,terrainSettings.Blend,"",v=>terrainSettings.Blend=v,()=>terrainSettings.Blend);
             else SliderRow("Elevation step",-156,.25f,12,terrainSettings.Step," m",v=>terrainSettings.Step=Mathf.Round(v*4)/4,()=>terrainSettings.Step);
             TextLabel(panel,"Clears trees and objects across the brush and banks.\nDrag to sculpt · Shift: double size · Tab: rotate · Esc: finish\nClick Update Terrain when ready to refresh water and sand",new Vector2(150,-255),new Vector2(980,86),20);

@@ -14,7 +14,7 @@ namespace CityForge.World
         private enum TownSection { None, Transport, Zones, CivicLots, Utilities, Parks, TownInfo }
 
         private RectTransform townModeSwitch, townToolbar, townPanel;
-        private Button natureModeButton, townModeButton;
+        private Button natureModeButton, townModeButton, addTownCenterButton;
         private RectTransform transportModal;
         private readonly Button[] townCategories = new Button[8];
         private TownSection townSection;
@@ -47,6 +47,13 @@ namespace CityForge.World
             townModeButton.GetComponentInChildren<Text>(includeInactive: true).text = "City";
             SkinTownButton(natureModeButton, new Rect(740, 462, 347, 112), 44);
             SkinTownButton(townModeButton, new Rect(1087, 462, 349, 112), 44);
+
+            var recovery = BottomPanel(hud, "Missing Town Center", 14, 250, 40);
+            addTownCenterButton = TownButton(recovery, font, "Add Town Center", 0, 0, 250, OpenMissingTownCenter);
+            addTownCenterButton.image.sprite = ZoneModalArtwork.Dark;
+            addTownCenterButton.image.type = Image.Type.Sliced;
+            addTownCenterButton.image.color = Color.white;
+            addTownCenterButton.GetComponentInChildren<Text>().color = TownGold;
 
             townToolbar = BottomPanel(hud, "Town construction toolbar", 117, 1336, 82);
             string[] labels = { "Transport", "Zones", "Civic Lots", "Utilities", "Parks", "Town Info" };
@@ -138,9 +145,31 @@ namespace CityForge.World
             outline.effectDistance = new Vector2(1, -1);
         }
 
+        private bool MissingTownCenter => SelectedDistrict >= 0 && !DistrictLoading &&
+            (PendingFounder is { } capital && InCapitalDistrict(capital) ||
+             CanOpenCityMenu && Towns.Any(town => ActiveDistrictMembers.Contains(town.DistrictIndex(GridSide))) &&
+             !PlacedLots.Exists(lot => ActiveDistrictMembers.Contains(lot.district) &&
+                 (IsFoundersLot(lot.definition) || lot.definition.id == DistrictTownCenterId)));
+
+        private void OpenMissingTownCenter()
+        {
+            if (!MissingTownCenter || IsSaving) return;
+            CancelRoadPlacement();
+            CloseTownSection();
+            if (PendingFounder != null) OpenFounderPicker();
+            else
+            {
+                SetTownConstruction(true);
+                ShowTownSection(TownSection.CivicLots);
+            }
+        }
+
         private void RefreshTownConstruction()
         {
             if (!townModeSwitch) return;
+            addTownCenterButton.transform.parent.gameObject.SetActive(MissingTownCenter &&
+                !founderPicker && !transportModal && lotPlacementDraft == null && !playerLotWorkspace);
+            addTownCenterButton.interactable = !IsSaving;
             bool available = CanOpenCityMenu;
             if (!available && TownConstructionVisible)
             {
@@ -187,6 +216,7 @@ namespace CityForge.World
                 townPanel = null;
             }
             townSection = TownSection.None;
+            SetZoningGameplayPause(false);
             foreach (var button in townCategories)
                 if (button) MarkTownButton(button, false);
         }
@@ -237,6 +267,7 @@ namespace CityForge.World
                 CancelZonedBlock(false); zoneToolArmed = false;
                 CancelZoneDrag();
                 townPanel.gameObject.SetActive(true);
+                SetZoningGameplayPause(true);
                 return;
             }
             bool toggleOff = townSection == section;
@@ -244,6 +275,7 @@ namespace CityForge.World
             if (toggleOff) return;
             CancelLotPlacement();
             townSection = section;
+            SetZoningGameplayPause(section==TownSection.Zones);
             var category = townCategories[(int)section - 1];
             MarkTownButton(category, true);
 

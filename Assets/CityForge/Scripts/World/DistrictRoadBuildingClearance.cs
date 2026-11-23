@@ -11,11 +11,14 @@ namespace CityForge.World
 
         private readonly struct RoadBuildingFootprint
         {
+            internal readonly Transform Instance;
+            internal readonly Matrix4x4 ObstacleMatrix;
             private readonly Vector2 center, half, right, forward;
             private readonly Rect bounds;
 
             public RoadBuildingFootprint(Transform instance, Vector2 size)
             {
+                Instance=instance;ObstacleMatrix=Matrix4x4.Rotate(Quaternion.Inverse(instance.rotation))*Matrix4x4.Translate(-instance.position);
                 center = new Vector2(instance.position.x, instance.position.z);
                 half = size * .5f;
                 right = new Vector2(instance.right.x, instance.right.z);

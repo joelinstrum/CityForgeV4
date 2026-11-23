@@ -362,7 +362,7 @@ namespace CityForge.World
             if (lots > 0)
             {
                 QueueDemolitionGrowth(detonateLots);
-                RebuildDistrictLots();
+                RemoveDistrictLotViews(detonateLots);
             }
             ClearDetonateStroke();
             if (lots + roads > 0) ShowDistrictMessage($"Removed {lots} lots and {roads} road runs.");

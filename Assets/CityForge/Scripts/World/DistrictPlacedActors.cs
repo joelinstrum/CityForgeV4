@@ -52,6 +52,7 @@ namespace CityForge.World
         internal sealed class Pedestrian
         {
             public Transform Body;
+            public EventImmigrant Immigrant;
             public Animator Animator;
             public string IdleState, WalkState, AssetId;
             public int IdleHash, WalkHash;
@@ -191,15 +192,19 @@ namespace CityForge.World
                     for(int attempt=0;attempt<32;attempt++)
                     {
                         var animal=armedRandomAnimals?species[UnityEngine.Random.Range(0,species.Length)]:species[i/armedActorCount];
-                        var candidate=point+UnityEngine.Random.insideUnitCircle*CurrentAnimalPlacementRadius;
-                        if(!InActiveDistrict(candidate)||!wildlife.Suitable(animal,candidate,out _)||
+                        var home = animal.Domesticated ? PlacedLots.FirstOrDefault(l => IsLowDensityHome(l) && new DistrictLotFootprint(l).Contains(point)) : null;
+                        var candidate=home==null ? point+UnityEngine.Random.insideUnitCircle*CurrentAnimalPlacementRadius :
+                            new DistrictLotFootprint(home).WorldPoint(new Vector2(UnityEngine.Random.Range(-.48f,.48f)*home.definition.Size.x,
+                                UnityEngine.Random.Range(-.48f,.48f)*home.definition.Size.y));
+                        if((candidate-point).sqrMagnitude>CurrentAnimalPlacementRadius*CurrentAnimalPlacementRadius || !InActiveDistrict(candidate)||!wildlife.Suitable(animal,candidate,out _)||
                             !animal.Domesticated&&wildlife.Land.View.WildlifeDeveloped(candidate)||
                             sites.Any(site=>(site.point-candidate).sqrMagnitude<1))continue;
                         sites.Add((animal,candidate));found=true;break;
                     }
                     if(!found)
                     {
-                        ShowDistrictMessage("Not enough suitable habitat in this circle. Move the circle or choose fewer animals.");
+                        ShowDistrictMessage(species.All(a=>a.Domesticated) ? "Not enough open yard space. Avoid buildings, fences, roads and water." :
+                            "Not enough suitable habitat in this circle. Move the circle or choose fewer animals.");
                         return true;
                     }
                 }
@@ -223,6 +228,7 @@ namespace CityForge.World
 
         private void RebuildPlacedPedestrians()
         {
+            CaptureImmigrantPositions();
             CancelDistrictActor();
             RebuildPlacedTrees();
             RebuildStreetscape();
@@ -768,6 +774,16 @@ namespace CityForge.World
 
         private void RedirectBlockedPedestrian(Pedestrian walker)
         {
+            if (walker.Immigrant != null)
+            {
+                walker.Immigrant.hasDestination=false;
+                immigrantPlanRetry.Remove(walker.Immigrant.id);
+                immigrantRouteChecks.Remove(walker.Immigrant.id);immigrantRoadSearches.Remove(walker.Immigrant.id);
+                nextEventTick=0; // Retry this assigned route only; never rediscover housing.
+                walker.Route = Array.Empty<Vector2>();
+                SetPedestrianAnimation(walker, false);
+                return;
+            }
             // Search only after the actor actually reaches a blocker, never on a global edit.
             if (!walker.Ambient) SetPedestrianRoute(walker, 2f);
             else
@@ -921,6 +937,7 @@ namespace CityForge.World
 
         private void TickPlacedPedestrians()
         {
+            if(ZoningSimulationPaused)return;
             if (SelectedDistrict < 0 || DistrictLoading || IsSaving) return;
             TickLotPopulation();
             if (pedestrianRoutesDirty)
@@ -930,6 +947,7 @@ namespace CityForge.World
                 foreach (var walker in pedestrians)
                     if (walker.Route.Length < 2 && !walker.Vehicle)
                     {
+                        if (walker.Immigrant != null) continue;
                         if (walker.Ambient) RedirectBlockedPedestrian(walker);
                         else SetPedestrianRoute(walker);
                     }
@@ -1018,6 +1036,12 @@ namespace CityForge.World
                     if (walker.Closed) index = (index + walker.Route.Length) % walker.Route.Length;
                     else if (index < 0 || index >= walker.Route.Length)
                     {
+                        if (walker.Immigrant != null)
+                        {
+                            walker.Immigrant.position = target;
+                            BeginImmigrantMoveIn(walker);
+                            break;
+                        }
                         if (walker.Vehicle)
                         {
                             // End this trip and start a fresh forward pass after a short gap.

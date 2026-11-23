@@ -89,13 +89,15 @@ namespace CityForge.World
 
         private void QueueLotGrowth()
         {
+            immigrantRouteChecks.Clear();immigrantRoadSearches.Clear();
             fullGrowthCheckQueued = true;
             localGrowthCells.Clear();
-            nextLotGrowth = Time.unscaledTime + LotGrowthDelay;
+            nextLotGrowth = Time.time + LotGrowthDelay;
         }
 
         private void QueueZoningGrowth(RectInt edited)
         {
+            MarkImmigrationSitesChanged();
             // A lot grows from its minimum corner. Include corners outside the edit
             // whose footprints could extend into it, without scanning other zones.
             int reach = LotDefinition.MaxTiles - 1;
@@ -107,11 +109,14 @@ namespace CityForge.World
                 if (townZones.TryGetValue(cell, out var zone) && SupportsLotGrowth(zone))
                     localGrowthCells.Add(cell);
             }
-            nextLotGrowth = Time.unscaledTime + LotGrowthDelay;
+            nextLotGrowth = Time.time + LotGrowthDelay;
         }
 
         private void QueueDemolitionGrowth(IEnumerable<DistrictLotRecord> removed)
         {
+            removed=removed.ToArray();
+            ReleaseImmigrantHomes(removed);
+            MarkImmigrationSitesChanged();
             foreach (var lot in removed)
             {
                 var footprint = new DistrictLotFootprint(lot);
@@ -133,20 +138,35 @@ namespace CityForge.World
                 }
             }
             if (localGrowthCells.Count > 0)
-                nextLotGrowth = Time.unscaledTime + LotGrowthDelay;
+                nextLotGrowth = Time.time + LotGrowthDelay;
         }
 
         private void UpdateLotGrowth()
         {
+            if(ZoningSimulationPaused)return;
             if (growthDistrict != SelectedDistrict)
             {
                 growthDistrict = SelectedDistrict;
                 QueueLotGrowth();
             }
             if (!CanBuildTown || IsSaving || movingDistrictLot != null || detonateLastPoint.HasValue ||
-                Time.unscaledTime < nextLotGrowth) return;
+                Time.time < nextLotGrowth) return;
             nextLotGrowth = float.PositiveInfinity;
+            GrowPendingPlayerLots();
+            // No arrived residents means no possible Player home construction.
+            // Avoid loading layouts and walking all parcel combinations at population zero.
+            if(!DeveloperMode && !PlayerPopulationPresent)
+            {fullGrowthCheckQueued=false;localGrowthCells.Clear();return;}
             IEnumerable<Vector2Int> pending = fullGrowthCheckQueued ? townZones.Where(pair => SupportsLotGrowth(pair.Value)).Select(pair => pair.Key) : localGrowthCells;
+            if(!DeveloperMode)
+            {
+                var arrivals=WaitingResidents.Where(p=>p.destinationLotId!=null && p.destinationLotId.StartsWith("zone:"))
+                    .Select(p=>p.destinationZoneCell).ToArray();
+                pending=pending.Where(cell=>townZones.TryGetValue(cell,out var zone) &&
+                    (IsResidentialZone(zone) ? arrivals.Any(at=>at.x>=cell.x && at.y>=cell.y &&
+                        at.x-cell.x<LotDefinition.MaxTiles && at.y-cell.y<LotDefinition.MaxTiles) :
+                        PlayerGrowthAllowed(default,zone,WealthAt(cell))));
+            }
             var cellsToCheck = pending.OrderBy(cell => cell.y).ThenBy(cell => cell.x).ToArray();
             fullGrowthCheckQueued = false;
             localGrowthCells.Clear();
@@ -217,6 +237,8 @@ namespace CityForge.World
                     var size = GrowthLotCells(layout, rotation);
                     var cells = new RectInt(cell, size);
                     if (!HasGrowthZoning(cells, zone, facing, wealth, requestedSize)) continue;
+                    if ((!DeveloperMode && buildings.Length==0) || !PlayerGrowthAllowed(cells,zone,wealth))
+                    { blocked ??= "Waiting for residents to reach a low-wealth homesite beside a road."; continue; }
                     int maxDepth = GrowthFrontageSize(layout).y;
 
                     var center = (ZoneCorner(cells.min) + ZoneCorner(cells.max)) * .5f;
@@ -266,8 +288,15 @@ namespace CityForge.World
 
                     if (buildings.Length > 0)
                     {
-                        var building = ChooseGrowthBuilding(record, roadFacing, buildings);
-                        record.definition = LotGrowableBuildings.Materialize(layout, building, layout.id+":"+record.district+":"+record.center);
+                        var preferredBuilding = ChooseGrowthBuilding(record, roadFacing, buildings);
+                        LotObjectDefinition building=null;
+                        foreach(var candidate in new[]{preferredBuilding}.Concat(buildings.Where(b=>b.assetId!=preferredBuilding.assetId)))
+                        {
+                            record.definition=LotGrowableBuildings.Materialize(layout,candidate,layout.id+":"+record.district+":"+record.center);
+                            if(GrowableBuildingsOverlapRoad(record))continue;
+                            building=candidate;break;
+                        }
+                        if(building==null){blocked??="Keep buildings clear of the road surface.";continue;}
                         record.growthBuildingId = record.definition.objects.Last().id;
                         if (IsResidentialZone(zone)) AddResidentialEntryPath(record, building);
                     }
@@ -283,6 +312,7 @@ namespace CityForge.World
                     record.id = Guid.NewGuid().ToString("N");
                     LotPropStyles.Apply(record.definition, record.id, LotAssetCatalog.Load());
                     PlacedLots.Add(record);
+                    BindResidentsToBuilding(record,cells);
                     grownLots.Add(record);
                     grownNames.Add(layout.name);
                     placed = true;
@@ -309,13 +339,13 @@ namespace CityForge.World
 
         private System.Collections.IEnumerator ConstructZonedLot(DistrictLotRecord record)
         {
-            if (!districtLotRoots.TryGetValue(record, out var finished) || !finished) yield break;
+            if (!districtLotRoots.TryGetValue(record, out var finished) || !finished) {ReleaseLotPopulation(record);yield break;}
             var catalog = LotAssetCatalog.Load();
             var building = record.definition.objects.FirstOrDefault(item => item.id == record.growthBuildingId)
                 ?? record.definition.objects.FirstOrDefault(item => catalog?.Find(item.assetId)?.category == "Buildings");
-            if (building == null) yield break;
+            if (building == null) {ReleaseLotPopulation(record);yield break;}
             var asset = catalog.Find(building.assetId);
-            if (asset == null || !asset.prefab) yield break;
+            if (asset == null || !asset.prefab) {ReleaseLotPopulation(record);yield break;}
 
             var site = new GameObject("Lot under construction").transform;
             site.SetParent(lotInstances, false);
@@ -329,17 +359,19 @@ namespace CityForge.World
             frame.SetParent(site, false);
 
             // Read the already-instantiated building, including its final fit, scale and LOD.
-            var model = finished.Cast<Transform>().FirstOrDefault(child => child.name == asset.label &&
-                Vector2.Distance(new Vector2(child.localPosition.x, child.localPosition.z), building.position) < .01f);
-            var renderers = record.definition.zoningLayout.buildingRow ? finished.Cast<Transform>().Where(child=>record.definition.objects.Any(item=>item.generatedRowBuilding&&catalog.Find(item.assetId)?.label==child.name)).SelectMany(child=>child.GetComponentsInChildren<MeshRenderer>()).ToArray() :
-                model ? model.GetComponentsInChildren<MeshRenderer>() : Array.Empty<MeshRenderer>();
-            var visible = renderers.Where(renderer => renderer.enabled).ToArray();
+            lotBuildingViews.TryGetValue((record,building.id),out var model);
+            var renderers = record.definition.zoningLayout.buildingRow ? record.definition.objects
+                .Where(item=>item.generatedRowBuilding).Select(item=>lotBuildingViews.GetValueOrDefault((record,item.id)))
+                .Where(child=>child).SelectMany(child=>child.GetComponentsInChildren<Renderer>(true)).ToArray() :
+                model ? model.GetComponentsInChildren<Renderer>(true) : Array.Empty<Renderer>();
+            var visible = renderers.Where(renderer => renderer.enabled && renderer.gameObject.activeInHierarchy).ToArray();
             if (visible.Length == 0) visible = renderers;
             if (visible.Length == 0)
             {
                 Destroy(site.gameObject);
                 Destroy(wood);
                 Destroy(dirt);
+                ReleaseLotPopulation(record);
                 yield break;
             }
             float baseY = float.PositiveInfinity;

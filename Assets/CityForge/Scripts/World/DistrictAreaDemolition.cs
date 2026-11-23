@@ -139,7 +139,9 @@ namespace CityForge.World
                 }
             }
             parkPaths.Clear();parkPaths.AddRange(keptPaths);
+            var removedLots=PlacedLots.Where(WholeLot).ToArray();
             int lots = PlacedLots.RemoveAll(WholeLot);
+            if(lots>0)QueueDemolitionGrowth(removedLots);
             int actors = PlacedActors.RemoveAll(actor => Inside(actor.position));
             foreach (var cell in townZones.Keys.Where(cell => Inside(ZoneCorner(cell) + Vector2.one * (DistrictGridCellMeters * .5f))).ToArray())
             {
@@ -173,7 +175,12 @@ namespace CityForge.World
             }
             districtGroundPaint.PruneEmpty();
             SelectDistrictLot(null); ClearDetonateStroke();
-            RebuildDistrictRoads(); RebuildDistrictLots(); RebuildPlacedPedestrians(); RebuildGroundPaint(); BuildDetonateRoadRuns();
+            if(changedRoads.Count>0){RebuildDistrictRoads();BuildDetonateRoadRuns();}
+            else RebuildParkPaths();
+            RemoveDistrictLotViews(removedLots);
+            if(lots==0){RefreshZoneOverlay();MarkImmigrationSitesChanged();}
+            if(actors>0)RebuildPlacedPedestrians();
+            RebuildGroundPaint();
             ShowDistrictMessage($"Cleared the selected area: {lots} lots, {changedRoads.Count} road sections, {actors} placed objects, forest, zoning and ground paint. Save the region to keep it.");
         }
     }

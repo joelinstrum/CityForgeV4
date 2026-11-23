@@ -335,6 +335,10 @@ namespace CityForge.World
                 if (snapshot?.info.lots != null) view.PlacedLots.AddRange(snapshot.info.lots);
                 if (snapshot?.info.zoneGroundPlanes != null) view.ZoneGroundPlanes.AddRange(snapshot.info.zoneGroundPlanes);
                 view.RestoreReadRegionMessages(snapshot?.info.readMessages);
+                view.ImmigrationPaused = snapshot?.info.immigrationPaused ?? false;
+                view.DeveloperMode = snapshot?.info.developerMode ?? false;
+                if(snapshot?.info.pendingPlayerLots!=null)view.PendingPlayerLots.AddRange(snapshot.info.pendingPlayerLots);
+                if (snapshot?.info.events != null) view.RegionEvents.AddRange(snapshot.info.events);
                 view.RestoreTownZones(snapshot?.info.townZones, snapshot?.info.townZoneGridVersion ?? 0);
                 view.RestoreDistrictRoads(snapshot?.info.districtRoads);
                 view.RestoreGroundPaint(snapshot?.info.groundPaint);
@@ -671,6 +675,7 @@ namespace CityForge.World
 
             gameObject.AddComponent<CityForge.UI.NatureToolbar>().Initialize(this,root.transform);
             BuildTownConstructionMenu(root.transform, font);
+            BuildGameplayTools(root.transform, font);
             RefreshSeasonButtons();
             var diagnostics = gameObject.AddComponent<RegionPreviewDiagnostics>();
             diagnostics.Initialize(transform.Find("RegionLandCover").GetComponent<MeshRenderer>(),
@@ -824,11 +829,17 @@ namespace CityForge.World
 
         private void Update()
         {
+            if (UpdateGameplayTools())
+            {
+                TickDistrictClock(); TickRegionEvents(); TickPlacedPedestrians(); UpdateLotGrowth();
+                return;
+            }
             UpdateAnimalPlacementPreview();
             var rideRig = GetComponentInChildren<CityForge.CameraSystem.CityForgeCameraController>();
             if (rideRig && rideRig.HandleRideInput(this))
             {
                 TickDistrictClock();
+                TickRegionEvents();
                 TickPlacedPedestrians();
                 return;
             }
@@ -845,6 +856,7 @@ namespace CityForge.World
                 regionHudVisibility.blocksRaycasts = show;
             }
             TickDistrictClock();
+            TickRegionEvents();
             RefreshTownConstruction();
             UpdateRegionDistrictHover();
             if (SelectedDistrict >= 0 && !DistrictLoading && !IsSaving && Input.GetKeyDown(KeyCode.G) &&
@@ -1139,6 +1151,8 @@ namespace CityForge.World
             RebuildParkPaths();
             RebuildDistrictLots();
             RebuildPlacedPedestrians();
+            progress?.Invoke("Preparing construction grid",.99f);
+            yield return PrepareDistrictGridStages();
             if(NaturalLandscape&&IsCombinedDistrict){
                 var bounds=ActiveDistrictBounds;var rig=GetComponentInChildren<CityForgeCameraController>();
                 var heightRange=approvedDistrict.DistrictHeightRange;
@@ -1287,6 +1301,7 @@ namespace CityForge.World
         }
         private void OnDestroy()
         {
+            SetZoningGameplayPause(false);
             CloseAnimalPlacementPreview();
             CloseTransportModal();
             tearingDownPaint = true;

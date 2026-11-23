@@ -61,7 +61,7 @@ namespace CityForge.World
             return system;
         }
         internal void Reveal() {
-            if(revealAt>=0)return;revealAt=Time.unscaledTime;
+            if(revealAt>=0)return;revealAt=Time.time;
             foreach(var system in GetComponentsInChildren<ParticleSystem>()){
                 var velocity=system.velocityOverLifetime;velocity.enabled=true;velocity.y=2.5f;
             }
@@ -69,8 +69,9 @@ namespace CityForge.World
         }
         private void Update()
         {
+            if(PrototypeRegionView.ZoningSimulationPaused)return;
             if (revealAt < 0) return;
-            float alpha = 1f - Mathf.Clamp01((Time.unscaledTime - revealAt) / 1.2f);
+            float alpha = 1f - Mathf.Clamp01((Time.time - revealAt) / 1.2f);
             material.SetColor("_BaseColor", new Color(.48f, .40f, .31f, alpha * .44f));
             if (alpha <= 0) Destroy(gameObject);
         }

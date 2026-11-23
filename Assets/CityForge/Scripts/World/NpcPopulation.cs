@@ -87,6 +87,7 @@ namespace CityForge.World
         }
         void ZoomChanged(int level){PresentationVisible=level<=2;foreach(var p in people)p.Visual.gameObject.SetActive(PresentationVisible);accumulator=0;}
         void Update(){
+            if(PrototypeRegionView.ZoningSimulationPaused)return;
             if(!PresentationVisible)return;accumulator+=Mathf.Min(Time.deltaTime,.1f);
             // One budgeted scheduler, 30 Hz close and 10 Hz at medium zoom. No per-person Update components.
             float step=cameraRig.ZoomLevel<2?1f/30: .1f;if(accumulator<step)return;float dt=accumulator;accumulator=0;
