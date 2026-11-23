@@ -18,6 +18,7 @@ namespace CityForge.World
         }
         internal IEnumerator BuildOverviewStages()
         {
+            if(data.Import!=null){yield return BuildStages();yield break;}
             // Filter before shading so abrupt slope changes cannot create a crease
             // in the mesh or a dark line in the atlas.
             var raw=new float[Resolution,Resolution];

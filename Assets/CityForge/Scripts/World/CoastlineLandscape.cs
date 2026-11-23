@@ -29,6 +29,7 @@ public sealed partial class MeadowDistrictLandscape {
  var worldX=Origin.x+(x+.5f)*Side/maskSize;var worldZ=Origin.y+(z+.5f)*Side/maskSize;
  var point=new Vector2(worldX,worldZ);
  bool wet=useSwash?Height(point)<seaLevel+2:coastlineTest?worldX<CoastlineTestRegion.ShoreX(worldZ)+12:Height(point)<seaLevel-.02f;
+ if(data.Import!=null)wet=data.Import.TidalAt(point/mapSide+Vector2.one*.5f);
  if(wet&&!coastlineTest&&legacyCoast){
  var normalized=new Vector2(worldX/mapSide+.5f,worldZ/mapSide+.5f);wet=false;
  foreach(var body in View.Data.WaterBodies)if(!body.playerChannel&&(body.kind==WaterBodyKind.Ocean||body.kind==WaterBodyKind.River)&&body.Bounds.Contains(normalized)&&body.Contains(normalized)){wet=true;break;}
@@ -50,7 +51,7 @@ public sealed partial class MeadowDistrictLandscape {
  if(needsTerrainHoles&&!Contains(point))clipValue=1;
  pixels[z*maskSize+x]=new Color(clipValue,clipValue,clipValue,1);
  }
- var mask=Own(new Texture2D(maskSize,maskSize,TextureFormat.RHalf,false,true){name="Coastal ocean inclusion mask",wrapMode=TextureWrapMode.Clamp,filterMode=FilterMode.Bilinear});mask.SetPixels(pixels);mask.Apply(false,false);terraformOceanClip=mask;
+ var mask=Own(new Texture2D(maskSize,maskSize,TextureFormat.RHalf,false,true){name="Coastal ocean inclusion mask",wrapMode=TextureWrapMode.Clamp,filterMode=data.Import!=null?FilterMode.Point:FilterMode.Bilinear});mask.SetPixels(pixels);mask.Apply(false,false);terraformOceanClip=mask;
  var maskObject=new GameObject("Coastal shoreline clipping");maskObject.transform.SetParent(holder.transform,false);maskObject.transform.position=new Vector3(Origin.x+Side/2,View.SeaLevel,Origin.y+Side/2);maskObject.transform.localScale=new Vector3(Side,1,Side);
  var clip=WaveHarmonic.Crest._Extensions.AddComponent<ClipLodInput>(maskObject,LodInputMode.Texture);clip.GetData<ClipTextureLodInputData>().Texture=mask;
  Water.Reflections.UseObliqueMatrix=!groundFollowing;

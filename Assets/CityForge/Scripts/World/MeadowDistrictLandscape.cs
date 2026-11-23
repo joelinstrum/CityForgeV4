@@ -294,7 +294,7 @@ namespace CityForge.World
             var heightTimer=System.Diagnostics.Stopwatch.StartNew();
             float[,] horizontal=null;
             Vector2Int[] channelRows=null;
-            if(smooth&&rockBankBlend==null&&streamBankBlend==null){
+            if(smooth&&data.Import==null&&rockBankBlend==null&&streamBankBlend==null){
                 channelRows=RegionalRiverNetwork.HeightRowBounds(data,origin/view.MapSide+Vector2.one*.5f,Side/view.MapSide,resolution);
                 horizontal=new float[PrototypeRegionData.Resolution,resolution];
                 yield return RegionBuildSteps.ComputeRows(PrototypeRegionData.Resolution,z=>

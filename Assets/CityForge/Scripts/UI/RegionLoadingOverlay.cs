@@ -18,7 +18,7 @@ namespace CityForge.UI
         Text stageLabel;RectTransform fill;
         Action completed;Action<Exception> failed;
         readonly Stack<IEnumerator> steps=new();
-        bool finished;
+        bool finished,cancelRequested;Action cancelWork;
         readonly System.Diagnostics.Stopwatch loadTimer=System.Diagnostics.Stopwatch.StartNew();
         readonly Dictionary<string,double> stageWork=new();
         readonly Dictionary<string,double> stageWall=new();
@@ -62,7 +62,13 @@ namespace CityForge.UI
             if(IsLoading)return;IsLoading=true;completed=onComplete;failed=onFailure;StartCoroutine(Load(info,menu));
         }
         void Advance(string stage,float progress){if(Stage!=stage)RecordStageWall();Stage=stage;Progress=Mathf.Max(Progress,Mathf.Clamp01(progress));fill.anchorMax=new Vector2(Progress,1);stageLabel.text=stage;}
-        void Update(){if(IsLoading&&stageLabel)stageLabel.text=Stage+new string('.',(int)(Time.unscaledTime*2)%4);}
+        void Update(){if(IsLoading&&cancelWork!=null&&Input.GetKeyDown(KeyCode.Escape))RequestCancellation();if(IsLoading&&stageLabel)stageLabel.text=Stage+new string('.',(int)(Time.unscaledTime*2)%4);}
+        public void EnableCancellation(Action cancel)
+        {
+            cancelWork=cancel;var panel=transform.Find("Panel");var rect=Box(panel,"Cancel imported region",new Color(.25f,.22f,.13f));rect.anchorMin=rect.anchorMax=rect.pivot=new Vector2(0,1);rect.anchoredPosition=new Vector2(650,-218);rect.sizeDelta=new Vector2(160,42);
+            var button=rect.gameObject.AddComponent<Button>();button.targetGraphic=rect.GetComponent<Image>();button.onClick.AddListener(RequestCancellation);Label(rect,"Label","Cancel / Esc",stageLabel.font,18,new Vector2(14,-9),new Vector2(140,27));
+        }
+        public void RequestCancellation(){if(cancelWork==null||!IsLoading||cancelRequested)return;cancelRequested=true;cancelWork();}
         IEnumerator Load(SavedRegionInfo info,Canvas menu)
         {
             Advance("Reading saved region",.04f);
@@ -92,6 +98,7 @@ namespace CityForge.UI
         {
             Exception error=null;
             while(steps.Count>0){
+                if(cancelRequested){DisposeSteps();Finish(null);yield break;}
                 var current=steps.Peek();bool more=false;object yielded=null;var timer=System.Diagnostics.Stopwatch.StartNew();string stage=Stage;
                 try{more=current.MoveNext();if(more)yielded=current.Current;}
                 catch(Exception e){error=e;break;}

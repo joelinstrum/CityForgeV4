@@ -36,7 +36,7 @@ namespace CityForge.World
         public RegionBiomeMap(RegionCreationSettings recipe,PrototypeRegionData data)
         {
             recipe.Validate();this.recipe=recipe;this.data=data;
-            tropicalElevationOffset=TropicalOceanDepth.DeepRecipe(recipe)?(TropicalOceanDepth.Sea-12)/PrototypeRegionData.Height:0;
+            tropicalElevationOffset=data.Import!=null?(data.Import.Settings.GameSea-12)/data.Import.Settings.heightRange:TropicalOceanDepth.DeepRecipe(recipe)?(TropicalOceanDepth.Sea-12)/PrototypeRegionData.Height:0;
             var random=new System.Random(recipe.seed);offset=new Vector2(random.Next(100,10000),random.Next(100,10000));
             if(DistrictTreeCoverage.Applies(recipe)){
                 coverageThresholds=new float[recipe.GridSide*recipe.GridSide];
@@ -45,7 +45,7 @@ namespace CityForge.World
                     for(int z=0;z<24;z++)for(int x=0;x<24;x++){
                         var uv=bounds.min+new Vector2((x+.5f)/24,(z+.5f)/24)/recipe.GridSide;
                         float sea=(tropicalElevationOffset>0?TropicalOceanDepth.Sea:12)/PrototypeRegionData.Height;
-                        if(Sample(data.Heights,uv)<sea&&Sample(data.WaterDistance,uv)<=0)continue;
+                        if(data.Import!=null?data.Import.TidalAt(uv):Sample(data.Heights,uv)<sea&&Sample(data.WaterDistance,uv)<=0)continue;
                         values.Add(DistrictTreeCoverage.Score(uv,recipe));
                     }
                     values.Sort();coverageThresholds[i]=values.Count==0?2:values[Mathf.Clamp(Mathf.RoundToInt(values.Count*(1-recipe.TreeCoverage(i)/100f)),0,values.Count-1)];
@@ -68,7 +68,7 @@ namespace CityForge.World
             float moisture=Mathf.Clamp01(.25f+regional*.5f+river*.25f+climate);
             float forest=0;
             float dry=Mathf.Clamp01((.55f-moisture)*1.8f);
-            bool wet=elevation<12f/PrototypeRegionData.Height&&bank<=0;
+            bool wet=data.Import!=null?data.Import.TidalAt(uv):elevation<12f/PrototypeRegionData.Height&&bank<=0;
             if(!wet&&coverageThresholds!=null){
                 int x=Mathf.Min(recipe.GridSide-1,(int)(uv.x*recipe.GridSide)),z=Mathf.Min(recipe.GridSide-1,(int)(uv.y*recipe.GridSide));
                 float threshold=coverageThresholds[z*recipe.GridSide+x];forest=Mathf.SmoothStep(0,1,Mathf.InverseLerp(threshold-.025f,threshold+.025f,DistrictTreeCoverage.Score(uv,recipe)));

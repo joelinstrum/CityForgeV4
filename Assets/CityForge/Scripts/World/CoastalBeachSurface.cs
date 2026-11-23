@@ -24,7 +24,7 @@ namespace CityForge.World
             coastalGradedRivers=Array.Exists(View.Data.WaterBodies,b=>!b.playerChannel&&b.kind==WaterBodyKind.River&&b.channelVersion>=2);
             if(HasOcean())coastalOceans=Array.FindAll(View.Data.WaterBodies,b=>b.kind==WaterBodyKind.Ocean);
             var settings=View.CreationSettings;
-            if(settings?.version>=6&&(coastalOceans.Length>0||settings.terrainShape==RegionTerrainShape.RiverAndBay))
+            if(View.Data.Import==null&&settings?.version>=6&&(coastalOceans.Length>0||settings.terrainShape==RegionTerrainShape.RiverAndBay))
                 coastalLayout=new RegionTerrainLayout(settings);
             PrepareEstuary();
         }

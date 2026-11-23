@@ -162,7 +162,7 @@ namespace CityForge.World
                     writer.Write(Magic);var metadata=JsonUtility.ToJson(snapshot.info);
                     // Unity serializes a null inline class as a default object. Preserve legacy
                     // maps' absent recipe so saving climate cannot change their grid or scale.
-                    if(snapshot.info.creation==null)metadata=System.Text.RegularExpressions.Regex.Replace(metadata,"\"creation\"\\s*:\\s*\\{[^{}]*\\}","\"creation\":null");
+                    if(snapshot.info.creation==null)metadata=NullRecipeJson(metadata);
                     var json=Encoding.UTF8.GetBytes(metadata);if(json.Length>16777216)throw new InvalidDataException("Region metadata exceeds the supported size.");writer.Write(json.Length);writer.Write(json);
                     // Stream the terrain arrays without allocating a second copy of the control map.
                     var floatBuffer = new byte[128 * 1024];
@@ -173,6 +173,7 @@ namespace CityForge.World
                         writer.Write(m.trees.Length);foreach(var t in m.trees){writer.Write(t.position.x);writer.Write(t.position.y);writer.Write(t.position.z);writer.Write(t.widthScale);writer.Write(t.heightScale);writer.Write(t.rotation);writer.Write(t.prototypeIndex);WriteColor(writer,t.color);WriteColor(writer,t.lightmapColor);}
                         writer.Write(m.alphamaps.GetLength(0));writer.Write(m.alphamaps.GetLength(2));WriteFloats(writer, m.alphamaps, floatBuffer);
                     }
+                    if(snapshot.info.creation?.terrainImport?.Active==true){if(snapshot.data.Import==null)throw new InvalidDataException("Imported region has no embedded rasters.");TerrainImportData.WritePayload(writer,snapshot.data.Import);}
                 }
                 if(File.Exists(path))File.Replace(temp,path,path+".bak");else File.Move(temp,path);
             }finally{if(File.Exists(temp))File.Delete(temp);}
@@ -193,7 +194,22 @@ namespace CityForge.World
                 }
                 int n=Count(reader,32,4096),layers=Count(reader,1,8);m.alphamaps=new float[n,n,layers];ReadFloats(reader,m.alphamaps);foreach(float value in m.alphamaps)if(!Finite(value)||value<0||value>1)throw new InvalidDataException("Invalid saved ground cover.");result.meadow=m;
             }
+            TerrainImportData.ReadPayload(reader,result);
             return result;
+        }
+        static string NullRecipeJson(string json)
+        {
+            // JsonUtility serializes null inline classes as default objects. Recipes can
+            // now contain nested import metadata, so match balanced JSON rather than a flat regex.
+            int key=json.IndexOf("\"creation\"",StringComparison.Ordinal);if(key<0)return json;
+            int start=json.IndexOf(':',key)+1;while(start<json.Length&&char.IsWhiteSpace(json[start]))start++;
+            if(start>=json.Length||json[start]!='{')return json;
+            bool quoted=false,escaped=false;int depth=0;
+            for(int i=start;i<json.Length;i++){
+                char c=json[i];if(quoted){if(escaped)escaped=false;else if(c=='\\')escaped=true;else if(c=='"')quoted=false;continue;}
+                if(c=='"'){quoted=true;continue;}if(c=='{')depth++;else if(c=='}'&&--depth==0)return json.Substring(0,start)+"null"+json.Substring(i+1);
+            }
+            throw new InvalidDataException("Incomplete region creation metadata.");
         }
         static bool Finite(float v)=>!float.IsNaN(v)&&!float.IsInfinity(v);
         static SavedRegionInfo ReadInfo(BinaryReader reader)

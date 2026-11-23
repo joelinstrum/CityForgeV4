@@ -44,8 +44,10 @@ namespace CityForge.World
         public RegionVegetation vegetation;
         public string era, period;
         public bool animals;
+        public TerrainImportSettings terrainImport;
         public void Validate()
         {
+            if(terrainImport?.Active==true)terrainImport.Validate();
             if((version!=1&&version!=2&&version!=3&&version!=4&&version!=5&&version!=6&&version!=7&&version!=8&&version!=9&&version!=10&&version!=11&&version!=12&&version!=13)||(int)terrainShape<0||(int)terrainShape>8||topography<0||topography>4||rivers<0||rivers>3||streams<0||streams>2||(int)climate<0||(int)climate>1||(int)moisture<0||(int)moisture>2||(int)vegetation<0||(int)vegetation>2)
                 throw new ArgumentException("Unsupported region creation settings.");
             if ((uint)riverBayVariant > RiverBayLayout.RemakeVariantCount)
@@ -73,8 +75,13 @@ namespace CityForge.World
 
     public static class RegionMapGenerator
     {
-        public static IEnumerator GenerateStages(string name,RegionSize size,RegionCreationSettings settings,Action<SavedRegionSnapshot> complete,Action<string,float> progress)
+        public static IEnumerator GenerateStages(string name,RegionSize size,RegionCreationSettings settings,Action<SavedRegionSnapshot> complete,Action<string,float> progress,System.Threading.CancellationToken cancellation=default)
         {
+            if(settings.terrainImport?.Active==true){
+                var imported=settings.terrainImport.data??throw new InvalidOperationException("Imported terrain must be previewed first.");
+                var job=Task.Run(()=>imported.Generate(name,settings,cancellation));while(!job.IsCompleted){progress?.Invoke("Preparing imported terrain, water and ecology",.2f);yield return null;}
+                if(job.IsFaulted)throw job.Exception.GetBaseException();complete(job.Result);yield break;
+            }
             var generationTimer=System.Diagnostics.Stopwatch.StartNew();settings.Validate();var recipe=JsonUtility.FromJson<RegionCreationSettings>(JsonUtility.ToJson(settings));float[,] geography=null;
             if(recipe.version>=4){
                 progress?.Invoke("Preparing MapMagic geography graph",.04f);yield return null;
@@ -93,6 +100,7 @@ namespace CityForge.World
         public static SavedRegionSnapshot Generate(string name,RegionSize size,RegionCreationSettings settings,float[,] geography=null)
         {
             settings.Validate();
+            if(settings.terrainImport?.Active==true)return (settings.terrainImport.data??throw new InvalidOperationException("Missing imported rasters.")).Generate(name,settings);
             if((int)size<0||(int)size>2||string.IsNullOrWhiteSpace(name))throw new ArgumentException("Invalid region name or size.");
             // Copy the recipe so later wizard edits cannot change the region's provenance.
             var recipe=JsonUtility.FromJson<RegionCreationSettings>(JsonUtility.ToJson(settings));

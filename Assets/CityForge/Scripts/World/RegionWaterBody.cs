@@ -9,6 +9,7 @@ namespace CityForge.World
     public sealed class RegionWaterBody
     {
         public string id;
+        [NonSerialized] public TerrainImportData importedTidal;
         public WaterBodyKind kind;
         // Coordinates are normalized over the whole region, independent of district/camera.
         public Vector2[] outline,centerline;
@@ -146,6 +147,7 @@ namespace CityForge.World
 
         public bool Contains(Vector2 point)
         {
+            if(importedTidal!=null)return point.x>=0&&point.x<=1&&point.y>=0&&point.y<=1&&importedTidal.TidalAt(point);
             if(kind==WaterBodyKind.Ocean&&(holes?.Length??0)<=30&&outline?.Length>=3&&!(centerline?.Length>1)){
                 var index=oceanIndex;
                 if(index==null||index.Outline!=outline||index.Holes!=holes)
@@ -171,6 +173,7 @@ namespace CityForge.World
         }
         public bool Intersects(Rect area)
         {
+            if(importedTidal!=null)return importedTidal.AnyIn(area);
             if(!Bounds.Overlaps(area))return false;
             foreach(var p in new[]{area.min,area.max,new Vector2(area.xMin,area.yMax),new Vector2(area.xMax,area.yMin)})if(Contains(p))return true;
             return ContoursCross(area);
@@ -178,6 +181,7 @@ namespace CityForge.World
 
         internal bool HasShorelineInside(Rect area)
         {
+            if(importedTidal!=null)return importedTidal.AnyIn(area,true);
             // The ocean polygon can close around the region border. Its closing edges
             // and a boundary that only touches the district do not define a shore here.
             const float inset = .000001f;

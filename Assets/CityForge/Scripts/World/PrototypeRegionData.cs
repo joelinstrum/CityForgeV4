@@ -12,6 +12,7 @@ namespace CityForge.World
         public const int DefaultSeed = 730421;
         public readonly int Seed;
         public RegionWaterBody[] WaterBodies;
+        public TerrainImportData Import;
         public RegionBiomeMap Biomes;
         public RegionWaterBody WaterBodyAt(Vector2 point)
         {
@@ -40,7 +41,7 @@ namespace CityForge.World
             return depth*(1-Mathf.SmoothStep(0,1,Mathf.InverseLerp(width*.28f,width,d)));
         }
         public float SmoothHeight(float u,float v)=>SmoothHeight(u,v,true);
-        internal float SmoothHeight(float u,float v,bool includeStreams)=>RegionalRiverNetwork.ContinuousHeight(this,u,v,riverGrade!=null?SmoothRiverSurface.Sample(riverGrade,u,v)-RiverIncision(u,v)/riverVertical:SmoothRiverSurface.Sample(Heights,u,v),includeStreams);
+        internal float SmoothHeight(float u,float v,bool includeStreams)=>Import!=null?Import.HeightMeters(new Vector2(u,v))/Import.Settings.heightRange:RegionalRiverNetwork.ContinuousHeight(this,u,v,riverGrade!=null?SmoothRiverSurface.Sample(riverGrade,u,v)-RiverIncision(u,v)/riverVertical:SmoothRiverSurface.Sample(Heights,u,v),includeStreams);
         public readonly float[,] Heights;
         public readonly float[,] WaterDistance;
 
