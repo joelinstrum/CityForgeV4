@@ -743,8 +743,11 @@ namespace CityForge.World
 
         private bool hasSeasonalLotTrees;
 
+        private readonly Dictionary<(DistrictLotRecord Lot,string Item),Transform> lotBuildingViews = new();
+
         private void RebuildDistrictLots()
         {
+            SyncRegionEvents();
             EnsureDistrictRats();
             pedestrianRoutesDirty = true;
             hasSeasonalLotTrees = false;
@@ -754,6 +757,7 @@ namespace CityForge.World
             if (gradeTerrain && gradeTerrain.TryGetComponent<DistrictLotGrading>(out var grading)) grading.Restore();
             platformCells.Clear();
             districtLotRoots.Clear();
+            lotBuildingViews.Clear();
             roadBuildings.Clear();
             eagleBuildingBounds.Clear();
             lotTreePositions.Clear();
@@ -786,9 +790,12 @@ namespace CityForge.World
             SelectDistrictLot(selectedDistrictLot);
         }
 
-        private void PresentDistrictLots(IEnumerable<DistrictLotRecord> records)
+        private void PresentDistrictLots(IEnumerable<DistrictLotRecord> records)=>PresentDistrictLotBatch(records,false);
+
+        private void PresentDistrictLotBatch(IEnumerable<DistrictLotRecord> records,bool deferSidewalks)
         {
             LotPresentationBuilds++;
+            MarkImmigrationSitesChanged();
             pedestrianRoutesDirty = true;
             var catalog = LotAssetCatalog.Load();
             if (!lotInstances)
@@ -865,6 +872,7 @@ namespace CityForge.World
                     if (dockWorker && !item.characterScript.dockStayVisible) continue;
                     hasSeasonalLotTrees |= asset.IsSeasonalTree;
                     var instance = LotRuntimeLoader.InstantiateObject(item, asset, root, VisualSeason, cameraRig).transform;
+                    if(asset.category=="Buildings")lotBuildingViews[(record,item.id)]=instance;
                     if(asset.IsCharacter && !LotPopulationReady(record)) {instance.gameObject.SetActive(false);delayedLotCharacters.Add((record,instance.gameObject));}
                     if (definition.type == LotType.Zoning && asset.category == "Trees")
                         instance.localScale *= .75f;
@@ -941,11 +949,14 @@ namespace CityForge.World
                 if (definition.AttractsVessels && ApprovedDistrict && ApprovedDistrict.DisplayTerrain)
                     HarborLanding.Build(root, ApprovedDistrict, record, harborPorch);
                 residentialGround.Add(definition, record.id, ResidentialGround.LotEra(definition), root, p => SiteHeight(p)+definition.elevation+record.elevation);
-                root.gameObject.AddComponent<DistrictLotSurfaces>().Build(definition, SiteHeight, record.waterfrontDeckHeight, meadowGrade);
+                var lotSurfaces=root.gameObject.AddComponent<DistrictLotSurfaces>();
+                lotSurfaces.Build(definition, SiteHeight, record.waterfrontDeckHeight, meadowGrade);
+                if(deferSidewalks)deferredLotStreetMasks.Add(lotSurfaces);
                 root.position+=Vector3.up*(definition.elevation+record.elevation);
             }
             residentialGround.Build();
-            RefreshDistrictSidewalks();
+            InvalidateLotGridHeights(presented);
+            if(deferSidewalks)QueueDistrictSidewalkRefresh();else RefreshDistrictSidewalks();
         }
 
         private static (LotObjectDefinition item, LotAssetCatalogEntry asset) VaryPlacedTree(

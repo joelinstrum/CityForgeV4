@@ -70,6 +70,7 @@ namespace CityForge.World
 
         private void Update()
         {
+            if(PrototypeRegionView.ZoningSimulationPaused)return;
             if (!land || land.IsRegionOverview || land.View.DistrictLoading || land.View.IsSaving) return;
             float delta = cadence.Step(Mathf.Min(Time.deltaTime, .1f), ActorSimulationVisibility.NearCamera(districtCamera, transform.position), GetInstanceID());
             if (delta <= 0) return;

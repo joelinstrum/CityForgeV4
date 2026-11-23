@@ -28,6 +28,7 @@ namespace CityForge.World
         }
         private void Update()
         {
+            if(PrototypeRegionView.ZoningSimulationPaused)return;
             if (!view || view.DistrictLoading || view.IsSaving) return;
             float elapsed = cadence.Step(Mathf.Min(Time.deltaTime, .1f),
                 ActorSimulationVisibility.NearCamera(districtCamera, transform.position), GetInstanceID());

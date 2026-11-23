@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.Linq;
+using CityForge.Lots;
 using UnityEngine;
 namespace CityForge.World
 {
@@ -38,6 +40,25 @@ namespace CityForge.World
                 }
             }
             return wildlifeObstacles.Contains(DistrictGridCell(p));
+        }
+        internal static bool IsLowDensityHome(DistrictLotRecord lot) =>
+            lot.definition.zoningLayout.zone == TownZone.Residential1;
+
+        internal bool DomesticAnimalObstructed(Vector2 point)
+        {
+            if (PlacedLots.Any(lot => new DistrictLotFootprint(lot).Contains(point) && !IsLowDensityHome(lot))) return true;
+            if (LumberjackObstacle(point, .55f)) return true;
+            foreach (var road in districtRoads)
+            {
+                var points = RoadCenterline(road).ToArray();
+                for (int i=0;i<points.Length-(road.closed?0:1);i++)
+                {
+                    var a=points[i];var edge=points[(i+1)%points.Length]-a;
+                    var closest=a+edge*(edge.sqrMagnitude>0?Mathf.Clamp01(Vector2.Dot(point-a,edge)/edge.sqrMagnitude):0);
+                    if ((point-closest).sqrMagnitude < Mathf.Pow(road.width*.5f+.6f,2)) return true;
+                }
+            }
+            return false;
         }
         internal bool WildlifeDeveloped(Vector2 p)
         {

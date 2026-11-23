@@ -18,6 +18,7 @@ namespace CityForge.World
         internal void Initialize(PrototypeRegionView source){view=source;cameraRig=view.GetComponentInChildren<CityForgeCameraController>();}
         void Update()
         {
+            if(PrototypeRegionView.ZoningSimulationPaused)return;
             if(!view||view.IsSaving||view.DistrictLoading)return;
             if(Time.unscaledTime>=refreshAt){refreshAt=Time.unscaledTime+5;Refresh();}
             int zoom=cameraRig?cameraRig.ZoomLevel:5;

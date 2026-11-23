@@ -80,11 +80,22 @@ namespace CityForge.World
         internal IEnumerable<(Mesh Mesh,List<Vector3> Vertices,IReadOnlyList<(string Id,int Start,int Count)> Lots)> GradingMeshes {get{foreach(var batch in batches.Values)if(batch.Mesh)yield return (batch.Mesh,batch.Vertices,batch.Lots);}}
         internal void Remove(HashSet<string> ids)
         {
-            foreach(var b in batches.Values){var removed=b.Lots.FindAll(l=>ids.Contains(l.Id));if(removed.Count==0)continue;
-                for(int i=b.Indices.Count-3;i>=0;i-=3){int index=b.Indices[i];if(removed.Exists(l=>index>=l.Start&&index<l.Start+l.Count))b.Indices.RemoveRange(i,3);}
+            foreach(var b in batches.Values)
+            {
+                var removed=b.Lots.FindAll(l=>ids.Contains(l.Id));if(removed.Count==0)continue;
+                var erased=new bool[b.Vertices.Count];
+                foreach(var lot in removed)Array.Fill(erased,true,lot.Start,lot.Count);
+                int write=0;
+                for(int read=0;read<b.Indices.Count;read+=3)
+                {
+                    if(erased[b.Indices[read]])continue;
+                    b.Indices[write++]=b.Indices[read];b.Indices[write++]=b.Indices[read+1];b.Indices[write++]=b.Indices[read+2];
+                }
+                b.Indices.RemoveRange(write,b.Indices.Count-write);
                 b.Lots.RemoveAll(l=>ids.Contains(l.Id));if(b.Mesh)b.Mesh.SetTriangles(b.Indices,0);
             }
         }
+
         internal void Build()
         {
             foreach (var batch in dirtyBatches)

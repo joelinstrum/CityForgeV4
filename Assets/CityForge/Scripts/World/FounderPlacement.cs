@@ -58,7 +58,10 @@ namespace CityForge.World
         private bool lotPlacementEvaluated;
         private readonly List<RaycastResult> lotPlacementUiHits = new();
 
-        private RegionTown PendingFounder => Capital is { awaitingFoundersBuilding: true } capital ? capital : null;
+        // The saved founding flag alone cannot detect a demolished Founder’s Building.
+        private RegionTown PendingFounder => Capital is { } capital &&
+            (capital.awaitingFoundersBuilding || !PlacedLots.Exists(lot => IsFoundersLot(lot.definition)))
+                ? capital : null;
         private bool InCapitalDistrict(RegionTown capital) => SelectedDistrict >= 0 &&
             DistrictAnchor(capital.DistrictIndex(GridSide)) == SelectedDistrict;
 
@@ -329,7 +332,7 @@ namespace CityForge.World
                 else UpdateLotCursor(null);
                 return true;
             }
-            if (!offeredFounderPicker && !DistrictLoading && !IsSaving)
+            if (capital.awaitingFoundersBuilding && !offeredFounderPicker && !DistrictLoading && !IsSaving)
             {
                 var rig = GetComponentInChildren<CityForgeCameraController>();
                 var state = rig.CaptureRegionState();
@@ -623,6 +626,7 @@ namespace CityForge.World
             ClearLotStructures(record);
             if (movingDistrictLot != null)
             {
+                RemoveDistrictLotViews(new[]{movingDistrictLot});
                 movingDistrictLot.definition=LotDefinition.Parse(JsonUtility.ToJson(record.definition));
                 movingDistrictLot.center = record.center;
                 movingDistrictLot.district = record.district;
@@ -637,7 +641,9 @@ namespace CityForge.World
                 if (movingDistrictLot.definition.type == LotType.Zoning) QueueLotGrowth();
                 var movedLot = movingDistrictLot;
                 CancelLotPlacement();
-                RebuildDistrictLots();
+                PresentDistrictLotBatch(new[]{movedLot},true);
+                RefreshPlacedLotEnvironment(movedLot);
+                SelectDistrictLot(movedLot);
                 selectedLotFeedback.text = "Lot moved. Save the region to keep it.";
                 return;
             }
@@ -645,8 +651,8 @@ namespace CityForge.World
             record.definition = LotDefinition.Parse(JsonUtility.ToJson(record.definition));
             record.authoredElevationVersion = 1;
             if (record.definition.type == LotType.Zoning) PrepareLotGrading(record);
-            HoldLotPopulation(record);ReleaseLotPopulation(record);
             PlacedLots.Add(record);
+            HoldLotPopulation(record);ReleaseLotPopulation(record);
             RegisterDistrictTownCenter(record);
             ClearLotVegetation(record);
             if (capital != null)
@@ -656,10 +662,21 @@ namespace CityForge.World
             }
             else
                 CancelLotPlacement();
-            RebuildDistrictLots();
+            PresentDistrictLotBatch(new[]{record},true);
+            RefreshPlacedLotEnvironment(record);
             StartCoroutine(LotPlacementDust(record));
             SetLotFeedback(capital != null ? "Founder’s Building placed. Save the region to keep it." :
                 "Lot placed. Save the region to keep it.");
+        }
+
+        private void RefreshPlacedLotEnvironment(DistrictLotRecord record)
+        {
+            EnsureDistrictRats();
+            if(!ApprovedDistrict)return;
+            ApprovedDistrict.Geography?.RefreshSettlements();
+            if(record.definition.IsWaterfront||record.definition.AttractsVessels)ApprovedDistrict.RefreshHarborStones();
+            if(record.definition.AttractsVessels&&!ApprovedDistrict.GetComponent<HarborVesselVisits>())
+                ApprovedDistrict.gameObject.AddComponent<HarborVesselVisits>().Initialize(ApprovedDistrict);
         }
 
         private void DrawLotOutline(DistrictLotRecord record)

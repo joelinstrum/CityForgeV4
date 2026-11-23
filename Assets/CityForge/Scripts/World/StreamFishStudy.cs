@@ -32,6 +32,7 @@ public sealed class StreamFishStudy:MonoBehaviour {
  float SwimHeight(Vector2 p,float depth)=>Mathf.Max(12-depth,land.Height(p)+.16f);
  bool ClearPath(Vector2 a,Vector2 b){int n=Mathf.CeilToInt(Vector2.Distance(a,b)/.12f);for(int i=0;i<=n;i++)if(!Suitable(Vector2.Lerp(a,b,i/(float)Mathf.Max(1,n))))return false;return true;}
  void Update(){
+            if(PrototypeRegionView.ZoningSimulationPaused)return;
   if(!land)return;float dt=Mathf.Min(Time.deltaTime,.1f);
   foreach(var f in fish){if(!f.body.isVisible)continue;var p=new Vector2(f.root.position.x,f.root.position.z);
    if(Vector2.Distance(p,f.target)<.06f){f.wait-=dt;if(f.wait>0)continue;f.wait=1+R()*2;for(int i=0;i<25;i++){var target=f.home+new Vector2((R()*2-1)*1.3f,(R()*2-1)*2);if(Vector2.Distance(p,target)>.2f&&ClearPath(p,target)){f.target=target;break;}}}

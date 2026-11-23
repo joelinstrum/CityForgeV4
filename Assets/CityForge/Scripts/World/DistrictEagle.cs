@@ -41,6 +41,7 @@ namespace CityForge.World
 
         private void TickDistrictEagle()
         {
+            if(ZoningSimulationPaused)return;
             if (SelectedDistrict < 0 || SelectedDistrict != eagleDistrict || !AnimalsEnabled)
             {
                 ResetDistrictEagle();

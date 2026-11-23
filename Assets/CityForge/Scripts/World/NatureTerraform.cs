@@ -5,11 +5,11 @@ using CityForge.UI;
 namespace CityForge.World
 {
     public enum TerraformAction { Raise,Lower,Level,Smooth }
-    public enum TerraformLevel { Lowest,Average,Clicked,Sea }
+    public enum TerraformLevel { Lowest,Average,Clicked,Sea,LotsAndZones }
     [Serializable]public sealed class TerraformBrushSettings
     {
         public TerraformAction Action=TerraformAction.Level;
-        public TerraformLevel Level=TerraformLevel.Lowest;
+        public TerraformLevel Level=TerraformLevel.LotsAndZones;
         public float Size=32,Step=5,Offset=0,Blend=.35f;
     }
     public sealed partial class PrototypeRegionView
@@ -37,6 +37,7 @@ namespace CityForge.World
                 ApprovedDistrict.QueueTerraformCoast(area,true,plane);
             }
             ApprovedDistrict.FlushTerraformCoast();
+            MarkImmigrationSitesChanged();QueueLotGrowth();
             ShowDistrictMessage("Terrain updated · Water and shoreline refreshed");
         }
         internal void CancelTerraform(){if(levelerNature)SetLeveler(false);}
@@ -46,6 +47,9 @@ namespace CityForge.World
         }
         float TerraformTarget(ZoneGroundPlane plane,DistrictLotGrading grading)
         {
+            // A fixed building datum avoids sampling and stays identical across separate strokes.
+            if(terraformSettings.Action==TerraformAction.Level&&terraformSettings.Level==TerraformLevel.LotsAndZones)
+                return Mathf.Max(0,SeaLevel+1f+terraformSettings.Offset);
             var stats=grading.Statistics(plane.Bounds,p=>plane.Contains(p)&&InActiveDistrict(p),CurrentLotTerrainHeight(plane.center));
             float target=terraformSettings.Action switch{
                 TerraformAction.Raise=>stats.Mean+terraformSettings.Step,

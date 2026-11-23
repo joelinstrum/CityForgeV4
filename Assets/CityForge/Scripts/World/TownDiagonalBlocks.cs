@@ -39,7 +39,7 @@ namespace CityForge.World
                 var record = new DistrictLotRecord { center = center, rotation = rotation, diagonalRotation = true,
                     definition = template, district = DistrictAtWorld(new Vector3(center.x, 0, center.y)) };
                 var footprint = new DistrictLotFootprint(record);
-                if (PlacedLots.Any(lot => footprint.Overlaps(new DistrictLotFootprint(lot))) ||
+                if (PlacedLots.Concat(PendingPlayerLots).Any(lot => footprint.Overlaps(new DistrictLotFootprint(lot))) ||
                     FootprintHasGridZoning(footprint) || LotOverlapsDistrictRoad(record, ResidentialRoadCornerInset)) continue;
                 if (InCampClearing(center, template.Size.magnitude * .5f)) return "Keep the lot clear of camps.";
                 var problem = LotSiteProblem(record, water, growing: true);
@@ -114,6 +114,15 @@ namespace CityForge.World
             if (!CanBuildTown || IsSaving) return "Establish the town center before zoning.";
             var problem = PrepareDiagonalBlock(plan, out var lots, out var streets);
             if (problem != null) return problem;
+            if (!DeveloperMode)
+            {
+                problem=CommitNewRoadPieces(streets);
+                if(problem!=null)return problem;
+                CommitBlockGroundPlane(plan,streets,true);
+                foreach(var lot in lots){lot.id=Guid.NewGuid().ToString("N");PendingPlayerLots.Add(lot);}
+                RefreshZoneOverlay(); MarkImmigrationSitesChanged();
+                return null;
+            }
             var options = diagonalGrowthOptions;
             var catalog = LotAssetCatalog.Load();
             foreach (var record in lots)

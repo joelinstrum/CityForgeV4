@@ -27,6 +27,7 @@ namespace CityForge.World
             CancelRoadPlacement(); CancelLotPlacement(); CancelZoneDrag(); CancelZonedBlock(false);
             diagonalGrowthOptions = null;
             zoneToolArmed = false; activeZone = zone; zonedBlockSize = size.x; zonedBlockDepth=size.y; zonedBlockTurns = 0; zonedBlockArmed = true;
+            SetZoningGameplayPause(true);
             SelectDistrictLot(null); EnsureZoneSurfaces();
             if (townPanel) townPanel.gameObject.SetActive(false);
             ShowDistrictMessage("Move the block into place · Tab to rotate · Click to build streets and zone · Esc to cancel");
@@ -42,6 +43,7 @@ namespace CityForge.World
             if (zonedBlockRoadMaterial) Destroy(zonedBlockRoadMaterial);
             zonedBlockRoadPreview = null; zonedBlockRoadMesh = null; zonedBlockRoadMaterial = null;
             if (showPanel && townPanel) townPanel.gameObject.SetActive(true);
+            if(!zoneToolArmed && !(townPanel && townPanel.gameObject.activeInHierarchy))SetZoningGameplayPause(false);
         }
 
         private bool UpdateZonedBlock()

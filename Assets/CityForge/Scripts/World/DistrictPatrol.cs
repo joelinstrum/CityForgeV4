@@ -39,6 +39,7 @@ namespace CityForge.World
         }
         private void LateUpdate()
         {
+            if(PrototypeRegionView.ZoningSimulationPaused)return;
             if (!view || view.DistrictLoading || view.IsSaving || !view.HarassCloseView) return;
             bool near = ActorSimulationVisibility.NearCamera(districtCamera, transform.position);
             float delta = cadence.Step(Mathf.Min(Time.deltaTime, .1f), near, GetInstanceID());

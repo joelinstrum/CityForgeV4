@@ -51,7 +51,7 @@ namespace CityForge.World
             {
                 // Tilted views use sky only; no projected mountain silhouettes.
                 material.SetFloat(Visibility, visibility);
-                material.SetFloat("_CloudTime",Time.unscaledTime);
+                material.SetFloat("_CloudTime",Time.time);
 
                 float hour=region.CurrentClockHour;
                 float stars=StarAmount(hour);

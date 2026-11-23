@@ -41,6 +41,7 @@ namespace CityForge.World
             foreach (var town in Towns.Where(t => members.Contains(t.DistrictIndex(GridSide))).ToArray())
                 DeleteTown(town);
             PlacedLots.RemoveAll(lot => members.Contains(lot.district));
+            PendingPlayerLots.RemoveAll(lot => members.Contains(lot.district));
             PlacedActors.RemoveAll(actor => members.Contains(actor.district));
             districtRoads.RemoveAll(road => members.Contains(road.district));
             undoRoadEdits.RemoveAll(edit => members.Contains(edit.Road.district));

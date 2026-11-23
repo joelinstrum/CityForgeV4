@@ -303,3 +303,7 @@ venv/
 # Original leveler selection shader; no artwork.
 !/Assets/CityForge/Resources/Region/LevelerPreview.shader
 !/Assets/CityForge/Resources/Region/LevelerPreview.shader.meta
+
+# Date/circumstance event definitions are shared gameplay source.
+!/Assets/CityForge/Resources/Config/RegionEvents.json
+!/Assets/CityForge/Resources/Config/RegionEvents.json.meta

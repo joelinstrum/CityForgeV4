@@ -39,7 +39,7 @@ namespace CityForge.World
 
         internal void Step(float delta, float now, bool visible)
         {
-            if (behavior == null || !view || view.IsSaving || view.DistrictLoading) return;
+            if (PrototypeRegionView.ZoningSimulationPaused || behavior == null || !view || view.IsSaving || view.DistrictLoading) return;
             CaptureHome();
             if (TestMode && (now >= TestEnds || view.SelectedDistrict != TestDistrict))
             {
