@@ -97,7 +97,7 @@ namespace CityForge.UI
             Caption("Description", 455, 291, 600, 18); var description = Edit("Building description", 455, 324, 940); description.characterLimit = 600;
             At(description.GetComponent<RectTransform>(), 455, 324, 940, 60); description.lineType = InputField.LineType.MultiLineNewline; description.textComponent.fontSize = 18;
             var refreshers = new List<Action>(); GameObject menu = null;
-            var feedback = Caption("", 455, 653, 940, 17, false, 44);
+            var feedback = Caption("", 790, 653, 605, 17, false, 44);
             var save = Action("Save Properties", 1187, 759, 211, null, true, 54);
             var scale = Edit("Default scale percent", 1110, 605, 180); scale.characterLimit = 8; scale.contentType = InputField.ContentType.DecimalNumber;
             bool ReadInputs()
@@ -139,6 +139,25 @@ namespace CityForge.UI
                 refreshers.Add(() => button.GetComponentInChildren<Text>().text = (options().FirstOrDefault(o => o.Id == selected()).Name ?? "Unspecified") + "  ▾");
             }
             Choice("First era", 455, 403, 300, () => CityForgeTimeline.Eras.Select(e => (e.id, e.Name)).ToArray(), () => draft.firstEra, v => draft.firstEra = v);
+            Action("Available eras…",455,656,300,()=>
+            {
+                if(menu)Destroy(menu);
+                var blocker=AddImage("Available eras input blocker",frame,Color.clear);Place(blocker.rectTransform,Vector2.zero,Vector2.one,Vector2.zero,Vector2.zero);blocker.raycastTarget=true;menu=blocker.gameObject;
+                var overlay=AddImage("Building available eras",blocker.transform,new Color(.015f,.035f,.045f,1));At(overlay.rectTransform,430,154,990,550);
+                var title=Label(overlay.transform,"Available starting eras",24,20,900,28);title.color=cream;title.font=serif;
+                var note=Label(overlay.transform,"The primary era is always included. Select any additional eras.",24,65,920,19);note.color=cream;
+                var extras=new HashSet<string>(draft.additionalEraIds??Array.Empty<string>());
+                for(int i=0;i<CityForgeTimeline.Eras.Length;i++)
+                {
+                    var era=CityForgeTimeline.Eras[i];bool primary=era.id==draft.firstEra;
+                    var toggle=Checkbox(overlay.transform,"Available era "+era.id,era.Name+(primary?" · Primary":""),24+(i%2)*480,120+(i/2)*66,450,primary||extras.Contains(era.id));
+                    toggle.interactable=!primary;
+                    toggle.onValueChanged.AddListener(value=>{if(value)extras.Add(era.id);else extras.Remove(era.id);draft.additionalEraIds=extras.Where(id=>id!=draft.firstEra).ToArray();restoring=false;RefreshValues();});
+                }
+                var done=Action("Done",1180,640,180,()=>{Destroy(menu);menu=null;RefreshValues();});done.transform.SetAsLastSibling();
+                // Keep the close control inside the overlay so it is destroyed with it.
+                done.transform.SetParent(overlay.transform,false);At((RectTransform)done.transform,770,475,180,44);
+            });
             Choice("Category", 775, 403, 300, () => LotClassification.Categories.Select(c => (c.id, c.name)).ToArray(), () => draft.category, v => { draft.category = v; draft.subcategory = ""; if (!LotBuildingProperties.Zones(v).Contains(draft.zone)) draft.zone = TownZone.None; });
             Choice("Wealth", 1095, 403, 300, () => Enum.GetValues(typeof(LotWealth)).Cast<LotWealth>().Select(w => (w.ToString(), w == LotWealth.None ? "Unspecified" : w.ToString())).ToArray(), () => draft.wealth.ToString(), v => draft.wealth = Enum.Parse<LotWealth>(v));
             Choice("Use / subcategory", 455, 500, 460, () => new[] { ("", "Unspecified") }.Concat(LotClassification.ForCategory(draft.category).Select(s => (s.id, s.name))).ToArray(), () => draft.subcategory, v => draft.subcategory = v);

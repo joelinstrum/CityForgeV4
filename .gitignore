@@ -307,3 +307,13 @@ venv/
 # Date/circumstance event definitions are shared gameplay source.
 !/Assets/CityForge/Resources/Config/RegionEvents.json
 !/Assets/CityForge/Resources/Config/RegionEvents.json.meta
+
+# Source-only era appearance policy; private models and textures remain excluded.
+!/Assets/CityForge/Resources/Config/EraAppearanceProfiles.json
+!/Assets/CityForge/Resources/Config/EraAppearanceProfiles.json.meta
+
+# Source-only Art Deco character metadata and pedestrian rules
+!/Assets/CityForge/Resources/Config/ArtDecoCharacters.json
+!/Assets/CityForge/Resources/Config/ArtDecoCharacters.json.meta
+!/Assets/CityForge/Resources/Config/PedestrianProfiles.json
+!/Assets/CityForge/Resources/Config/PedestrianProfiles.json.meta

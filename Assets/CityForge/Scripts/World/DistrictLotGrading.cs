@@ -284,7 +284,9 @@ float r=Mathf.Clamp(cornerRadius,0,Mathf.Min(size.x,size.y)*.5f);var d=new Vecto
         {
             if(lotPopulationAfter.Count==0&&delayedLotCharacters.Count==0)return;
             foreach(var lot in lotPopulationAfter.Keys.Where(l=>!PlacedLots.Contains(l)||LotPopulationReady(l)).ToArray()){lotPopulationAfter.Remove(lot);pedestrianRoutesDirty=true;}
-            for(int i=delayedLotCharacters.Count-1;i>=0;i--){var item=delayedLotCharacters[i];if(!item.body||!PlacedLots.Contains(item.lot)){delayedLotCharacters.RemoveAt(i);continue;}if(LotPopulationReady(item.lot)){item.body.SetActive(true);delayedLotCharacters.RemoveAt(i);}}
+            for(int i=delayedLotCharacters.Count-1;i>=0;i--){var item=delayedLotCharacters[i];if(!item.body||!PlacedLots.Contains(item.lot)){delayedLotCharacters.RemoveAt(i);continue;}if(LotPopulationReady(item.lot)){var appearance = EffectiveAppearanceLot(item.lot);
+                var eraView = item.body.GetComponentInParent<EraLotAppearanceView>();
+                item.body.SetActive(!eraView || eraView.Allows(item.body, appearance, DistrictAppearanceEra(item.lot.district)));delayedLotCharacters.RemoveAt(i);}}
         }
     }
 }

@@ -7,5 +7,7 @@
   "modelFolder": "RollsRoyce",
   "length": 4.7,
   "colorExtension": ".jpeg",
-  "speed": 10
+  "speed": 10,
+  "spawnEvery": 6,
+  "trafficGroup": "motor-car"
 }

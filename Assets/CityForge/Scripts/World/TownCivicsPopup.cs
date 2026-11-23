@@ -41,8 +41,6 @@ namespace CityForge.World
             catch (Exception error) when (error is IOException || error is UnauthorizedAccessException)
             { libraryProblem = "Saved lots could not be read. Close this popup and try again."; }
             var choices = CivicBuildingChoices.Collect(saved);
-            if (catalog && catalog.Find("timber-council-hall") is { prefab: not null })
-                choices.Insert(0, DistrictTownCenter());
             var eras = CityForgeTimeline.Eras;
             int era = Array.FindIndex(eras, e => TownYear(SelectedDistrict) >= e.FirstYear && TownYear(SelectedDistrict) <= e.LastYear);
             if (era < 0) era = 0;
@@ -156,7 +154,7 @@ namespace CityForge.World
             {
                 foreach (Transform child in content) { child.gameObject.SetActive(false); Destroy(child.gameObject); }
                 cards.Clear(); selected = null;
-                var visible = choices.Where(lot => CivicBuildingChoices.Category(lot) == CivicBuildingChoices.Categories[category].Id && CivicBuildingChoices.Era(lot) == eras[era].id).ToArray();
+                var visible = choices.Where(lot => CivicBuildingChoices.Category(lot) == CivicBuildingChoices.Categories[category].Id && CityCenterEraAllows(lot,eras[era].id)).ToArray();
                 for (int i = 0; i < categoryButtons.Length; i++)
                     categoryButtons[i].image.sprite = i == category ? ZoneModalArtwork.Gold : ZoneModalArtwork.Dark;
                 resultsTitle.text = CivicBuildingChoices.Categories[category].Name + $" Buildings ({visible.Length})";
@@ -205,7 +203,7 @@ namespace CityForge.World
             }
             string Problem(LotDefinition lot)
             {
-                if (!CanBuildTown && lot.id != DistrictTownCenterId) return "Place a Town Center first.";
+                if (!CanBuildTown && !IsTownCenterLot(lot)) return "Place a Town Center first.";
                 if (lot.objects == null || lot.objects.Count == 0) return "This saved lot has no placed assets.";
                 string assetProblem = LotAssetProblem(lot, catalog);
                 if (assetProblem != null) return assetProblem;

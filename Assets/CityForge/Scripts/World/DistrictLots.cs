@@ -356,7 +356,7 @@ namespace CityForge.World
             draft.objects.RemoveAt(index);
             string era = ResidentialGround.LotEra(draft);
             var choices = LotGrowableBuildings.Candidates(draft, catalog)
-                .Where(item => catalog.Find(item.assetId).eraId == era).ToArray();
+                .Where(item => catalog.Find(item.assetId).IsAvailableInEra(era)).ToArray();
             int currentIndex = Array.FindIndex(choices, item => item.assetId == current.assetId);
             if (choices.Length == 0 || (choices.Length == 1 && currentIndex == 0))
             {
@@ -454,10 +454,13 @@ namespace CityForge.World
                 var back = LotEditorWorkspace.Create(font, ClosePlayerLot, record.definition, record.customization,
                     customization =>
                     {
+                        var before = EffectiveAppearanceLot(record);
                         record.customization = customization;
-                        RebuildDistrictLots();
+                        var after = EffectiveAppearanceLot(record);
+                        if (EraAppearance.OnlyAppearanceChanged(before, after)) RefreshEraAppearance();
+                        else { RemoveDistrictLotViews(new[] { record }); PresentDistrictLots(new[] { record }); }
                         SetLotFeedback("Landscaping applied. Save the region to keep it.");
-                    }, placedLotId: record.id);
+                    }, placedLotId: record.id, appearanceEra: DistrictAppearanceEra(record.district));
                 playerLotWorkspace = back.GetComponentInParent<Canvas>().gameObject;
                 lotCamera = rig;
                 lotCamera.enabled = false;
@@ -831,6 +834,8 @@ namespace CityForge.World
                     try { definition = LotCustomizationService.Apply(definition, record.customization, catalog); }
                     catch (InvalidDataException error) { Debug.LogWarning(error.Message); }
                 }
+                string appearanceEra = DistrictAppearanceEra(record.district);
+                definition = EraAppearance.Resolve(definition, appearanceEra);
                 root.SetPositionAndRotation(new Vector3(record.center.x, 0, record.center.y),
                     Quaternion.Euler(0, record.FacingDegrees, 0));
                 var platformFootprint = new DistrictLotFootprint(record);
@@ -860,6 +865,7 @@ namespace CityForge.World
                 Transform harborPorch = null;
                 var porches = new List<(LotObjectDefinition item, Transform view)>();
                 var characters = new List<(LotObjectDefinition item, Transform view)>();
+                var eraView = root.gameObject.AddComponent<EraLotAppearanceView>();
                 foreach (var authored in definition.objects)
                 {
                     var item = authored;
@@ -905,6 +911,7 @@ namespace CityForge.World
                     }
                     if (asset.IsCharacter) characters.Add((item, instance));
                     if (dockWorker) dockWorkerHomes.Add((record, item.id), instance.gameObject);
+                    eraView.Register(instance.gameObject, asset);
                 }
                 foreach (var (item, character) in characters)
                 {
@@ -946,6 +953,7 @@ namespace CityForge.World
                         });
                     }
                 }
+                eraView.Apply(definition, appearanceEra, LotPopulationReady(record));
                 if (definition.AttractsVessels && ApprovedDistrict && ApprovedDistrict.DisplayTerrain)
                     HarborLanding.Build(root, ApprovedDistrict, record, harborPorch);
                 residentialGround.Add(definition, record.id, ResidentialGround.LotEra(definition), root, p => SiteHeight(p)+definition.elevation+record.elevation);

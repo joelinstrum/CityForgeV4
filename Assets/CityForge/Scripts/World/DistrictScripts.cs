@@ -28,9 +28,12 @@ namespace CityForge.World
 
         internal void ShowNewRegionWelcome()
         {
-            var founders = CityForgeTimeline.Find("founders");
-            if (founders != null && !readRegionMessages.Contains("era:" + founders.id))
-                ShowRegionEraMessage(founders, preview: false);
+            var era = CityForgeTimeline.Eras.FirstOrDefault(candidate =>
+                candidate.id == CreationSettings?.era || candidate.Name == CreationSettings?.era)
+                ?? CityForgeTimeline.Eras.FirstOrDefault(candidate => candidate.Periods.Any(period => period.Name == CreationSettings?.period))
+                ?? CityForgeTimeline.Find("founders");
+            if (era != null && !readRegionMessages.Contains("era:" + era.id))
+                ShowRegionEraMessage(era, preview: false);
         }
 
         private bool UpdateRegionMessage()

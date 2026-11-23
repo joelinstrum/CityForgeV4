@@ -16,8 +16,26 @@ namespace CityForge.World
         internal static void Attach(GameObject instance, LotAssetCatalogEntry asset, RegionTimeOfDay time,
             int cullingMask = -1)
         {
+            // Authored entrance-fixture centers, ray-picked from the Art Deco source meshes.
             Vector3[] c2Lanterns=asset.id switch
             {
+                LotAssetCatalog.ArtDecoCityCenter => new[]{new Vector3(9.394433f,3.390375f,9.692767f),new Vector3(-9.484547f,3.390375f,9.712611f),new Vector3(3.401821f,5.327836f,11.378491f),new Vector3(-3.852393f,5.327836f,11.382795f)},
+                "v3-building-c2-art-deco-hotel" => new[]{new Vector3(9.269121f,10.002480f,12.853903f),new Vector3(-9.069785f,10.002480f,12.969236f),new Vector3(4.418613f,4.288184f,13.870455f),new Vector3(-4.418613f,4.288184f,13.702475f)},
+                "v3-building-c2-art-deco-theater" => new[]{new Vector3(5.334609f,4.045078f,8.161988f),new Vector3(-5.562422f,4.045078f,8.143004f)},
+                "v3-building-c2-art-deco-kingsley-department-store" => new[]{new Vector3(8.104746f,8.850137f,6.608265f),new Vector3(-8.203887f,8.850137f,6.895467f)},
+                "v3-building-c2-art-deco-dry-goods" => new[]{new Vector3(5.555039f,5.605352f,13.318079f),new Vector3(-5.797617f,5.605352f,13.300724f)},
+                "v3-building-c2-art-deco-metro-bank" => new[]{new Vector3(4.512480f,5.149082f,11.124014f),new Vector3(-4.693887f,5.149082f,11.111936f)},
+
+                "v3-building-r2-art-deco-townhome-01" => new[]{new Vector3(3.065344f,3.562781f,6.914907f),new Vector3(0.442969f,3.562781f,6.932170f)},
+                "v3-building-r2-art-deco-townhome-02" => new[]{new Vector3(2.480625f,3.460625f,6.420832f),new Vector3(0.725625f,3.460625f,6.419857f)},
+                "v3-building-r2-art-deco-townhome-05" => new[]{new Vector3(1.381113f,4.229824f,6.304435f)},
+                "v3-building-r2-art-deco-townhome-06" => new[]{new Vector3(1.821656f,2.970219f,5.698455f),new Vector3(0.129094f,2.970219f,5.707934f)},
+                "v3-building-r2-art-deco-townhome-07" => new[]{new Vector3(-0.072773f,2.984789f,5.353500f),new Vector3(-1.993992f,2.984789f,5.343218f)},
+                "v3-building-r2-art-deco-townhome-08" => new[]{new Vector3(2.349316f,3.945059f,6.019641f),new Vector3(0.555293f,3.945059f,5.922326f)},
+                "v3-building-r2-art-deco-townhome-09" => new[]{new Vector3(0.887836f,3.450539f,6.750028f),new Vector3(-0.887836f,3.450539f,6.751727f)},
+                "v3-building-r2-art-deco-townhome-10" => new[]{new Vector3(2.226867f,2.781023f,5.425703f),new Vector3(0.538523f,2.781023f,5.428734f)},
+                "v3-building-r2-art-deco-townhome-11" => new[]{new Vector3(1.917211f,4.002648f,4.403310f),new Vector3(0.141539f,4.002648f,4.420223f)},
+                "v3-building-r2-art-deco-townhome-12" => new[]{new Vector3(2.314828f,3.466672f,5.164493f),new Vector3(0.640828f,3.466672f,5.156822f)},
                 "v3-building-c2-mid-wealth-ye-olde-inn" => new[]{new Vector3(-4.12108f,4.21636f,1.86818f),new Vector3(-0.08342f,2.08075f,3.33081f),new Vector3(1.61840f,2.08075f,3.32119f)},
                 "v3-building-c2-mid-wealth-kings-arms" => new[]{new Vector3(-1.07831f,2.35856f,2.92385f),new Vector3(1.04794f,2.35856f,2.92265f),new Vector3(-3.06735f,3.51281f,3.29569f)},
                 "v3-building-c2-mid-wealth-apothecary-3-stories" => new[]{new Vector3(-2.04036f,3.03758f,3.55342f)},

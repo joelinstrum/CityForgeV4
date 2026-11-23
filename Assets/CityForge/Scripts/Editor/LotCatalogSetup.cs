@@ -107,6 +107,25 @@ internal static class LotCatalogSetup
             R2LowWealthHome("r2-low-wealth-stone-house-2", "Low Wealth Stone House 2", "R2LowWealthStoneHouse2", 12.289818f),
             R2LowWealthHome("r2-low-wealth-trio", "Low Wealth Trio", "R2LowWealthTrio", 15.387814f),
             R2LowWealthHome("r2-low-wealth-apartment-collapse", "Low Wealth Apartment Collapse", "R2LowWealthApartmentCollapse", 14.357811f),
+            ArtDecoTownhome("r2-art-deco-townhome-01", "Green Cornice Bay", "R2ArtDecoTownhome01", 17.8812650f, -3.609878f, 3.573470f, -8.940632f),
+            ArtDecoTownhome("r2-art-deco-townhome-02", "Brownstone Bay", "R2ArtDecoTownhome02", 17.6031329f, -3.056328f, 3.056602f, -8.801566f),
+            ArtDecoTownhome("r2-art-deco-townhome-03", "Brick Three Bay", "R2ArtDecoTownhome03", 17.5816773f, -3.046315f, 3.049321f, -8.790839f),
+            ArtDecoTownhome("r2-art-deco-townhome-04", "Green Cornice Wide Bay", "R2ArtDecoTownhome04", 16.5014203f, -2.735046f, 2.942048f, -8.250710f),
+            ArtDecoTownhome("r2-art-deco-townhome-05", "Brownstone Three Story", "R2ArtDecoTownhome05", 17.6730403f, -2.937979f, 2.859773f, -8.836520f),
+            ArtDecoTownhome("r2-art-deco-townhome-06", "Limestone Shutters", "R2ArtDecoTownhome06", 14.9590225f, -2.468996f, 2.436817f, -7.479511f),
+            ArtDecoTownhome("r2-art-deco-townhome-07", "Brick Paired Bays", "R2ArtDecoTownhome07", 15.3724633f, -2.560041f, 2.602777f, -7.686232f),
+            ArtDecoTownhome("r2-art-deco-townhome-08", "Brick Three Bay Steps", "R2ArtDecoTownhome08", 16.6482557f, -2.827796f, 2.849298f, -8.324128f),
+            ArtDecoTownhome("r2-art-deco-townhome-09", "Limestone Deco Crown", "R2ArtDecoTownhome09", 16.8477555f, -2.626389f, 2.630842f, -8.423878f),
+            ArtDecoTownhome("r2-art-deco-townhome-10", "Brick Projecting Bay", "R2ArtDecoTownhome10", 13.9257337f, -2.815253f, 2.812207f, -6.962867f),
+            ArtDecoTownhome("r2-art-deco-townhome-11", "Brick Entry Bay", "R2ArtDecoTownhome11", 12.1550867f, -2.476389f, 2.497515f, -6.077543f),
+            ArtDecoTownhome("r2-art-deco-townhome-12", "Green Cornice Double Bay", "R2ArtDecoTownhome12", 13.7193686f, -2.984711f, 2.992190f, -6.859684f),
+            ArtDecoCommercial("c2-art-deco-hotel", "Hotel", "C2ArtDecoHotel", 35.4270937f, -10.260852f, 10.193405f, -17.713547f),
+            ArtDecoCommercial("c2-art-deco-theater", "Theater", "C2ArtDecoTheater", 17.6713855f, -6.130346f, 6.130346f, -6.926136f),
+            ArtDecoCommercial("c2-art-deco-kingsley-department-store", "Kingsley Department Store", "C2ArtDecoKingsley", 17.1641594f, -8.190216f, 8.311699f, -7.870271f),
+            ArtDecoCommercial("c2-art-deco-dry-goods", "Dry Goods", "C2ArtDecoDryGoods", 28.0867770f, -6.507189f, 6.656571f, -13.422217f),
+            ArtDecoCommercial("c2-art-deco-cartier-corner", "Cartier Corner", "C2ArtDecoCartierCorner", 12.4979254f, -6.232958f, 5.910493f, -5.514523f),
+            ArtDecoCommercial("c2-art-deco-metro-bank", "Metro Bank", "C2ArtDecoMetroBank", 23.5535981f, -5.429439f, 5.437563f, -11.776799f),
+            ArtDecoCityCenter(),
             FrontierLogCabin(),
             SmallColonialCabin(),
             FoundersHome("low-wealth-front-gable", "Front Gable House", "LowWealthFrontGable"),
@@ -234,11 +253,13 @@ internal static class LotCatalogSetup
         var catalog = AssetDatabase.LoadAssetAtPath<LotAssetCatalog>(CatalogPath);
         var entries = (catalog ? catalog.entries : System.Array.Empty<LotAssetCatalogEntry>()).ToList();
         bool changed = false;
-        foreach (var entry in candidates.Concat(ConfiguredVehicles()).Concat(PlaceableSeasonalTrees.CatalogEntries()).Concat(CityForge.EditorTools.FoxOakPreparation.OakEntries()).Concat(PurchasedTreeCatalog.CatalogEntries()).Concat(CityForge.EditorTools.PlaneTreePreparation.CatalogEntries()).Concat(foundersHomes).Concat(mediumHomes).Concat(meadowPoplars).Concat(ChildrenCharacterSetup.Entries()).Concat(Characters()).Concat(Landscaping()).Concat(Corn()).Concat(Wheat()).Where(item => item.prefab))
+        foreach (var entry in candidates.Concat(ConfiguredVehicles()).Concat(PlaceableSeasonalTrees.CatalogEntries()).Concat(CityForge.EditorTools.FoxOakPreparation.OakEntries()).Concat(PurchasedTreeCatalog.CatalogEntries()).Concat(CityForge.EditorTools.PlaneTreePreparation.CatalogEntries()).Concat(CityForge.EditorTools.CityTreePreparation.CatalogEntries()).Concat(foundersHomes).Concat(mediumHomes).Concat(meadowPoplars).Concat(ChildrenCharacterSetup.Entries()).Concat(Characters()).Concat(CityForge.EditorTools.ArtDecoCharacterPreparation.CatalogEntries()).Concat(Landscaping()).Concat(Corn()).Concat(Wheat()).Where(item => item.prefab))
         {
             if (entry.category != "Buildings" && !entry.IsCharacter)
                 entry.distantPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(
                     $"{DirectoryPath}/PropLOD/{entry.id}.fbx");
+            if (entry.category == "Buildings" && entry.group == "civics" && entry.eraId == "founders")
+                entry.additionalEraIds = new[] { "industrial" };
             entry.PrepareFenceSpan();
             var existing = entries.Find(item => item != null && item.id == entry.id);
             if (existing == null)
@@ -264,6 +285,7 @@ internal static class LotCatalogSetup
                 }
                 continue;
             }
+            if(existing.preserveEmissionColors!=entry.preserveEmissionColors){existing.preserveEmissionColors=entry.preserveEmissionColors;changed=true;}
             if (existing.nightWindowGlass != entry.nightWindowGlass)
             {
                 existing.nightWindowGlass = entry.nightWindowGlass;
@@ -344,11 +366,13 @@ internal static class LotCatalogSetup
             }
             else if ((entry.category == "Buildings" || entry.IsCharacter) &&
                 (existing.group != entry.group || existing.eraId != entry.eraId ||
+                    !(existing.additionalEraIds ?? System.Array.Empty<string>()).SequenceEqual(entry.additionalEraIds ?? System.Array.Empty<string>()) ||
                     existing.fromYear != entry.fromYear || existing.toYear != entry.toYear ||
                     existing.growableZone != entry.growableZone || existing.growableWealth != entry.growableWealth))
             {
                 existing.group = entry.group;
                 existing.eraId = entry.eraId;
+                existing.additionalEraIds = entry.additionalEraIds;
                 existing.fromYear = entry.fromYear;
                 existing.toYear = entry.toYear;
                 existing.growableZone = entry.growableZone;
@@ -704,6 +728,43 @@ internal static class LotCatalogSetup
             _ => null
         };
         return home;
+    }
+
+    private static LotAssetCatalogEntry ArtDecoTownhome(string id, string label, string folder,
+        float span, float leftWall, float rightWall, float frontStep)
+    {
+        var home = V3Building(id, label, folder, "residential", "modern", span);
+        home.growableZone = TownZone.Residential2;
+        home.growableWealth = LotWealth.Medium;
+        home.rowGeometry = new LotRowGeometry { leftWall = leftWall, rightWall = rightWall, frontStep = frontStep };
+        ConfigureBuildingWindowMask(home, $"{DirectoryPath}/V3Buildings/{folder}/Windows.png");
+        ConfigureCivicSurface(home, $"{DirectoryPath}/V3Buildings/{folder}/MetallicSmoothness.png");
+        return home;
+    }
+
+    private static LotAssetCatalogEntry ArtDecoCommercial(string id, string label, string folder,
+        float span, float leftWall, float rightWall, float frontStep)
+    {
+        var shop = V3Building(id, label, folder, "commercial", "modern", span);
+        shop.growableZone = TownZone.Commercial2;
+        shop.growableWealth = LotWealth.Medium;
+        shop.preserveEmissionColors = true;
+        shop.rowGeometry = new LotRowGeometry { leftWall = leftWall, rightWall = rightWall, frontStep = frontStep };
+        ConfigureBuildingWindowMask(shop, $"{DirectoryPath}/V3Buildings/{folder}/Windows.png");
+        ConfigureCivicSurface(shop, $"{DirectoryPath}/V3Buildings/{folder}/MetallicSmoothness.png");
+        return shop;
+    }
+
+    private static LotAssetCatalogEntry ArtDecoCityCenter()
+    {
+        var center = V3Building("art-deco-city-center", "Art Deco City Center", "ArtDecoCityCenter",
+            "civics", "modern", 29.0573551f);
+        center.subcategory = "government";
+        center.additionalEraIds = new[]{"postwar","contemporary"};
+        center.preserveEmissionColors = true;
+        ConfigureBuildingWindowMask(center, $"{DirectoryPath}/V3Buildings/ArtDecoCityCenter/Windows.png");
+        ConfigureCivicSurface(center, $"{DirectoryPath}/V3Buildings/ArtDecoCityCenter/MetallicSmoothness.png");
+        return center;
     }
 
     private static LotAssetCatalogEntry R2LowWealthHome(string id, string label, string folder, float span)

@@ -20,6 +20,32 @@ namespace CityForge.World
         private static readonly Color GradedPath = new(.635f, .56f, .49f, 1f);
         private static readonly Color GradedBuilding = new(.79f, .79f, .79f, 1f);
 
+        internal void ApplyEraMaterials(LotDefinition lot, string era)
+        {
+            for (int i = 0; i < paths.Count && i < lot.paths.Count; i++)
+            {
+                var path = lot.paths[i];
+                var style = LotPathMaterial.Find(EraAppearance.MaterialId(lot, path, era));
+                var renderer = paths[i].Filter.GetComponent<MeshRenderer>();
+                var previous = renderer.sharedMaterial;
+                var material = style.CreateMaterial();
+                if (previous.HasProperty(BaseColor) && material.HasProperty(BaseColor))
+                    material.SetColor(BaseColor, previous.GetColor(BaseColor));
+                LotPathMaterial.ApplyEdgeTreatment(material, path, path.edgeBlend, i);
+                material.SetFloat("_VertexOpacity", 1f);
+                if (material.shader.name == "CityForge/Lot Path Blend") material.renderQueue = PathRenderQueue;
+                renderer.sharedMaterial = material; assets.Add(material); assets.Remove(previous); Destroy(previous);
+                UpdateUV(paths[i].Source);
+                if (paths[i].Filter.sharedMesh != paths[i].Source) UpdateUV(paths[i].Filter.sharedMesh);
+                void UpdateUV(Mesh mesh)
+                {
+                    var vertices = mesh.vertices; var uv = new Vector2[vertices.Length];
+                    for (int v = 0; v < uv.Length; v++) uv[v] = LotGroundOverlay.QuarterTurn(new Vector2(vertices[v].x, vertices[v].z), -path.textureRotation) / style.TileSize;
+                    mesh.uv = uv; mesh.RecalculateTangents();
+                }
+            }
+        }
+
         internal void Build(LotDefinition lot, Func<Vector2, float> terrainHeight, float deckHeight, bool meadowGrade)
         {
             var bounds = new Rect(-lot.Size * .5f, lot.Size);

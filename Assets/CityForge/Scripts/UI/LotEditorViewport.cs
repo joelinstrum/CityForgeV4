@@ -344,9 +344,11 @@ namespace CityForge.UI
             draftingMaterial.SetColor("_BaseColor", color);
         }
 
+        private string previewAppearanceEra;
         public void Refresh(LotDefinition lot, LotAssetCatalog catalog, string selected, HashSet<string> selectedGroup,
-            LotPathDefinition selectedPath, bool grid, Rect? selectedTile, LotObjectDefinition growablePreview, LotObjectDefinition[] rowPreview = null)
+            LotPathDefinition selectedPath, bool grid, Rect? selectedTile, LotObjectDefinition growablePreview, LotObjectDefinition[] rowPreview = null, string appearanceEra = null)
         {
+            previewAppearanceEra = appearanceEra ?? ResidentialGround.LotEra(lot);
             selectedObject = selected;
             if(hiddenItem!=null&&!lot.objects.Exists(o=>o.id==hiddenItem))hiddenItem=null;
             footprintRoot = null;
@@ -510,7 +512,8 @@ namespace CityForge.UI
             foreach (var item in lot.objects)
             {
                 var asset = catalog ? catalog.Find(item.assetId) : null;
-                if (asset == null || !asset.prefab || LotAssetCatalog.IsRetiredTree(asset.id)) continue;
+                if (asset == null || !asset.prefab || LotAssetCatalog.IsRetiredTree(asset.id) ||
+                    !EraAppearance.Allows(lot, asset, previewAppearanceEra)) continue;
                 var instance = LotRuntimeLoader.InstantiateObject(item, asset, content);
                 PrototypeRegionView.SetVehicleMotion(instance.transform, asset.id, false);
                 foreach (var child in instance.GetComponentsInChildren<Transform>(true))
@@ -543,7 +546,7 @@ namespace CityForge.UI
             for (int i = 0; i < lot.paths.Count; i++)
             {
                 var path = lot.paths[i];
-                var style = LotPathMaterial.Find(path.materialId);
+                var style = LotPathMaterial.Find(EraAppearance.MaterialId(lot, path, previewAppearanceEra));
                 var mesh = LotPathSurface.BuildMesh(path, style.TileSize, .085f + i * .0005f);
                 pathMeshes.Add(mesh);
                 var edges = mesh.vertices;
@@ -588,7 +591,7 @@ namespace CityForge.UI
             }
             else if (material.HasProperty("_EdgeBlend"))
             {
-                var opaque = LotPathMaterial.Find(path.materialId).CreateMaterial();
+                var opaque = LotPathMaterial.Find(EraAppearance.MaterialId(previewLot, path, previewAppearanceEra)).CreateMaterial();
                 selectedPathRenderer.sharedMaterial = opaque;
                 materials.Remove(material);
                 materials.Add(opaque);

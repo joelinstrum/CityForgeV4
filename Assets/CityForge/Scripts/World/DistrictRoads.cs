@@ -15,6 +15,7 @@ namespace CityForge.World
     {
         public int district;
         public string surfaceId;
+        public string streetTreeStyle; // Missing/empty in older saves means no automatic planting.
         public Vector2[] points;
         public bool closed;
         public bool curved;
@@ -44,7 +45,11 @@ namespace CityForge.World
             ("founders-weathered-herringbone-pavement-street", "Herringbone Brick Street", "weathered-herringbone-pavement", "A one-tile (4 m) street with herringbone brick paving. Supports commercial frontage at every wealth level."),
             ("founders-irregular-flagstone-pavement-street", "Irregular Flagstone Street", "irregular-flagstone-pavement", "A one-tile (4 m) street with irregular flagstone paving. Supports commercial frontage at every wealth level."),
             ("founders-weathered-red-brick-pavement-street", "Weathered Red Brick Street", "weathered-red-brick-pavement", "A one-tile (4 m) street with weathered red brick paving. Supports commercial frontage at every wealth level."),
-            ("founders-rustic-wood-pavement-street", "Rustic Wood Planks Street", "rustic-wood-pavement", "A one-tile (4 m) street with rustic wood planks paving. Supports commercial frontage at every wealth level.")
+            ("founders-rustic-wood-pavement-street", "Rustic Wood Planks Street", "rustic-wood-pavement", "A one-tile (4 m) street with rustic wood planks paving. Supports commercial frontage at every wealth level."),
+            ("weathered-concrete-road", "Concrete Road", "weathered-concrete-pavement", "Weathered gray concrete paving. Available from the Art Deco era."),
+            ("weathered-asphalt-road", "Asphalt Road", "weathered-charcoal-asphalt", "Weathered charcoal asphalt paving. Available from the Art Deco era."),
+            ("weathered-concrete-street", "Concrete Street", "weathered-concrete-pavement", "A one-tile (4 m) concrete street with sidewalks. Optional automatic street trees."),
+            ("weathered-asphalt-street", "Asphalt Street", "weathered-charcoal-asphalt", "A one-tile (4 m) asphalt street with sidewalks. Optional automatic street trees.")
         };
 
         private const int HistoricalRoadSurfaceCount = 6;
@@ -54,6 +59,8 @@ namespace CityForge.World
         private const string FoundersCobblestoneStreetId = "founders-cobblestone-street";
         private const string FoundersBrickStreetId = "founders-brick-street";
 
+        internal static bool IsModernStreet(string id) => id is "weathered-concrete-street" or "weathered-asphalt-street";
+        internal static bool IsModernRoadSurface(string id) => IsModernStreet(id) || id is "weathered-concrete-road" or "weathered-asphalt-road";
         internal static bool IsFoundersStreet(string id) => FoundersStreetSlot(id) >= 0;
         private static int FoundersStreetSlot(string id) => id switch
         {
@@ -121,7 +128,7 @@ namespace CityForge.World
             {
                 if (record == null || record.district < 0 || record.district >= districtCount ||
                     FindRoadSurface(record.surfaceId) < 0 || (record.width != OneTileRoadWidth && Array.IndexOf(LotPathSurface.Widths, record.width) < 0) ||
-                    RoadGuideProblem(record.points, record.closed, mapSide * .5f) != null)
+                    RoadGuideProblem(record.points, record.closed, mapSide * .5f) != null || !StreetTreePalette.Valid(record.streetTreeStyle))
                     throw new InvalidDataException("Invalid district road.");
             }
         }
@@ -132,7 +139,7 @@ namespace CityForge.World
             "founders-mossy-fieldstone-street" or "founders-weathered-herringbone-pavement-street" or
             "founders-irregular-flagstone-pavement-street" or "founders-weathered-red-brick-pavement-street";
 
-        private static bool HasSidewalks(string id) => IsMasonryRoad(id) || IsFoundersStreet(id);
+        private static bool HasSidewalks(string id) => IsMasonryRoad(id) || IsFoundersStreet(id) || IsModernStreet(id);
 
         // Masonry roads already have the same pavement and sidewalks as streets.
         private static bool SupportsCommercialFrontage(string id) => HasSidewalks(id) || id == "paved-street";
@@ -271,6 +278,7 @@ namespace CityForge.World
             {
                 district = SelectedDistrict,
                 surfaceId = RoadSurfaces[roadSurfaceIndex].Id,
+                streetTreeStyle = HasSidewalks(RoadSurfaces[roadSurfaceIndex].Id) ? newStreetTreeStyle : null,
                 points = guide,
                 closed = closed,
                 curved = true,
@@ -459,7 +467,7 @@ namespace CityForge.World
                 if (run.Count >= 2 && RoadGuideProblem(run, false, MapSide * .5f) == null)
                     pieces.Add(new DistrictRoadRecord
                     {
-                        district = proposal.district, surfaceId = proposal.surfaceId, width = proposal.width,
+                        district = proposal.district, surfaceId = proposal.surfaceId, width = proposal.width,streetTreeStyle=proposal.streetTreeStyle,
                         points = run.ToArray(), curved = proposal.curved
                     });
                 run.Clear();
@@ -570,7 +578,7 @@ namespace CityForge.World
             int added = guide.Length - road.points.Length;
             var extension = new DistrictRoadRecord
             {
-                district = road.district, surfaceId = road.surfaceId, width = road.width, curved = road.curved,
+                district = road.district, surfaceId = road.surfaceId, width = road.width, curved = road.curved,streetTreeStyle=road.streetTreeStyle,
                 points = prepend ? guide.Take(added + 1).ToArray() : guide.Skip(road.points.Length - 1).ToArray()
             };
             var pieces = UnpavedRoadPieces(extension, road);
@@ -655,7 +663,7 @@ namespace CityForge.World
                 LotPathMaterial.ApplyEdgeTreatment(material, new LotPathDefinition
                 {
                     width = record.width, depth = LotPathDepth.HalfFoot, recessed = true,
-                    border = IsMasonryRoad(record.surfaceId) || record.surfaceId is "blacktop" or "paved-street" ? LotPathBorder.Curb : LotPathBorder.None
+                    border = IsModernRoadSurface(record.surfaceId) || IsMasonryRoad(record.surfaceId) || record.surfaceId is "blacktop" or "paved-street" ? LotPathBorder.Curb : LotPathBorder.None
                 }, HasSidewalks(record.surfaceId) ? 0 : 8, 0);
                 material.renderQueue = DistrictLotSurfaces.PathRenderQueue + 1;
                 BindRoadRecess(material);
@@ -808,6 +816,7 @@ namespace CityForge.World
         }
         private System.Collections.IEnumerator BuildDistrictSidewalks(bool paced)
         {
+            PruneAutomaticStreetTrees();
             ClearDistrictSidewalks();
             var visibleRoads = districtRoadMeshes.Keys.ToArray();
             var pavementMask = paced&&sidewalkMaskRoadRevision==FreightRoadRevision?cachedPavementMask:null;
@@ -864,8 +873,10 @@ namespace CityForge.World
             {
                 if(paced)yield return null;
                 bool paved = HasSidewalks(road.surfaceId);
-                bool plank = road.surfaceId == FoundersStreetId;
-                string styleId = plank ? LotPathMaterial.Plankboard : LotPathMaterial.Bluestone;
+                string eraPavingId = EraAppearance.Profile(DistrictAppearanceEra(SelectedDistrict))?.generalMaterial;
+                bool modernPaving = !string.IsNullOrEmpty(eraPavingId) && LotPathMaterial.Find(eraPavingId)?.IsAvailable == true;
+                bool plank = road.surfaceId == FoundersStreetId && !modernPaving;
+                string styleId = modernPaving ? eraPavingId : plank ? LotPathMaterial.Plankboard : LotPathMaterial.Bluestone;
                 var style = LotPathMaterial.Find(styleId);
                 var path = new LotPathDefinition { points = road.points, width = road.width, closed = road.closed, curved = road.curved };
                 var line = RoadCenterline(road).ToList();
@@ -877,6 +888,7 @@ namespace CityForge.World
                 var search = Rect.MinMaxRect(minimum.x - reach.x, minimum.y - reach.y, maximum.x + reach.x, maximum.y + reach.y);
                 var nearby = frontages.FindAll(edge => search.Overlaps(Rect.MinMaxRect(Mathf.Min(edge.A.x, edge.B.x),
                     Mathf.Min(edge.A.y, edge.B.y), Mathf.Max(edge.A.x, edge.B.x), Mathf.Max(edge.A.y, edge.B.y))));
+                if (modernPaving) nearby.Clear();
                 if (!paved && nearby.Count == 0) continue;
                 for (int side = -1; side <= 1; side += 2)
                 {
@@ -942,6 +954,8 @@ namespace CityForge.World
                 }
             }
 
+            var planting=RefreshAutomaticStreetTreesStages();while(planting.MoveNext()){if(paced)yield return planting.Current;}
+
             Material Material(string key, LotPathMaterial style, bool soft, bool masked = false)
             {
                 if (materials.TryGetValue(key, out var existing)) return existing;
@@ -984,6 +998,7 @@ namespace CityForge.World
         private void ClearDistrictRoadPresentation()
         {
             CancelQueuedSidewalks();
+            ClearAutomaticStreetTrees();
             ClearRoadRecess();
             ClearStreetJunctionPresentation();
             ClearRoadPathGuides();

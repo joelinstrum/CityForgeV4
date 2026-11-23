@@ -35,7 +35,7 @@ namespace CityForge.World
             var bounded = new List<DistrictRoadRecord>();
             foreach (var piece in result)
                 for (int start = 0; start < piece.points.Length - 1; start += markerLimit - 1)
-                    bounded.Add(new DistrictRoadRecord { district = piece.district, surfaceId = piece.surfaceId, width = piece.width,
+                    bounded.Add(new DistrictRoadRecord { district = piece.district, surfaceId = piece.surfaceId, streetTreeStyle=piece.streetTreeStyle, width = piece.width,
                         gridAligned = piece.gridAligned, points = piece.points.Skip(start).Take(markerLimit).ToArray() });
             return bounded;
             void Add(Vector2 a, Vector2 b)
@@ -64,7 +64,7 @@ namespace CityForge.World
                         bool clear = true;
                         for (int i = 1; i < simplified.Count; i++)
                             if (box.InteriorInterval(simplified[i - 1], simplified[i], out _)) { clear = false; break; }
-                        result.Add(new DistrictRoadRecord { district = road.district, surfaceId = road.surfaceId,
+                        result.Add(new DistrictRoadRecord { district = road.district, surfaceId = road.surfaceId, streetTreeStyle=road.streetTreeStyle,
                             width = road.width, gridAligned = road.gridAligned, points = clear ? simplified.ToArray() : run.ToArray() });
                     }
                 }

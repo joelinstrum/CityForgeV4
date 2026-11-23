@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using CityForge.World;
+using CityForge.UI;
 using UnityEngine;
 
 namespace CityForge.Lots
@@ -20,6 +21,17 @@ namespace CityForge.Lots
         [Serializable] internal sealed class PathStyle
         {
             public string materialId, era, family;
+            public string label, textureResource, firstEra, lastEra;
+            public float tileSizeMeters;
+            internal bool AllowsEra(string id)
+            {
+                if(string.IsNullOrEmpty(firstEra)&&string.IsNullOrEmpty(lastEra))return true;
+                var eras=CityForgeTimeline.Eras;int current=Array.FindIndex(eras,e=>e.id==id);
+                int first=string.IsNullOrEmpty(firstEra)?0:Array.FindIndex(eras,e=>e.id==firstEra);
+                int last=string.IsNullOrEmpty(lastEra)?eras.Length-1:Array.FindIndex(eras,e=>e.id==lastEra);
+                return current>=0&&first>=0&&last>=first&&current>=first&&current<=last;
+            }
+            internal bool VariationEra(string id)=>era==id||!string.IsNullOrEmpty(firstEra)&&AllowsEra(id);
             public LotWealth wealth;
             public LotWealth[] wealths;
             internal bool AllowsWealth(LotWealth value) => wealth == value || (wealths != null && Array.IndexOf(wealths, value) >= 0);
@@ -86,14 +98,14 @@ namespace CityForge.Lots
             VaryFences();
             // Capture source groups before changing IDs to avoid cascading replacements.
             // One seed per wealth/surface pool keeps compatible paths uniform lot-wide.
-            foreach (var group in lot.paths.Where(path => !path.generatedResidentialEntry)
+            foreach (var group in lot.paths.Where(path => !path.generatedResidentialEntry && !path.materialLocked)
                 .GroupBy(path => path.materialId).ToArray())
             {
                 var source = FindPath(group.Key);
-                if (source == null || source.wealth == LotWealth.None || source.era != era) continue;
+                if (source == null || source.wealth == LotWealth.None || !source.VariationEra(era)) continue;
                 var poolWealth = source.SelectionWealth(lot);
                 var choices = Paths.Where(style => style.AllowsWealth(poolWealth) && style.family == source.family &&
-                    style.era == era && LotPathMaterial.Find(style.materialId)?.IsAvailable == true)
+                    style.VariationEra(era) && style.AllowsEra(era) && LotPathMaterial.Find(style.materialId)?.IsAvailable == true)
                     .OrderBy(style => style.materialId, StringComparer.Ordinal).ToArray();
                 if (choices.Length == 0) continue;
                 string selected = choices[Hash(instanceId + ":path:" + poolWealth + ":" + source.family) % (uint)choices.Length].materialId;

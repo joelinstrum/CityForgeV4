@@ -106,7 +106,7 @@ namespace CityForge.World
             dismiss.navigation = new Navigation { mode = Navigation.Mode.None };
             dismiss.onClick.AddListener(CloseRoadContext);
 
-            var panel = FounderRect(roadContext, "Road actions", Vector2.zero, new Vector2(284, 346));
+            var panel = FounderRect(roadContext, "Road actions", Vector2.zero, new Vector2(284, 390));
             StyleTownPanel(panel, TownPanelColor);
             if (RectTransformUtility.ScreenPointToLocalPointInRectangle(roadContext, screen, null, out var point))
             {
@@ -118,8 +118,8 @@ namespace CityForge.World
             }
 
             FounderText(panel, RoadSurfaces[FindRoadSurface(road.surfaceId)].Label,
-                new Vector2(0, 150), new Vector2(258, 30), 21).color = TownGold;
-            var feedback = FounderText(panel, "", new Vector2(0, -148), new Vector2(258, 46), 15);
+                new Vector2(0, 172), new Vector2(258, 30), 21).color = TownGold;
+            var feedback = FounderText(panel, "", new Vector2(0, -173), new Vector2(258, 46), 15);
 
             TownButton(panel, lotFont, "Continue road", 12, -43, 260, () =>
             {
@@ -166,6 +166,13 @@ namespace CityForge.World
                     repaveTarget = road;
                     OpenTransportModal("Roads");
                 }
+            });
+
+            if(HasSidewalks(road.surfaceId))TownButton(panel,lotFont,"Trees: "+StreetTreePalette.DisplayName(road.streetTreeStyle),12,-277,260,()=>
+            {
+                int current=System.Array.FindIndex(StreetTreePalette.Styles,p=>p.Id==road.streetTreeStyle);
+                road.streetTreeStyle=current+1<StreetTreePalette.Styles.Length?StreetTreePalette.Styles[current+1].Id:null;
+                RefreshAutomaticStreetTrees();CloseRoadContext();ShowDistrictMessage("Street trees: "+StreetTreePalette.DisplayName(road.streetTreeStyle));
             });
 
             void Apply(Vector2[] points, bool curved, string success, bool? gridAligned = null)
@@ -255,6 +262,8 @@ namespace CityForge.World
 
             CloseTransportModal();
             RepaveRoad(target, surface);
+            if(target.surfaceId==RoadSurfaces[surface].Id&&HasSidewalks(target.surfaceId))
+            {target.streetTreeStyle=newStreetTreeStyle;RefreshAutomaticStreetTrees();}
         }
 
         private void RepaveRoad(DistrictRoadRecord road, int surface)

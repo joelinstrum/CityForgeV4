@@ -53,8 +53,9 @@ namespace CityForge.World
 
             var detail = instance.gameObject.AddComponent<DistrictBuildingDetail>();
             detail.distantZoom = asset.category == "Fences" || asset.id.StartsWith("v3-building-r3-", System.StringComparison.Ordinal) ||
+                asset.id.StartsWith("v3-building-r2-art-deco-", System.StringComparison.Ordinal) ||
                 asset.id.StartsWith("v3-building-c2-", System.StringComparison.Ordinal) ||
-                asset.id is "v3-building-new-england-church" or "v3-building-chapel" or "v3-building-constable-station" or
+                asset.id is LotAssetCatalog.ArtDecoCityCenter or "v3-building-new-england-church" or "v3-building-chapel" or "v3-building-constable-station" or
                     "v3-building-founders-academy" or "v3-building-founders-courthouse" or
                     "v3-building-founders-infirmary" or "v3-building-founders-schoolhouse" or
                     "v3-building-founders-college" ? 3 : DistantZoom;

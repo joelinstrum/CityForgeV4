@@ -68,13 +68,13 @@ namespace CityForge.World
             var badge=GovernmentPanel(panel,"Current game mode",new Vector2(555,332),new Vector2(332,30));
             governmentModeBadge=GovernmentText(badge,"",Vector2.zero,new Vector2(312,28),18,TextAnchor.MiddleCenter);
             var rule=FounderRect(panel,"Header rule",new Vector2(0,307),new Vector2(1536,2));rule.gameObject.AddComponent<Image>().color=new Color(.7f,.5f,.22f);
-            var sections=new[]{"Overview","Game Mode","Treasury","Taxes","Immigration","Labor & Rights","Trade","Public Services"};
+            var sections=new[]{"Overview","Game Mode","Treasury","Taxes","Immigration","Labor & Rights","Trade","Public Services","Era Content"};
             var crops=new[]{new Rect(365,65,213,190),new Rect(40,18,300,255),new Rect(605,25,240,240),new Rect(875,25,205,240),new Rect(1110,35,250,220),new Rect(1400,20,225,240),new Rect(1660,15,250,250),new Rect(1940,25,230,230)};
             for(int i=0;i<sections.Length;i++)
             {
                 string section=sections[i];var button=GovernmentButton(panel,section,new Vector2(-628,260-i*68),new Vector2(278,59),()=>ShowGovernmentPage(section));
                 button.GetComponentInChildren<Text>().rectTransform.anchoredPosition=new Vector2(25,0);button.GetComponentInChildren<Text>().rectTransform.sizeDelta=new Vector2(214,50);
-                GovernmentArt(button.transform,section+" icon",governmentIcons,crops[i],new Vector2(2172,724),new Vector2(-105,0),new Vector2(43,43),true);
+                GovernmentArt(button.transform,section+" icon",governmentIcons,crops[i % crops.Length],new Vector2(2172,724),new Vector2(-105,0),new Vector2(43,43),true);
                 governmentNav.Add(section,button);
             }
             var vertical=FounderRect(panel,"Navigation rule",new Vector2(-470,-30),new Vector2(1,650));vertical.gameObject.AddComponent<Image>().color=new Color(.6f,.46f,.24f,.6f);
@@ -98,6 +98,7 @@ namespace CityForge.World
             else if(section=="Game Mode")BuildGovernmentMode();
             else if(section=="Immigration")BuildGovernmentImmigration();
             else if(section=="Events")BuildGovernmentEvents();
+            else if(section=="Era Content")BuildGovernmentEraContent();
             else BuildGovernmentPlanned(section);
             RefreshGovernmentDashboard();
         }

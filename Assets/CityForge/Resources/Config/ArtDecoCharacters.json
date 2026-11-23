@@ -1,0 +1,60 @@
+{
+  "characters": [
+    {
+      "id": "artdeco-man-brown",
+      "label": "Art Deco Man in Brown",
+      "folder": "man-brown",
+      "albedo": "tripo_image_65b42714_0.jpg",
+      "normal": "NormalGL_7b7be01c-3c54-4cf7-9443-237693c83c61.jpg"
+    },
+    {
+      "id": "artdeco-man-tan",
+      "label": "Art Deco Man in Tan",
+      "folder": "man-tan",
+      "albedo": "tripo_image_4929bfc6_0.jpg",
+      "normal": "NormalGL_c2eb9c17-47f7-4742-9a93-3b07f453e079.jpg"
+    },
+    {
+      "id": "artdeco-man-black",
+      "label": "Art Deco Man in Black",
+      "folder": "man-black",
+      "albedo": "tripo_image_9bfa11d0_0.jpg",
+      "normal": "NormalGL_d51744d5-ddb4-432c-9e4b-c58fc3b5a689.jpg"
+    },
+    {
+      "id": "artdeco-man-blue-brown",
+      "label": "Art Deco Man in Blue and Brown",
+      "folder": "man-blue-brown",
+      "albedo": "tripo_image_ca0117c6_0.jpg",
+      "normal": "NormalGL_72d601fe-54e7-4e74-887c-5f95028db5e0.jpg"
+    },
+    {
+      "id": "artdeco-lady-green",
+      "label": "Art Deco Lady in Green",
+      "folder": "lady-green",
+      "albedo": "tripo_image_24d49f85_0.jpg",
+      "normal": "NormalGL_bf4e5837-aecb-4c72-957a-d4b3c69c4e98.jpg"
+    },
+    {
+      "id": "artdeco-lady-pink",
+      "label": "Art Deco Lady in Pink",
+      "folder": "lady-pink",
+      "albedo": "tripo_image_a0a99ac3_0.jpg",
+      "normal": "NormalGL_fdb4b469-745e-40a3-814c-164e99d6d61f.jpg"
+    },
+    {
+      "id": "artdeco-lady-tan",
+      "label": "Art Deco Lady in Tan",
+      "folder": "lady-tan",
+      "albedo": "tripo_image_1bc42ed9_0.jpg",
+      "normal": "NormalGL_09dd220f-3eb1-48b2-b3c6-5cba8f3a77f1.jpg"
+    },
+    {
+      "id": "artdeco-lady-navy",
+      "label": "Art Deco Lady in Navy",
+      "folder": "lady-navy",
+      "albedo": "tripo_image_cf64acd0_0.jpg",
+      "normal": "NormalGL_d59afd86-45f3-4ad4-88a5-49365a3304a2.jpg"
+    }
+  ]
+}

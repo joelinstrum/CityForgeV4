@@ -56,6 +56,8 @@ namespace CityForge.World
             public Animator Animator;
             public string IdleState, WalkState, AssetId;
             public int IdleHash, WalkHash;
+            public EraPedestrianProfile ActivityProfile;
+            public float ActivityPhase;
             public float Speed, CornerSpeed;
             public float ScaredUntil, HarassTestUntil;
             public Vector2[] Route;
@@ -73,6 +75,8 @@ namespace CityForge.World
             public float VehicleRestartTime;
             public Vector2 PassingOffset;
             public int Next, Direction = 1, TrafficRank;
+            public int AppearanceDistrict;
+            public bool AppearanceAllowed = true;
             public bool Closed, Ambient, Vehicle, EagleCarried, VisualWakePending;
             public ActorSimulationCadence Cadence;
         }
@@ -340,7 +344,8 @@ namespace CityForge.World
             }
             var walker = new Pedestrian
             {
-                Body = body, Animator = animator, VisualWakePending = true,
+                Body = body, Animator = animator, VisualWakePending = true, AssetId = asset.id, AppearanceDistrict = record.district,
+                AppearanceAllowed = EraAppearance.Allows(new LotDefinition(), asset, DistrictAppearanceEra(record.district)),
                 IdleState = definition ? definition.idleState : string.IsNullOrEmpty(asset.idleState) ? "Idle" : asset.idleState,
                 WalkState = definition ? definition.walkState : "Walk",
                 Speed = definition ? definition.walkSpeed : 1.15f
@@ -369,10 +374,7 @@ namespace CityForge.World
                 .OrderBy(lot => lot.center.y).ThenBy(lot => lot.center.x).ToArray();
             if (!catalog || buildings.Length == 0) return;
             var blocks = pedestrianBlockCircuits;
-            int districtYear = TownYear(SelectedDistrict);
-            string vehicleEra = CityForgeTimeline.Eras.FirstOrDefault(era =>
-                districtYear >= era.FirstYear && districtYear <= era.LastYear)?.id;
-            var vehicleGroups = VehicleProfile.All.Where(profile => profile.spawnEvery > 0 && profile.AvailableIn(vehicleEra))
+            var vehicleGroups = VehicleProfile.All.Where(profile => profile.spawnEvery > 0)
                 .Select(profile => (profile, asset: catalog.Find(profile.assetId)))
                 .Where(entry => entry.asset != null && entry.asset.prefab)
                 .GroupBy(entry => (group: string.IsNullOrEmpty(entry.profile.trafficGroup) ? entry.profile.assetId :
@@ -402,9 +404,12 @@ namespace CityForge.World
                 var zone = lot.definition.zoningLayout.zone;
                 if (zone == TownZone.None && LotClassification.FindCategory(lot.definition.category)?.id == "commercial")
                     zone = TownZone.Commercial1;
+                var appearanceLot = EffectiveAppearanceLot(lot);
+                string appearanceEra = EraAppearance.EffectiveEra(appearanceLot, DistrictAppearanceEra(lot.district));
                 var eligibleVehicles = vehicleGroups.Select(group => group.choices
-                    .Where(entry => entry.profile.AllowsTraffic(vehicleEra, zone, wealth)).ToArray()).ToArray();
-                var era = ResidentialGround.LotEra(lot.definition);
+                    .Where(entry => entry.profile.AllowsTraffic(appearanceEra, zone, wealth) && EraAppearance.Allows(appearanceLot, entry.asset, appearanceEra)).ToArray()).ToArray();
+                var era = appearanceEra;
+                var pedestrianProfile = EraPedestrianProfile.Find(era);
                 var pool = AmbientPedestrianPool(catalog, wealth, era, zone);
                 var root = districtLotRoots[lot];
                 foreach (var item in lot.definition.objects.Where(item => catalog.Find(item.assetId)?.category == "Buildings"))
@@ -423,7 +428,13 @@ namespace CityForge.World
                             var outside = root.TransformPoint(new Vector3(local.x, 0, local.y));
                             route.start = new Vector2(outside.x, outside.z);
                         }
-                        SpawnTraffic(pool[random.Next(pool.Length)], route.start, route.points, route.next, route.closed, random, false, lot);
+                        int count=pedestrianProfile?.Count(zone)??1;
+                        for(int person=0;person<count;person++)
+                        {
+                            var actor=SpawnTraffic(pool[random.Next(pool.Length)],route.start,route.points,route.next,route.closed,random,false,lot);
+                            actor.ActivityProfile=pedestrianProfile;
+                            if(pedestrianProfile!=null)actor.ActivityPhase=(float)random.NextDouble()*pedestrianProfile.cycleSeconds;
+                        }
                     }
                     for (int i = 0; i < vehicleGroups.Length; i++)
                     {
@@ -470,6 +481,8 @@ namespace CityForge.World
                 asset != null && asset.prefab && asset.prefab.GetComponentInChildren<Animator>() is { } animator &&
                 animator.runtimeAnimatorController && animator.runtimeAnimatorController.animationClips.Any(clip =>
                     clip.name.Contains("walk", StringComparison.OrdinalIgnoreCase))).ToArray();
+            var profile=EraPedestrianProfile.Find(era);
+            if(profile!=null)return profile.Count(zone)>0?Pool(profile.assetIds??Array.Empty<string>()):Array.Empty<LotAssetCatalogEntry>();
             var low = Pool("v3-hooligan");
             var high = era == "founders"
                 ? Pool("v3-founders-gentleman-black", "v3-founders-gentleman-blue", "v3-founders-lady-gray", "v3-founders-lady-red")
@@ -911,7 +924,8 @@ namespace CityForge.World
                 RegionTimeOfDay.Night => 0,
                 _ => ambientTrafficCount
             };
-            bool active = actor.VehicleRestartTime <= 0f && (!actor.Ambient || actor.TrafficRank < limit);
+            bool eraAllowed = actor.Ambient || actor.AppearanceAllowed;
+            bool active = eraAllowed && actor.VehicleRestartTime <= 0f && (!actor.Ambient || actor.TrafficRank < limit);
             if (!actor.Body) return;
             if (actor.Body.gameObject.activeSelf != active)
             {
@@ -994,6 +1008,16 @@ namespace CityForge.World
                 bool nearCamera = ActorSimulationVisibility.NearCamera(camera, p);
                 float simulationTime = walker.Cadence.Step(elapsed, nearCamera, walker.Body.GetInstanceID());
                 if (simulationTime <= 0f) continue;
+                // Advance only simulation time: authoring/gameplay pauses preserve the activity phase.
+                if(!walker.Vehicle&&walker.ActivityProfile!=null)
+                {
+                    walker.ActivityPhase=Mathf.Repeat(walker.ActivityPhase+simulationTime,Mathf.Max(1,walker.ActivityProfile.cycleSeconds));
+                    if(!walker.ActivityProfile.Walking(walker.ActivityPhase)&&Time.time>=walker.ScaredUntil)
+                    {
+                        if(nearCamera)SetPedestrianAnimation(walker,false);
+                        continue;
+                    }
+                }
                 // A culled Animator may still report its previous state as it returns to view.
                 if (nearCamera && !walker.Vehicle) SetPedestrianAnimation(walker, true);
                 var current = new Vector2(p.x, p.z) - walker.PassingOffset;

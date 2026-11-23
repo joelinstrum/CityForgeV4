@@ -27,6 +27,7 @@ namespace CityForge.UI
         private Button sprayButton, boundaryButton;
         private Vector2 last;
         private GroundPaintData before;
+        private string paletteEra="founders";
         private string texture = "packed-earth", group = "All";
         private ScrollRect paletteScroll;
         private Text paletteCount;
@@ -37,9 +38,9 @@ namespace CityForge.UI
         private BrushFeedback feedback;
         internal void Initialize(Transform hud, GroundPaintData data, Func<Vector2?> getPointer, Func<Vector2, Vector2> screen,
             Func<Vector2, float> ground, Predicate<Vector2> allowed, Func<bool> editable, Action<GroundPaintData> changed,
-            Action finished, Rect? clip = null)
+            Action finished, Rect? clip = null,string era="founders")
         {
-            paintClip = clip;
+            paletteEra=era;paintClip = clip;
             Data = (data ?? new GroundPaintData()).Copy(); pointer = getPointer; project = screen; height = ground;
             contains = allowed; canEdit = editable; committed = changed; closed = finished;
             rendering = gameObject.AddComponent<GroundPaintRenderer>(); rendering.Initialize(Data, ground, clip);
@@ -99,7 +100,7 @@ namespace CityForge.UI
         private void Populate()
         {
             foreach(Transform child in palette){child.gameObject.SetActive(false);Destroy(child.gameObject);}
-            var styles=LotPathMaterial.All.Where(s=>s.IsAvailable&&(group=="All"||s.Group==group)).ToArray();
+            var styles=LotPathMaterial.All.Where(s=>s.IsAvailable&&s.IsAvailableInEra(paletteEra)&&(group=="All"||s.Group==group)).ToArray();
             palette.sizeDelta=new Vector2(324,Mathf.Max(222,Mathf.CeilToInt(styles.Length/3f)*112));
             foreach(var button in groupButtons)button.Value.image.sprite=button.Key==group?ZoneModalArtwork.Gold:ZoneModalArtwork.Dark;
             if(paletteCount)paletteCount.text=$"{styles.Length} ground textures · Scroll to browse";

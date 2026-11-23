@@ -1,3 +1,82 @@
+# Session checkpoint and next bridge prototype — November23,2026
+
+Read Documentation/03_Technical/Bridge_Assembly_Handoff.md for the consolidated
+installed-feature summary, private asset paths, verification and agreed next task.
+Bridges are transport structures, not lots: versioned JSON style definitions plus
+saved bridge instances and an in-game drag/release designer. First prototype is a
+plain-shape trestle with deck, railings, braced supports, inclined approaches and
+confirm-only earthwork. No bridge implementation or artwork started yet. Prioritize
+road/elevated route connectivity, real bed supports, water clearance and save/reload.
+User asked to commit this checkpoint and continue in a new chat. Source-only commit;
+private art/models/saves stay local. Do not interpret earlier Play discard approval
+as permission to interrupt a future unsaved session.
+
+# Building gallery era filter — November23,2026
+
+Removed unused-tracking filter from shared galleries. Building gallery now seeds
+its era/category from the current lot, resetting on lot/era/category context changes,
+while retaining manual filter choices for unchanged context. Blank era defaults All.
+Top shows LOT ERA as context; FILTER BY ERA dropdown sits below Favorites. First-era
+metadata is never changed by browsing. Art Deco City Center remains visible in a
+fresh modern civic lot. Seven native UI checks passed for default visibility, earlier
+and all-era filters, same-lot filter retention, lot switching and removed checkbox.
+Screenshot: be/outputs/Building-Era-Filter. Installed after explicit session-discard
+approval. No saved lots changed.
+
+# Civic lots define town centers — November23,2026
+
+Supersedes generated Art Deco/timber starter-lot shortcuts. Founding and Civics
+menus now select saved library lots only. CivicBuildingChoices.IsTownCenter uses
+Civics category plus effective TownCenter delivery role, without a building asset
+ID. FoundingLots also retains unconfigured legacy Founder category lots; explicit
+None overrides it. Existing generated centers keep their saved explicit role.
+No auto TownCenter role from the Art Deco model in LotDefinition; legacy Harbor
+Council fallback remains for compatibility. Art Deco model remains in Buildings.
+Lot Editor Lot role… opens the role/delivery modal; TownCenter selection enabled
+only for Civics. Saved lot layout, first era and resource checks remain authoritative.
+Town-center era filtering permits its first era and later; ordinary civic filtering
+unchanged. Empty libraries prompt authoring and receive no generated fallback.
+14 native Unity checks passed: model-only/explicit role/category rules, save/reload,
+legacy/None compatibility, empty library, generic era rules and actual role UI.
+Evidence: be/outputs/Civic-Lot-Rules. No user saved lots or placed centers changed.
+
+# Art Deco pedestrians — November23,2026
+
+ArtDecoCharacterPreparation imports8 private humanoid characters from the user's
+art-deco-npcs ZIPs. Retained originals: SourceAssets/ArtDecoCharacters. Models and
+controllers: Resources/Lots/ArtDecoCharacters. Black/tan men had no takes; use
+Humanoid-retargeted brown-suit Idle/Walk clips. All8 avatars/loops/bone motion
+verified in isolated native Unity; gallery screenshot inspected. Characters are
+modern/1921–1945, player-placeable, group Art Deco Era.
+Config/ArtDecoCharacters.json is source-only import metadata. PedestrianProfiles.json
+owns era pools, zone counts and walking cadence: modern R2=2,R3=3,C2=4,C3=6 per
+building, all wealth, .75 walking fraction/40s cycle. Spawn phases are staggered.
+DistrictPlacedActors selects the effective district/lot appearance era; legacy eras
+retain their pools when no profile exists. R1/C1 don't get this Art Deco set. Ambient
+activity advances by active simulation cadence and leaves blocked/no-route actors
+stationary; manual characters, freight, immigrant routes and native biomes unchanged.
+Existing ambient instances survive unrelated refreshes. Modern commercial spawns
+are2× residential at matching density. Primary compile4.63s, all8 registered.
+Evidence: be/outputs/ArtDeco-Characters. No commit/push performed.
+
+# Art Deco welcome and city trees — November23,2026
+
+New-region welcome resolves CreationSettings.era by ID/name, then period name,
+then Founder fallback. Modern era text remains in ContentCatalog.json; harbor art
+replaces private ModernEraIllustration.png, using the same welcome layout.
+Acknowledgments remain era:<id>. CityTreePreparation registers8 private seasonal
+entries city-tree-01..04-{bare,planter}; source was a material-grouped12-tree grid
+(four sizes × summer/fall/winter). Split meshes retain UVs and authored winter
+branches, with reduced distant tiers in prefab LODGroups. Planter variants retain
+concrete/mulch/iron; bare variants omit them. StreetTreePalette adds small/medium
+bare and planter presets; HasPlanter suppresses the extra soil pit. No native biome
+changes. All missing bark/planter textures recovered from OBJ texture archive in
+the full collection. Source FBX/Blender/texture archives retained privately under
+SourceAssets/CityTrees; Downloads files are not runtime dependencies.
+216 isolated Unity checks passed including actual street planting, gallery seasons,
+serialization, Zoom2/3 transitions and era welcome/acknowledgments. Primary compile
+2.04s, all8 entries registered. Evidence in be/outputs/ArtDeco-Welcome-City-Trees.
+
 # Lower Manhattan1609 import — November22,2026
 
 Default private prebuilt preset is now Manhattan1609/Manhattan_1609_CityForge.json:

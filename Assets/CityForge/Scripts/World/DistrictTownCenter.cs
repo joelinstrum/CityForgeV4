@@ -1,26 +1,21 @@
 using System;
 using System.Linq;
 using CityForge.Lots;
+using CityForge.UI;
 using UnityEngine;
 
 namespace CityForge.World
 {
     public sealed partial class PrototypeRegionView
     {
-        private const string DistrictTownCenterId = "6c54a4bdc61a47b09bbc4bf17f5d5420";
-
-        private static LotDefinition DistrictTownCenter() => new()
-        {
-            id = DistrictTownCenterId, name = "Town Center", type = LotType.Playable,
-            category = "civics", subcategory = "government", firstEraId = "founders",
-            width = 4, length = 4, deliveryRole = LotDeliveryRole.TownCenter,
-            deliveryRoleConfigured = true,
-            objects = new() { new LotObjectDefinition { assetId = "timber-council-hall" } }
-        };
+        private static bool IsTownCenterLot(LotDefinition lot) => CivicBuildingChoices.IsTownCenter(lot);
+        private static bool CityCenterEraAllows(LotDefinition lot,string era) => IsTownCenterLot(lot)
+            ? (LotClassification.Era(lot)?.FirstYear ?? lot.firstEraYear) <= (CityForgeTimeline.Find(era)?.LastYear ?? 0)
+            : CivicBuildingChoices.Era(lot)==era;
 
         private void RegisterDistrictTownCenter(DistrictLotRecord record)
         {
-            if (record.definition.id != DistrictTownCenterId ||
+            if (!IsTownCenterLot(record.definition) ||
                 Towns.Any(town => ActiveDistrictMembers.Contains(town.DistrictIndex(GridSide)))) return;
             var town = new RegionTown
             {

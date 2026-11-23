@@ -11,6 +11,7 @@ namespace CityForge.World
     {
         public int index;
         public int currentYear;
+        public string appearanceEraId;
         public string name;
         public Rect bounds;
         public RegionBiome biome;

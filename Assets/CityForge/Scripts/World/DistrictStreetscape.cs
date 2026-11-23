@@ -165,7 +165,7 @@ namespace CityForge.World
                     if (streetscapeGhost) streetscapeGhost.SetActive(false);
                     DrawStreetscapeOutline();
                     OpenStreetscapePanel();
-                    ShowDistrictMessage("Prop moved.");
+                    RefreshAutomaticStreetTrees();ShowDistrictMessage("Prop moved.");
                 }
             }
             return true;
@@ -232,7 +232,7 @@ namespace CityForge.World
                 view.SetActive(false);
                 Destroy(view);
             }
-            ShowDistrictMessage("Prop deleted.");
+            RefreshAutomaticStreetTrees();ShowDistrictMessage("Prop deleted.");
         }
 
         private void DrawStreetscapeOutline()
@@ -324,6 +324,7 @@ namespace CityForge.World
                 PresentStreetscape(record, streetscapeAsset);
                 PlacedActors.Add(record);
             }
+            RefreshAutomaticStreetTrees();
             PlayerPrefs.SetString(StreetscapeHistoryKey, string.Join("|", StreetscapeHistory()
                 .Prepend(streetscapeAsset.id).Distinct().Take(32)));
             return null;
@@ -331,6 +332,8 @@ namespace CityForge.World
 
         private string StreetscapePlacementProblem(LotObjectDefinition piece, Vector2 center, WildlifeWaterAccess water)
         {
+            if (!EraAppearance.Allows(new LotDefinition(), LotAssetCatalog.Load()?.Find(piece.assetId), DistrictAppearanceEra(SelectedDistrict)))
+                return "This transport is unavailable in the district appearance era.";
             var direction = new Vector2(Mathf.Cos(piece.yaw * Mathf.Deg2Rad), -Mathf.Sin(piece.yaw * Mathf.Deg2Rad));
             int steps = Mathf.Max(1, Mathf.CeilToInt(piece.fenceLength));
             for (int i = 0; i <= steps; i++)
@@ -357,6 +360,7 @@ namespace CityForge.World
             LamppostLight.Attach(instance, asset, TimeOfDay);
             SetVehicleMotion(instance.transform, asset.id, false);
             streetscapeViews[record] = instance;
+            instance.SetActive(EraAppearance.Allows(new LotDefinition(), asset, DistrictAppearanceEra(record.district)));
         }
 
         private void RebuildStreetscape()

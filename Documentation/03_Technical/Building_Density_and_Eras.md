@@ -1,0 +1,9 @@
+# Building gallery density and multiple starting eras
+
+The gallery's former Use dropdown is now Density: All densities, One, Two, Three. Density is derived from existing Residential/Commercial/Industrial zone tiers, not estimated from appearance. Ploppable models with no growable zone do not receive an invented tier. Civic and transportation categories disable density and wealth filters; category changes clear the previous density and wealth selection so a residential filter cannot hide civic models. Subcategory metadata remains available in Building Properties and search.
+
+LotAssetCatalogEntry.additionalEraIds augments the existing primary eraId. IsAvailableInEra uses exact primary/additional membership, with the existing year-range fallback for legacy entries without a primary era. Gallery, growable candidate eligibility, row eligibility and building replacement use that same membership. Existing single-era definitions retain their behavior.
+
+Prepared Founder’s-era civic buildings, including churches, schools, government and healthcare structures, also support Industrial. Colonial Growth remains a period within Founder’s Era; no extra timeline era is introduced. Art Deco homes retain their original Art Deco classification.
+
+Building Properties > Available eras opens a seven-era checklist; the primary era is included and locked. Additional choices remain draft state until Save Properties. They persist in the existing private BuildingProperties/catalog.json store. Restore Defaults resets era additions along with other properties. Version-one records that omitted the new field inherit prepared additional eras when their primary era matches; explicit empty arrays opt out. Changing an override’s primary era does not inherit unrelated catalog era additions. No player lot schema migration or authored building replacement occurs.

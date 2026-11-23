@@ -278,6 +278,120 @@
       "wealth": 2,
       "family": "Walk",
       "era": "victorian"
+    },
+    {
+      "materialId": "artdeco-light-gray-concrete",
+      "label": "Light Gray Concrete",
+      "textureResource": "Lots/PathMaterials/artdeco-light-gray-concrete",
+      "tileSizeMeters": 4,
+      "firstEra": "modern",
+      "era": "modern",
+      "family": "Concrete",
+      "wealth": 2,
+      "wealths": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "materialId": "artdeco-weathered-gray-concrete",
+      "label": "Weathered Gray Concrete",
+      "textureResource": "Lots/PathMaterials/artdeco-weathered-gray-concrete",
+      "tileSizeMeters": 4,
+      "firstEra": "modern",
+      "era": "modern",
+      "family": "Concrete",
+      "wealth": 2,
+      "wealths": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "materialId": "artdeco-warm-tan-concrete",
+      "label": "Warm Tan-Gray Concrete",
+      "textureResource": "Lots/PathMaterials/artdeco-warm-tan-concrete",
+      "tileSizeMeters": 4,
+      "firstEra": "modern",
+      "era": "modern",
+      "family": "Concrete",
+      "wealth": 2,
+      "wealths": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "materialId": "artdeco-concrete-sidewalk-tiles",
+      "label": "Concrete Sidewalk Tiles",
+      "textureResource": "Lots/PathMaterials/artdeco-concrete-sidewalk-tiles",
+      "tileSizeMeters": 3,
+      "firstEra": "modern",
+      "era": "modern",
+      "family": "Concrete",
+      "wealth": 2,
+      "wealths": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "materialId": "artdeco-cracked-concrete",
+      "label": "Cracked Concrete",
+      "textureResource": "Lots/PathMaterials/artdeco-cracked-concrete",
+      "tileSizeMeters": 4,
+      "firstEra": "modern",
+      "era": "modern",
+      "family": "Concrete",
+      "wealth": 2,
+      "wealths": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "materialId": "artdeco-vintage-gray-concrete",
+      "label": "Vintage Gray Concrete",
+      "textureResource": "Lots/PathMaterials/artdeco-vintage-gray-concrete",
+      "tileSizeMeters": 4,
+      "firstEra": "modern",
+      "era": "modern",
+      "family": "Concrete",
+      "wealth": 2,
+      "wealths": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "materialId": "weathered-concrete-pavement",
+      "era": "modern",
+      "family": "Concrete",
+      "wealth": 2,
+      "wealths": [
+        1,
+        2,
+        3
+      ],
+      "firstEra": "modern"
+    },
+    {
+      "materialId": "weathered-charcoal-asphalt",
+      "era": "modern",
+      "family": "Asphalt",
+      "wealth": 2,
+      "wealths": [
+        1,
+        2,
+        3
+      ],
+      "firstEra": "modern"
     }
   ],
   "ground": [

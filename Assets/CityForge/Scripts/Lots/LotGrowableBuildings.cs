@@ -8,6 +8,7 @@ namespace CityForge.Lots
         // These imports face +Z at yaw zero. LotFrontage.South faces -Z.
         internal static float FrontageOffset(string assetId) => assetId switch
         {
+            LotAssetCatalog.ArtDecoCityCenter => 180f,
             // The vertical-siding model's gabled entrance is on its +X wall.
             "v3-building-low-wealth-vertical-siding-front-gable" or "v3-building-low-wealth-front-gable-cottage" => 90f,
             "v3-building-medium-wealth-old-yeller" or "v3-building-medium-wealth-stone-house" => 90f,

@@ -65,10 +65,7 @@ namespace CityForge.World
         private bool InCapitalDistrict(RegionTown capital) => SelectedDistrict >= 0 &&
             DistrictAnchor(capital.DistrictIndex(GridSide)) == SelectedDistrict;
 
-        private static bool IsFoundersLot(LotDefinition lot) =>
-            LotClassification.FindCategory(lot.category)?.id == "civics" &&
-            LotClassification.ForCategory(lot.category).Any(child => child.id == "founders-buildings" &&
-                (lot.subcategory == child.id || lot.subcategory == child.name || lot.subcategory == child.legacyName));
+        private static bool IsFoundersLot(LotDefinition lot) => CivicBuildingChoices.IsFoundingLot(lot);
 
         private void OpenFounderPicker()
         {
@@ -95,7 +92,7 @@ namespace CityForge.World
 
             var panel = FounderRect(founderPicker, "Founder’s Building", Vector2.zero, new Vector2(720, 492));
             panel.gameObject.AddComponent<Image>().color = new Color(.10f, .12f, .09f);
-            FounderText(panel, $"Choose a Founder’s Building for {capital.name}", new Vector2(0, 211), new Vector2(668, 48), 25);
+            FounderText(panel, $"Choose a founding civic lot for {capital.name}", new Vector2(0, 211), new Vector2(668, 48), 25);
             var close = AddLotButton(panel, lotFont, "Choose later", 0, 160, CloseFounderPicker);
             var closeRect = (RectTransform)close.transform.parent;
             closeRect.anchorMin = closeRect.anchorMax = closeRect.pivot = Vector2.one * .5f;
@@ -118,7 +115,7 @@ namespace CityForge.World
             LotDefinition[] lots;
             try
             {
-                lots = LotLibrary.Local.List().Select(entry => entry.Lot).Where(IsFoundersLot).ToArray();
+                lots = CivicBuildingChoices.FoundingLots(LotLibrary.Local.List().Select(entry => entry.Lot));
             }
             catch (Exception error) when (error is IOException || error is UnauthorizedAccessException)
             {
@@ -126,7 +123,7 @@ namespace CityForge.World
                 return;
             }
             if (lots.Length == 0)
-                FounderText(panel, "Save a Civics → Founder’s Buildings lot in the Lot Editor to make it available here.",
+                FounderText(panel, "Save a civic lot in the Lot Editor and assign its Town Center role under Lot role to make it available here.",
                     Vector2.zero, new Vector2(590, 85), 18);
 
             founderThumbnails = new LotAssetThumbnails();

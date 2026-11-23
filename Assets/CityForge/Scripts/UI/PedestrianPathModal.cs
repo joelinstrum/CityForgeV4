@@ -12,25 +12,27 @@ namespace CityForge.UI
         internal string materialId="weathered-red-brick-pavement";
         internal int width=2, feather=45, rotation, shape;
         internal bool curved=true;
+        internal EraPathRole role; internal bool materialLocked;
         internal LotPathDepth depth;
         internal LotPathBorder border;
         internal LotPathBorderSides sides;
-        internal static PedestrianPathOptions From(LotPathDefinition p)=>new(){materialId=p.materialId,width=p.width,feather=p.edgeBlend,rotation=p.textureRotation,curved=p.curved,depth=p.depth,border=p.border,sides=p.borderSides};
-        internal void Apply(LotPathDefinition p){p.materialId=materialId;p.width=width;p.edgeBlend=feather;p.textureRotation=rotation;p.curved=curved;p.depth=depth;p.recessed=false;p.border=border;p.borderSides=sides;}
+        internal static PedestrianPathOptions From(LotPathDefinition p)=>new(){materialId=p.materialId,width=p.width,feather=p.edgeBlend,rotation=p.textureRotation,curved=p.curved,depth=p.depth,border=p.border,sides=p.borderSides,role=p.eraRole,materialLocked=p.materialLocked};
+        internal void Apply(LotPathDefinition p){p.materialId=materialId;p.width=width;p.edgeBlend=feather;p.textureRotation=rotation;p.curved=curved;p.depth=depth;p.recessed=false;p.border=border;p.borderSides=sides;p.eraRole=role;p.materialLocked=materialLocked;}
     }
     // Shared appearance controls; consumers retain their own geometry, persistence and undo.
     internal sealed class PedestrianPathModal:MonoBehaviour
     {
         static readonly Color Gold=new(.94f,.83f,.58f), Muted=new(.66f,.68f,.61f);
         static Font pathFont;
+        string era="founders";
         RectTransform frame;Font font;PedestrianPathOptions state;Action undoKeys;
         readonly List<(Button button,Func<bool> selected,bool border)> choices=new();
         Text borderHint;readonly List<Action> captions=new();
-        internal static GameObject Show(Transform parent,Font font,PedestrianPathOptions state,bool editing,Action accept,Action cancel,Action undo,Action delete=null,bool handleUndoKeys=false)
+        internal static GameObject Show(Transform parent,Font font,PedestrianPathOptions state,bool editing,Action accept,Action cancel,Action undo,Action delete=null,bool handleUndoKeys=false,string era="founders")
         {
             var root=new GameObject("Pedestrian path modal",typeof(RectTransform),typeof(Image),typeof(PedestrianPathModal));root.transform.SetParent(parent,false);
             var r=(RectTransform)root.transform;r.anchorMin=Vector2.zero;r.anchorMax=Vector2.one;r.offsetMin=r.offsetMax=Vector2.zero;root.GetComponent<Image>().color=new Color(0,0,0,.58f);
-            var modal=root.GetComponent<PedestrianPathModal>();if(!pathFont)pathFont=Font.CreateDynamicFontFromOSFont("Georgia",20);modal.font=pathFont?pathFont:font;modal.state=state;modal.undoKeys=handleUndoKeys?undo:null;modal.Build(editing,accept,cancel,undo,delete);return root;
+            var modal=root.GetComponent<PedestrianPathModal>();if(!pathFont)pathFont=Font.CreateDynamicFontFromOSFont("Georgia",20);modal.font=pathFont?pathFont:font;modal.state=state;modal.era=era;modal.undoKeys=handleUndoKeys?undo:null;modal.Build(editing,accept,cancel,undo,delete);return root;
         }
         static RectTransform Rect(Transform parent,string name,float x,float y,float w,float h)
         {var r=new GameObject(name,typeof(RectTransform)).GetComponent<RectTransform>();r.SetParent(parent,false);r.anchorMin=r.anchorMax=r.pivot=new Vector2(0,1);r.anchoredPosition=new Vector2(x,-y);r.sizeDelta=new Vector2(w,h);return r;}
@@ -48,12 +50,13 @@ namespace CityForge.UI
             var close=Button(frame,"×",1180,22,40,40,cancel);if(artwork){close.image.color=Color.clear;close.GetComponentInChildren<Text>().enabled=false;}
             if(editing)Label(frame,"Editing selected path",430,91,400,24,17);
             var surfaces=Rect(frame,"Surface",18,124,1204,220);Panel(surfaces);Label(surfaces,"Surface",24,9,150,38,29);Label(surfaces,"Select a texture for your path.",184,12,380,34,19);
-            Label(surfaces,"Founders Era (1740–1819)",880,12,300,34,19);
+            Label(surfaces,CityForgeTimeline.Find(era)?.Name??"Unknown era",880,12,300,34,19);
             var area=Rect(surfaces,"Surface browser",20,62,1164,144);area.gameObject.AddComponent<Image>().color=new Color(.045f,.075f,.075f);area.gameObject.AddComponent<Mask>().showMaskGraphic=true;var scroll=area.gameObject.AddComponent<ScrollRect>();scroll.viewport=area;scroll.horizontal=true;scroll.vertical=false;scroll.movementType=ScrollRect.MovementType.Clamped;
             var preferred=new[]{"irregular-flagstone-pavement","weathered-red-brick-pavement","weathered-herringbone-pavement","early-macadam-gravel","rustic-wood-pavement","mossy-fieldstone",LotPathMaterial.Bluestone};
-            var styles=LotPathMaterial.All.Where(s=>s.IsAvailable).OrderBy(s=>{int i=Array.IndexOf(preferred,s.Id);return i<0?100:i;}).ToArray();var content=Rect(area,"Path surfaces",0,0,styles.Length*158,136);scroll.content=content;
+            var styles=LotPathMaterial.All.Where(s=>s.IsAvailable&&s.IsAvailableInEra(era)).OrderBy(s=>{int i=Array.IndexOf(preferred,s.Id);return i<0?100:i;}).ToArray();var content=Rect(area,"Path surfaces",0,0,styles.Length*158,136);scroll.content=content;
             var materialButtons=new List<(LotPathMaterial style,Button button)>();
             for(int i=0;i<styles.Length;i++){var style=styles[i];var b=Button(content,style.Label,i*158,0,148,134,()=>state.materialId=style.Id,()=>state.materialId==style.Id);Thumb(b,style.Texture,148,92);materialButtons.Add((style,b));}
+            if(!styles.Any(s=>s.Id==state.materialId))state.materialId=styles.FirstOrDefault()?.Id??LotPathMaterial.ResidentialFootpath;
             int current=Array.FindIndex(styles,s=>s.Id==state.materialId);content.anchoredPosition=new Vector2(-Mathf.Clamp((current-3)*158,0,Mathf.Max(0,content.sizeDelta.x-1164)),0);
             var search=DefaultControls.CreateInputField(new DefaultControls.Resources()).GetComponent<InputField>();search.transform.SetParent(surfaces,false);var sr=(RectTransform)search.transform;sr.anchorMin=sr.anchorMax=sr.pivot=new Vector2(0,1);sr.anchoredPosition=new Vector2(580,-15);sr.sizeDelta=new Vector2(270,30);search.textComponent.font=font;search.textComponent.color=Gold;search.textComponent.fontSize=17;search.GetComponent<Image>().sprite=ZoneModalArtwork.Dark;search.GetComponent<Image>().type=Image.Type.Sliced;var placeholder=(Text)search.placeholder;placeholder.font=font;placeholder.fontSize=17;placeholder.text="Search surfaces…";placeholder.color=Muted;
             search.onValueChanged.AddListener(query=>{int index=0;foreach(var entry in materialButtons){bool show=entry.style.Label.IndexOf(query,StringComparison.OrdinalIgnoreCase)>=0;entry.button.gameObject.SetActive(show);if(show)((RectTransform)entry.button.transform).anchoredPosition=new Vector2(index++*158,0);}content.sizeDelta=new Vector2(index*158,136);scroll.horizontalNormalizedPosition=0;});
@@ -67,6 +70,7 @@ namespace CityForge.UI
             var facing=Button(settings,"",790,44,390,32,()=>state.rotation=(state.rotation+1)%4);captions.Add(()=>facing.GetComponentInChildren<Text>().text="Texture facing: "+new[]{"North","East","South","West"}[state.rotation]);
             var corners=Button(settings,"",790,87,390,32,()=>state.curved=!state.curved,()=>state.curved);captions.Add(()=>corners.GetComponentInChildren<Text>().text="Corners: "+(state.curved?"Curved":"Straight"));
             if(!editing){var shape=Button(settings,"",790,130,390,32,()=>state.shape=(state.shape+1)%4);captions.Add(()=>shape.GetComponentInChildren<Text>().text="Shape: "+new[]{"Freehand","Circle","Open rectangle","Half circle"}[state.shape]);}
+            if(editing && undoKeys!=null){var role=Button(frame,"",26,739,530,28,()=>state.role=(EraPathRole)(((int)state.role+1)%5));captions.Add(()=>role.GetComponentInChildren<Text>().text="Era paving purpose: "+state.role);var locked=Button(frame,"",580,739,630,28,()=>state.materialLocked=!state.materialLocked);captions.Add(()=>locked.GetComponentInChildren<Text>().text=state.materialLocked?"Material locked · keep this surface":"Material unlocked · follow appearance era");}
             Button(frame,"Undo · Ctrl/Cmd Z",26,770,270,44,undo);if(delete!=null)Button(frame,"Delete path",316,770,220,44,delete);Button(frame,"Cancel",770,770,180,44,cancel);Button(frame,editing?"Apply changes":"Draw Path",970,766,244,52,accept,()=>true);Refresh();Fit();
         }
         void Refresh(){foreach(var choice in choices){bool enabled=!choice.border||state.depth!=LotPathDepth.Flat;choice.button.interactable=enabled;choice.button.image.sprite=choice.selected()?ZoneModalArtwork.Gold:ZoneModalArtwork.Dark;choice.button.image.color=enabled?Color.white:new Color(.45f,.45f,.45f);foreach(var image in choice.button.GetComponentsInChildren<RawImage>())image.color=enabled?Color.white:new Color(.4f,.4f,.4f);}borderHint.text=state.depth==LotPathDepth.Flat?"Sink the path to add borders.":"Choose a lining · Left/right follows the drawing direction.";foreach(var caption in captions)caption();}
