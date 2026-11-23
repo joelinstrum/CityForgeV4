@@ -13,15 +13,15 @@ namespace CityForge.UI
     public sealed partial class CityForgeModal
     {
         TerrainImportData activeImport;
-        RectTransform importRoot;GameObject importStage;
+        RectTransform importRoot;
         InputField importMetadata,importHeight,importWater;
         bool importPresetMode,importRefreshQueued;
         Toggle importRepair;Dropdown importRotation,importRelief;
         Text importStatus,importSummary,importElevations,importWarnings,importLegend,importProvenance;RawImage importImage;Button importPreviewButton,importUseButton;
-        Material importOutlineMaterial,importTerrainMaterial;
+
         Texture2D importPreviewImage;
         string autoImportHeight,autoImportWater,importValidatedKey,importPendingKey;
-        RenderTexture importTexture;TerrainData importTerrain;Mesh importWaterMesh;Material importWaterMaterial;
+
         CancellationTokenSource importCancellation;
         static Sprite importRoundedSprite;
         static Sprite ImportRoundedSprite()
@@ -47,7 +47,7 @@ namespace CityForge.UI
             importSummary.text=$"Image size: {s.widthPixels:N0} × {s.heightPixels:N0} pixels\nImported area: {s.widthMeters/1000:0.###} × {s.heightMeters/1000:0.###} km\nPadded region: {s.mapSide/1000:0.###} × {s.mapSide/1000:0.###} km";
             importElevations.text=$"Elevation: {s.actualMin:0.00} to {s.actualMax:0.00} m\nEncoding: {s.blackMeters:0.##} to {s.whiteMeters:0.##} m\nSea level: {s.sourceSea:0.##} m   ·   Game offset: +{s.verticalOffset:0.##} m";
             importWarnings.text=$"{s.waterAboveSea:N0} water pixels above sea level\n{s.landBelowSea:N0} land pixels below sea level\n"+(s.repairShoreline?"Repair ON · derived shoreline only":"Repair OFF · original data preserved");
-            importLegend.text=$"<color=#F5AF47>□</color> Imported area ({s.widthMeters/1000:0.###} × {s.heightMeters/1000:0.###} km)     <color=#92958B>■</color> Generated padding";
+            importLegend.text=$"N ↑   <color=#F5AF47>□</color> Imported area ({s.widthMeters/1000:0.###} × {s.heightMeters/1000:0.###} km)     <color=#92958B>■</color> Generated padding";
             importProvenance.text=s.dataset+" · "+s.provenance;
             importStatus.text="Preview ready. Review the warnings, then create your region.";
         }
@@ -99,7 +99,7 @@ namespace CityForge.UI
             importRotation=ImportChoice(panel,"Rotation",new[]{"North Up","90° clockwise","180°","270° clockwise"},new Vector2(40,-640),()=>ImportOptionsChanged());
             importRelief=ImportChoice(panel,"Relief",new[]{"Original (1×)","Relief 2×","Relief 4×"},new Vector2(395,-640),()=>ImportOptionsChanged());
             var previewCard=ImportCard(panel,"Preview frame",new Vector2(775,-145),new Vector2(785,543),new Color(.075f,.10f,.09f));
-            var imageRect=ImportRect(previewCard.transform,"3D preview",new Vector2(16,-16),new Vector2(753,460));importImage=imageRect.gameObject.AddComponent<RawImage>();importImage.color=new Color(.08f,.11f,.10f);importImage.raycastTarget=false;
+            var imageRect=ImportRect(previewCard.transform,"Flat terrain preview",new Vector2(162.5f,-16),new Vector2(460,460));importImage=imageRect.gameObject.AddComponent<RawImage>();importImage.color=new Color(.08f,.11f,.10f);importImage.raycastTarget=false;
             importLegend=ImportText(previewCard.transform,"Your terrain preview will appear here",new Vector2(22,-492),new Vector2(745,36),18);
             var summary=ImportCard(panel,"Import details",new Vector2(40,-715),new Vector2(1520,165),new Color(.10f,.13f,.115f));
             ImportText(summary.transform,"Import Summary",new Vector2(24,-14),new Vector2(450,30),24);importSummary=ImportText(summary.transform,"Select your metadata and heightmap.\nThe water mask is optional.",new Vector2(24,-55),new Vector2(465,94),19);
@@ -117,15 +117,15 @@ namespace CityForge.UI
             ImportButton(panel,prebuilt?"Import your own files":"Pre-built maps",new Vector2(1280,-65),new Vector2(280,46),()=>{if(prebuilt)OpenTerrainImport();else OpenPrebuiltMaps();});
             if(prebuilt){
                 var map=ImportCard(panel,"Manhattan preset",new Vector2(40,-158),new Vector2(690,320),new Color(.10f,.13f,.115f));
-                ImportText(map.transform,"Manhattan",new Vector2(26,-24),new Vector2(620,48),34);
-                ImportText(map.transform,"17 × 28 km · island and surrounding waterways",new Vector2(26,-86),new Vector2(630,40),21);
-                ImportText(map.transform,"Starter map · synthetic landscape",new Vector2(26,-136),new Vector2(630,36),21).color=new Color(.95f,.76f,.39f);
-                ImportText(map.transform,"Ready to use. Includes terrain, sea level and water.\nThis starter is illustrative, not a surveyed replica.",new Vector2(26,-184),new Vector2(630,84),21);
+                ImportText(map.transform,"Lower Manhattan · circa 1609",new Vector2(26,-24),new Vector2(620,48),34);
+                ImportText(map.transform,"12 × 12 km · natural shoreline schematic",new Vector2(26,-86),new Vector2(630,40),21);
+                ImportText(map.transform,"Synthetic, historically inspired · NOT GIS",new Vector2(26,-136),new Vector2(630,36),21).color=new Color(.95f,.76f,.39f);
+                ImportText(map.transform,"Hand-schematized coast; generated relief and seabed.\nNot a verified historical reconstruction.",new Vector2(26,-184),new Vector2(630,84),21);
                 importUseButton.GetComponentInChildren<Text>().text="Create Region";
-                importSummary.text="Manhattan starter map\nPreparing your preview…";
-                string folder=Path.Combine(Application.streamingAssetsPath,"TerrainPresets","Manhattan");
-                SetImportPath(importHeight,Path.Combine(folder,"Manhattan_Height.png"));SetImportPath(importWater,Path.Combine(folder,"Manhattan_Water.png"));SetImportPath(importMetadata,Path.Combine(folder,"Manhattan_Metadata.json"));
-                if(File.Exists(ImportPath(importMetadata)))StartCoroutine(PreviewTerrainImport());else importStatus.text="Manhattan starter files are not installed in this project.";
+                importSummary.text="Lower Manhattan 1609 schematic\nPreparing your preview…";
+                string folder=Path.Combine(Application.streamingAssetsPath,"TerrainPresets","Manhattan1609");
+                SetImportPath(importHeight,Path.Combine(folder,"Manhattan_1609_Height.png"));SetImportPath(importWater,Path.Combine(folder,"Manhattan_1609_Water.png"));SetImportPath(importMetadata,Path.Combine(folder,"Manhattan_1609_CityForge.json"));
+                if(File.Exists(ImportPath(importMetadata)))StartCoroutine(PreviewTerrainImport());else importStatus.text="Lower Manhattan 1609 preset files are not installed in this project.";
             }else SetImportPath(importMetadata,PlayerPrefs.GetString("CityForge.TerrainImport.Metadata",""));
         }
         Dropdown ImportChoice(Transform parent,string label,string[] options,Vector2 at,Action changed)
@@ -154,14 +154,14 @@ namespace CityForge.UI
             if(!importRoot)yield break;foreach(var field in new[]{importMetadata,importHeight,importWater}){string path=ImportPath(field);if(File.Exists(path))SetImportPath(field,path);}importCancellation?.Cancel();var cancellation=new CancellationTokenSource();importCancellation=cancellation;var token=cancellation.Token;string inputsKey=ImportInputsKey();importPendingKey=inputsKey;
             string metadata=ImportPath(importMetadata),height=ImportPath(importHeight),water=ImportPath(importWater);bool repair=importRepair.isOn;int rotation=importRotation.value;float relief=importRelief.value==0?1:importRelief.value==1?2:4;
             string regionName=RegionName;var recipe=ReadCreationSettings();recipe.terrainImport=null;recipe.districtGrid=16;recipe.districtTreeCoverage=null;importPreviewButton.interactable=false;importUseButton.interactable=false;importStatus.text="Reading and validating terrain… Cancel remains available.";
-            var job=Task.Run(()=>{var data=TerrainImportData.Read(metadata,height,water,repair,rotation,relief,token);return data.Generate(regionName,recipe,token);},token);
+            var job=Task.Run(()=>{var data=TerrainImportData.Read(metadata,height,water,repair,rotation,relief,token);var snapshot=data.Generate(regionName,recipe,token);return (snapshot,pixels:BuildFlatImportPixels(data,token));},token);
             while(!job.IsCompleted){if(!importRoot){cancellation.Cancel();yield break;}yield return null;}
             if(!importRoot||importCancellation!=cancellation)yield break;importPreviewButton.interactable=true;
             if(job.IsCanceled||token.IsCancellationRequested){importStatus.text="Preview cancelled. Original files were not changed.";yield break;}
             if(job.IsFaulted){importStatus.text=job.Exception.GetBaseException().Message;yield break;}
-            activeImport=job.Result.data.Import;importPendingKey=null;importValidatedKey=inputsKey;
+            activeImport=job.Result.snapshot.data.Import;importPendingKey=null;importValidatedKey=inputsKey;
             try{
-                BuildImportPreview(job.Result);
+                BuildImportPreview(job.Result.snapshot,job.Result.pixels);
                 if(activeImport==null)throw new InvalidOperationException("Preview data was invalidated while rendering.");
                 ShowImportSummary();
                 importUseButton.interactable=true;
@@ -169,27 +169,39 @@ namespace CityForge.UI
             }
             catch(Exception e){Debug.LogException(e);activeImport=null;importStatus.text="Preview could not be built: "+e.Message;}
         }
-        void BuildImportPreview(SavedRegionSnapshot snapshot)
+        const int FlatImportPreviewSize=768;
+        static Color32[] BuildFlatImportPixels(TerrainImportData data,CancellationToken token)
         {
-            DisposeImportStage();float side=activeImport.Settings.mapSide;Vector3 origin=new Vector3(1000000,0,1000000);importStage=new GameObject("Temporary terrain import preview");importStage.transform.position=origin;
-            importTerrain=new TerrainData{alphamapResolution=32,heightmapResolution=513,size=new Vector3(side,activeImport.Settings.heightRange,side)};importTerrain.SetHeights(0,0,snapshot.data.Heights);
-            var baseline=Resources.Load<MeadowRuntimeBaseline>("Region/MeadowRuntimeBaseline");if(baseline&&baseline.layers.Length>0){importTerrain.terrainLayers=new[]{baseline.layers[0]};var alpha=new float[32,32,1];for(int z=0;z<32;z++)for(int x=0;x<32;x++)alpha[z,x,0]=1;importTerrain.SetAlphamaps(0,0,alpha);}
-            var terrain=Terrain.CreateTerrainGameObject(importTerrain);terrain.transform.SetParent(importStage.transform,false);terrain.transform.localPosition=new Vector3(-side/2,0,-side/2);terrain.layer=29;var nativeTerrain=terrain.GetComponent<Terrain>();nativeTerrain.heightmapPixelError=1;nativeTerrain.heightmapMaximumLOD=0;nativeTerrain.heightmapMinimumLODSimplification=6;nativeTerrain.ignoreQualitySettings=true;
-            importTerrainMaterial=new Material(Shader.Find("Universal Render Pipeline/Terrain/Lit"));nativeTerrain.materialTemplate=importTerrainMaterial;
-            // Preview-only mesh visualizes the exact categorical tidal footprint. Gameplay uses Crest.
-            const int n=513,last=n-1;var vertices=new Vector3[n*n];var triangles=new List<int>();for(int z=0;z<n;z++)for(int x=0;x<n;x++){int i=z*n+x;vertices[i]=new Vector3((x/(float)last-.5f)*side,activeImport.Settings.GameSea,(z/(float)last-.5f)*side);if(x<last&&z<last&&activeImport.TidalAt(new Vector2((x+.5f)/last,(z+.5f)/last)))triangles.AddRange(new[]{i,i+n,i+1,i+1,i+n,i+n+1});}
-            importWaterMesh=new Mesh{indexFormat=IndexFormat.UInt32};importWaterMesh.vertices=vertices;importWaterMesh.SetTriangles(triangles,0);importWaterMesh.RecalculateBounds();var water=new GameObject("Tidal footprint",typeof(MeshFilter),typeof(MeshRenderer));water.transform.SetParent(importStage.transform,false);water.GetComponent<MeshFilter>().sharedMesh=importWaterMesh;importWaterMaterial=new Material(Shader.Find("Universal Render Pipeline/Unlit"));importWaterMaterial.color=new Color(.07f,.32f,.48f);water.GetComponent<MeshRenderer>().sharedMaterial=importWaterMaterial;
-            var outline=new GameObject("Imported footprint",typeof(LineRenderer));outline.transform.SetParent(importStage.transform,false);var ring=outline.GetComponent<LineRenderer>();ring.useWorldSpace=false;ring.positionCount=128;ring.loop=true;ring.widthMultiplier=50;importOutlineMaterial=new Material(Resources.Load<Shader>("UI/ForestRemovalCircle"));importOutlineMaterial.SetColor("_Color",new Color(1,.6f,.15f));ring.sharedMaterial=importOutlineMaterial;ring.startColor=ring.endColor=new Color(1,.6f,.15f);
-            var corners=new[]{Vector2.zero,Vector2.right,Vector2.one,Vector2.up};
-            for(int i=0;i<128;i++){var p=activeImport.SourceToWorld(Vector2.Lerp(corners[i/32],corners[(i/32+1)%4],(i%32)/32f));ring.SetPosition(i,new Vector3(p.x,activeImport.HeightMeters(p/side+Vector2.one*.5f)+3,p.y));}
-            var cameraObject=new GameObject("Import preview camera",typeof(Camera));cameraObject.transform.SetParent(importStage.transform,false);cameraObject.transform.localPosition=new Vector3(0,side*.9f,-side*.65f);cameraObject.transform.LookAt(origin+Vector3.up*40);var camera=cameraObject.GetComponent<Camera>();camera.enabled=false;camera.orthographic=true;camera.orthographicSize=side*.61f;camera.nearClipPlane=1;camera.farClipPlane=side*4;camera.cullingMask=1<<29;camera.backgroundColor=new Color(.07f,.1f,.09f);camera.clearFlags=CameraClearFlags.SolidColor;
-            var lamp=new GameObject("Preview sunlight",typeof(Light));lamp.transform.SetParent(importStage.transform,false);lamp.transform.rotation=Quaternion.Euler(45,-30,0);lamp.GetComponent<Light>().type=LightType.Directional;lamp.GetComponent<Light>().cullingMask=1<<29;
-            foreach(var t in importStage.GetComponentsInChildren<Transform>())t.gameObject.layer=29;
-            importTexture=new RenderTexture(1200,733,24);camera.targetTexture=importTexture;camera.aspect=1200f/733;camera.Render();
-            var previous=RenderTexture.active;RenderTexture.active=importTexture;importPreviewImage=new Texture2D(importTexture.width,importTexture.height,TextureFormat.RGB24,false);importPreviewImage.ReadPixels(new Rect(0,0,importTexture.width,importTexture.height),0,0);importPreviewImage.Apply();RenderTexture.active=previous;
-            camera.targetTexture=null;importTexture.Release();Destroy(importTexture);importTexture=null;importImage.texture=importPreviewImage;importImage.color=Color.white;
+            int n=FlatImportPreviewSize;var result=new Color32[n*n];var settings=data.Settings;
+            float span=Mathf.Max(settings.widthMeters,settings.heightMeters)*1.16f;
+            for(int y=0;y<n;y++)
+            {
+                token.ThrowIfCancellationRequested();
+                for(int x=0;x<n;x++)
+                {
+                    var point=new Vector2((x/(float)(n-1)-.5f)*span,(y/(float)(n-1)-.5f)*span);
+                    var uv=point/settings.mapSide+Vector2.one*.5f;var source=data.SourceUV(uv);
+                    bool inside=source.x>=0&&source.x<=1&&source.y>=0&&source.y<=1;
+                    float height=data.HeightMeters(uv)-settings.verticalOffset;
+                    Color color=data.TidalAt(uv)
+                        ?Color.Lerp(new Color(.08f,.29f,.39f),new Color(.13f,.39f,.47f),Mathf.InverseLerp(-25,0,height))
+                        :Color.Lerp(new Color(.39f,.49f,.30f),new Color(.68f,.66f,.43f),Mathf.InverseLerp(0,Mathf.Max(1,settings.actualMax),height));
+                    if(!inside)color=Color.Lerp(color,new Color(.32f,.34f,.32f),.7f);
+                    float edge=Mathf.Min(Mathf.Abs(source.x),Mathf.Abs(source.x-1),Mathf.Abs(source.y),Mathf.Abs(source.y-1));
+                    if(source.x>=-.003f&&source.x<=1.003f&&source.y>=-.003f&&source.y<=1.003f&&edge<span/n/Mathf.Min(settings.widthMeters,settings.heightMeters)*1.5f)color=new Color(.96f,.63f,.22f);
+                    result[y*n+x]=color;
+                }
+            }
+            return result;
         }
-        void DisposeImportStage(){if(importStage){foreach(var camera in importStage.GetComponentsInChildren<Camera>())camera.targetTexture=null;Destroy(importStage);}if(importTexture){importTexture.Release();Destroy(importTexture);}if(importPreviewImage)Destroy(importPreviewImage);if(importTerrainMaterial)Destroy(importTerrainMaterial);if(importTerrain)Destroy(importTerrain);if(importWaterMesh)Destroy(importWaterMesh);if(importWaterMaterial)Destroy(importWaterMaterial);if(importOutlineMaterial)Destroy(importOutlineMaterial);importStage=null;importTexture=null;}
+        void BuildImportPreview(SavedRegionSnapshot snapshot,Color32[] pixels)
+        {
+            DisposeImportStage();
+            importPreviewImage=new Texture2D(FlatImportPreviewSize,FlatImportPreviewSize,TextureFormat.RGBA32,false){name="Flat imported terrain preview"};
+            importPreviewImage.SetPixels32(pixels);importPreviewImage.Apply();
+            importImage.texture=importPreviewImage;importImage.color=Color.white;
+        }
+        void DisposeImportStage(){if(importPreviewImage)Destroy(importPreviewImage);importPreviewImage=null;}
         void OnDisable(){CloseTerrainImport();}
         void CloseTerrainImport(){importCancellation?.Cancel();DisposeImportStage();if(importRoot){importRoot.gameObject.SetActive(false);Destroy(importRoot.gameObject);}importRoot=null;}
     }

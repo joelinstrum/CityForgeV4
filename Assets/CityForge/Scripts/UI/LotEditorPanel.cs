@@ -200,7 +200,7 @@ namespace CityForge.UI
                 pathWidthButtons.Add(Control(pathTools, $"{meters} m", 60 + pathWidthButtons.Count * 42, 5, 39,
                     () => { pathWidth = meters; Refresh(rebuildPreview: false); }, description: $"Set path width to {meters} meters"));
             }
-            finishPath = Control(pathTools, "Finish", 318, 5, 66, () => FinishGroundPath(false),
+            finishPath = Control(pathTools, "Finish", 318, 5, 66, () => FinishGroundPath(false, commit: true),
                 description: "Keep the current path (Enter)");
             clearPath = Control(pathTools, "Clear", 388, 5, 66, () => { ClearGroundPath(); Refresh(rebuildPreview: false); },
                 description: "Remove the ground path sketch");
@@ -684,7 +684,7 @@ namespace CityForge.UI
                 }
                 if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
                 {
-                    FinishGroundPath(false);
+                    FinishGroundPath(false, commit: true);
                     return;
                 }
             }
@@ -2506,10 +2506,23 @@ namespace CityForge.UI
             Refresh();
         }
 
-        private void FinishGroundPath(bool close)
+        private void FinishGroundPath(bool close, bool commit = false)
         {
             drawingPath = false;
-            if (!(close ? groundPath.TryClose() : groundPath.TryFinishOpen())) ClearGroundPath();
+            if (!(close ? groundPath.TryClose() : groundPath.TryFinishOpen()))
+            {
+                // Enter with one marker must not throw away the sketch.
+                drawingPath = groundPath.Points.Count > 0;
+                Refresh("Add at least two markers, then press Enter.", rebuildPreview: false);
+                return;
+            }
+            if (commit && !PlayerMode)
+            {
+                var material = recentPathMaterials.Select(LotPathMaterial.Find).FirstOrDefault(item => item != null && item.IsAvailable)
+                    ?? LotPathMaterial.Find(LotPathMaterial.ResidentialFootpath)
+                    ?? LotPathMaterial.All.FirstOrDefault(item => item.IsAvailable);
+                if (material != null) { FillGroundPath(material); return; }
+            }
             Refresh(rebuildPreview: false);
         }
 

@@ -223,9 +223,15 @@ namespace CityForge.World
             if(IsSaving||DistrictLoading||returning||RemakeBlocksInput)return;
             StartCoroutine(SaveWithFeedback());
         }
-        IEnumerator SaveWithFeedback()
+        private float saveNavigationReleaseTime;
+        IEnumerator SaveWithFeedback() => SaveWithFeedback(SavedRegionStore.SaveAsync);
+        internal IEnumerator SaveWithFeedback(System.Func<SavedRegionSnapshot, System.Threading.Tasks.Task<string>> writeSnapshot)
         {
             IsSaving=true;
+            // Save is an in-place action. Do not leave a HUD action selected for
+            // a later Enter press, or let its release spill into Back navigation.
+            saveNavigationReleaseTime=float.PositiveInfinity;
+            if(EventSystem.current)EventSystem.current.SetSelectedGameObject(null);
             RefreshRemakeButton();
             var button=transform.Find("RegionHud/SaveRegion").GetComponent<Button>();
             var caption=button.transform.Find("Caption").GetComponent<Text>();
@@ -256,7 +262,7 @@ namespace CityForge.World
                 {
                     snapshot = SavedRegionStore.Capture(this);
                     captureMilliseconds = saveTimer.ElapsedMilliseconds;
-                    write = SavedRegionStore.SaveAsync(snapshot);
+                    write = writeSnapshot(snapshot);
                 }
                 catch(System.Exception error){failure=error;}
                 while(write!=null&&!write.IsCompleted){
@@ -284,6 +290,7 @@ namespace CityForge.World
                 }
             }finally{
                 IsSaving=false;
+                saveNavigationReleaseTime=Time.unscaledTime+.35f;
                 RefreshRemakeButton();
                 if(progress)progress.SetActive(false);
                 if(button)button.interactable=true;
@@ -765,9 +772,29 @@ namespace CityForge.World
             rect.anchoredPosition = new Vector2(right, -25f);
             rect.sizeDelta = styled ? Vector2.one * 53f : district ? Vector2.one * DistrictActionSize : new Vector2(205f, 48f);
             var caption = rect.Find("Caption").GetComponent<Text>();
-            caption.gameObject.SetActive(!district && !styled);
-            caption.text = overviewCaption;
+            bool districtSave = district && artwork == "save";
+            caption.gameObject.SetActive(districtSave || (!district && !styled));
+            caption.text = districtSave ? "SAVE DISTRICT" : overviewCaption;
+            if(districtSave)
+            {
+                // The label is an additional, unambiguous save target to the left
+                // of the disk, away from the neighboring Return-to-Region arrow.
+                caption.rectTransform.anchorMin=caption.rectTransform.anchorMax=new Vector2(0,.5f);
+                caption.rectTransform.pivot=new Vector2(1,.5f);
+                caption.rectTransform.anchoredPosition=new Vector2(-10,0);
+                caption.rectTransform.sizeDelta=new Vector2(125,DistrictActionSize);
+                caption.alignment=TextAnchor.MiddleRight;
+            }
+            else
+            {
+                caption.rectTransform.anchorMin=Vector2.zero;caption.rectTransform.anchorMax=Vector2.one;
+                caption.rectTransform.pivot=Vector2.one*.5f;
+                caption.rectTransform.offsetMin=caption.rectTransform.offsetMax=Vector2.zero;
+                caption.alignment=TextAnchor.MiddleCenter;
+            }
+            caption.raycastTarget=districtSave;
             icon.gameObject.SetActive(district && !styled);
+            button.navigation=new Navigation{mode=Navigation.Mode.None};
             button.targetGraphic = image;
             button.transition = Selectable.Transition.ColorTint;
             var colors = button.colors;
@@ -1176,7 +1203,7 @@ namespace CityForge.World
 
         public void ShowOverview()
         {
-            if(IsSaving)return;
+            if(IsSaving||Time.unscaledTime<saveNavigationReleaseTime)return;
             if(districtLoading)return;
             CloseFounderPicker();
             lastRepaveSurface = null;

@@ -57,12 +57,34 @@ namespace CityForge.World
             if(parkPaths.Count>=512)return "This region has reached its path limit.";
             var problem=RoadGuideProblem(points,closed,MapSide*.5f);if(problem!=null)return problem;
             var path=new LotPathDefinition{points=points.ToArray(),closed=closed,curved=curved,width=width,materialId=material,use=LotPathUse.Pedestrian,edgeBlend=pathDraftFeather,textureRotation=pathDraftRotation,depth=pathDraftDepth,border=pathDraftBorder,borderSides=pathDraftSides};
-            var style=LotPathMaterial.Find(material);var mesh=LotPathSurface.BuildMesh(path,style.TileSize,.065f,LotHeight);
-            // Paths may cross lots and sidewalks, but must stay on dry land and avoid buildings.
-            problem=RoadSiteProblem(mesh);Destroy(mesh);if(problem!=null)return problem;
+            problem=ParkPathSiteProblem(path);if(problem!=null)return problem;
             var added=new DistrictParkPathRecord{district=SelectedDistrict,path=path};parkPaths.Add(added);RecordPathUndo(()=>parkPaths.Remove(added));RebuildParkPaths();pedestrianRoutesDirty=true;RebuildPlacedPedestrians();
             ShowDistrictMessage("Path placed · Pedestrians can use this route. Save the region to keep it.");return null;
         }
+        private string ParkPathSiteProblem(LotPathDefinition path)
+        {
+            // Footpaths paint existing ground; lot bounds, porches, fences, prop
+            // envelopes and building clearance boxes must not veto the whole route.
+            // Solid models naturally cover any paving underneath them.
+            var water=DistrictLotWater();
+            var points=PathDisplayPoints(path);
+            for(int i=0;i<points.Length-(path.closed?0:1);i++)
+            {
+                var a=points[i];var b=points[(i+1)%points.Length];
+                int steps=Mathf.Max(1,Mathf.CeilToInt(Vector2.Distance(a,b)));
+                for(int j=0;j<=steps;j++)
+                {
+                    var point=Vector2.Lerp(a,b,(float)j/steps);
+                    if(!InActiveDistrict(point))return "Keep the path inside the active district.";
+                    float height=LotHeight(point);
+                    if((!Waterless&&height<=SeaLevel)||(water!=null
+                        ?water.Wet(point,height,out _,out _,surfaceTolerance:0f)
+                        :TryLotWater(point,height,null,out _)))return "Keep the path on dry ground.";
+                }
+            }
+            return null;
+        }
+
         private void RebuildParkPaths(StreetSurfaceMask roadMask=null)
         {
             if(parkPathRoot){parkPathRoot.SetActive(false);Destroy(parkPathRoot);}
@@ -72,7 +94,7 @@ namespace CityForge.World
             foreach(var record in parkPaths.Where(p=>ActiveDistrictMembers.Contains(p.district)))
             {
                 var path=record.path;var style=LotPathMaterial.Find(path.materialId);
-                var source=LotPathSurface.BuildMesh(path,style.TileSize,.065f,LotHeight);
+                var source=LotPathSurface.BuildMesh(path,style.TileSize,.09f,LotHeight);
                 if(roadMask==null)
                 {
                     roadMask=new StreetSurfaceMask();
@@ -81,6 +103,8 @@ namespace CityForge.World
                 var mesh=roadMask.Clip(source,Matrix4x4.identity,.55f);
                 if(mesh!=source)Destroy(source);
                 var material=style.CreateMaterial();LotPathMaterial.ApplyEdgeTreatment(material,path,path.edgeBlend,0);
+                // Player paths are the newest paving layer, above authored lot overlays/paths.
+                if(material.shader.name=="CityForge/Lot Path Blend")material.renderQueue=DistrictLotSurfaces.PathRenderQueue+1;
                 var go=new GameObject("Pedestrian path",typeof(MeshFilter),typeof(MeshRenderer));go.transform.SetParent(parkPathRoot.transform,false);
                 go.GetComponent<MeshFilter>().sharedMesh=mesh;var renderer=go.GetComponent<MeshRenderer>();renderer.sharedMaterial=material;renderer.shadowCastingMode=ShadowCastingMode.Off;
                 parkPathAssets.Add(mesh);parkPathAssets.Add(material);

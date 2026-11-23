@@ -42,12 +42,12 @@ namespace CityForge.World
 
         private string ResidentialFrontageProblem(RectInt cells, int maxDepth, out TownZoneFacing frontage,
             bool? frontageAlongX = null, bool allowEnclosedBlock = false,
-            TownZoneFacing requiredFacing = TownZoneFacing.None, bool commercial = false, bool allowRoundedLotCorners = false)
+            TownZoneFacing requiredFacing = TownZoneFacing.None, bool commercial = false, bool allowRoundedLotCorners = false, bool allowRoadEdgeCells = false)
         {
             frontage = TownZoneFacing.None;
             const float edgeTolerance = .15f;
             // Rounded grid-aligned corners can clip a small part of the outside cells.
-            const float cornerInset = LotRoadEdgeTolerance;
+            float cornerInset = allowRoadEdgeCells ? DistrictGridCellMeters * .5f : LotRoadEdgeTolerance;
             string depthProblem = $"This zone allows up to {maxDepth} cells deep from the road.";
             bool enclosedBlock = !commercial && allowEnclosedBlock && cells.width > maxDepth && cells.height > maxDepth;
             if (!enclosedBlock && Mathf.Min(cells.width, cells.height) > maxDepth) return depthProblem;
@@ -84,7 +84,7 @@ namespace CityForge.World
                     var a = vertices[triangles[i]];
                     var b = vertices[triangles[i + 1]];
                     var c = vertices[triangles[i + 2]];
-                    if (!allowRoundedLotCorners && RoadTriangleSpan(a, b, c, min.y + cornerInset, max.y - cornerInset, false,
+                    if (!allowRoadEdgeCells && !allowRoundedLotCorners && RoadTriangleSpan(a, b, c, min.y + cornerInset, max.y - cornerInset, false,
                             out float innerWest, out float innerEast) &&
                         innerWest < max.x - cornerInset && innerEast > min.x + cornerInset)
                         return "Keep zoning clear of the road surface.";
@@ -102,10 +102,10 @@ namespace CityForge.World
                     }
                     if (coverage != null)
                     {
-                        Cover(0, true, max.x - edgeTolerance, max.x + reach);
-                        Cover(1, false, max.y - edgeTolerance, max.y + reach);
-                        Cover(2, true, min.x - reach, min.x + edgeTolerance);
-                        Cover(3, false, min.y - reach, min.y + edgeTolerance);
+                        Cover(0, true, max.x - (allowRoadEdgeCells ? cornerInset : edgeTolerance), max.x + reach);
+                        Cover(1, false, max.y - (allowRoadEdgeCells ? cornerInset : edgeTolerance), max.y + reach);
+                        Cover(2, true, min.x - reach, min.x + (allowRoadEdgeCells ? cornerInset : edgeTolerance));
+                        Cover(3, false, min.y - reach, min.y + (allowRoadEdgeCells ? cornerInset : edgeTolerance));
                         continue;
                     }
 

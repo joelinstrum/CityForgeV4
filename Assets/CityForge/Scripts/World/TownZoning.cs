@@ -387,7 +387,7 @@ namespace CityForge.World
                 if (requireFrontage)
                 {
                     var problem = ResidentialFrontageProblem(bounds, maxDepth, out frontage, allowEnclosedBlock: true,
-                        commercial: IsCommercialZone(zone));
+                        commercial: IsCommercialZone(zone), allowRoadEdgeCells: true);
                     if (problem != null) return problem;
                 }
             }
@@ -430,11 +430,26 @@ namespace CityForge.World
             }
             if(zone!=TownZone.None)
             {
-                var parcel=new DistrictLotRecord{center=(ZoneCorner(bounds.min)+ZoneCorner(bounds.max))*.5f,
-                    definition=new LotDefinition{width=bounds.width,length=bounds.height,type=LotType.Zoning}};
-                if(LotOverlapsDistrictRoad(parcel))return "Keep zoning clear of the paved road surface. Sidewalks are allowed.";
+                // A zoning tile may straddle the curb because roads need not align to
+                // the four-metre grid. Reserve pavement by cell center, not the entire
+                // tile rectangle. Actual buildings retain their own road collision check.
+                if (ZoneOverlapsDistrictRoad(bounds)) return "Keep zoning cell centers clear of the paved road. Sidewalks are allowed.";
             }
             return null;
+        }
+
+        private bool ZoneOverlapsDistrictRoad(RectInt bounds)
+        {
+            const float radius = .025f;
+            foreach (var cell in bounds.allPositionsWithin)
+            {
+                var center = ZoneCorner(cell) + Vector2.one * (DistrictGridCellMeters * .5f);
+                var min = center - Vector2.one * radius;
+                var max = center + Vector2.one * radius;
+                var corners = new[] { min, new Vector2(max.x,min.y), max, new Vector2(min.x,max.y) };
+                if (PolygonOverlapsDistrictRoad(corners, new Rect(min,max-min))) return true;
+            }
+            return false;
         }
 
         private string ApplyTownZone(RectInt bounds, TownZone zone)

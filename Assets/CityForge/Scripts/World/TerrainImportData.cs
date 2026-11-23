@@ -9,7 +9,7 @@ namespace CityForge.World
         public int version,widthPixels,heightPixels,quarterTurns,waterAboveSea,landBelowSea;
         public float widthMeters,heightMeters,mapSide,blackMeters,whiteMeters,sourceSea,verticalOffset,heightRange,actualMin,actualMax,exaggeration=1;
         public bool repairShoreline;
-        public string dataset,provenance,sourceHeightName,sourceWaterName;
+        public string dataset,provenance,sourceHeightName,sourceWaterName,sourceMetadataJson;
         [NonSerialized] public TerrainImportData data;
         public bool Active=>version==1;
         public float GameSea=>sourceSea+verticalOffset;
@@ -47,7 +47,7 @@ namespace CityForge.World
         public static TerrainImportData Read(string metadataPath,string heightPath=null,string waterPath=null,bool repair=false,int turns=0,float exaggeration=1,CancellationToken cancel=default)
         {
             if(!File.Exists(metadataPath)||new FileInfo(metadataPath).Length>65536)throw new InvalidDataException("Choose a valid metadata JSON (up to64 KB).");
-            TerrainImportMetadata m;try{m=JsonUtility.FromJson<TerrainImportMetadata>(File.ReadAllText(metadataPath));}catch(Exception e){throw new InvalidDataException("Metadata JSON could not be read.",e);}
+            string metadataJson=File.ReadAllText(metadataPath);TerrainImportMetadata m;try{m=JsonUtility.FromJson<TerrainImportMetadata>(metadataJson);}catch(Exception e){throw new InvalidDataException("Metadata JSON could not be read.",e);}
             if(m==null||m.schema!="cityforge.terrain-import.v1"||m.approximate_extent_m==null||m.elevation_encoding==null||m.orientation!="north-up")throw new InvalidDataException("Expected cityforge.terrain-import.v1 metadata with north-up orientation, extent and elevation encoding.");
             if(m.water_colors!=null&&(m.water_colors.land!="#000000"||m.water_colors.tidal!="#0000FF"||m.water_colors.lake!="#00FFFF"||m.water_colors.river!="#00FF00"))throw new InvalidDataException("Metadata water palette does not match the v1 contract.");
             string folder=Path.GetDirectoryName(Path.GetFullPath(metadataPath));
@@ -55,7 +55,7 @@ namespace CityForge.World
             byte[] ReadBytes(string path){cancel.ThrowIfCancellationRequested();if(!File.Exists(path)||new FileInfo(path).Length>64*1024*1024)throw new InvalidDataException("Input file missing or larger than64 MB: "+Path.GetFileName(path));return File.ReadAllBytes(path);}
             var h=TerrainImportPng.Decode(ReadBytes(heightPath),true,cancel);
             var s=new TerrainImportSettings{version=1,widthPixels=h.width,heightPixels=h.height,widthMeters=m.approximate_extent_m.width,heightMeters=m.approximate_extent_m.height,mapSide=32768,
-                blackMeters=m.elevation_encoding.black_m,whiteMeters=m.elevation_encoding.white_m,sourceSea=m.elevation_encoding.sea_level_m,repairShoreline=repair,quarterTurns=turns,exaggeration=exaggeration,dataset=m.dataset_name,provenance=m.data_provenance,sourceHeightName=Path.GetFileName(heightPath),sourceWaterName=Path.GetFileName(waterPath)};
+                blackMeters=m.elevation_encoding.black_m,whiteMeters=m.elevation_encoding.white_m,sourceSea=m.elevation_encoding.sea_level_m,repairShoreline=repair,quarterTurns=turns,exaggeration=exaggeration,dataset=m.dataset_name,provenance=m.data_provenance,sourceMetadataJson=metadataJson,sourceHeightName=Path.GetFileName(heightPath),sourceWaterName=Path.GetFileName(waterPath)};
             s.verticalOffset=Mathf.Max(0,1-Mathf.Min(s.sourceSea,s.sourceSea+(s.blackMeters-s.sourceSea)*exaggeration));s.heightRange=Mathf.Max(PrototypeRegionData.Height,Mathf.Max(s.sourceSea,s.sourceSea+(s.whiteMeters-s.sourceSea)*exaggeration)+s.verticalOffset+1);s.Validate();
             if(m.pixel_width!=h.width||m.pixel_height!=h.height)throw new InvalidDataException("Metadata pixel dimensions differ from the height PNG.");
             var raw=new ushort[h.width*h.height];var water=new byte[raw.Length];

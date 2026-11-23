@@ -14,6 +14,9 @@ public sealed partial class MeadowDistrictLandscape {
  Water.FoamLod.Settings=surf;
  Water.DepthLod.Enabled=true;Water.DepthLod.Resolution=256;Water.ShadowLod.Enabled=false;Water.LevelLod.Enabled=false;Water.AlbedoLod.Enabled=false;Water.AbsorptionLod.Enabled=false;
  Water.LodResolution=256;Water.LodLevels=7;Water.GeometryDownSampleFactor=2;
+ // The approved river prefab caps scale at32m. Imported2–4km coastal districts
+ // need a wider simulation range at far zoom so the tidal surface is not clipped.
+ if(View.Data.Import!=null)Water.ScaleRange=new Vector2(4,Mathf.Max(32,Side/32f));
  Water.ClipLod.Enabled=true;Water.ClipLod.Resolution=512;Water.ClipLod.DefaultClippingState=DefaultClippingState.EverythingClipped;Water.DefaultExcludes=WaterBodyAffects.Surface;
  var bounds=new GameObject("District-bounded ocean footprint").AddComponent<WaterBody>();bounds.transform.SetParent(holder.transform,false);bounds.transform.position=new Vector3(Origin.x+Side/2,View.SeaLevel,Origin.y+Side/2);bounds.transform.localScale=new Vector3(Side,40,Side);bounds.Affects=WaterBodyAffects.Surface;bounds.Exclusion=WaterBodyExclusion.Include;bounds.Precise=true;
  // Clip dry inland water as well as the district perimeter, so lower water cannot peek

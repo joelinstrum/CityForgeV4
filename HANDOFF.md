@@ -1,3 +1,79 @@
+# Lower Manhattan1609 import — November22,2026
+
+Default private prebuilt preset is now Manhattan1609/Manhattan_1609_CityForge.json:
+12×12km,2048² U16, source -40…80m/sea0, +41m game offset. Original supplied JSON and
+PNG files remain unchanged; adapted schema maps fields and retains original metadata.
+TerrainImportSettings.sourceMetadataJson additionally persists the complete JSON;
+old saves remain compatible. The existing wizard uses a flat worker-built texture;
+no separate3D preview. Actual districts retain native Terrain/Crest. Repair OFF.
+
+Visual testing exposed far-zoom imported ocean coverage: reuse CoastalWaterClock's
+ground focus, actual viewer for rides, and imported ScaleRange max(32,Side/32).
+Do not change procedural oceans to fix imports. No source heights/masks or approved
+water materials changed. Zero source shoreline conflicts. Native sample max error
+0.26683m across625 test points; source-free native menu reopen/cache round trips and
+v3/v13 temperate/tropical procedural regressions passed. Screenshots inspected.
+
+New native region installed separately as "Lower Manhattan1609 — schematic"; existing
+saves and former private Manhattan preset retained. Dataset/preset zip/native save and
+verification are private outputs under the be chat's outputs/Manhattan-1609. No merge
+or push performed. Temporary integration harnesses live under work/manhattan1609,
+not in Assets. Read Documentation/03_Technical/Terrain_Import.md for limitations.
+This is a schematic technical test, not geographically verified1609 reconstruction.
+
+# Save District stays in place — November22,2026
+
+Save District must preserve the current district, camera and world. HUD disk now
+has an explicit SAVE DISTRICT label, an additional save-only click target. Save
+and Back have no automatic UI navigation; saving clears selected HUD focus.
+ShowOverview is blocked during saving and for .35seconds after completion to keep
+the save release from triggering immediate Back navigation. Ordinary saves retain
+the existing async writer. The save coroutine accepts a writer delegate so QA can
+exercise native writes without normal saves. DistrictSaveStayChecks.Check covers
+raycasts for disk/label/Back, capture/write/read with paths, camera/district identity,
+focus cleanup, navigation guards and restored controls. Passed in isolated Play
+mode on Unity6000.1.12f1; only disposable temporary save written. User's log showed
+a Back pointer click, but the exact triggering user gesture was not reproduced.
+
+# Lenient path creation / Enter commits — November22,2026
+
+Pedestrian paths use ParkPathSiteProblem, not RoadSiteProblem. Existing building
+clearance boxes, porches, props, fences and lot footprints must not veto a ground
+path. Validate the sampled centerline for dry land and active-district containment;
+solid models naturally cover paving beneath them. Creation and appearance editing
+share this validator. Preserve ordinary road/building safety rules separately.
+Player paths render at .09m above terrain and above authored lot-path render queue,
+so lot overlays do not hide an accepted path. Enter/KeypadEnter finishes park paths
+even with the pointer over HUD. In the Lot Editor Enter/Finish commits using the
+last-used available material (default residential footpath); one-marker completion
+retains its sketch. Existing edit/material options and undo remain.
+LenientParkPathChecks.Run covers the old building veto, actual PointWire completion,
+visible mesh/layer, serialization/undo, wet/outside-district rejection and actual
+Lot Editor Finish handler. Isolated QA passed; rendered fixture inspected. No normal
+saves changed.
+
+# Approved warm night illumination — November22,2026
+
+Preserve the user-approved23h warm building/street wash throughout night, including
+midnight: NightSunIntensity .85, NightSunColor (1,.84,.66), ambient level1/white.
+Previously SunriseProgress and the dawn ambient noon blend incorrectly treated
+22–24h as completed sunrise/noon, then snapped cold at midnight. Night now explicitly
+uses that approved illumination; dawn calculations exclude evening hours. Keep dark
+sky, lamp/window schedules and daytime lighting. WarmNightLightingChecks.Run checks
+22h/23h/midnight/2h/5h preset AND live district interpolation, dawn and noon. Passed
+in isolated QA with Unity6000.1.12f1. No saved-map schema or private art changes.
+
+# Sidewalk zoning — November22,2026
+
+Manual zoning allows curb-straddling grid cells whose centers are outside paved
+roads. Do not reject the whole selection because an outer cell clips pavement;
+sidewalks and off-grid curbs must remain usable. Residential/commercial zoning
+frontage accepts this partial-cell alignment. Road-centered cells remain blocked.
+Actual lot/building road clearance is unchanged. SidewalkZoningChecks.Run covers
+4m/8m road-edge cells, frontage and pavement protection; prepared-ground, event,
+Player and interaction regressions passed in isolated QA. This changes designation,
+not the building-clearance or growth-siting rules.
+
 # Repeated zoning stress test — November22,2026
 
 A24-block test reproduces progressive click latency:8x3 blocks (96 parcels),12 R2
