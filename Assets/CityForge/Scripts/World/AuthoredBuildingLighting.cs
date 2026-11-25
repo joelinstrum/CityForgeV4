@@ -31,16 +31,19 @@ namespace CityForge.World
             previewOverride = true; previewTime = time;
             if (fixtureLights != null) foreach (var light in fixtureLights) if (light) light.cullingMask = cullingMask;
             SetTime(time);
+            foreach (var sign in GetComponentsInChildren<AuthoredSignLighting>(true)) sign.SetPreviewTime(time);
         }
         public void SetTime(RegionTimeOfDay time)
         {
             if (applied == time) return;
             applied = time;
+            foreach (var sign in GetComponentsInChildren<AuthoredSignLighting>(true)) sign.SetTime(time);
             surfaces ??= GetComponentsInChildren<Renderer>(true);
             float gain = time == RegionTimeOfDay.Night ? 1.8f : time == RegionTimeOfDay.Evening ? 1.1f : 0;
             var block = new MaterialPropertyBlock();
             foreach (var surface in surfaces)
             {
+                if (surface.GetComponentInParent<AuthoredSignLighting>()) continue;
                 var materials = surface.sharedMaterials;
                 for (int slot = 0; slot < materials.Length; slot++)
                 {
