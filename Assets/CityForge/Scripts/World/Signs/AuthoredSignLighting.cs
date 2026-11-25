@@ -13,6 +13,8 @@ namespace CityForge.World
         sealed class AnimationClock { public float seconds; public int frame = -1; }
         static readonly ConditionalWeakTable<Transform, AnimationClock> clocks = new();
         AnimationClock clock;
+        Transform clockOwner;
+        public void BindClock(Transform owner){clockOwner=owner;clock=null;}
         PrototypeRegionView region;
         bool preview;
         RegionTimeOfDay time;
@@ -24,7 +26,7 @@ namespace CityForge.World
                 if (clock != null) return clock;
                 var building = GetComponentInParent<AuthoredBuildingLighting>();
                 // Both native tiers share the lot-object wrapper, even while one tier is hidden.
-                var owner = building ? (building.transform.parent ? building.transform.parent : building.transform) : transform;
+                var owner = clockOwner ? clockOwner : building ? (building.transform.parent ? building.transform.parent : building.transform) : transform;
                 return clock = clocks.GetValue(owner, _ => new AnimationClock());
             }
         }

@@ -7,6 +7,7 @@ namespace CityForge.World
     public sealed class AuthoredBuildingLighting : MonoBehaviour
     {
         public Light[] fixtureLights;
+        public bool preserveAuthoredEmissionStrength;
         Renderer[] surfaces;
         PrototypeRegionView region;
         RegionTimeOfDay? applied;
@@ -49,7 +50,8 @@ namespace CityForge.World
                 {
                     if (!materials[slot] || !materials[slot].IsKeywordEnabled("_EMISSION")) continue;
                     block.Clear(); surface.GetPropertyBlock(block, slot);
-                    block.SetColor(EmissionColor, Color.white * gain);
+                    block.SetColor(EmissionColor, preserveAuthoredEmissionStrength ?
+                        materials[slot].GetColor(EmissionColor) * (gain / 1.8f) : Color.white * gain);
                     surface.SetPropertyBlock(block, slot);
                 }
             }

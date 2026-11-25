@@ -13,6 +13,7 @@ namespace CityForge.World
 
         private CityForgeCameraController cameraRig;
         private CameraMotionQuality motionQuality;
+        private Transform closeRoot,distantRoot;
         private Renderer[] closeRenderers;
         private Renderer[] distantRenderers;
         private (LODGroup group, int tier)[] nativeLevels;
@@ -61,6 +62,7 @@ namespace CityForge.World
                     "v3-building-founders-college" ? 3 : DistantZoom;
             bool authoredMaterials = distantModel.GetComponent<AuthoredBuildingLighting>();
             if (authoredMaterials) detail.distantZoom = 3;
+            detail.closeRoot=closeModel;detail.distantRoot=distantModel;
             detail.closeRenderers = closeRenderers;
             detail.distantRenderers = distantModel.GetComponentsInChildren<Renderer>();
             for (int i = 0; i < detail.distantRenderers.Length; i++)
@@ -75,7 +77,8 @@ namespace CityForge.World
                     for (int slot = 0; slot < materials.Length; slot++) materials[slot] = asset.materialOverride;
                     renderer.sharedMaterials = materials;
                 }
-                else if (!authoredMaterials) renderer.sharedMaterials = original.sharedMaterials;
+                else if (!authoredMaterials)
+                    renderer.sharedMaterials = original.sharedMaterials;
             }
             detail.Bind(rig);
         }
@@ -155,6 +158,12 @@ namespace CityForge.World
             foreach (var renderer in distantRenderers) if (renderer) renderer.enabled = distant;
         }
 
+        internal void RefreshSignRenderers()
+        {
+            if(!closeRoot||!distantRoot)return;
+            closeRenderers=closeRoot.GetComponentsInChildren<Renderer>(true);distantRenderers=distantRoot.GetComponentsInChildren<Renderer>(true);
+            showingDistant=null;ApplyZoom(cameraRig.ZoomLevel);
+        }
         private void OnDestroy()
         {
             if (cameraRig) cameraRig.ZoomChanged -= ApplyZoom;

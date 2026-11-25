@@ -918,7 +918,10 @@ namespace CityForge.World
             if (playerLotWorkspace)
             {
                 if (Input.GetKeyDown(KeyCode.Escape))
-                    playerLotWorkspace.GetComponent<CityForge.UI.LotEditorPanel>().CancelInteraction();
+                    {
+                        var editor = playerLotWorkspace.GetComponent<CityForge.UI.LotEditorPanel>();
+                        if (editor) editor.CancelInteraction(); else ClosePlayerLot();
+                    }
                 return;
             }
             if (transportModal)

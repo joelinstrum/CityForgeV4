@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "status": "Preparation contract; not an installed runtime schema",
+  "roster": {
+    "zone": "Residential2",
+    "wealth": "Medium",
+    "scope": "All eras",
+    "replacementAssetId": "cf-building-artdeco-green-cornice-bay-001",
+    "replacementRevision": "v005",
+    "replacementNativeId": "v3-building-r2-art-deco-townhome-01",
+    "policy": "Retire other R2 Medium choices from new placement and automatic growth; preserve assets, stable IDs and existing placements. Activate only after approved replacement native package is ready.",
+    "eraPolicy": "Retirement spans all eras. Replacement era eligibility remains explicit; do not silently make an Art Deco building available in earlier eras."
+  },
+  "classification": {
+    "category": "Residential",
+    "density": "R2",
+    "wealth": "$$",
+    "subcategory": "Townhouse"
+  },
+  "coordinates": {
+    "space": "Blender authoring local",
+    "units": "metres",
+    "right": "+X",
+    "up": "+Z",
+    "streetFacing": "-Y",
+    "note": "Convert anchors together with native model; these are not Unity-space coordinates."
+  },
+  "frontage": {
+    "partyWallsX": [
+      -4,
+      4
+    ],
+    "wallY": -6.4,
+    "doorThreshold": [
+      -2.7,
+      -6.8545,
+      1.1025
+    ],
+    "landingFrontCenter": [
+      -2.7,
+      -7.525,
+      1.08
+    ],
+    "stairEnvelopeFrontY": -9.563500404,
+    "source": "Approved v005 composition and entrance working calibration",
+    "pendingMeasurement": [
+      "Landing width and walkable polygon",
+      "Full stair and outward-door swept clearance polygons",
+      "Front garden / sidewalk boundary and fence baseline",
+      "Left/right fence sockets and end/corner treatments"
+    ]
+  },
+  "futureRows": {
+    "modes": [
+      "Townhouse Row",
+      "Commercial Row"
+    ],
+    "townhouseFences": "Optional wrought iron frontage generated at build time, with openings for each stair approach. Join eligible frontage segments using their sockets; never draw a straight connection through stairs or doors.",
+    "persistence": "Persist chosen building revision/profile, fence style and option, generated layout and any variation seed. Preserve on reload and LOD change.",
+    "compatibility": "Use subtype and valid frontage profile, not R2 Medium classification alone, to qualify for Townhouse Row. Commercial Row has its own eligibility."
+  },
+  "cutoverPrerequisites": [
+    "Prepare consolidated whole-house native geometry and reduced LODs while preserving approved appearance",
+    "Convert shared materials and authored night selection; verify doors and clock behavior",
+    "Verify tile fit, adjoining party walls and frontage clearance",
+    "Apply reversible eligibility policy to both placement and growth; keep saved-ID lookup and rendering intact"
+  ],
+  "implementedThisDocument": false
+}

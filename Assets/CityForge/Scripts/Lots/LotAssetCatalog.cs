@@ -243,6 +243,8 @@ namespace CityForge.Lots
                 item.characterScript.scriptedBehavior == LotScriptedBehavior.ChildrenAtPlay))
                 ChildrenAtPlay.Attach(wrapper);
             DistrictAudioEmitter.Attach(wrapper, asset);
+            BuildingPaint.Attach(wrapper, asset, item.buildingAppearance);
+            if(asset.category=="Buildings")BuildingSignInstances.Attach(wrapper,asset,item.buildingAppearance);
             return wrapper;
         }
 

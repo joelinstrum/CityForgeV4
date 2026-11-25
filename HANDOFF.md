@@ -4659,3 +4659,10 @@ Approved private package is versioned through the shared repository as Marquee
 Tower/v003. Source only is committed here; art remains private. See
 Documentation/03_Technical/Marquee_Fixed_Sign.md. Reuse its sealed native kit;
 older converter/import harness would overwrite the fixed sign/material pass.
+
+## Townhouse / building customization checkpoint — November 25, 2026
+
+See `Documentation/03_Technical/Townhouse_Checkpoint.md` before continuing
+the approved modular Green Cornice Bay or the all-era R2 $$ roster reset.
+The approved v005 composition still needs native preparation; roster retirement
+and procedural townhouse fences are not installed by this checkpoint.

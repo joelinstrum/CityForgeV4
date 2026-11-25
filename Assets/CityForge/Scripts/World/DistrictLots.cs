@@ -138,6 +138,7 @@ namespace CityForge.World
                 if (selectedDistrictLot != null && !DistrictLoading && !IsSaving)
                     BeginLotPlacement(selectedDistrictLot.definition, selectedDistrictLot);
             });
+            editSelectedBuildingButton = AddPanelButton("Edit Building", 156, -454, 130, EditSelectedBuilding);
             changeBuildingButton = AddPanelButton("Change building", 14, -228, 272, ChangeSelectedLotBuilding);
             changeLotButton = AddPanelButton("Change lot", 14, -272, 272, ChangeSelectedLotLayout);
             deliveryRoleButton = AddPanelButton("Receives: None · change", 14, -272, 272, () =>
@@ -202,7 +203,11 @@ namespace CityForge.World
             int extraRow = replaceable ? 44 : 0;
             ((RectTransform)changeLotButton.transform).anchoredPosition = new Vector2(14, growable ? -272 : -228);
             var panel = (RectTransform)selectedLotPanel.transform;
-            panel.sizeDelta = new Vector2(300, (growable ? 498 : 454) + extraRow);
+            bool hasBuilding = record.definition.objects.Any(item => LotAssetCatalog.Load().Find(item.assetId)?.category == "Buildings");
+            editSelectedBuildingButton.gameObject.SetActive(hasBuilding);
+            float editorRow = hasBuilding ? 44 : 0;
+            panel.sizeDelta = new Vector2(300, (growable ? 498 : 454) + extraRow + editorRow);
+            ((RectTransform)editSelectedBuildingButton.transform).anchoredPosition = new Vector2(156, (growable ? -490 : -446) - extraRow);
             ((RectTransform)deliveryRoleButton.transform).anchoredPosition = new Vector2(14, (growable ? -272 : -228) - extraRow);
             deliveryRoleButton.GetComponentInChildren<Text>().text = "Receives: " + (record.definition.DeliveryRole switch
             { LotDeliveryRole.LumberMill => "Lumber Mill", LotDeliveryRole.TownCenter => "Town Center", _ => "None" }) + " · change";
