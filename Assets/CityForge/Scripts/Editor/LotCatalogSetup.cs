@@ -253,7 +253,7 @@ internal static class LotCatalogSetup
         var catalog = AssetDatabase.LoadAssetAtPath<LotAssetCatalog>(CatalogPath);
         var entries = (catalog ? catalog.entries : System.Array.Empty<LotAssetCatalogEntry>()).ToList();
         bool changed = false;
-        foreach (var entry in candidates.Concat(ConfiguredVehicles()).Concat(PlaceableSeasonalTrees.CatalogEntries()).Concat(CityForge.EditorTools.FoxOakPreparation.OakEntries()).Concat(PurchasedTreeCatalog.CatalogEntries()).Concat(CityForge.EditorTools.PlaneTreePreparation.CatalogEntries()).Concat(CityForge.EditorTools.CityTreePreparation.CatalogEntries()).Concat(foundersHomes).Concat(mediumHomes).Concat(meadowPoplars).Concat(ChildrenCharacterSetup.Entries()).Concat(Characters()).Concat(CityForge.EditorTools.ArtDecoCharacterPreparation.CatalogEntries()).Concat(Landscaping()).Concat(Corn()).Concat(Wheat()).Where(item => item.prefab))
+        foreach (var entry in candidates.Concat(CityForge.EditorTools.RebuiltOfficeCatalog.CatalogEntries()).Concat(ConfiguredVehicles()).Concat(PlaceableSeasonalTrees.CatalogEntries()).Concat(CityForge.EditorTools.FoxOakPreparation.OakEntries()).Concat(PurchasedTreeCatalog.CatalogEntries()).Concat(CityForge.EditorTools.PlaneTreePreparation.CatalogEntries()).Concat(CityForge.EditorTools.CityTreePreparation.CatalogEntries()).Concat(foundersHomes).Concat(mediumHomes).Concat(meadowPoplars).Concat(ChildrenCharacterSetup.Entries()).Concat(Characters()).Concat(CityForge.EditorTools.ArtDecoCharacterPreparation.CatalogEntries()).Concat(Landscaping()).Concat(Corn()).Concat(Wheat()).Where(item => item.prefab))
         {
             if (entry.category != "Buildings" && !entry.IsCharacter)
                 entry.distantPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(
@@ -266,6 +266,14 @@ internal static class LotCatalogSetup
             {
                 entries.Add(entry);
                 changed = true;
+                continue;
+            }
+            // Prepared buildings carry their classification and prefab references in the package.
+            // User property overrides are applied separately by LotBuildingPropertiesStore.
+            if (entry.prefab.GetComponent<CityForge.World.AuthoredBuildingLighting>())
+            {
+                if (JsonUtility.ToJson(existing) != JsonUtility.ToJson(entry))
+                { entries[entries.IndexOf(existing)] = entry; changed = true; }
                 continue;
             }
             if (entry.id is "oak-pilot-a" or "oak-pilot-b")

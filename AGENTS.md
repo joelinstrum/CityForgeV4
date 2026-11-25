@@ -44,6 +44,15 @@ The Git repository is public and source-only. Do not add licensed artwork, impor
 
 ## Building imports
 
+Prepared reconstructed buildings use the JSON-driven adapter described in
+Documentation/03_Technical/Prepared_Building_Imports.md. Finish portable materials
+and native prefab preparation during building creation; reuse sealed outputs on
+installation. Do not rerun baking, the full private import harness or all building
+renders for an unchanged prepared kit. Missing/stale outputs mean preparation is
+still needed; report that work separately from import time. Preserve stable GUIDs,
+IDs and each tier's own material mapping.
+
+
 - Create and register a reduced mesh for each building import. Use the original at Zoom 0–2 and the same reduced mesh at Zoom 3–5. For local lot models, stage the alternate as `Distant.fbx` in the building's private asset folder. Match the original origin, scale, orientation, footprint, materials, and emission UVs. Check the silhouette and frontage at Zoom 3 and verify the switch in both directions.
 - Author a warm emission mask for selected front window panes and every exterior lamp on the model. Preserve visible sash and glazing detail. Connect emission to the district evening and night cycle on both mesh tiers. Give modeled exterior fixtures a local light pool where appropriate and check fixture alignment and dusk/night behavior in Unity.
 - Keep imported art, reduced meshes, emission masks, and the generated local catalog in the private asset workflow.

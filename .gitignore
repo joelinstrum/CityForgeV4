@@ -317,3 +317,6 @@ venv/
 !/Assets/CityForge/Resources/Config/ArtDecoCharacters.json.meta
 !/Assets/CityForge/Resources/Config/PedestrianProfiles.json
 !/Assets/CityForge/Resources/Config/PedestrianProfiles.json.meta
+
+# Local reconstructed-office import and visual QA harness
+/Assets/CityForge/Scripts/Editor/RebuiltOfficeImport.cs*

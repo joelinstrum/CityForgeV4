@@ -139,6 +139,8 @@ namespace CityForge.UI
             cameraView.allowHDR = true;
             var cameraData = cameraView.GetUniversalAdditionalCameraData();
             cameraData.renderPostProcessing = true;
+            cameraData.antialiasing = AntialiasingMode.SubpixelMorphologicalAntiAliasing;
+            cameraData.antialiasingQuality = AntialiasingQuality.High;
             cameraData.volumeLayerMask = 1 << PreviewLayer;
             districtView = GetComponentInParent<PrototypeRegionView>();
             if (!districtView) districtView = FindFirstObjectByType<PrototypeRegionView>();
@@ -149,8 +151,7 @@ namespace CityForge.UI
             var template = previewBaseline && previewBaseline.sunTemplate
                 ? previewBaseline.sunTemplate.GetComponentInChildren<Light>() : null;
             baselineSunIntensity = (template ? template.intensity : 1.55f) * PrototypeRegionView.DistrictSunScale;
-            if (previewBaseline && previewBaseline.volume)
-                CreatePreviewVolume("Lot baseline grade", previewBaseline.volume, 30f);
+            // Inspect materials with the editor profile, independent of the landscape colour grade.
             previewProfile = ScriptableObject.CreateInstance<VolumeProfile>();
             previewProfile.Add<Tonemapping>().mode.Override(TonemappingMode.ACES);
             previewGrade = previewProfile.Add<ColorAdjustments>(false);
@@ -160,8 +161,8 @@ namespace CityForge.UI
             previewLight.type = LightType.Directional;
             previewLight.cullingMask = 1 << PreviewLayer;
             previewLight.shadows = LightShadows.Hard;
-            previewLight.shadowBias = .05f;
-            previewLight.shadowNormalBias = .15f;
+            previewLight.shadowBias = .015f;
+            previewLight.shadowNormalBias = .035f;
             ApplyLighting();
             draftingTexture = DraftingTexture();
         }
@@ -309,10 +310,12 @@ namespace CityForge.UI
             previewLight.shadowStrength = calibrated && districtView ? districtView.AfternoonShadowStrength : defaults[3];
             var lightData = previewLight.GetUniversalAdditionalLightData();
             lightData.usePipelineSettings = false;
-            lightData.softShadowQuality = SoftShadowQuality.Low;
-            previewCalibration.enabled = calibrated;
+            lightData.softShadowQuality = SoftShadowQuality.High;
+            previewCalibration.enabled = true;
             float exposure = districtView ? districtView.AfternoonExposure : defaults[4];
             PrototypeRegionView.ApplyCalibratedGrade(previewGrade, time, exposure, linear);
+            previewGrade.colorFilter.Override(Color.white);
+            previewGrade.postExposure.Override(calibrated ? 0f : .25f);
 
             var probe = PrototypeRegionView.LotDaylightProbe();
             if (previewBaseline && previewBaseline.ambientSH?.Length == 27)
@@ -325,6 +328,19 @@ namespace CityForge.UI
             if (calibrated && linear)
                 daylightProbe.AddDirectionalLight(MeadowDistrictLandscape.AfternoonSkyDirection,
                     new Color(.80f, .89f, 1f), .49f * ambient / 1.096f);
+            if (calibrated)
+            {
+                previewLight.intensity = linear ? 1.3f : 1.0f;
+                previewLight.color = new Color(1f, .975f, .94f);
+                previewLight.transform.rotation = Quaternion.Euler(40f, yaw - 25f, 0);
+                previewLight.shadowStrength = .8f;
+                daylightProbe = new SphericalHarmonicsL2();
+                daylightProbe.AddAmbientLight(new Color(.22f, .24f, .28f));
+                daylightProbe.AddDirectionalLight(Vector3.up, new Color(.8f, .87f, 1f), .12f);
+                previewGrade.postExposure.Override(-.15f);
+                previewGrade.contrast.Override(4f);
+                previewGrade.saturation.Override(0f);
+            }
             cameraView.backgroundColor = night ? new Color32(10, 16, 27, 255) : new Color32(28, 37, 46, 255);
             UpdateDraftingLighting();
             foreach (var renderer in previewLitSurfaces)
@@ -333,6 +349,9 @@ namespace CityForge.UI
             if (content)
                 foreach (var windows in content.GetComponentsInChildren<ResidentialWindowLights>())
                     windows.SetTime(time);
+            if (content)
+                foreach (var authored in content.GetComponentsInChildren<AuthoredBuildingLighting>())
+                    authored.SetPreviewTime(time, 1 << PreviewLayer);
         }
 
         private void UpdateDraftingLighting()
@@ -489,11 +508,12 @@ namespace CityForge.UI
                         collider.enabled = false;
                     foreach (var renderer in preview.GetComponentsInChildren<Renderer>())
                     {
-                        renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                        // Keep authored self shadows: they define window recesses and facade relief.
                         RegisterLitSurface(renderer);
                     }
                     ResidentialWindowLights.Attach(preview, building, PreviewTime);
                     LamppostLight.Attach(preview, building, PreviewTime, 1 << PreviewLayer);
+                    foreach (var authored in preview.GetComponentsInChildren<AuthoredBuildingLighting>()) authored.SetPreviewTime(PreviewTime, 1 << PreviewLayer);
                 }
                 if (zoning.hasEntrance)
                     entryMarker = DrawAnchor("House entrance", zoning.entrance, new Color32(255, 211, 109, 255));
@@ -536,6 +556,7 @@ namespace CityForge.UI
                 }
                 ResidentialWindowLights.Attach(instance, asset, PreviewTime);
                 LamppostLight.Attach(instance, asset, PreviewTime, 1 << PreviewLayer);
+                foreach (var authored in instance.GetComponentsInChildren<AuthoredBuildingLighting>()) authored.SetPreviewTime(PreviewTime, 1 << PreviewLayer);
                 if (item.id != selected && !selectedGroup.Contains(item.id)) continue;
                 var footprint = tree ? new Rect(Vector2.zero, Vector2.one * TreePickWidth(instance.transform)) : LotRuntimeLoader.Footprint(item, asset);
                 var position = instance.transform.localPosition;
@@ -1039,12 +1060,15 @@ namespace CityForge.UI
             UpdatePlacementGhost();
             var rect = image.rectTransform.rect;
             var canvasScale = image.canvas.scaleFactor;
-            int width = Mathf.Clamp(Mathf.RoundToInt(rect.width * canvasScale), 1, 4096);
-            int height = Mathf.Clamp(Mathf.RoundToInt(rect.height * canvasScale), 1, 4096);
+            float displayWidth = Mathf.Max(1f, rect.width * canvasScale);
+            float displayHeight = Mathf.Max(1f, rect.height * canvasScale);
+            float previewScale = Mathf.Min(1.5f, 4096f / Mathf.Max(displayWidth, displayHeight));
+            int width = Mathf.Max(1, Mathf.RoundToInt(displayWidth * previewScale));
+            int height = Mathf.Max(1, Mathf.RoundToInt(displayHeight * previewScale));
             if (!target || target.width != width || target.height != height)
             {
                 ReleaseTarget();
-                target = new RenderTexture(width, height, 24, RenderTextureFormat.DefaultHDR) { name = "Lot editor viewport" };
+                target = new RenderTexture(width, height, 24, RenderTextureFormat.DefaultHDR) { name = "Lot editor viewport", filterMode = FilterMode.Bilinear };
                 cameraView.targetTexture = target;
                 cameraView.aspect = (float)width / height;
                 image.texture = target;
@@ -1059,6 +1083,8 @@ namespace CityForge.UI
 
         private void ApplyPose()
         {
+            if (previewLight && PreviewTime is RegionTimeOfDay.Noon or RegionTimeOfDay.Afternoon)
+                previewLight.transform.rotation = Quaternion.Euler(40f, yaw - 25f, 0);
             var rotation = Quaternion.Euler(pitch, yaw, 0);
             cameraView.orthographicSize = (span * .60f + 3f) * zoom / Mathf.Min(1, cameraView.aspect);
             // Fit the depth range around the visible ground so shadow cascades resolve small models.
