@@ -193,6 +193,7 @@ namespace CityForge.Lots
                     !float.IsFinite(item.position.x) || !float.IsFinite(item.position.y) ||
                     !item.characterScript.IsValid || !item.vehicleScript.IsValid)
                     throw new InvalidDataException("Invalid lot object.");
+                BuildingAppearance.Validate(item.buildingAppearance);
             }
             lot.paths ??= new List<LotPathDefinition>();
             if (lot.paths.Count > LotPathDefinition.MaxPaths)
@@ -316,6 +317,7 @@ namespace CityForge.Lots
     [Serializable]
     public sealed class LotObjectDefinition
     {
+        public BuildingAppearanceSettings buildingAppearance;
         public bool generatedRowBuilding;
         public string id = Guid.NewGuid().ToString("N");
         public string assetId;

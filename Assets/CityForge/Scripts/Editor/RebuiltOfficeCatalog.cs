@@ -25,6 +25,9 @@ namespace CityForge.EditorTools
             public string folder, id, label, eraId, group, subcategory, zone, wealth;
             public string[] additionalEraIds;
             public float width, depth, height;
+            public bool rowHouse;
+            public int toYear;
+            public float leftWall, rightWall, frontStep;
         }
         internal static IEnumerable<PreparedBuilding> Definitions()
         {
@@ -43,7 +46,8 @@ namespace CityForge.EditorTools
                            d.folder.Any(c=>!char.IsLetterOrDigit(c)&&c!='_'&&c!='-')||
                            CityForgeTimeline.Find(d.eraId)==null||
                            !Enum.TryParse<TownZone>(d.zone,out _)||!Enum.TryParse<LotWealth>(d.wealth,out _)||
-                           !float.IsFinite(d.width)||!float.IsFinite(d.depth)||!float.IsFinite(d.height)||d.width<=0||d.depth<=0||d.height<=0)
+                           !float.IsFinite(d.width)||!float.IsFinite(d.depth)||!float.IsFinite(d.height)||d.width<=0||d.depth<=0||d.height<=0||
+                           d.rowHouse&&(!float.IsFinite(d.leftWall)||!float.IsFinite(d.rightWall)||!float.IsFinite(d.frontStep)||d.rightWall-d.leftWall<=.25f||d.rightWall-d.leftWall>=128))
                             throw new InvalidDataException("Invalid prepared building catalog metadata: "+path);
                         if(definitions.TryGetValue(d.id,out var existing)&&existing.folder!=d.folder)
                             throw new InvalidDataException("Duplicate building ID in different folders: "+d.id);
@@ -64,11 +68,12 @@ namespace CityForge.EditorTools
                 yield return new LotAssetCatalogEntry {
                     id=b.id,label=b.label,description="Reconstructed building; authored metres and recessed illuminated rooms.",
                     category="Buildings",group=b.group,subcategory=b.subcategory,eraId=b.eraId,
-                    additionalEraIds=b.additionalEraIds??Array.Empty<string>(),fromYear=CityForgeTimeline.Find(b.eraId).FirstYear,
+                    additionalEraIds=b.additionalEraIds??Array.Empty<string>(),fromYear=CityForgeTimeline.Find(b.eraId).FirstYear,toYear=b.toYear,
                     prefab=near,distantPrefab=medium,materialOverride=null,preserveEmissionColors=true,
                     fitModel=false,defaultBuildingScale=1,footprint=new Vector2(b.width,b.depth),
                     buildingDimensionsMeters=new Vector3(b.width,b.height,b.depth),
-                    growableZone=Enum.Parse<TownZone>(b.zone),growableWealth=Enum.Parse<LotWealth>(b.wealth)
+                    growableZone=Enum.Parse<TownZone>(b.zone),growableWealth=Enum.Parse<LotWealth>(b.wealth),
+                    rowGeometry=b.rowHouse?new LotRowGeometry{leftWall=b.leftWall,rightWall=b.rightWall,frontStep=b.frontStep}:null
                 };
             }
         }

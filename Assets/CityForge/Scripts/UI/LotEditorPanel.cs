@@ -36,7 +36,7 @@ namespace CityForge.UI
         private readonly PointWirePath groundPath = new PointWirePath();
         private bool drawingPath;
         private int pathWidth = 3;
-        private Button textureTool, terrainTool;
+        private Button textureTool, terrainTool, handTool;
         private bool terrainMode;
         private Vector2Int? terrainTile;
         private RectTransform terrainInspector;
@@ -222,9 +222,9 @@ namespace CityForge.UI
                 "Fill the purple path with a fence style");
 
             var bar = selectionToolbar = Tray("Tools", 648, 147, 385, 141);
-            selectTool = Control(bar, "Select", 6, 8, 42, () => { armed = null; moving = false; Refresh(); },
+            selectTool = Control(bar, "Select", 6, 8, 42, () => { viewport.HandTool = false; armed = null; moving = false; Refresh(); },
                 LotGlyph.Select, "Select an object on the lot", true);
-            moveTool = Control(bar, "Move", 53, 8, 42, () => { armed = null; moving = CanEdit(Selection); Refresh(); },
+            moveTool = Control(bar, "Move", 53, 8, 42, () => { viewport.HandTool = false; armed = null; moving = CanEdit(Selection); Refresh(); },
                 LotGlyph.Move, "Move the selected object", true);
             rotateSelectionButton = Control(bar, "Rotate 45°", 100, 8, 42, RotateSelection,
                 LotGlyph.Rotate, "Rotate the selected object 45 degrees", true);
@@ -238,6 +238,8 @@ namespace CityForge.UI
             scriptButton = Control(bar, "Script", 335, 8, 42, OpenCharacterScript, LotGlyph.Edit,
                 "Script · Configure the selected character or vehicle", true);
 
+            if (!PlayerMode) editBuildingButton = Control(bar, "Edit Building", 382, 8, 42, OpenBuildingEditor,
+                LotGlyph.House, "Edit Building · Customize the selected building’s appearance", true);
             varyTreeButton = Control(bar, "Vary when placed: Off", 6, 48, 222,
                 () => ChangeObject(item => item.varyTreeOnPlacement = !item.varyTreeOnPlacement),
                 description: "Vary this tree’s species, size and rotation when a lot is placed");
@@ -337,14 +339,8 @@ namespace CityForge.UI
                 MarkActive(animation, paused);
             }, description: "Pause or resume animations in the lot preview");
 
-            Button hand = null;
-            hand = Control(viewTools, "Hand: Off", 764, 5, 130, () =>
-            {
-                viewport.HandTool = !viewport.HandTool;
-                hand.GetComponentInChildren<Text>().text = viewport.HandTool ? "Hand: On" : "Hand: Off";
-                MarkActive(hand, viewport.HandTool);
-                Refresh(rebuildPreview: false);
-            }, description: "Drag to pan the inspection view; arrow keys also pan. The lot stays unchanged.");
+            handTool = Control(viewTools, "Pan: Off", 764, 5, 130, ToggleHandTool, LotGlyph.Hand,
+                "Pan view · Drag up, down or sideways; arrow keys also pan. The lot stays unchanged.");
             Control(viewTools, "Reset view", 900, 5, 130, viewport.ResetOrbit, description: "Center the lot and reset its inspection view");
 
 
@@ -3479,6 +3475,7 @@ namespace CityForge.UI
             bool hasSelection = item != null;
             bool propertySelection = !PlayerMode && selectedGroup.Count < 2 && item != null && catalog && catalog.Find(item.assetId)?.category == "Buildings";
             if (buildingPropertiesButton) buildingPropertiesButton.gameObject.SetActive(propertySelection);
+            if (editBuildingButton) editBuildingButton.gameObject.SetActive(propertySelection);
             At(selectedLabel.rectTransform, 20, 482, propertySelection ? 186 : 308, 36);
             selectedLabel.fontSize = propertySelection ? 14 : 18;
             if (!hasSelection) selectedGroup.Clear();
@@ -3494,7 +3491,9 @@ namespace CityForge.UI
             selectionToolbar.gameObject.SetActive(hasSelection);
             bool editableTree = singleEditable && catalog && catalog.Find(item.assetId)?.category == "Trees";
             varyTreeButton.gameObject.SetActive(editableTree);
-            At(selectionToolbar, 648, 147, 385, 141);
+            At(selectionToolbar, 648, 147, propertySelection ? 432 : 385, 141);
+            handTool.GetComponentInChildren<Text>().text = viewport.HandTool ? "Pan: On" : "Pan: Off";
+            MarkActive(handTool, viewport.HandTool);
             if (editableTree)
             {
                 varyTreeButton.GetComponentInChildren<Text>().text = item.varyTreeOnPlacement
@@ -3521,8 +3520,8 @@ namespace CityForge.UI
             }
             MarkActive(curveSelectedCorners, selectedPath?.curved == true);
             MarkActive(curveDraftCorners, curvePath);
-            MarkActive(selectTool, !moving && armed == null);
-            MarkActive(moveTool, moving);
+            MarkActive(selectTool, !viewport.HandTool && !moving && armed == null);
+            MarkActive(moveTool, !viewport.HandTool && moving);
             foreach (var pair in categoryButtons) MarkActive(pair.Value, pair.Key == category);
             if (terrainTile.HasValue && (terrainTile.Value.x >= lot.width || terrainTile.Value.y >= lot.length))
                 terrainTile = null;
@@ -3560,7 +3559,7 @@ namespace CityForge.UI
             for (int i = 0; i < LotPathSurface.Widths.Length; i++) MarkActive(pathWidthButtons[i], LotPathSurface.Widths[i] == pathWidth);
             finishPath.interactable = drawingPath && groundPath.Points.Count >= 2;
             clearPath.interactable = groundPath.Points.Count > 0;
-            var hint = viewport.HandTool ? "Hand · Drag to pan · Arrow keys to inspect · Reset view to center the lot" : pickingLotEntrance ? "Click inside the blue building slot to place the entry marker · Esc to cancel"
+            var hint = viewport.HandTool ? "Pan · Drag to pan · Arrow keys to inspect · Reset view to center the lot" : pickingLotEntrance ? "Click inside the blue building slot to place the entry marker · Esc to cancel"
                 : repeatSource != null ? "Click or press Enter at the end of the row · Esc to cancel"
                 : terrainMode ? "Click to select · Delete clears overlay · Drag to paint with a texture"
                 : drawingPath ? "Click to add points · Enter to finish · Esc to cancel · Click start to close"

@@ -4643,3 +4643,26 @@ updated kits are resealed. Evidence and handoff:
 ### November24 — asset grooming next
 
 User accepts Marquee Tower architecture; next pass is green foliage and less excessive black, preserving bracing and editable olive trim. This grooming remains pending. See Documentation/03_Technical/Asset_Grooming_Handoff.md and the originating chat outputs/Asset-Grooming-Handoff/Handoff.md for private continuation details.
+
+### November 24 — approved Marquee / Majestic fixed sign and materials
+
+Approved perpendicular double-sided Majestic sign is installed on Marquee Tower.
+AuthoredSignLighting shares one clock across native tiers, respects district/zoning
+pauses and preserves original emission strengths and cumulative sequence.
+AuthoredBuildingLighting forwards preview time and excludes sign slots from room
+emission. Lot Editor glow is conditional on sign-bearing previews; world lighting
+is unchanged. Private grooming restores green shrubs, green spandrels and raised
+gold fan accents without changing geometry/counts/UVs/pivots or stable IDs/GUIDs.
+179 isolated native Play assertions passed; both-tier day/night and close-ups
+reviewed, existing native lot roundtrip passed. Main installed files match QA.
+Approved private package is versioned through the shared repository as Marquee
+Tower/v003. Source only is committed here; art remains private. See
+Documentation/03_Technical/Marquee_Fixed_Sign.md. Reuse its sealed native kit;
+older converter/import harness would overwrite the fixed sign/material pass.
+
+## Townhouse / building customization checkpoint — November 25, 2026
+
+See `Documentation/03_Technical/Townhouse_Checkpoint.md` before continuing
+the approved modular Green Cornice Bay or the all-era R2 $$ roster reset.
+The approved v005 composition still needs native preparation; roster retirement
+and procedural townhouse fences are not installed by this checkpoint.

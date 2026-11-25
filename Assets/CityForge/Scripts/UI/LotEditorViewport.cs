@@ -312,6 +312,7 @@ namespace CityForge.UI
             lightData.usePipelineSettings = false;
             lightData.softShadowQuality = SoftShadowQuality.High;
             previewCalibration.enabled = true;
+            ConfigureSignGlow();
             float exposure = districtView ? districtView.AfternoonExposure : defaults[4];
             PrototypeRegionView.ApplyCalibratedGrade(previewGrade, time, exposure, linear);
             previewGrade.colorFilter.Override(Color.white);
@@ -352,6 +353,20 @@ namespace CityForge.UI
             if (content)
                 foreach (var authored in content.GetComponentsInChildren<AuthoredBuildingLighting>())
                     authored.SetPreviewTime(time, 1 << PreviewLayer);
+        }
+
+        private void ConfigureSignGlow()
+        {
+            // The sign's authored HDR emission needs the same glow used in its approved preview.
+            // Keep other lot previews and the district/world lighting profile unchanged.
+            bool hasSign = content && content.GetComponentInChildren<AuthoredSignLighting>(true);
+            if (hasSign && !previewProfile.TryGet<Bloom>(out _))
+            {
+                var glow = previewProfile.Add<Bloom>();
+                glow.threshold.Override(1f); glow.intensity.Override(.12f);
+                glow.scatter.Override(.45f); glow.highQualityFiltering.Override(true);
+            }
+            if (previewProfile.TryGet<Bloom>(out var signGlow)) signGlow.active = hasSign;
         }
 
         private void UpdateDraftingLighting()
@@ -596,6 +611,7 @@ namespace CityForge.UI
                 RegisterLitSurface(renderer);
             }
 
+            ConfigureSignGlow();
             characterPreview.EndRefresh();
             PauseAnimations(content);
             span = Mathf.Max(size.x, size.y);

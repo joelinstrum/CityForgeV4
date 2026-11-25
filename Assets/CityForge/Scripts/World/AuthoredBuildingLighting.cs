@@ -7,6 +7,7 @@ namespace CityForge.World
     public sealed class AuthoredBuildingLighting : MonoBehaviour
     {
         public Light[] fixtureLights;
+        public bool preserveAuthoredEmissionStrength;
         Renderer[] surfaces;
         PrototypeRegionView region;
         RegionTimeOfDay? applied;
@@ -31,22 +32,26 @@ namespace CityForge.World
             previewOverride = true; previewTime = time;
             if (fixtureLights != null) foreach (var light in fixtureLights) if (light) light.cullingMask = cullingMask;
             SetTime(time);
+            foreach (var sign in GetComponentsInChildren<AuthoredSignLighting>(true)) sign.SetPreviewTime(time);
         }
         public void SetTime(RegionTimeOfDay time)
         {
             if (applied == time) return;
             applied = time;
+            foreach (var sign in GetComponentsInChildren<AuthoredSignLighting>(true)) sign.SetTime(time);
             surfaces ??= GetComponentsInChildren<Renderer>(true);
             float gain = time == RegionTimeOfDay.Night ? 1.8f : time == RegionTimeOfDay.Evening ? 1.1f : 0;
             var block = new MaterialPropertyBlock();
             foreach (var surface in surfaces)
             {
+                if (surface.GetComponentInParent<AuthoredSignLighting>()) continue;
                 var materials = surface.sharedMaterials;
                 for (int slot = 0; slot < materials.Length; slot++)
                 {
                     if (!materials[slot] || !materials[slot].IsKeywordEnabled("_EMISSION")) continue;
                     block.Clear(); surface.GetPropertyBlock(block, slot);
-                    block.SetColor(EmissionColor, Color.white * gain);
+                    block.SetColor(EmissionColor, preserveAuthoredEmissionStrength ?
+                        materials[slot].GetColor(EmissionColor) * (gain / 1.8f) : Color.white * gain);
                     surface.SetPropertyBlock(block, slot);
                 }
             }
