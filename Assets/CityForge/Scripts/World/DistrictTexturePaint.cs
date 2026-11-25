@@ -48,7 +48,7 @@ namespace CityForge.World
             districtTexturePaint.Initialize(townToolbar.parent,districtGroundPaint,Pointer,Project,LotHeight,
                 point=>InActiveDistrict(point)&&!PaintHitsBuilding(point),
                 ()=>CanBuildTown&&TownConstructionVisible&&!IsSaving&&!DistrictLoading,
-                data=>districtGroundPaint=data,()=>{paintInputReleaseFrame=Time.frameCount;districtTexturePaint=null;RebuildGroundPaint();},ActiveDistrictBounds);
+                data=>districtGroundPaint=data,()=>{paintInputReleaseFrame=Time.frameCount;districtTexturePaint=null;RebuildGroundPaint();},ActiveDistrictBounds,DistrictAppearanceEra(SelectedDistrict));
             Vector2? Pointer()
             {
                 if(EventSystem.current&&EventSystem.current.IsPointerOverGameObject())return null;

@@ -323,7 +323,7 @@ namespace CityForge.World
 
         private bool TryPlantParkTree(Vector2 point, WildlifeWaterAccess water)
         {
-            if (!InActiveDistrict(point) || PickDistrictRoad(point) != null ||
+            if (NearAutomaticStreetTree(point, ParkTreeSpacing) || !InActiveDistrict(point) || PickDistrictRoad(point) != null ||
                 (ApprovedDistrict && ApprovedDistrict.Baseline &&
                     ApprovedDistrict.RoadDistance(point) <= ApprovedDistrict.Baseline.roadWidth) ||
                 roadBuildings.Any(building => building.Contains(point, .4f)))

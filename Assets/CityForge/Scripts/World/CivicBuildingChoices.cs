@@ -20,6 +20,19 @@ namespace CityForge.World
             ("infrastructure", "Infrastructure", "Public works and town infrastructure.")
         };
 
+        internal static bool IsTownCenter(LotDefinition lot) => lot != null &&
+            LotClassification.FindCategory(lot.category)?.id == "civics" && lot.DeliveryRole == LotDeliveryRole.TownCenter;
+
+        internal static bool IsFoundingLot(LotDefinition lot) => IsTownCenter(lot) ||
+            lot != null && !lot.deliveryRoleConfigured &&
+            LotClassification.FindCategory(lot.category)?.id == "civics" &&
+            LotClassification.ForCategory(lot.category).Any(child => child.id == "founders-buildings" &&
+                (lot.subcategory == child.id || lot.subcategory == child.name || lot.subcategory == child.legacyName));
+
+        internal static LotDefinition[] FoundingLots(IEnumerable<LotDefinition> saved) =>
+            (saved ?? Enumerable.Empty<LotDefinition>()).Where(IsFoundingLot)
+                .OrderBy(lot => lot.name, StringComparer.CurrentCultureIgnoreCase).ToArray();
+
         internal static List<LotDefinition> Collect(IEnumerable<LotDefinition> saved) =>
             (saved ?? Enumerable.Empty<LotDefinition>())
                 .Where(lot => lot != null && LotClassification.FindCategory(lot.category)?.id == "civics" && Category(lot) != null)

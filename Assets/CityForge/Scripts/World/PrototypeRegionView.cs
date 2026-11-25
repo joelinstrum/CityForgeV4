@@ -75,6 +75,7 @@ namespace CityForge.World
             {
                 if (hasSeasonalLotTrees) RebuildDistrictLots();
                 RebuildPlacedTrees();
+                RefreshAutomaticStreetTrees(force:true);
             }
             RefreshSeasonButtons();
         }
@@ -362,7 +363,10 @@ namespace CityForge.World
                 {
                     foreach (var district in snapshot.info.districts)
                         if (district != null && district.index >= 0 && district.index < view.Districts.Length)
+                            {
                             view.Districts[district.index].currentYear = district.currentYear;
+                            view.Districts[district.index].appearanceEraId = district.appearanceEraId;
+                            }
                 }
                 progress?.Invoke("Selecting saved district",.38f);yield return null;
                 view.deferLandscapeUpdate=true;

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 namespace CityForge.Lots
@@ -45,15 +46,17 @@ namespace CityForge.Lots
         internal const int MaxEdgeBlend = 100;
         internal float BlendMeters(int value) => width * .45f * value / MaxEdgeBlend;
         public string materialId;
+        public EraPathRole eraRole;
+        public bool materialLocked;
     }
 
-    internal sealed class LotPathMaterial
+    public sealed class LotPathMaterial
     {
         internal const string Plankboard = "weathered-plankboard";
         internal const string Bluestone = "weathered-bluestone";
         internal const string ResidentialFootpath = "residential-footpath";
 
-        public static readonly LotPathMaterial[] All =
+        private static readonly LotPathMaterial[] BuiltIns =
         {
             new LotPathMaterial("cobblestone", "Cobblestone", "Paving", new Color32(122, 116, 107, 255), 2f),
             new LotPathMaterial("cobblestone-road-9", "Cobblestone Road 9", "Paving",
@@ -76,6 +79,8 @@ namespace CityForge.Lots
             new LotPathMaterial("rustic-wood-pavement", "Rustic Wood Planks", "Paving",
                 new Color32(127, 116, 104, 255), 4f, requiresTexture: true),
             new LotPathMaterial("timber-deck", "Timber Deck", "Paving", new Color32(111, 79, 50, 255), 4f),
+            new LotPathMaterial("weathered-concrete-pavement", "Weathered Concrete", "Paving", new Color32(168,167,159,255), 4f, requiresTexture:true),
+            new LotPathMaterial("weathered-charcoal-asphalt", "Weathered Charcoal Asphalt", "Paving", new Color32(70,70,68,255), 4f, requiresTexture:true),
             new LotPathMaterial("concrete", "Concrete", "Paving", new Color32(168, 167, 159, 255), 3f),
             new LotPathMaterial("weathered-red-brick-herringbone", "Weathered Red Brick Herringbone", "Paving",
                 new Color32(127, 116, 104, 255), 4f, requiresTexture: true),
@@ -115,6 +120,13 @@ namespace CityForge.Lots
                 requiresTexture: true, textureResource: "Lots/GroundTextures/Residential/worn-grass-base")
         };
 
+        public static readonly LotPathMaterial[] All = BuiltIns.Concat(LotPropStyles.Paths
+            .Where(s=>!string.IsNullOrEmpty(s.textureResource))
+            .Select(s=>new LotPathMaterial(s.materialId,s.label??s.materialId,"Paving",new Color32(168,167,159,255),s.tileSizeMeters>0?s.tileSizeMeters:4,requiresTexture:true,textureResource:s.textureResource)))
+            .GroupBy(s=>s.Id,StringComparer.Ordinal).Select(g=>g.First()).ToArray();
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void WarmPathCatalog(){_ = All.Length;}
+        public bool IsAvailableInEra(string era) => LotPropStyles.FindPath(Id)?.AllowsEra(era) ?? true;
         public readonly string Id, Label, Group;
         public readonly Color Fallback;
         public readonly Vector2 TileSize;

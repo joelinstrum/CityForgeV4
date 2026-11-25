@@ -10,6 +10,7 @@ namespace CityForge.World
     {
         private void BuildRoadsPopup()
         {
+            if(repaveTarget!=null)newStreetTreeStyle=repaveTarget.streetTreeStyle;
             const string artPath = "UI/TownConstruction/";
             var categoriesArt = Resources.Load<Texture2D>(artPath + "RoadCategories");
             var surfacesArt = Resources.Load<Texture2D>(artPath + "RoadSurfaces");
@@ -62,6 +63,16 @@ namespace CityForge.World
                 new Vector2(0, -388), new Vector2(760, 40), 21);
             placeHint.color = TownGold;
 
+            var treeHeading=FounderText(panel,"STREET TREES",new Vector2(520,-145),new Vector2(390,30),21);treeHeading.color=TownGold;
+            var treeChoices=new Button[StreetTreePalette.Styles.Length+1];
+            for(int t=0;t<treeChoices.Length;t++)
+            {
+                int choice=t;string id=t==0?null:StreetTreePalette.Styles[t-1].Id;
+                treeChoices[t]=TownButton(panel,lotFont,t==0?"No trees":StreetTreePalette.Styles[t-1].Label,1064+(t%2)*202,-600-(t/2)*45,194,()=>{newStreetTreeStyle=id;RefreshTreeChoices();});
+                treeChoices[t].gameObject.name="Road tree style · "+(id??"none");
+            }
+            void RefreshTreeChoices(){for(int t=0;t<treeChoices.Length;t++)MarkTownButton(treeChoices[t],t==0?string.IsNullOrEmpty(newStreetTreeStyle):newStreetTreeStyle==StreetTreePalette.Styles[t-1].Id);}
+            RefreshTreeChoices();
             int hoveredSurface = -1;
             int selectedCategory = 0;
             for (int i = 0; i < categoryNames.Length; i++)
@@ -85,7 +96,7 @@ namespace CityForge.World
                 {
                     var caption = button.GetComponentInChildren<Text>();
                     caption.fontSize = 22;
-                    if (IsFoundersStreet(RoadSurfaces[i].Id))
+                    if (IsFoundersStreet(RoadSurfaces[i].Id) || IsModernRoadSurface(RoadSurfaces[i].Id))
                     {
                         var texture = StreetTexture(i);
                         if (texture)
@@ -157,6 +168,7 @@ namespace CityForge.World
                 bool laterEra = industrialIndex >= 0 && eraIndex > industrialIndex;
                 bool roads = index == 0;
                 bool streets = index == 1;
+                bool modernEra=eraIndex>=Array.FindIndex(eras,e=>e.id=="modern");
                 int roadCount = HistoricalRoadSurfaceCount + (laterEra ? 1 : 0);
                 categoryTitle.text = categoryNames[index];
                 summary.text = roads ? "Overland connections for trade, industry, and regional travel."
@@ -164,17 +176,18 @@ namespace CityForge.World
                     : "No construction options are available for this category in this era.";
 
                 int columns = streets || (roads && laterEra) ? 4 : 3;
+                int slot=0;
                 float width = columns == 4 ? 163 : 219;
                 float height = streets ? 154 : columns == 4 ? 194 : 247;
                 for (int i = 0; i < surfaceButtons.Length; i++)
                 {
-                    bool visible = (roads && i < roadCount) || (streets && (IsFoundersStreet(RoadSurfaces[i].Id) || (laterEra && i == PavedStreetIndex)));
+                    bool visible = (roads && (i < roadCount || modernEra && IsModernRoadSurface(RoadSurfaces[i].Id) && !IsModernStreet(RoadSurfaces[i].Id))) || (streets && (IsFoundersStreet(RoadSurfaces[i].Id) || (laterEra && i == PavedStreetIndex) || modernEra && IsModernStreet(RoadSurfaces[i].Id)));
                     surfaceButtons[i].gameObject.SetActive(visible);
                     if (!visible) continue;
-                    int slot = streets ? (i == PavedStreetIndex ? 9 : FoundersStreetSlot(RoadSurfaces[i].Id)) : i;
+                    int position = slot++;
                     var rect = (RectTransform)surfaceButtons[i].transform;
-                    rect.anchoredPosition = new Vector2(322 + slot % columns * (720 / columns),
-                        -199 - slot / columns * (height + 20));
+                    rect.anchoredPosition = new Vector2(322 + position % columns * (720 / columns),
+                        -199 - position / columns * (height + 20));
                     rect.sizeDelta = new Vector2(width, height);
                     if (streets)
                     {
@@ -186,6 +199,8 @@ namespace CityForge.World
                     if (surfaceFaces[i]) surfaceFaces[i].rectTransform.sizeDelta = rect.sizeDelta;
                 }
 
+                treeHeading.gameObject.SetActive(streets);foreach(var treeChoice in treeChoices)treeChoice.gameObject.SetActive(streets);
+                placeHint.text=streets?"Choose paving · Trees fill available sidewalk space.":"Hover for details · Click a surface to place it";
                 placeHint.gameObject.SetActive(roads || streets);
                 PreviewSurface(-1);
             }
@@ -210,12 +225,12 @@ namespace CityForge.World
                 }
                 detailTitle.text = RoadSurfaces[index].Label;
                 details.text = RoadSurfaces[index].Description;
-                var texture = IsFoundersStreet(RoadSurfaces[index].Id) ? StreetTexture(index) : index >= HistoricalRoadSurfaceCount ? null
+                var texture = IsFoundersStreet(RoadSurfaces[index].Id) || IsModernRoadSurface(RoadSurfaces[index].Id) ? StreetTexture(index) : index >= HistoricalRoadSurfaceCount ? null
                     : index == 3 && concept ? concept : surfacesArt;
                 preview.gameObject.SetActive(texture != null);
                 if (!texture) return;
                 preview.texture = texture;
-                if (IsFoundersStreet(RoadSurfaces[index].Id))
+                if (IsFoundersStreet(RoadSurfaces[index].Id) || IsModernRoadSurface(RoadSurfaces[index].Id))
                 {
                     preview.uvRect = new Rect(0, 0, 1, 1);
                     ((RectTransform)preview.transform).sizeDelta = new Vector2(396, 188);

@@ -39,7 +39,7 @@ namespace CityForge.World
                     }
 
                     var buildings = LotGrowableBuildings.Candidates(layout, catalog)
-                        .Where(building => catalog.Find(building.assetId).eraId == "founders").ToArray();
+                        .Where(building => catalog.Find(building.assetId).IsAvailableInEra("founders")).ToArray();
                     bool propFiller = layout.width == 1 && layout.length == 1 && layout.objects.Count > 0;
                     if (buildings.Length == 0 && !propFiller)
                         problem = $"{layout.name}: No matching building fits the building slot.";

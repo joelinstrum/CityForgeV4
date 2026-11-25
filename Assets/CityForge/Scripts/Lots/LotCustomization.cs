@@ -10,6 +10,8 @@ namespace CityForge.Lots
     {
         public int schema = 1;
         public bool configured;
+        public bool appearanceConfigured;
+        public EraAppearanceSettings appearance;
         public List<LotObjectDefinition> objects = new List<LotObjectDefinition>();
     }
 
@@ -28,6 +30,11 @@ namespace CityForge.Lots
             if (customization.schema != 1 || customization.objects == null || customization.objects.Count > 512)
                 throw new InvalidDataException("Invalid landscaping customization.");
             // Unity serializes null inline fields as empty objects in region saves.
+            if (customization.appearanceConfigured)
+            {
+                EraAppearance.Validate(customization.appearance);
+                result.eraAppearance = customization.appearance;
+            }
             if (!customization.configured && customization.objects.Count == 0) return result;
             var authored = new Dictionary<string, LotObjectDefinition>();
             foreach (var item in result.objects) authored.Add(item.id, item);
@@ -51,7 +58,7 @@ namespace CityForge.Lots
 
         public static LotCustomization CreateOverride(LotDefinition original, LotDefinition working, LotAssetCatalog catalog)
         {
-            var changes = new LotCustomization { configured = true };
+            var changes = new LotCustomization { configured = true, appearanceConfigured = true, appearance = working.eraAppearance };
             foreach (var item in working.objects)
                 if (IsCosmetic(catalog, item.assetId)) changes.objects.Add(item);
             var permitted = Apply(original, changes, catalog);

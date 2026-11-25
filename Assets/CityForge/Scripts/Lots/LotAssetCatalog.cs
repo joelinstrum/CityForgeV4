@@ -17,6 +17,17 @@ namespace CityForge.Lots
         public string group;
         public string subcategory;
         public string eraId;
+        // Additional eras in which this model can begin use; eraId remains its primary era.
+        public string[] additionalEraIds = Array.Empty<string>();
+        public bool IsAvailableInEra(string era)
+        {
+            if (string.IsNullOrEmpty(era)) return true;
+            if (eraId == era || Array.IndexOf(additionalEraIds ?? Array.Empty<string>(), era) >= 0) return true;
+            if (!string.IsNullOrEmpty(eraId)) return false;
+            var period = UI.CityForgeTimeline.Find(era);
+            return period != null && fromYear <= period.LastYear && toYear >= period.FirstYear;
+        }
+        internal int Density => growableZone == TownZone.None ? 0 : ((int)growableZone - 1) % 3 + 1;
         public TownZone growableZone;
         public LotWealth growableWealth;
         public string GrowableLabel => new LotZoningLayout { zone = growableZone, wealth = growableWealth }.Label;
@@ -24,7 +35,7 @@ namespace CityForge.Lots
         internal bool CanPreviewGrowable(TownZone zone, LotWealth wealth, string era) =>
             prefab && category == "Buildings" && growableZone == zone && growableWealth == wealth &&
             ResidentialWealthPolicy.Allows(zone, wealth, era) &&
-            (string.IsNullOrEmpty(era) || eraId == era);
+            IsAvailableInEra(era);
 
         public bool IsCharacter => category == "Characters";
         internal float DefaultPlacementScale => category == "Buildings" && float.IsFinite(defaultBuildingScale) && defaultBuildingScale > 0
@@ -33,6 +44,7 @@ namespace CityForge.Lots
         public GameObject distantPrefab;
         public GameObject autumnPrefab, winterPrefab;
         public Mesh nightWindowGlass;
+        public bool preserveEmissionColors; // RGB emission contains authored sign colors and window warmth.
         internal bool IsSeasonalTree => category == "Trees" && autumnPrefab && winterPrefab;
 
         internal GameObject PrefabFor(RegionSeason season) => season switch
@@ -72,6 +84,7 @@ namespace CityForge.Lots
         // Tree review, 2026-11-21: Remove choices are hidden across planting and lot rendering.
         public static bool IsRetiredTree(string id) =>
             id is "animated-tree-beech-2" or "animated-tree-birch-1" or "animated-tree-birch-2" or "animated-tree-birch-3" or "animated-tree-fir-1" or "animated-tree-juniper-1" or "animated-tree-juniper-2" or "animated-tree-pine-1" or "animated-tree-pine-2" or "animated-tree-pine-3" or "animated-tree-pine-4" or "animated-tree-pine-5" or "animated-tree-sycamore" or "oak-pilot-a" or "oak-pilot-b" or "plane-pack-01" or "plane-pack-02" or "plane-pack-03" or "plane-pack-04" or "plane-pack-05" or "plane-pack-06" or "silver-maple" or "silver-maple-b";
+        public const string ArtDecoCityCenter = "v3-building-art-deco-city-center";
         public const string Transport = "Transport";
         public const string StreetFurniture = "Street Furniture";
 

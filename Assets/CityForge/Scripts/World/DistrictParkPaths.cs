@@ -54,6 +54,7 @@ namespace CityForge.World
         }
         private string CreateParkPath(IReadOnlyList<Vector2> points,bool closed,string material,int width,bool curved)
         {
+            if(LotPathMaterial.Find(material)?.IsAvailableInEra(DistrictAppearanceEra(SelectedDistrict))!=true)return "This path surface is unavailable in the district era.";
             if(parkPaths.Count>=512)return "This region has reached its path limit.";
             var problem=RoadGuideProblem(points,closed,MapSide*.5f);if(problem!=null)return problem;
             var path=new LotPathDefinition{points=points.ToArray(),closed=closed,curved=curved,width=width,materialId=material,use=LotPathUse.Pedestrian,edgeBlend=pathDraftFeather,textureRotation=pathDraftRotation,depth=pathDraftDepth,border=pathDraftBorder,borderSides=pathDraftSides};

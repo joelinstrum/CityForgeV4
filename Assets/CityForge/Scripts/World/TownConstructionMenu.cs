@@ -149,7 +149,7 @@ namespace CityForge.World
             (PendingFounder is { } capital && InCapitalDistrict(capital) ||
              CanOpenCityMenu && Towns.Any(town => ActiveDistrictMembers.Contains(town.DistrictIndex(GridSide))) &&
              !PlacedLots.Exists(lot => ActiveDistrictMembers.Contains(lot.district) &&
-                 (IsFoundersLot(lot.definition) || lot.definition.id == DistrictTownCenterId)));
+                 (IsFoundersLot(lot.definition) || IsTownCenterLot(lot.definition))));
 
         private void OpenMissingTownCenter()
         {
@@ -773,14 +773,14 @@ namespace CityForge.World
             var walls = assets.Where(asset => IsWall(asset) &&
                 (asset.category == "Walls" || asset.category == "Fences" || asset.category == LotAssetCatalog.StreetFurniture));
             var outdoor = assets.Where(asset => asset.category == LotAssetCatalog.StreetFurniture &&
-                asset.group != "Lighting" && !IsWall(asset));
+                asset.group != "Lighting" && !IsWall(asset) &&
+                EraAppearance.Allows(new LotDefinition(), asset, DistrictAppearanceEra(SelectedDistrict)));
             int districtYear = TownYear(SelectedDistrict);
-            string districtEra = CityForgeTimeline.Eras.FirstOrDefault(era =>
-                districtYear >= era.FirstYear && districtYear <= era.LastYear)?.id;
+            string districtEra = DistrictAppearanceEra(SelectedDistrict);
             var categories = new[] { ("Street Lamps", lamps), ("Fences", fences.Where(asset => !IsWall(asset))),
-                ("Walls", walls), ("Outdoor Details", outdoor), ("Horses & Wagons",
+                ("Walls", walls), ("Outdoor Details", outdoor), ("Vehicles",
                     assets.Where(asset => asset.category == LotAssetCatalog.Transport &&
-                        VehicleProfile.Find(asset.id) is { } profile && !string.IsNullOrEmpty(profile.motionFolder) &&
+                        VehicleProfile.Find(asset.id) is { } profile &&
                         profile.AvailableIn(districtEra))) };
             var buttons = new Button[categories.Length];
             int currentCategory = 0;

@@ -12,6 +12,7 @@ namespace CityForge.Lots
     internal sealed class LotBuildingProperties
     {
         public string id, name, description, firstEra, category, subcategory;
+        public string[] additionalEraIds;
         public TownZone zone;
         public LotWealth wealth;
         public float defaultScale = 1;
@@ -19,6 +20,7 @@ namespace CityForge.Lots
 
         internal static LotBuildingProperties From(LotAssetCatalogEntry asset) => new()
         {
+            additionalEraIds = (asset.additionalEraIds ?? Array.Empty<string>()).ToArray(),
             id = asset.id, name = asset.label, description = asset.description ?? "", firstEra = asset.eraId,
             category = LotClassification.FindCategory(asset.group)?.id ?? asset.group,
             subcategory = asset.subcategory ?? "", zone = asset.growableZone, wealth = asset.growableWealth,
@@ -31,6 +33,8 @@ namespace CityForge.Lots
             if (string.IsNullOrWhiteSpace(name) || name.Trim().Length > 100 || name.Any(char.IsControl)) return "Enter a building name of 1–100 characters.";
             if ((description ?? "").Length > 600) return "Keep the description within 600 characters.";
             if (CityForgeTimeline.Find(firstEra) == null) return "Choose a first era.";
+            if ((additionalEraIds?.Length ?? 0) > CityForgeTimeline.Eras.Length || (additionalEraIds ?? Array.Empty<string>()).Any(id => CityForgeTimeline.Find(id) == null)) return "Choose valid additional eras.";
+            if ((additionalEraIds ?? Array.Empty<string>()).Any(id => !ResidentialWealthPolicy.Allows(zone, wealth, id))) return "Low-wealth R3 buildings are unavailable in a selected era.";
             if (LotClassification.FindCategory(category) == null) return "Choose a building category.";
             if (!string.IsNullOrEmpty(subcategory) && !LotClassification.ForCategory(category).Any(s => s.id == subcategory)) return "Choose a use within this category.";
             if (!Zones(category).Contains(zone)) return "Choose a growable type that matches the category.";
@@ -49,6 +53,10 @@ namespace CityForge.Lots
         };
         internal void Apply(LotAssetCatalogEntry asset)
         {
+            // Version-one saved overrides omitted the new field; retain catalog additions
+            // when the saved primary era still matches. Explicit empty arrays opt out.
+            var extra = additionalEraIds ?? (asset.eraId == firstEra ? asset.additionalEraIds : Array.Empty<string>());
+            asset.additionalEraIds = (extra ?? Array.Empty<string>()).Where(id => id != firstEra).Distinct().ToArray();
             asset.label = name; asset.description = description ?? ""; asset.eraId = firstEra;
             asset.group = category; asset.subcategory = subcategory; asset.growableZone = zone;
             asset.growableWealth = wealth; asset.defaultBuildingScale = defaultScale;

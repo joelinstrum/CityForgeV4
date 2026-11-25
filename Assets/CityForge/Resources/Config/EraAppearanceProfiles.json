@@ -1,0 +1,74 @@
+{
+  "profiles": [
+    {
+      "eraId": "founders",
+      "filterVehicles": false,
+      "generalMaterial": "",
+      "entranceMaterial": "",
+      "courtyardMaterial": "",
+      "drivewayMaterial": "",
+      "hiddenProps": [],
+      "soundSetId": ""
+    },
+    {
+      "eraId": "industrial",
+      "filterVehicles": false,
+      "generalMaterial": "",
+      "entranceMaterial": "",
+      "courtyardMaterial": "",
+      "drivewayMaterial": "",
+      "hiddenProps": [],
+      "soundSetId": ""
+    },
+    {
+      "eraId": "victorian",
+      "filterVehicles": false,
+      "generalMaterial": "",
+      "entranceMaterial": "",
+      "courtyardMaterial": "",
+      "drivewayMaterial": "",
+      "hiddenProps": [],
+      "soundSetId": ""
+    },
+    {
+      "eraId": "machine",
+      "filterVehicles": false,
+      "generalMaterial": "",
+      "entranceMaterial": "",
+      "courtyardMaterial": "",
+      "drivewayMaterial": "",
+      "hiddenProps": [],
+      "soundSetId": ""
+    },
+    {
+      "eraId": "modern",
+      "filterVehicles": true,
+      "generalMaterial": "concrete",
+      "entranceMaterial": "concrete",
+      "courtyardMaterial": "concrete",
+      "drivewayMaterial": "concrete",
+      "hiddenProps": [],
+      "soundSetId": ""
+    },
+    {
+      "eraId": "postwar",
+      "filterVehicles": true,
+      "generalMaterial": "concrete",
+      "entranceMaterial": "concrete",
+      "courtyardMaterial": "concrete",
+      "drivewayMaterial": "concrete",
+      "hiddenProps": [],
+      "soundSetId": ""
+    },
+    {
+      "eraId": "contemporary",
+      "filterVehicles": true,
+      "generalMaterial": "concrete",
+      "entranceMaterial": "concrete",
+      "courtyardMaterial": "concrete",
+      "drivewayMaterial": "concrete",
+      "hiddenProps": [],
+      "soundSetId": ""
+    }
+  ]
+}

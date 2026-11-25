@@ -22,7 +22,7 @@ namespace CityForge.UI
             var go=new GameObject("Lot Texturize tool");go.layer=PreviewLayer;go.transform.SetParent(stage,false);
             texturePaintTool=go.AddComponent<TexturePaintTool>();
             texturePaintTool.Initialize(hud,lot.groundPaint,Pointer,Project,_=>0,lot.LandBounds.Contains,
-                ()=>previewLot==lot,changed,()=>{texturePaintReleaseFrame=Time.frameCount;texturePaintTool=null;finished();},lot.LandBounds);
+                ()=>previewLot==lot,changed,()=>{texturePaintReleaseFrame=Time.frameCount;texturePaintTool=null;finished();},lot.LandBounds,EraAppearance.EffectiveEra(lot,ResidentialGround.LotEra(lot)));
             Vector2? Pointer()
             {
                 var canvas=image.canvas;var eventCamera=canvas.renderMode==RenderMode.ScreenSpaceOverlay?null:canvas.worldCamera;

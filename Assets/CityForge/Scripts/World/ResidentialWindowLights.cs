@@ -7,7 +7,7 @@ namespace CityForge.World
         private static readonly int EmissionColor = Shader.PropertyToID("_EmissionColor");
         private static readonly Color WarmLight = new(2.2f, .92f, .29f, 1f);
         private Renderer[] renderers;
-        private bool highWealth;
+        private bool highWealth, preserveEmissionColors;
         private Renderer glazing;
         private static Material glazingMaterial;
 
@@ -58,6 +58,7 @@ namespace CityForge.World
                     lights.glazing.receiveShadows = false;
                 }
             }
+            lights.preserveEmissionColors = asset.preserveEmissionColors;
             lights.highWealth = asset.growableWealth == CityForge.Lots.LotWealth.High;
             lights.SetTime(time);
         }
@@ -71,7 +72,9 @@ namespace CityForge.World
                 RegionTimeOfDay.Evening => new Color(1.21f, .83f, .25f, 1f),
                 _ => Color.black
             };
-            if (highWealth && time is RegionTimeOfDay.Night or RegionTimeOfDay.Evening)
+            if (preserveEmissionColors)
+                emission = time == RegionTimeOfDay.Night ? Color.white * 2.2f : time == RegionTimeOfDay.Evening ? Color.white * 1.21f : Color.black;
+            else if (highWealth && time is RegionTimeOfDay.Night or RegionTimeOfDay.Evening)
                 emission = time == RegionTimeOfDay.Night ? new Color(1.8f, 1.05f, .49f, 1f)
                     : new Color(1.08f, .64f, .31f, 1f);
             emission.r *= .72f; emission.g *= .72f; emission.b *= .72f;

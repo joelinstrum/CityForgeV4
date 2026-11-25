@@ -1,0 +1,37 @@
+{
+  "profiles": [
+    {
+      "eraId": "modern",
+      "assetIds": [
+        "artdeco-man-brown",
+        "artdeco-man-tan",
+        "artdeco-man-black",
+        "artdeco-man-blue-brown",
+        "artdeco-lady-green",
+        "artdeco-lady-pink",
+        "artdeco-lady-tan",
+        "artdeco-lady-navy"
+      ],
+      "walkingFraction": 0.75,
+      "cycleSeconds": 40,
+      "zones": [
+        {
+          "zone": "Residential2",
+          "pedestriansPerBuilding": 2
+        },
+        {
+          "zone": "Residential3",
+          "pedestriansPerBuilding": 3
+        },
+        {
+          "zone": "Commercial2",
+          "pedestriansPerBuilding": 4
+        },
+        {
+          "zone": "Commercial3",
+          "pedestriansPerBuilding": 6
+        }
+      ]
+    }
+  ]
+}

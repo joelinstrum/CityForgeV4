@@ -33,6 +33,7 @@ namespace CityForge.Lots
         internal int SideStreetTurn => streetFrontage == LotStreetFrontage.LeftCorner ? 1 :
             streetFrontage == LotStreetFrontage.RightCorner ? -1 : 0;
         public ResidentialGroundSettings residentialGround;
+        public EraAppearanceSettings eraAppearance;
         public string id = Guid.NewGuid().ToString("N");
         public string name = "Colonial Homestead";
         public int cost;
@@ -144,6 +145,7 @@ namespace CityForge.Lots
         public static LotDefinition Parse(string json)
         {
             var lot = JsonUtility.FromJson<LotDefinition>(json);
+            EraAppearance.Validate(lot?.eraAppearance);
             if (lot?.schema == 1)
             {
                 if (lot.width < 1 || lot.width > LegacyMaxTiles || lot.length < 1 || lot.length > LegacyMaxTiles ||
@@ -198,7 +200,7 @@ namespace CityForge.Lots
             foreach (var path in lot.paths)
             {
                 if (path?.points == null || path.points.Length < (path.closed ? 3 : 2) || path.points.Length > 256 ||
-                    !Enum.IsDefined(typeof(LotPathUse), path.use) || path.textureRotation < 0 || path.textureRotation > 3 || path.edgeBlend < 0 || path.edgeBlend > LotPathDefinition.MaxEdgeBlend ||
+                    !Enum.IsDefined(typeof(EraPathRole), path.eraRole) || !Enum.IsDefined(typeof(LotPathUse), path.use) || path.textureRotation < 0 || path.textureRotation > 3 || path.edgeBlend < 0 || path.edgeBlend > LotPathDefinition.MaxEdgeBlend ||
                     !Enum.IsDefined(typeof(LotPathDepth), path.depth) || !Enum.IsDefined(typeof(LotPathBorder), path.border) || !Enum.IsDefined(typeof(LotPathBorderSides), path.borderSides) ||
                     Array.IndexOf(LotPathSurface.Widths, path.width) < 0 || LotPathMaterial.Find(path.materialId) == null)
                     throw new InvalidDataException("Invalid lot path.");

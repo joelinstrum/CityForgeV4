@@ -47,7 +47,7 @@ namespace CityForge.World
             if(selected!=null)ShowPathSelection(selected.path);
             parkPathOptions=PedestrianPathModal.Show(townToolbar.parent,lotFont,pathAppearance,selected!=null,
                 ()=>{ReadPathAppearance();if(selected==null)BeginParkPath();else ApplyParkPath(selected);},CancelParkPath,UndoParkPath,
-                selected==null?null:()=>{int index=parkPaths.IndexOf(selected);parkPaths.Remove(selected);RecordPathUndo(()=>parkPaths.Insert(Mathf.Min(index,parkPaths.Count),selected));CancelParkPath();RebuildParkPaths();pedestrianRoutesDirty=true;RebuildPlacedPedestrians();});
+                selected==null?null:()=>{int index=parkPaths.IndexOf(selected);parkPaths.Remove(selected);RecordPathUndo(()=>parkPaths.Insert(Mathf.Min(index,parkPaths.Count),selected));CancelParkPath();RebuildParkPaths();pedestrianRoutesDirty=true;RebuildPlacedPedestrians();},era:DistrictAppearanceEra(SelectedDistrict));
         }
         void OpenParkPathEditorWithDraft(DistrictParkPathRecord selected)=>BuildParkPathEditor(selected,true);
         void BeginParkPath()
@@ -64,6 +64,7 @@ namespace CityForge.World
         {
             var before=JsonUtility.ToJson(selected.path);var candidate=JsonUtility.FromJson<LotPathDefinition>(before);
             candidate.materialId=parkPathMaterial;candidate.width=pathDraftWidth;candidate.edgeBlend=pathDraftFeather;candidate.textureRotation=pathDraftRotation;candidate.curved=pathDraftCurved;candidate.depth=pathDraftDepth;candidate.recessed=false;candidate.border=pathDraftBorder;candidate.borderSides=pathDraftSides;
+            if(candidate.materialId!=selected.path.materialId&&LotPathMaterial.Find(candidate.materialId)?.IsAvailableInEra(DistrictAppearanceEra(SelectedDistrict))!=true){ShowDistrictMessage("This path surface is unavailable in the district era.");return;}
             var problem=ParkPathSiteProblem(candidate);
             if(problem!=null){ShowDistrictMessage(problem);return;}
             bool geometry=selected.path.width!=candidate.width||selected.path.curved!=candidate.curved;

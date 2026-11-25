@@ -1,3 +1,82 @@
+# Session checkpoint and next bridge prototype — November23,2026
+
+Read Documentation/03_Technical/Bridge_Assembly_Handoff.md for the consolidated
+installed-feature summary, private asset paths, verification and agreed next task.
+Bridges are transport structures, not lots: versioned JSON style definitions plus
+saved bridge instances and an in-game drag/release designer. First prototype is a
+plain-shape trestle with deck, railings, braced supports, inclined approaches and
+confirm-only earthwork. No bridge implementation or artwork started yet. Prioritize
+road/elevated route connectivity, real bed supports, water clearance and save/reload.
+User asked to commit this checkpoint and continue in a new chat. Source-only commit;
+private art/models/saves stay local. Do not interpret earlier Play discard approval
+as permission to interrupt a future unsaved session.
+
+# Building gallery era filter — November23,2026
+
+Removed unused-tracking filter from shared galleries. Building gallery now seeds
+its era/category from the current lot, resetting on lot/era/category context changes,
+while retaining manual filter choices for unchanged context. Blank era defaults All.
+Top shows LOT ERA as context; FILTER BY ERA dropdown sits below Favorites. First-era
+metadata is never changed by browsing. Art Deco City Center remains visible in a
+fresh modern civic lot. Seven native UI checks passed for default visibility, earlier
+and all-era filters, same-lot filter retention, lot switching and removed checkbox.
+Screenshot: be/outputs/Building-Era-Filter. Installed after explicit session-discard
+approval. No saved lots changed.
+
+# Civic lots define town centers — November23,2026
+
+Supersedes generated Art Deco/timber starter-lot shortcuts. Founding and Civics
+menus now select saved library lots only. CivicBuildingChoices.IsTownCenter uses
+Civics category plus effective TownCenter delivery role, without a building asset
+ID. FoundingLots also retains unconfigured legacy Founder category lots; explicit
+None overrides it. Existing generated centers keep their saved explicit role.
+No auto TownCenter role from the Art Deco model in LotDefinition; legacy Harbor
+Council fallback remains for compatibility. Art Deco model remains in Buildings.
+Lot Editor Lot role… opens the role/delivery modal; TownCenter selection enabled
+only for Civics. Saved lot layout, first era and resource checks remain authoritative.
+Town-center era filtering permits its first era and later; ordinary civic filtering
+unchanged. Empty libraries prompt authoring and receive no generated fallback.
+14 native Unity checks passed: model-only/explicit role/category rules, save/reload,
+legacy/None compatibility, empty library, generic era rules and actual role UI.
+Evidence: be/outputs/Civic-Lot-Rules. No user saved lots or placed centers changed.
+
+# Art Deco pedestrians — November23,2026
+
+ArtDecoCharacterPreparation imports8 private humanoid characters from the user's
+art-deco-npcs ZIPs. Retained originals: SourceAssets/ArtDecoCharacters. Models and
+controllers: Resources/Lots/ArtDecoCharacters. Black/tan men had no takes; use
+Humanoid-retargeted brown-suit Idle/Walk clips. All8 avatars/loops/bone motion
+verified in isolated native Unity; gallery screenshot inspected. Characters are
+modern/1921–1945, player-placeable, group Art Deco Era.
+Config/ArtDecoCharacters.json is source-only import metadata. PedestrianProfiles.json
+owns era pools, zone counts and walking cadence: modern R2=2,R3=3,C2=4,C3=6 per
+building, all wealth, .75 walking fraction/40s cycle. Spawn phases are staggered.
+DistrictPlacedActors selects the effective district/lot appearance era; legacy eras
+retain their pools when no profile exists. R1/C1 don't get this Art Deco set. Ambient
+activity advances by active simulation cadence and leaves blocked/no-route actors
+stationary; manual characters, freight, immigrant routes and native biomes unchanged.
+Existing ambient instances survive unrelated refreshes. Modern commercial spawns
+are2× residential at matching density. Primary compile4.63s, all8 registered.
+Evidence: be/outputs/ArtDeco-Characters. No commit/push performed.
+
+# Art Deco welcome and city trees — November23,2026
+
+New-region welcome resolves CreationSettings.era by ID/name, then period name,
+then Founder fallback. Modern era text remains in ContentCatalog.json; harbor art
+replaces private ModernEraIllustration.png, using the same welcome layout.
+Acknowledgments remain era:<id>. CityTreePreparation registers8 private seasonal
+entries city-tree-01..04-{bare,planter}; source was a material-grouped12-tree grid
+(four sizes × summer/fall/winter). Split meshes retain UVs and authored winter
+branches, with reduced distant tiers in prefab LODGroups. Planter variants retain
+concrete/mulch/iron; bare variants omit them. StreetTreePalette adds small/medium
+bare and planter presets; HasPlanter suppresses the extra soil pit. No native biome
+changes. All missing bark/planter textures recovered from OBJ texture archive in
+the full collection. Source FBX/Blender/texture archives retained privately under
+SourceAssets/CityTrees; Downloads files are not runtime dependencies.
+216 isolated Unity checks passed including actual street planting, gallery seasons,
+serialization, Zoom2/3 transitions and era welcome/acknowledgments. Primary compile
+2.04s, all8 entries registered. Evidence in be/outputs/ArtDeco-Welcome-City-Trees.
+
 # Lower Manhattan1609 import — November22,2026
 
 Default private prebuilt preset is now Manhattan1609/Manhattan_1609_CityForge.json:
@@ -4507,3 +4586,60 @@ Import window fit correction: the1600×1000 design frame now reuses GrowableModa
 Pre-built map choice: Region Shape now offers Pre-built Maps (Manhattan only) separately from Terrain Import. Manhattan opens the common responsive preview with all file fields hidden, loads the packaged triplet automatically, and has Create Region plus orientation/elevation/optional repair controls. Actual synthetic provenance remains visible. Source inputs are privately installed under Assets/StreamingAssets/TerrainPresets/Manhattan, so they ship in desktop builds without requiring Downloads or JSON knowledge. Source-only Git excludes those files: copy the triplet into other worktrees from the private asset workflow; native created saves remain independent.
 
 Repair checkbox report: immediate freeze was not reproduced in isolated Editor or real Play pointer-click checks. Added automatic next-frame preview refresh for preset option changes and an input-key guard so repeated unchanged Toggle/Dropdown callbacks cannot queue regeneration. Old/cancelled preview jobs cannot overwrite newer state. Real Play pointer click returned in1.18ms, frames continued, repaired preview completed, Create re-enabled, and repair OFF rebuilt original geometry. Evidence: current chat outputs/Terrain-Repair-Play-QA.txt. No save/generation schema change. Maximized Game layout was not changed: CUA still binds the primary Unity process instead of this isolated editor.
+
+
+### November 24 — reconstructed Art Deco offices imported
+
+Continental Insurance, Art Deco Office001 and Marquee Tower are registered through
+RebuiltOfficeCatalog, with private assets in Resources/Lots/RebuiltBuildings. Stable
+IDs begin cf-building-; commercial/office, modern, C2/Medium wealth. Authored metres
+and reserved tile footprints preserved; Near0–2/reduced Medium3–5.
+AuthoredBuildingLighting uses the parent PrototypeRegionView clock for recessed
+room emission and visible-tier fixture pools; DistrictBuildingDetail preserves these
+prefabs' own alternate materials. URP emission materials must retain a valid emission
+keyword; daytime darkness is applied per renderer. Original preparation masters and
+true far authoring meshes remain in the private library. Native bounds, LOD switches,
+lighting states and isolated native lot save/load checks passed. No city-scale
+performance or native three-tier routing claim. Detailed handoff and native renders:
+/Users/joelinstrum/Documents/Codex/2026-11-22/be/outputs/Building-Game-Import/Handoff.txt
+
+
+### November24 — repeatable prepared building workflow
+
+RebuiltOfficeCatalog now loads private UnityCatalog.json records (three original
+registrations remain fallback); prepared metadata changes update source defaults
+without overwriting the separate saved user-property store. Private preparation
+harness supports one stable asset ID per request; empty means full-set regression.
+The cityforge-buildings skill owns the portable-package contract and checksum-based
+unity_package.py. All three current library kits are sealed; repeat staging copies
+zero files, runs zero bakes (0.05–0.12s each; excludes Unity import time). Missing/stale
+outputs and changed installed GUIDs fail preflight. Read
+Documentation/03_Technical/Prepared_Building_Imports.md. Helper checks and isolated
+Unity Roslyn editor-assembly compilation passed. No Play session was stopped to
+validate this workflow change.
+
+
+### November24 — Lot Editor and rebuilt building quality repair
+
+Actual LotEditorViewport checks exposed missing back-facing Continental fans and
+awnings, blurred atlas lettering, and imported detail-albedo colour-space issues.
+Private rebuilt assets now preserve source detail maps/UVs, repair the affected
+faces, retain deliberate two-sided thin surfaces and use R-metal/A-smoothness body
+maps. Detail material recipes are per-tier *-Materials.json; albedos are sRGB, data
+maps linear. Native prep validates detail recipes and preserves asset GUIDs.
+LotEditorViewport uses a neutral editor-only day rig, improved soft shadows, SMAA
+and aspect-preserving 1.5x sampling capped at4096; zoning previews retain authored
+self shadows. AuthoredBuildingLighting.SetPreviewTime connects the editor clock and
+isolates lamp pools to layer31. World district lighting remains unchanged.
+All three buildings passed native bounds, LOD and lot roundtrip checks; actual
+viewport day/night, lamp masks, zoning shadows, capped-target aspect and legacy
+house/tree checks passed. Installed source/data match the tested isolated QA copy.
+User authorized discarding the unsaved Play session before installation. Original
+masters remain untouched; prior kits are archived in each library ReviewArchive;
+updated kits are resealed. Evidence and handoff:
+/Users/joelinstrum/Documents/Codex/2026-11-22/be/outputs/Lot-Editor-Quality/
+
+
+### November24 — asset grooming next
+
+User accepts Marquee Tower architecture; next pass is green foliage and less excessive black, preserving bracing and editable olive trim. This grooming remains pending. See Documentation/03_Technical/Asset_Grooming_Handoff.md and the originating chat outputs/Asset-Grooming-Handoff/Handoff.md for private continuation details.

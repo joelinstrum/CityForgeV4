@@ -1,0 +1,13 @@
+# Art Deco City Center
+
+The supplied town-center model is registered as `v3-building-art-deco-city-center` under Civics / Government / Art Deco Era (`modern`). It has no growable zone or wealth assignment. The private resource folder is `Lots/V3Buildings/ArtDecoCityCenter`.
+
+The ground-centered model is approximately 21.360 x 29.057 x 18.000 metres, uniformly scaled from the source; these are proportional estimates. Original geometry serves Zoom 0–2 (26,156 triangles); the UV/material-preserving reduced mesh serves Zoom 3–5 (24,350 triangles). Front orientation follows the existing civic placement convention.
+
+The existing color-preserving commercial lighting path lights the original gold CITY CENTER lettering, front glass, canopy and authored facade fixtures. A linear RGB emission atlas preserves source sign colors and contains warm window emission. Dynamic emission is off by day and increases at evening/night; the source diffuse and its painted lighting remain intact. Four aligned local light pools serve actual entrance/canopy fixtures. Sign projection uses explicit regions, surface direction and visible-depth limits to avoid lighting surrounding stone. No new shader or per-sign simulation is introduced.
+
+Town-center function is now assigned to a saved civic lot, not inferred from this model. Author a Civics / Government lot, set its first era and requirements, and use Lot role → Town Center. Founding and Civics menus collect saved library lots only; the earlier generated Art Deco/timber starter-lot shortcuts were removed. Existing placed centers retain their saved explicit role. The model remains available in Art Deco and later catalog eras.
+
+Unity validation passed civic classification, neutral RGB emission at noon/evening/night on both tiers, fixture count/phase/mesh-UV alignment, grounded matching bounds, actual zoom 0/2/3/5/2 switching, cardinal lot fit and isolated saved-lot roundtrip. The original asset-default receiving-role checks were superseded by civic-role QA: explicit role/None, save/reload, generic building identity, first-era eligibility, and no generated fallback. Legacy Harbor House compatibility remains. Front and four-corner day/night near/far captures were visually reviewed. No normal player saves were written. This is targeted import QA, not a full-city performance benchmark.
+
+Models, textures, materials, authoring files and Unity meta files remain private and ignored. Transfer the private asset ZIP with source changes, retain meta files, and let LotCatalogSetup regenerate LocalCatalog. Do not overwrite another project's generated catalog. Handoff and evidence are in this chat's outputs/ArtDeco-City-Center.

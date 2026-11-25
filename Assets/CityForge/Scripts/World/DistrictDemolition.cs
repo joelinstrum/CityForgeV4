@@ -288,7 +288,7 @@ namespace CityForge.World
                     if (current.Count < 2) return;
                     runs.Add(new DistrictRoadRecord
                     {
-                        district = road.district, surfaceId = road.surfaceId, width = road.width,
+                        district = road.district, surfaceId = road.surfaceId, streetTreeStyle=road.streetTreeStyle, width = road.width,
                         gridAligned = road.gridAligned, points = current.ToArray()
                     });
                     current = new List<Vector2> { current[^1] };
@@ -328,7 +328,7 @@ namespace CityForge.World
                         points.AddRange(points.Count == 0 ? piece.points : piece.points.Skip(1));
                     return points.Count < 2 ? null : new DistrictRoadRecord
                     {
-                        district = road.district, surfaceId = road.surfaceId, width = road.width,
+                        district = road.district, surfaceId = road.surfaceId, streetTreeStyle=road.streetTreeStyle, width = road.width,
                         gridAligned = road.gridAligned, curved = road.curved, points = points.ToArray()
                     };
                 }
