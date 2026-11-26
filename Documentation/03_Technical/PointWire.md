@@ -59,3 +59,15 @@ Validation exercised pure path operations, invalid polygons, actual menu/complet
 callbacks, closed/live-string renders, basin creation, save/reopen, stale caches,
 fresh generation with exact outside-forest positions, and separate lake/pond bodies.
 Use disposable snapshots under Library/ and restore the user checkpoint after checks.
+
+Closed-shape stamps: optional StampGuide(mouseGroundPoint) supplies an already
+projected closed guide, and StampCompletionRequested validates/commits it on click.
+The normal input guards and translucent ribbon remain shared; no marker state is
+added. Consumer controls cancellation and repeated stamping. DistrictRoundabouts
+uses this for R/Shift road rings. See Road_Roundabouts.md.
+
+Multi-path stamps: PointWireStampPath carries Points and Closed. StampPaths supplies
+independent paths and StampPathsCompletionRequested commits the shape once. All paths
+are validated before callback; open2-point branches are distinct from closed loops.
+Separate ribbons prevent accidental connections/closure between arms. Domain adapters
+remain responsible for atomic world mutations. See Road_Shapes.md.

@@ -23,6 +23,13 @@ namespace CityForge.UI
         public bool Processing {get;private set;}
         public event Action<bool> ProcessingChanged;
         RegionLoadingOverlay completionOverlay;bool acceptingCompletion;
+        // Optional repeatable closed-shape stamp. Input/preview remain shared;
+        // the consumer owns validation, persistence and all world mutations.
+        public Func<Vector2, IReadOnlyList<PointWireStampPath>> StampPaths;
+        public Func<IReadOnlyList<PointWireStampPath>, string> StampPathsCompletionRequested;
+        readonly List<List<Vector3>> stampPreviews = new();
+        public Func<Vector2, IReadOnlyList<Vector2>> StampGuide;
+        public Func<IReadOnlyList<Vector2>, string> StampCompletionRequested;
         public Func<Vector2,Vector2> SnapPoint;
         public Func<Vector2,bool> FinishOpenAtMarker;
         // Optional consumer gesture: place its endpoint on release, allowing drag-through joins.
@@ -163,7 +170,7 @@ namespace CityForge.UI
             StartPointHovered?.Invoke(null);
             pointerPressed=false;connectionPoint=null;if(connectionOverlay)connectionOverlay.Clear();
             Armed=false;terrainCollider=null;path.Clear();foreach(var marker in markers)if(marker)Destroy(marker.gameObject);markers.Clear();
-            boundary.Clear();preview.Clear();if(overlay)overlay.Clear();if(cursor)cursor.gameObject.SetActive(false);if(hint)hint.gameObject.SetActive(false);
+            boundary.Clear();preview.Clear();stampPreviews.Clear();if(overlay)overlay.Clear();if(cursor)cursor.gameObject.SetActive(false);if(hint)hint.gameObject.SetActive(false);
         }
         bool OverUI()
         {
@@ -174,22 +181,72 @@ namespace CityForge.UI
                 if (hit.gameObject.transform.IsChildOf(canvasRect)) return true;
             return false;
         }
+        internal bool TryPlaceStampPaths(IReadOnlyList<PointWireStampPath> paths)
+        {
+            if (!Armed || Processing || surface == null || !surface.CanEdit ||
+                paths == null || paths.Count == 0 || paths.Count > 8 || StampPathsCompletionRequested == null) return false;
+            foreach (var path in paths)
+            {
+                if (path.Points == null || path.Points.Count < (path.Closed ? 3 : 2) || path.Points.Count > 256) return false;
+                foreach (var point in path.Points)
+                    if (!float.IsFinite(point.x) || !float.IsFinite(point.y) || !surface.Contains(point))
+                    { SetMessage("Keep the full shape inside the district."); return false; }
+            }
+            string error = StampPathsCompletionRequested(paths);
+            if (!string.IsNullOrEmpty(error)) { SetMessage(error); return false; }
+            Hint(); return true;
+        }
+        internal bool TryPlaceStamp(IReadOnlyList<Vector2> guide)
+        {
+            if (!Armed || Processing || surface == null || !surface.CanEdit ||
+                guide == null || guide.Count < 3 || guide.Count > 256 || StampCompletionRequested == null) return false;
+            foreach (var point in guide)
+                if (!float.IsFinite(point.x) || !float.IsFinite(point.y) || !surface.Contains(point))
+                { SetMessage("Keep the full shape inside the district."); return false; }
+            string error = StampCompletionRequested(guide);
+            if (!string.IsNullOrEmpty(error)) { SetMessage(error); return false; }
+            Hint();
+            return true;
+        }
         void Update()
         {
             if(!Armed||Processing)return;
             if(surface==null||!surface.Available){Cancel();return;}
             if(HandleEscape&&Input.GetKeyDown(KeyCode.Escape)){Cancel();return;}
             if(Input.GetKeyDown(KeyCode.Backspace))UndoMarker();
-            if(OpenPath&&Application.isFocused&&(FinishOverUi||!OverUI())&&(Input.GetKeyDown(KeyCode.Return)||Input.GetKeyDown(KeyCode.KeypadEnter)))CompletePath();
+            if(StampPaths == null && StampGuide == null && OpenPath&&Application.isFocused&&(FinishOverUi||!OverUI())&&(Input.GetKeyDown(KeyCode.Return)||Input.GetKeyDown(KeyCode.KeypadEnter)))CompletePath();
             if(!Armed||Processing)return;
             bool valid=Application.isFocused&&surface.CanEdit&&!OverUI();RaycastHit hit=default;
             if(valid)valid=terrainCollider&&terrainCollider.Raycast(cameraView.ScreenPointToRay(Input.mousePosition),out hit,100000)&&surface.Contains(new Vector2(hit.point.x,hit.point.z));
             cursor.gameObject.SetActive(valid);Cursor.visible=valid?false:savedCursor;
             if(waitRelease&&!Input.GetMouseButton(0))waitRelease=false;
-            UpdateWidths();preview.Clear();
+            UpdateWidths();preview.Clear();foreach (var line in stampPreviews) line.Clear();
             if (!valid || Finished) StartPointHovered?.Invoke(null);
             if (!valid) { connectionPoint=null; if(!Input.GetMouseButton(0)||!Application.isFocused)pointerPressed=false; return; }
             RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect,Input.mousePosition,overlayCamera,out var local);cursor.rectTransform.anchoredPosition=local;if(Finished)return;
+            if (StampPaths != null)
+            {
+                var paths = StampPaths(new Vector2(hit.point.x, hit.point.z));
+                if (paths != null && paths.Count <= 8)
+                    for (int i = 0; i < paths.Count; i++)
+                    {
+                        if (i == stampPreviews.Count) stampPreviews.Add(new List<Vector3>());
+                        if (paths[i].Points != null && paths[i].Points.Count <= 256)
+                            BuildGuide(stampPreviews[i], paths[i].Points, paths[i].Closed);
+                    }
+                connectionPoint = null; StartPointHovered?.Invoke(null);
+                if (!waitRelease && Input.GetMouseButtonDown(0)) TryPlaceStampPaths(paths);
+                return;
+            }
+            if (StampGuide != null)
+            {
+                var guide = StampGuide(new Vector2(hit.point.x, hit.point.z));
+                if (guide != null) BuildGuide(preview, guide, true);
+                connectionPoint = null;
+                StartPointHovered?.Invoke(null);
+                if (!waitRelease && Input.GetMouseButtonDown(0)) TryPlaceStamp(guide);
+                return;
+            }
             bool snap=false;if((!OpenPath || LoopCompletionRequested != null)&&points.Count>=3){var first=cameraView.WorldToScreenPoint(Ground((ProjectGuide?.Invoke(points, false) ?? points)[0]));snap=first.z>0&&Vector2.Distance(new Vector2(first.x,first.y),Input.mousePosition)<=24;}
             var rawPoint = snap ? points[0] : new Vector2(hit.point.x, hit.point.z);
             var p = SnapPoint?.Invoke(rawPoint) ?? rawPoint;
@@ -246,6 +303,13 @@ namespace CityForge.UI
                 RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect,b,overlayCamera,out var end);overlay.Add(start,end);
             }
             void Draw(List<Vector3> line){for(int i=1;i<line.Count;i++)DrawSegment(line[i-1],line[i]);}
+            if (StampPaths != null)
+            {
+                if (RibbonFillColor is Color stampColor) overlay.color = stampColor;
+                foreach (var line in stampPreviews)
+                    if (RibbonWidth > 0 && RibbonFillColor.HasValue) DrawFilledRibbon(line); else Draw(line);
+                overlay.SetVerticesDirty(); return;
+            }
             bool replaceBoundary = ProjectGuide != null && preview.Count > 0;
             if (RibbonWidth > 0f && RibbonFillColor is Color fillColor)
             {
@@ -293,12 +357,18 @@ namespace CityForge.UI
                 local = default;
                 var screen = cameraView.WorldToScreenPoint(Ground(point));
                 return screen.z > 0f &&
-                    RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect, screen, null, out local);
+                    RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect, screen, overlayCamera, out local);
             }
         }
 
         void OnDisable(){Cancel();}
         void OnDestroy(){Cancel();if(material)Destroy(material);if(cursor)Destroy(cursor.gameObject);if(hint)Destroy(hint.gameObject);if(overlay)Destroy(overlay.gameObject);if(connectionOverlay)Destroy(connectionOverlay.gameObject);}
+    }
+    public readonly struct PointWireStampPath
+    {
+        public readonly IReadOnlyList<Vector2> Points;
+        public readonly bool Closed;
+        public PointWireStampPath(IReadOnlyList<Vector2> points, bool closed) { Points = points; Closed = closed; }
     }
     public sealed class PointWireGraphic : MaskableGraphic
     {

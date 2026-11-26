@@ -211,6 +211,11 @@ namespace CityForge.World
                 TownButton(roadControls, lotFont, "Cancel", 138, 0, 104, CancelRoadPlacement);
             }
 
+            roadStampShape = RoadStampShape.None;
+            roadStampQuarterTurns = 0;
+            roadWire.StampGuide = null;
+            roadWire.StampCompletionRequested = null;
+            roadWire.StampPaths = null; roadWire.StampPathsCompletionRequested = null;
             preferredRoadExtension = null;
             roadSurfaceIndex = surfaceIndex;
             lastRepaveSurface = surfaceIndex;
@@ -239,6 +244,14 @@ namespace CityForge.World
                 return true;
             }
 
+            UpdateRoadStampShortcut();
+            if (roadStampShape != RoadStampShape.None)
+            {
+                if (Input.GetKeyDown(KeyCode.Escape)) { SetRoadStamp(RoadStampShape.None); return true; }
+                if (stampWasLarge != LargeRoundaboutHeld) RefreshRoadStampHint();
+                finishRoadButton.interactable = false;
+                return true;
+            }
             RefreshRoadPlacementHint();
             finishRoadButton.interactable = roadWire.Points.Count >= 2;
             if (Input.GetKeyDown(KeyCode.Escape))
@@ -256,6 +269,9 @@ namespace CityForge.World
 
         private void CancelRoadPlacement()
         {
+            roadStampShape = RoadStampShape.None;
+            roadStampQuarterTurns = 0;
+            if (roadWire) { roadWire.StampGuide = null; roadWire.StampCompletionRequested = null; roadWire.StampPaths = null; roadWire.StampPathsCompletionRequested = null; }
             preferredRoadExtension = null;
             roadGestureStart = null;
             if (roadWire) roadWire.Cancel();
@@ -321,13 +337,14 @@ namespace CityForge.World
             roadExtensionHint = road;
             roadWire.RibbonWidth = road?.width ?? DefaultRoadWidth(RoadSurfaces[roadSurfaceIndex].Id);
             roadWire.DrawingHint = roadWire.PlaceOnRelease
-                ? roadWire.Label + " · Drag to draw · Release on a green square to join · Drag through to cross\n" +
+                ? roadWire.Label + " · r/d/t/x/s/i: shapes · Drag to draw · Release on a green square to join · Drag through to cross\n" +
                     "Click to add waypoints · Enter to place · Esc to cancel · Backspace to undo"
                 : road == null
-                ? roadWire.Label + " · Click an existing endpoint to continue that road, or click open ground to start a road\n" +
+                ? roadWire.Label + " · r/d/t/x/s/i: shapes · Click an existing endpoint to continue that road, or click open ground to start a road\n" +
                     "Click the first marker to close a loop · Enter to place · Esc to cancel · Backspace to undo"
                 : "Continue " + RoadSurfaces[FindRoadSurface(road.surfaceId)].Label +
-                    " · Click another road to connect, or press Enter to finish · Esc to cancel";
+                    " · Click another road to connect\n" +
+                    "r/d/t/x/s/i: shapes · Enter: finish · Esc: cancel · Backspace: undo";
             roadWire.SetMessage(roadWire.DrawingHint);
             finishRoadButton.GetComponentInChildren<Text>().text = road == null ? "Place Road" : "Extend Road";
         }
@@ -378,11 +395,7 @@ namespace CityForge.World
             var source = roadWire.Points.Count == 0 ? null : FindRoadExtensionEnd(roadWire.Points[0], .001f, out _);
             if (TrySnapRoadJunction(point, out var junction, source)) return junction;
             if (!snapNewRoadsToTileCenters) return point;
-            float origin = -MapSide * .5f;
-            return new Vector2(TileCenter(point.x), TileCenter(point.y));
-
-            float TileCenter(float coordinate) => origin +
-                (Mathf.Floor((coordinate - origin) / DistrictGridCellMeters) + .5f) * DistrictGridCellMeters;
+            return SnapRoadGridPoint(point);
         }
 
         private bool TryContinueFromRoadRun(IReadOnlyList<Vector2> points, out DistrictRoadRecord road,
@@ -584,7 +597,8 @@ namespace CityForge.World
             var pieces = UnpavedRoadPieces(extension, road);
             if (pieces.Count != 1 || pieces[0] != extension) return CommitNewRoadPieces(pieces);
             bool aligned = road.gridAligned && guide.Zip(guide.Skip(1), (a, b) =>
-                Mathf.Abs(a.x - b.x) < .001f || Mathf.Abs(a.y - b.y) < .001f).All(value => value);
+                Mathf.Abs(a.x - b.x) < .001f || Mathf.Abs(a.y - b.y) < .001f ||
+                Mathf.Abs(Mathf.Abs(a.x - b.x) - Mathf.Abs(a.y - b.y)) < .001f).All(value => value);
             return CommitRoadEdit(road, guide, road.curved, aligned, preserveGuide: true);
         }
 
@@ -594,7 +608,12 @@ namespace CityForge.World
             if (road.gridAligned)
             {
                 var aligned = AlignRoadGuide(extension, false, road.width);
-                if (RoadGuideProblem(aligned, false, MapSide * .5f) == null) extension = aligned;
+                if (RoadGuideProblem(aligned, false, MapSide * .5f) == null)
+                {
+                    // Keep the existing endpoint fixed without tilting a snapped segment.
+                    var offset = points[0] - aligned[0];
+                    extension = aligned.Select(p => p + offset).ToArray();
+                }
             }
             // The saved endpoint and the destination junction take priority over grid alignment.
             extension[0] = prepend ? road.points[0] : road.points[^1];

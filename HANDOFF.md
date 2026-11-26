@@ -1,3 +1,13 @@
+# Road shape stamps and45° snapping — November26,2026
+
+Lowercase r/d/t/x/s/i stamps road shapes; Shift enlarges and Tab rotates90°.
+Works from road selection and existing-road drags; continuation hints retain keys.
+Freehand roads infer45° headings with a rotated4m grid. No save schema changes.
+See Documentation/03_Technical/Road_Shapes_Handoff.md for controls, implementation,
+validation commands, scope and safe continuation alongside the townhouse installation.
+Isolated PR branch compiled and passed 2,478 native checks; actual previews inspected.
+Source-only scoped checkpoint; other sessions' private art/catalogs are excluded.
+
 # Session checkpoint and next bridge prototype — November23,2026
 
 Read Documentation/03_Technical/Bridge_Assembly_Handoff.md for the consolidated

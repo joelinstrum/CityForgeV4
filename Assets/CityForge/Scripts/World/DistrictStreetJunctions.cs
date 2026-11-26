@@ -45,9 +45,7 @@ namespace CityForge.World
                 if(PreviewStreetConnection(proposal).HasValue)return point;
             }
             if (!snapNewRoadsToTileCenters) return point;
-            float origin = -MapSide * .5f;
-            return new Vector2(origin + (Mathf.Floor((point.x - origin) / DistrictGridCellMeters) + .5f) * DistrictGridCellMeters,
-                origin + (Mathf.Floor((point.y - origin) / DistrictGridCellMeters) + .5f) * DistrictGridCellMeters);
+            return SnapRoadGridPoint(point);
         }
 
         private Vector2? PreviewStreetConnection(IReadOnlyList<Vector2> points)
