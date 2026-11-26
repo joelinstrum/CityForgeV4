@@ -526,6 +526,9 @@ namespace CityForge.World
         private string LotSiteProblem(DistrictLotRecord record, WildlifeWaterAccess water, bool editing = false, bool growing = false, bool replacing = false)
         {
             var footprint = new DistrictLotFootprint(record);
+            foreach(var bridge in ActiveBridges)
+                for(float at=0;at<=bridge.Length;at+=1)
+                    if(footprint.OverlapsCircle(bridge.Point(at),bridge.TotalWidth*.5f+bridge.earthworkFeather)) return "Keep lots clear of bridges and approach grading.";
             foreach (var other in PlacedLots)
                 if (!replacing && (record.id == null || record.id != other.id) && footprint.Overlaps(new DistrictLotFootprint(other)))
                     return "That lot overlaps another lot.";
@@ -762,6 +765,7 @@ namespace CityForge.World
             RefreshZoneOverlay();
             RefreshDirtRoadEndFades();
             var gradeTerrain = ApprovedDistrict ? ApprovedDistrict.DisplayTerrain : null;
+            RestoreBridgeEarthwork();
             if (gradeTerrain && gradeTerrain.TryGetComponent<DistrictLotGrading>(out var grading)) grading.Restore();
             platformCells.Clear();
             districtLotRoots.Clear();
@@ -793,7 +797,7 @@ namespace CityForge.World
                 placeLotLabel.text = PendingFounder != null ? "Founder’s Building…" : "Place saved lot";
             }
             if (SelectedDistrict < 0) {GetComponentInChildren<DistrictWeather>()?.RefreshGround();return;}
-            if(PlacedLots.Count==0){ApplyZoneGroundPlanes();GetComponentInChildren<DistrictWeather>()?.RefreshGround();return;}
+            if(PlacedLots.Count==0){ApplyZoneGroundPlanes();ApplyBridgeEarthwork();GetComponentInChildren<DistrictWeather>()?.RefreshGround();return;}
             PresentDistrictLots(PlacedLots);
             SelectDistrictLot(selectedDistrictLot);
         }
@@ -815,6 +819,7 @@ namespace CityForge.World
             // Apply all cuts before creating any surfaces, paths or objects.
             var presented = records.ToArray();
             ApplyLotGrading(presented);
+            ApplyBridgeEarthwork();
             var residentialGround = lotInstances.GetComponent<ResidentialGroundBatches>();
             var active = new HashSet<int>(ActiveDistrictMembers);
             var camera = GetComponentInChildren<Camera>();

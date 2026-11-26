@@ -358,7 +358,7 @@ namespace CityForge.World
                 return true;
             }
             var roads = pedestrianRoutes.Select(r => (r.Points, r.Closed))
-                .Concat(districtRoadMeshes.Keys.Select(r => (RoadCenterline(r).ToArray(), r.closed)));
+                .Concat(TransportRoadRoutes());
             // Dijkstra chooses the shortest connected street/sidewalk path. Use safe
             // ground access only when there is no usable connected network to this lot.
             if(!immigrantRoadSearches.TryGetValue(person.id,out var roadSearch) || roadSearch.From!=from || roadSearch.To!=target)

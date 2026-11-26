@@ -138,6 +138,8 @@ namespace CityForge.World
                     var copy=JsonUtility.FromJson<LotPathDefinition>(JsonUtility.ToJson(path));copy.points=piece.points;copy.closed=piece.closed;copy.curved=false;keptPaths.Add(new DistrictParkPathRecord{district=record.district,path=copy});
                 }
             }
+            var removedBridges=ActiveBridges.Where(b=>BridgeOutline(b,0).All(Inside)).ToArray();
+            if(removedBridges.Length>0){RestoreBridgeEarthwork();foreach(var bridge in removedBridges)bridges.Remove(bridge);}
             parkPaths.Clear();parkPaths.AddRange(keptPaths);
             var removedLots=PlacedLots.Where(WholeLot).ToArray();
             int lots = PlacedLots.RemoveAll(WholeLot);
@@ -175,7 +177,7 @@ namespace CityForge.World
             }
             districtGroundPaint.PruneEmpty();
             SelectDistrictLot(null); ClearDetonateStroke();
-            if(changedRoads.Count>0){RebuildDistrictRoads();BuildDetonateRoadRuns();}
+            if(changedRoads.Count>0 || removedBridges.Length>0){RebuildDistrictRoads();BuildDetonateRoadRuns();}
             else RebuildParkPaths();
             RemoveDistrictLotViews(removedLots);
             if(lots==0){RefreshZoneOverlay();MarkImmigrationSitesChanged();}

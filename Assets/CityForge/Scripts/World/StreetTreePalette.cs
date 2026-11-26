@@ -44,7 +44,7 @@ namespace CityForge.World
                 {
                     if(!road.closed&&next>total-8)break;
                     var center=a+tangent*(next-start);
-                    for(int side=-1;side<=1;side+=2)
+                    for(int side=PrototypeRegionView.IsDividedBoulevard(road.surfaceId)?0:-1;side<=1;side+=2)
                     {
                         var p=center+normal*side*(road.width*.5f+.9f);
                         if(!result.Exists(other=>(other.Point-p).sqrMagnitude<25)&&clear(p))result.Add(new Plant(p,(next*37+side*83)%360));

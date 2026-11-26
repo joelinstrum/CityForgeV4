@@ -24,7 +24,7 @@ namespace CityForge.World
 
         private void HandleRoadContextPointer(Event mouseEvent)
         {
-            if (!CanEditRoad) return;
+            if (!CanEditRoad || BridgeInputActive) return;
             if (roadContext)
             {
                 if (mouseEvent.type == EventType.MouseDown)
@@ -65,6 +65,7 @@ namespace CityForge.World
 
         private bool TryOpenRoadContext(Vector2 pointer)
         {
+            if (TryOpenBridgeContext(pointer)) return true;
             if (!TryRoadGround(pointer, out var point)) return false;
             var road = PickDistrictRoad(point);
             if (road == null) return false;
@@ -272,7 +273,7 @@ namespace CityForge.World
             CancelRoadPlacement();
             lastRepaveSurface = surface;
             var choice = RoadSurfaces[surface];
-            int width = HasSidewalks(choice.Id) ? OneTileRoadWidth : road.width;
+            int width = HasSidewalks(choice.Id) ? DefaultRoadWidth(choice.Id) : road.width;
             if (road.surfaceId != choice.Id || road.width != width)
             {
                 if (width > road.width)

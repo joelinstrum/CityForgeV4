@@ -29,6 +29,19 @@ namespace CityForge.World
                 levelerActorsChanged=true;
             }
             bool HitsLine(IReadOnlyList<Vector2> line,bool closed,float margin){for(int i=0;i<(closed?line.Count:line.Count-1);i++){var a=line[i];var b=line[(i+1)%line.Count];var bounds=Rect.MinMaxRect(Mathf.Min(a.x,b.x)-margin,Mathf.Min(a.y,b.y)-margin,Mathf.Max(a.x,b.x)+margin,Mathf.Max(a.y,b.y)+margin);if(!area.Overlaps(bounds))continue;int n=Mathf.Max(1,Mathf.CeilToInt(Vector2.Distance(a,b)/4));for(int j=0;j<=n;j++)if(plane.Contains(Vector2.Lerp(a,b,j/(float)n),feather+margin))return true;}return false;}
+            var touchedBridges=ActiveBridges.Where(b=>HitsLine(b.Route,false,b.TotalWidth*.5f+b.earthworkFeather)).ToArray();
+            if(touchedBridges.Length>0)
+            {
+                RestoreBridgeEarthwork();
+                foreach(var bridge in touchedBridges)
+                {
+                    bridges.Remove(bridge);navigableBridges.Remove(bridge);
+                    if(bridgeViews.Remove(bridge.id,out var view)&&view)Erase(view.gameObject);
+                    bridgeRepairs.Remove(bridge.id);
+                }
+                FreightRoadRevision++;MarkImmigrationSitesChanged();
+                levelerRoadsChanged=true;levelerActorsChanged=true;
+            }
             var roads=districtRoads.Where(r=>ActiveDistrictMembers.Contains(r.district)&&HitsLine(RoadCenterline(r),r.closed,r.width*.5f+2f)).ToHashSet();
             if(roads.Count>0){foreach(var road in roads)if(districtRoadMeshes.Remove(road,out var filter)&&filter)Erase(filter.gameObject);districtRoads.RemoveAll(roads.Contains);undoRoadEdits.RemoveAll(e=>roads.Contains(e.Road));redoRoadEdits.RemoveAll(e=>roads.Contains(e.Road));if(districtSidewalkRoot)districtSidewalkRoot.gameObject.SetActive(false);levelerRoadsChanged=true;levelerActorsChanged=true;}
             if(parkPaths.RemoveAll(r=>ActiveDistrictMembers.Contains(r.district)&&HitsLine(r.path.points,r.path.closed,r.path.width*.5f))>0){if(parkPathRoot)parkPathRoot.SetActive(false);levelerPathsChanged=true;levelerActorsChanged=true;}

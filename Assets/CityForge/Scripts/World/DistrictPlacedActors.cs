@@ -382,15 +382,16 @@ namespace CityForge.World
                 .Select(group => (group.Key, choices: group.ToArray())).ToArray();
             var vehicleCounts = new int[vehicleGroups.Length];
             var vehicleRoutes = districtRoadMeshes.Keys.Select(road =>
-                (Points: RoadCenterline(road).ToArray(), Closed: road.closed)).Where(route => route.Points.Length > 1).ToArray();
+                (Points: MotorBoulevardCenterline(road), Closed: road.closed)).Concat(BridgeRoadRoutes()).Where(route => route.Points.Length > 1).ToArray();
             var teamRoutes = districtRoadMeshes.Keys.Select(road =>
             {
+                if (IsDividedBoulevard(road.surfaceId)) return (Points: MotorBoulevardCenterline(road), Closed: road.closed);
                 if (road.curved) return (Points: RoadCenterline(road).ToArray(), Closed: road.closed);
                 var points = new List<Vector2>();
                 // Keep the turn close to the intersection on square-cornered roads.
                 LotPathSurface.RoundCorners(road.points, null, road.closed, road.width * .4f, points);
                 return (Points: points.ToArray(), Closed: road.closed);
-            }).Where(route => route.Points.Length > 1).ToArray();
+            }).Concat(BridgeRoadRoutes()).Where(route => route.Points.Length > 1).ToArray();
             var random = new System.Random(SelectedDistrict);
             var walking = blocks.Select(route => (Points: route, Closed: true))
                 .Concat(pedestrianRoutes.Select(route => (route.Points, route.Closed))).ToArray();
@@ -726,7 +727,7 @@ namespace CityForge.World
             }
         }
 
-        private Vector3 PedestrianGround(Vector2 point) => new Vector3(point.x, LotHeight(point) + .04f, point.y);
+        private Vector3 PedestrianGround(Vector2 point) => new Vector3(point.x, TransportHeight(point) + .04f, point.y);
 
         private void SetPedestrianRoute(Pedestrian walker, float snapRadius = 12f)
         {
@@ -803,7 +804,7 @@ namespace CityForge.World
             {
                 var position = new Vector2(walker.Body.position.x, walker.Body.position.z);
                 var candidates = walker.Vehicle
-                    ? districtRoadMeshes.Keys.Select(road => (Points: RoadCenterline(road).ToArray(), Closed: road.closed))
+                    ? VehicleRoadRoutes()
                     : pedestrianBlockCircuits.Select(points => (Points: points, Closed: true))
                         .Concat(pedestrianRoutes.Select(route => (route.Points, route.Closed)));
                 var selected = FindTrafficRoute(position, candidates);
@@ -884,6 +885,14 @@ namespace CityForge.World
             foreach(var record in parkPaths.Where(p=>ActiveDistrictMembers.Contains(p.district)))
             {
                 var p=record.path;var line=new List<Vector2>();if(p.curved)LotPathSurface.RoundCorners(p.points,null,p.closed,p.width,line);else line.AddRange(p.points);AddPath(line.ToArray(),p);
+            }
+            foreach(var bridge in UsableBridges)
+            for(int side=-1;side<=1;side+=2)
+            {
+                var offset=bridge.Right*(side*(bridge.width*.5f+bridge.sidewalkWidth*.5f));
+                var points=bridge.Route.Select(p=>p+offset).ToArray();
+                pedestrianRoutes.Add((points,false,true));
+                pedestrianSidewalks.Add(new RouteRoad(points,bridge.sidewalkWidth,false));
             }
             pedestrianSidewalkSnapshot = pedestrianSidewalks.ToArray();
             void AddPath(Vector2[] points,LotPathDefinition path)

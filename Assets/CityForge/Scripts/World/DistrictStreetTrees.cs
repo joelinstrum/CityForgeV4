@@ -71,8 +71,8 @@ namespace CityForge.World
                         tree=LotRuntimeLoader.InstantiateObject(new LotObjectDefinition{assetId=asset.id,scale=style.Scale,yaw=plant.Yaw},asset,root.transform,VisualSeason,GetComponentInChildren<CityForgeCameraController>());
                     }
                     if(!tree)continue;
-                    tree.transform.position=new Vector3(plant.Point.x,LotHeight(plant.Point),plant.Point.y);
-                    if(!style.HasPlanter)AddStreetTreePit(root.transform,plant.Point);
+                    tree.transform.position=new Vector3(plant.Point.x,LotHeight(plant.Point)+(IsDividedBoulevard(road.surfaceId ) ? .17f : 0),plant.Point.y);
+                    if(!style.HasPlanter&&!IsDividedBoulevard(road.surfaceId))AddStreetTreePit(root.transform,plant.Point);
                 }
                 view.Complete=true;
 
@@ -84,7 +84,9 @@ namespace CityForge.World
                     if(roadBuildings.Any(b=>b.Contains(point,style.CrownWidth*.5f+.15f)))return false;
                     foreach(var other in roads)
                     {
+                        if(other==road&&IsDividedBoulevard(road.surfaceId))continue;
                         float clearance=other==road?road.width*.5f+.45f:other.width*.5f+(HasSidewalks(other.surfaceId)?LotPathSurface.ResidentialSidewalkWidth:0)+2f;
+                        if(IsDividedBoulevard(road.surfaceId)&&other!=road)clearance=Mathf.Max(clearance,other.width*.5f+14);
                         if(LineDistance(point,lines[other],other.closed)<clearance)return false;
                     }
                     // Protect resolved entrance/driveway corridors and authored paths.

@@ -349,6 +349,7 @@ namespace CityForge.World
                 if (snapshot?.info.events != null) view.RegionEvents.AddRange(snapshot.info.events);
                 view.RestoreTownZones(snapshot?.info.townZones, snapshot?.info.townZoneGridVersion ?? 0);
                 view.RestoreDistrictRoads(snapshot?.info.districtRoads);
+                view.RestoreBridges(snapshot?.info.bridges);
                 view.RestoreGroundPaint(snapshot?.info.groundPaint);
                 view.RestoreParkPaths(snapshot?.info.parkPaths);
                 if (snapshot?.info.placedActors != null) view.PlacedActors.AddRange(snapshot.info.placedActors);
@@ -924,6 +925,7 @@ namespace CityForge.World
                     }
                 return;
             }
+            if (UpdateBridgeTool()) return;
             if (transportModal)
             {
                 if (Input.GetKeyDown(KeyCode.Escape))
@@ -984,7 +986,7 @@ namespace CityForge.World
         {
             var rideRig = GetComponentInChildren<CityForge.CameraSystem.CityForgeCameraController>();
             if (rideRig && rideRig.Riding) return;
-            if(DistrictPaintOwnsInput||ParkPathArmed||(parkPathOptions&&selectedParkPath==null)||DistrictScriptDialogOpen||RemakeBlocksInput||DistrictLoading||IsSaving||playerLotWorkspace||lotPlacementDraft!=null||founderPicker||savedLotPicker||transportModal||ParkTreeBrushArmed||streetscapeAsset != null){
+            if(BridgeInputActive||DistrictPaintOwnsInput||ParkPathArmed||(parkPathOptions&&selectedParkPath==null)||DistrictScriptDialogOpen||RemakeBlocksInput||DistrictLoading||IsSaving||playerLotWorkspace||lotPlacementDraft!=null||founderPicker||savedLotPicker||transportModal||ParkTreeBrushArmed||streetscapeAsset != null){
                 orbitingSlab=false;
                 return;
             }
@@ -1343,6 +1345,8 @@ namespace CityForge.World
             CancelParkPath();
             foreach(var asset in parkPathAssets)if(asset)Destroy(asset);
             CancelParkTreeBrush();
+            CancelBridgeTool();
+            ClearBridgePresentation();
             ClearDistrictRoadPresentation();
             ClosePlayerLot();
             CloseFounderPicker();

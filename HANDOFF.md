@@ -1,3 +1,25 @@
+# Expanded road and bridge checkpoint — November26,2026
+
+This checkpoint includes45° snapping and all six keyboard road stamps,12m avenues,
+20m planted boulevards, and the timber-trestle bridge assembly/runtime/save workflow.
+Bridge approaches retain the approved20% slope limit. Transport routing, vessels,
+lot/site clearance, edit/repair, demolition and destructive earthwork are integrated.
+Read Documentation/03_Technical/Road_Shapes_Handoff.md, Bridge_Assembly.md and
+Art_Deco_Avenues_Boulevards.md. Private art/catalogs and the parallel townhouse
+installation remain separate. Validation on the expanded branch: 2,561 native checks,
+including 69 bridge and 14 wide-road checks; bridge replay ran headlessly. No changes
+to the shared live checkout were made.
+
+# Road shape stamps and45° snapping — November26,2026
+
+Lowercase r/d/t/x/s/i stamps road shapes; Shift enlarges and Tab rotates90°.
+Works from road selection and existing-road drags; continuation hints retain keys.
+Freehand roads infer45° headings with a rotated4m grid. No save schema changes.
+See Documentation/03_Technical/Road_Shapes_Handoff.md for controls, implementation,
+validation commands, scope and safe continuation alongside the townhouse installation.
+Isolated PR branch compiled and passed 2,478 native checks; actual previews inspected.
+Source-only scoped checkpoint; other sessions' private art/catalogs are excluded.
+
 # Session checkpoint and next bridge prototype — November23,2026
 
 Read Documentation/03_Technical/Bridge_Assembly_Handoff.md for the consolidated
@@ -1419,7 +1441,7 @@ authored mutation, and actual fence surround guide inset. No player data written
 
 User requested only the main district Nature menu match City. NatureToolbar now
 uses five captioned category cards with the City's actual dark/gold rounded frame
-artwork, identical146x82 hit targets and148 spacing, row bottom117, and the same
+artwork, identical146x82 hit targets and 148 spacing, row bottom117, and the same
 Nature/City switch bottom64 in both modes. Existing Nature icons remain, labeled
 Terrain, Water, Forests, Animals and Sun & Sky. Georgia/serif captions, hover/press
 palette and gold active states match the City styling. No inner popup redesign.

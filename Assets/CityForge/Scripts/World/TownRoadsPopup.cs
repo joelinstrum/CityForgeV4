@@ -64,11 +64,12 @@ namespace CityForge.World
             placeHint.color = TownGold;
 
             var treeHeading=FounderText(panel,"STREET TREES",new Vector2(520,-145),new Vector2(390,30),21);treeHeading.color=TownGold;
+            bool treeChoiceMade=repaveTarget!=null;
             var treeChoices=new Button[StreetTreePalette.Styles.Length+1];
             for(int t=0;t<treeChoices.Length;t++)
             {
                 int choice=t;string id=t==0?null:StreetTreePalette.Styles[t-1].Id;
-                treeChoices[t]=TownButton(panel,lotFont,t==0?"No trees":StreetTreePalette.Styles[t-1].Label,1064+(t%2)*202,-600-(t/2)*45,194,()=>{newStreetTreeStyle=id;RefreshTreeChoices();});
+                treeChoices[t]=TownButton(panel,lotFont,t==0?"No trees":StreetTreePalette.Styles[t-1].Label,1064+(t%2)*202,-600-(t/2)*45,194,()=>{treeChoiceMade=true;newStreetTreeStyle=id;RefreshTreeChoices();});
                 treeChoices[t].gameObject.name="Road tree style · "+(id??"none");
             }
             void RefreshTreeChoices(){for(int t=0;t<treeChoices.Length;t++)MarkTownButton(treeChoices[t],t==0?string.IsNullOrEmpty(newStreetTreeStyle):newStreetTreeStyle==StreetTreePalette.Styles[t-1].Id);}
@@ -88,7 +89,7 @@ namespace CityForge.World
             {
                 int index = i;
                 var button = TownButton(panel, lotFont, RoadSurfaces[i].Label, 322 + i % 3 * 240, -199 - i / 3 * 267, 219,
-                    () => ChooseRoadSurface(index));
+                    () => {if(IsDividedBoulevard(RoadSurfaces[index].Id)&&!treeChoiceMade&&string.IsNullOrEmpty(newStreetTreeStyle))newStreetTreeStyle="city-tree-small";ChooseRoadSurface(index);});
                 surfaceButtons[i] = button;
                 if (i < HistoricalRoadSurfaceCount)
                     surfaceFaces[i] = RoadButtonArtwork(button, surfacesArt, SurfaceCrop(i, false), 247);
@@ -168,12 +169,13 @@ namespace CityForge.World
                 bool laterEra = industrialIndex >= 0 && eraIndex > industrialIndex;
                 bool roads = index == 0;
                 bool streets = index == 1;
+                bool avenues = index == 2;
                 bool modernEra=eraIndex>=Array.FindIndex(eras,e=>e.id=="modern");
                 int roadCount = HistoricalRoadSurfaceCount + (laterEra ? 1 : 0);
                 categoryTitle.text = categoryNames[index];
                 summary.text = roads ? "Overland connections for trade, industry, and regional travel."
                     : streets ? "Local streets for built-up districts."
-                    : "No construction options are available for this category in this era.";
+                    : avenues && modernEra ? "Wide avenues and divided boulevards with planted medians." : "No construction options are available for this category in this era.";
 
                 int columns = streets || (roads && laterEra) ? 4 : 3;
                 int slot=0;
@@ -181,7 +183,7 @@ namespace CityForge.World
                 float height = streets ? 154 : columns == 4 ? 194 : 247;
                 for (int i = 0; i < surfaceButtons.Length; i++)
                 {
-                    bool visible = (roads && (i < roadCount || modernEra && IsModernRoadSurface(RoadSurfaces[i].Id) && !IsModernStreet(RoadSurfaces[i].Id))) || (streets && (IsFoundersStreet(RoadSurfaces[i].Id) || (laterEra && i == PavedStreetIndex) || modernEra && IsModernStreet(RoadSurfaces[i].Id)));
+                    bool visible = (roads && (i < roadCount || modernEra && IsModernRoadSurface(RoadSurfaces[i].Id) && !IsModernStreet(RoadSurfaces[i].Id))) || (streets && (IsFoundersStreet(RoadSurfaces[i].Id) || (laterEra && i == PavedStreetIndex) || modernEra && IsModernStreet(RoadSurfaces[i].Id)&&!IsAvenue(RoadSurfaces[i].Id))) || (avenues&&modernEra&&IsAvenue(RoadSurfaces[i].Id));
                     surfaceButtons[i].gameObject.SetActive(visible);
                     if (!visible) continue;
                     int position = slot++;
@@ -199,9 +201,10 @@ namespace CityForge.World
                     if (surfaceFaces[i]) surfaceFaces[i].rectTransform.sizeDelta = rect.sizeDelta;
                 }
 
-                treeHeading.gameObject.SetActive(streets);foreach(var treeChoice in treeChoices)treeChoice.gameObject.SetActive(streets);
+                treeHeading.text=avenues?"TREES · CURBSIDE / MEDIAN":"STREET TREES";
+                treeHeading.gameObject.SetActive(streets||avenues&&modernEra);foreach(var treeChoice in treeChoices)treeChoice.gameObject.SetActive(streets||avenues&&modernEra);
                 placeHint.text=streets?"Choose paving · Trees fill available sidewalk space.":"Hover for details · Click a surface to place it";
-                placeHint.gameObject.SetActive(roads || streets);
+                placeHint.gameObject.SetActive(roads || streets || avenues&&modernEra);
                 PreviewSurface(-1);
             }
 

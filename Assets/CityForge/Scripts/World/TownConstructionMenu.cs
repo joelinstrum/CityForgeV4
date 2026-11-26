@@ -847,6 +847,11 @@ namespace CityForge.World
             transportModal.offsetMin = transportModal.offsetMax = Vector2.zero;
             transportModal.gameObject.AddComponent<Image>().color = new Color(0, 0, 0, .58f);
 
+            if (category == "Bridges")
+            {
+                BuildBridgesPopup();
+                return;
+            }
             if (category == "Roads")
             {
                 BuildRoadsPopup();
