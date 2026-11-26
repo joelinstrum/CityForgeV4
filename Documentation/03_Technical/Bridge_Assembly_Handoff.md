@@ -1,3 +1,7 @@
+Implementation status update, November 23, 2026: the first functional prototype is
+now installed. Read Bridge_Assembly.md and the latest HANDOFF.md for current behavior
+and verification. The following is the original pre-implementation design handoff.
+
 # CityForge V4 — era content checkpoint and bridge assembly handoff
 
 ## Start here

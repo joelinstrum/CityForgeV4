@@ -73,6 +73,7 @@ namespace CityForge.World
             var roads = new List<RouteRoad>();
             foreach (var road in districtRoadMeshes.Keys)
                 roads.Add(new RouteRoad(new List<Vector2>(RoadCenterline(road)).ToArray(), road.width, road.closed));
+            foreach (var bridge in UsableBridges) roads.Add(new RouteRoad(bridge.Route, bridge.width, false));
             routeRoadRevision = FreightRoadRevision;
             return routeRoads = roads.ToArray();
         }

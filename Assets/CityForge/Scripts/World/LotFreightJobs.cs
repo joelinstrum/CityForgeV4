@@ -61,7 +61,7 @@ namespace CityForge.World
         internal bool FreightRoute(Vector2 from, Vector2 to, float fromAccess, float toAccess, bool returnHome, out Vector2[] route)
         {
             FreightRoutePlans++;
-            var roads = districtRoadMeshes.Keys.Select(road => (RoadCenterline(road).ToArray(), road.closed));
+            var roads = TransportRoadRoutes();
             if (!FreightRoadGraph.TryRoute(roads, from, to, fromAccess, toAccess, out var path)) { route = null; return false; }
             var rounded = new List<Vector2>();
             LotPathSurface.RoundCorners(path, null, false, .8f, rounded);
@@ -82,11 +82,16 @@ namespace CityForge.World
             if (freightWaterLandscape != land) { freightWaterLandscape = land; freightWaterAccess = new WildlifeWaterAccess(land); }
             var water = freightWaterAccess;
             int steps = Mathf.Max(1, Mathf.CeilToInt(Vector2.Distance(from, to) / Mathf.Min(.75f, Mathf.Max(.15f, clearance))));
-            float previous = land.Height(from);
+            float previous = TransportHeight(from);
             for (int i = 0; i <= steps; i++)
             {
                 var p = Vector2.Lerp(from, to, (float)i / steps);
-                float height = land.Height(p);
+                float height = TransportHeight(p);
+                if (TryBridgeSurface(p,clearance,out _))
+                {
+                    if (Mathf.Abs(height-previous)>.35f) return false;
+                    previous=height;continue;
+                }
                 // Shared grading can create valid dry streets only centimetres above the
                 // regional sea datum. Actual water footprints remain authoritative there.
                 bool gradedGround=TryZoneGroundHeight(p,out _);

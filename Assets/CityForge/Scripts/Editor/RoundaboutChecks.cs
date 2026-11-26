@@ -16,9 +16,9 @@ public static class RoundaboutChecks {
  Check(guide.Length==48&&guide.All(p=>Mathf.Abs(Vector2.Distance(p,new Vector2(2,2))-radius)<.001f),$"Circular grid-centred guide width{width} large{big}");
  Check(guide.Zip(Guide(new Vector2(1.9f,1.1f),width,big),(a,b)=>a==b).All(x=>x),"Stable within a grid cell");
  Check(typeof(PrototypeRegionView).GetMethod("RoadGuideProblem",S).Invoke(null,new object[]{guide,true,512f})==null,"Saved road guide constraints");
- var record=new DistrictRoadRecord{district=0,surfaceId="dirt",points=guide,width=width,closed=true,curved=true,gridAligned=false};
+ var record=new DistrictRoadRecord{district=0,surfaceId=width==20?"art-deco-divided-boulevard":width==12?"art-deco-concrete-avenue":"dirt",points=guide,width=width,closed=true,curved=true,gridAligned=false};
  var saved=JsonUtility.FromJson<DistrictRoadRecord>(JsonUtility.ToJson(record));
- if(width!=20) typeof(PrototypeRegionView).GetMethod("ValidateDistrictRoads",S).Invoke(null,new object[]{new[]{saved},64,1024f});
+ typeof(PrototypeRegionView).GetMethod("ValidateDistrictRoads",S).Invoke(null,new object[]{new[]{saved},64,1024f});
  Check(saved.closed&&saved.curved&&!saved.gridAligned&&saved.points.SequenceEqual(guide),"Native road serialization retains circle and empty centre");
  var mesh=Mesh(guide,width);Check(mesh.vertexCount>0&&mesh.vertices.All(p=>float.IsFinite(p.x)&&float.IsFinite(p.y)&&float.IsFinite(p.z)),"Native finite road ribbon");
  Check(mesh.vertices.All(p=>new Vector2(p.x-2,p.z-2).magnitude>radius-width*.54f),"No paving across island");UnityEngine.Object.DestroyImmediate(mesh);

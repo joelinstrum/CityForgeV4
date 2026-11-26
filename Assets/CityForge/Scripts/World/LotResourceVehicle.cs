@@ -201,7 +201,7 @@ namespace CityForge.World
 
         private void Place(Vector2 point)
         {
-            transform.position = new Vector3(point.x, view.ApprovedDistrict.Height(point), point.y);
+            transform.position = new Vector3(point.x, view.TransportHeight(point), point.y);
             job.position = point; job.hasPosition = true;
         }
         private void SetTravelling(bool value)

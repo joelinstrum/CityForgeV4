@@ -320,3 +320,9 @@ venv/
 
 # Local reconstructed-office import and visual QA harness
 /Assets/CityForge/Scripts/Editor/RebuiltOfficeImport.cs*
+
+# Source-only modular bridge style definitions; no artwork or imported models.
+!/Assets/CityForge/Resources/Config/BridgeStyles/
+!/Assets/CityForge/Resources/Config/BridgeStyles.meta
+!/Assets/CityForge/Resources/Config/BridgeStyles/*.json
+!/Assets/CityForge/Resources/Config/BridgeStyles/*.json.meta

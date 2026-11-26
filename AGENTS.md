@@ -178,3 +178,13 @@ lot instance IDs. Explicitly register town-center/harbor side effects; do not re
 RebuildDistrictLots. Harbor ship profiles load asynchronously. Deferred sidewalk
 repair applies masks to newly created lot surfaces without rebuilding every survivor.
 Skip ground-paint/snow refresh where placement did not change that underlying data.
+
+## Bridge assembly
+
+Read Documentation/03_Technical/Bridge_Assembly.md before changing bridge construction.
+Keep transport bridges separate from lots and terrain-following road records. Preserve
+versioned JSON styles, additive saved instance data and missing-style repair. PointWire
+owns drag/release input; consumers own construction. Preview must not mutate terrain.
+Retain bounded reversible approach grading, actual bed supports, elevated transport
+surfaces and live vessel headroom/opening checks. The graph remains planar: do not
+create intermediate connections between ground roads and elevated bridges.

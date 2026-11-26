@@ -40,6 +40,7 @@ namespace CityForge.World
         public TownZoneCell[] townZones;
         public int townZoneGridVersion;
         public DistrictRoadRecord[] districtRoads;
+        public BridgeInstance[] bridges;
         public DistrictParkPathRecord[] parkPaths;
         public CityForge.Lots.GroundPaintData groundPaint;
         public DistrictPlacedActor[] placedActors;
@@ -115,6 +116,7 @@ namespace CityForge.World
             info.townZones = view.CaptureTownZones();
             info.townZoneGridVersion = PrototypeRegionView.TownZoneGridVersion;
             info.districtRoads = view.CaptureDistrictRoads();
+            info.bridges = view.CaptureBridges();
             info.parkPaths = view.CaptureParkPaths();
             info.zoneGroundPlanes = view.ZoneGroundPlanes.ToArray();
             info.groundPaint = view.CaptureGroundPaint();
@@ -153,6 +155,7 @@ namespace CityForge.World
             PrototypeRegionView.ValidateParkPaths(snapshot.info.parkPaths,(snapshot.info.creation?.GridSide??2)*(snapshot.info.creation?.GridSide??2),NativeCampPlanner.MapSide(snapshot.info.size,snapshot.info.creation?.GridSide??2));
             RegionTown.Validate(snapshot.info.towns);
             int districtGrid = snapshot.info.creation?.GridSide ?? 2;
+            PrototypeRegionView.ValidateBridges(snapshot.info.bridges,districtGrid*districtGrid,NativeCampPlanner.MapSide(snapshot.info.size,districtGrid));
             PrototypeRegionView.ValidateLotRecords(snapshot.info.pendingPlayerLots,districtGrid*districtGrid);
             RegionEventState.Validate(snapshot.info.events, districtGrid * districtGrid, NativeCampPlanner.MapSide(snapshot.info.size, districtGrid));
             PrototypeRegionView.ValidateDeepHarbors(snapshot.info.deepHarborDistricts, districtGrid * districtGrid);
@@ -247,6 +250,7 @@ namespace CityForge.World
             CityForge.Lots.GroundPaintData.Validate(info.groundPaint);
             PrototypeRegionView.ValidateParkPaths(info.parkPaths,gridSide*gridSide,NativeCampPlanner.MapSide(info.size,gridSide));
             PrototypeRegionView.ValidateDistrictRoads(info.districtRoads, gridSide * gridSide, NativeCampPlanner.MapSide(info.size, gridSide));
+            PrototypeRegionView.ValidateBridges(info.bridges, gridSide * gridSide, NativeCampPlanner.MapSide(info.size, gridSide));
             // JsonUtility writes the absent inline streetscape field as an empty object.
             if (info.placedActors != null)
                 foreach (var actor in info.placedActors)

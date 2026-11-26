@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "styles": [
+    {
+      "schemaVersion": 1,
+      "id": "timber-trestle-v1",
+      "label": "Timber trestle",
+      "firstEraId": "modern",
+      "widths": [
+        4,
+        8,
+        12
+      ],
+      "supportSpacing": 8,
+      "maxSpan": 32,
+      "maxSlope": 0.2,
+      "minClearance": 2,
+      "maxLength": 512,
+      "maxSupportHeight": 40,
+      "deckThickness": 0.45,
+      "railingHeight": 1.1,
+      "deckPart": "primitive:box",
+      "railingPart": "primitive:box",
+      "supportPart": "primitive:box",
+      "bracePart": "primitive:box"
+    }
+  ]
+}

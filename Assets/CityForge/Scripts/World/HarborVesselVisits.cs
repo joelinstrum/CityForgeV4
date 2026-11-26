@@ -12,7 +12,7 @@ namespace CityForge.World
         {
             internal readonly HarborVesselKind Kind;
             internal readonly GameObject Prefab;
-            internal readonly float Clearance, HalfLength, HalfBeam, Draft, Speed;
+            internal readonly float Clearance, HalfLength, HalfBeam, Draft, Speed, AirDraft;
 
             internal VesselProfile(HarborVesselKind kind, GameObject prefab, float clearance, float halfLength, float halfBeam, float draft, float speed)
             {
@@ -23,6 +23,9 @@ namespace CityForge.World
                 HalfBeam = halfBeam;
                 Draft = draft;
                 Speed = speed;
+                float low=float.PositiveInfinity,high=float.NegativeInfinity;
+                foreach(var renderer in prefab.GetComponentsInChildren<Renderer>(true)){low=Mathf.Min(low,renderer.bounds.min.y);high=Mathf.Max(high,renderer.bounds.max.y);}
+                AirDraft=float.IsFinite(high)?Mathf.Max(2,high-low)+.5f:30;
             }
         }
         private readonly struct DockingBerth
@@ -46,6 +49,8 @@ namespace CityForge.World
         private WildlifeWaterAccess water;
         private readonly List<VesselProfile> vessels = new();
         private GameObject vessel;
+        private VesselProfile activeProfile;
+        private bool bridgeBlocked;
         private Material vesselMaterial;
         private Coroutine visits;
         private int nextPort, nextVessel;
@@ -174,7 +179,7 @@ namespace CityForge.World
                 }
                 yield return new WaitForSeconds(5);
 
-                bool PortStillValid() => land.View.Data.WaterBodies == bodies && port.center == center &&
+                bool PortStillValid() => !bridgeBlocked && land.View.Data.WaterBodies == bodies && port.center == center &&
                     port.RotationSteps == rotation && port.definition.AttractsVessels &&
                     land.View.PlacedLots.Contains(port);
             }
@@ -276,7 +281,7 @@ namespace CityForge.World
                 for (int side = -1; side <= 1; side++)
                 {
                     var sample = station + cross * (side * beam);
-                    if (!DeepEnough(sample, profile.Draft) || land.View.HarborStoneOverlapsLot(sample, .55f, porch))
+                    if (!DeepEnough(sample, profile.Draft) || !water.Wet(sample,out _,out float surface) || !land.View.BridgeVesselClear(sample,.55f,profile.AirDraft,surface) || land.View.HarborStoneOverlapsLot(sample, .55f, porch))
                         return false;
                 }
             }
@@ -299,7 +304,7 @@ namespace CityForge.World
                 while(PrototypeRegionView.ZoningSimulationPaused)yield return null;
                 distance += Time.deltaTime * 2f;
                 var point = Vector2.Lerp(from, to, distance / length);
-                if (!water.Wet(point, out _, out float level)) yield break;
+                if (!water.Wet(point, out _, out float level) || !BridgeMotionClear(point)) yield break;
                 vessel.transform.SetPositionAndRotation(new Vector3(point.x, level, point.y), rotation);
                 yield return null;
             }
@@ -374,6 +379,7 @@ namespace CityForge.World
         private bool Navigable(Vector2 point, VesselProfile profile)
         {
             if (land.View.HarborStoneOverlapsLot(point, profile.Clearance) || !DeepEnough(point, profile.Draft)) return false;
+            if (!water.Wet(point,out _,out float level) || !land.View.BridgeVesselClear(point,profile.Clearance,profile.AirDraft,level)) return false;
             foreach (var direction in Neighbors)
                 if (!DeepEnough(point + (Vector2)direction * profile.Clearance, profile.Draft)) return false;
             return true;
@@ -405,7 +411,7 @@ namespace CityForge.World
                     while(PrototypeRegionView.ZoningSimulationPaused)yield return null;
                     travelled += Time.deltaTime * speed;
                     Vector2 point = Vector2.Lerp(from, to, travelled / length);
-                    if (!water.Wet(point, out _, out float level)) yield break;
+                    if (!water.Wet(point, out _, out float level) || !BridgeMotionClear(point)) yield break;
                     vessel.transform.SetPositionAndRotation(new Vector3(point.x, level, point.y),
                         Quaternion.RotateTowards(vessel.transform.rotation, heading, 85f * Time.deltaTime));
                     yield return null;
@@ -418,6 +424,7 @@ namespace CityForge.World
 
         private void SpawnVessel(VesselProfile profile)
         {
+            activeProfile=profile;bridgeBlocked=false;
             vessel = Instantiate(profile.Prefab, transform);
             vessel.name = profile.Kind switch
             {
@@ -443,6 +450,27 @@ namespace CityForge.World
             }
         }
 
+        // An already-planned visit must react to a bridge constructed after its route was certified.
+        internal bool BridgeMotionClear(Vector2 next)
+        {
+            if(!vessel)return false;
+            var from=new Vector2(vessel.transform.position.x,vessel.transform.position.z);
+            int steps=Mathf.Max(1,Mathf.CeilToInt(Vector2.Distance(from,next)));
+            for(int i=0;i<=steps;i++)
+            {
+                var point=Vector2.Lerp(from,next,(float)i/steps);
+                if(!water.Wet(point,out _,out float level) || !land.View.BridgeVesselClear(point,activeProfile.Clearance,activeProfile.AirDraft,level))
+                {bridgeBlocked=true;return false;}
+            }
+            return true;
+        }
+        internal bool VesselOccupiesBridge(BridgeInstance bridge)
+        {
+            if(!vessel)return false;
+            var p=new Vector2(vessel.transform.position.x,vessel.transform.position.z);
+            float at=Vector2.Dot(p-bridge.start,bridge.Direction),across=Mathf.Abs(Vector2.Dot(p-bridge.start,bridge.Right));
+            return at>=-activeProfile.Clearance && at<=bridge.Length+activeProfile.Clearance && across<=bridge.TotalWidth*.5f+activeProfile.Clearance;
+        }
         private void RemoveVessel()
         {
             if (vessel)

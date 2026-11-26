@@ -18,8 +18,8 @@ public static class RoadShapeChecks {
  Check(paths.Length==(name=="T"||name=="X"||name=="Intersection"?2:1),tag+" independent path count");
  Check(paths.All(p=>p.Closed==(name=="Roundabout"||name=="D")),tag+" no accidental closure of open shapes");
  foreach(var path in paths){Check(typeof(PrototypeRegionView).GetMethod("RoadGuideProblem",S).Invoke(null,new object[]{path.Points,path.Closed,512f})==null,tag+" valid bounded guide");
- var record=new DistrictRoadRecord{district=0,surfaceId="dirt",points=path.Points.ToArray(),width=width,closed=path.Closed,curved=name=="Roundabout"||name=="D",gridAligned=false};
- var saved=JsonUtility.FromJson<DistrictRoadRecord>(JsonUtility.ToJson(record));if(width!=20) typeof(PrototypeRegionView).GetMethod("ValidateDistrictRoads",S).Invoke(null,new object[]{new[]{saved},64,1024f});Check(saved.points.SequenceEqual(record.points)&&saved.closed==record.closed,tag+" native persistence");
+ var record=new DistrictRoadRecord{district=0,surfaceId=width==20?"art-deco-divided-boulevard":width==12?"art-deco-concrete-avenue":"dirt",points=path.Points.ToArray(),width=width,closed=path.Closed,curved=name=="Roundabout"||name=="D",gridAligned=false};
+ var saved=JsonUtility.FromJson<DistrictRoadRecord>(JsonUtility.ToJson(record));typeof(PrototypeRegionView).GetMethod("ValidateDistrictRoads",S).Invoke(null,new object[]{new[]{saved},64,1024f});Check(saved.points.SequenceEqual(record.points)&&saved.closed==record.closed,tag+" native persistence");
  var mesh=Mesh(path,width,record.curved);Check(mesh.vertexCount>0&&mesh.vertices.All(v=>float.IsFinite(v.x)&&float.IsFinite(v.y)&&float.IsFinite(v.z)),tag+" finite native ribbon");UnityEngine.Object.DestroyImmediate(mesh);
  }
  var next=Guides(name,new Vector2(1.9f,1.1f),width,big,turns);Check(paths.Zip(next,(a,b)=>a.Points.SequenceEqual(b.Points)).All(v=>v),tag+" stable grid centre");

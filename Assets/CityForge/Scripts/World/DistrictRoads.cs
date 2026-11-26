@@ -49,6 +49,8 @@ namespace CityForge.World
             ("weathered-concrete-road", "Concrete Road", "weathered-concrete-pavement", "Weathered gray concrete paving. Available from the Art Deco era."),
             ("weathered-asphalt-road", "Asphalt Road", "weathered-charcoal-asphalt", "Weathered charcoal asphalt paving. Available from the Art Deco era."),
             ("weathered-concrete-street", "Concrete Street", "weathered-concrete-pavement", "A one-tile (4 m) concrete street with sidewalks. Optional automatic street trees."),
+            ("art-deco-concrete-avenue", "Concrete Avenue", "weathered-concrete-pavement", "A 12 m avenue with sidewalks and optional curbside trees. Available from Art Deco onward."),
+            ("art-deco-divided-boulevard", "Divided Boulevard", "weathered-concrete-pavement", "A 20 m boulevard: two 8 m carriageways around a 4 m planted median, with sidewalks. Available from Art Deco onward."),
             ("weathered-asphalt-street", "Asphalt Street", "weathered-charcoal-asphalt", "A one-tile (4 m) asphalt street with sidewalks. Optional automatic street trees.")
         };
 
@@ -59,7 +61,9 @@ namespace CityForge.World
         private const string FoundersCobblestoneStreetId = "founders-cobblestone-street";
         private const string FoundersBrickStreetId = "founders-brick-street";
 
-        internal static bool IsModernStreet(string id) => id is "weathered-concrete-street" or "weathered-asphalt-street";
+        internal static bool IsAvenue(string id) => id is "art-deco-concrete-avenue" or "art-deco-divided-boulevard";
+        internal static bool IsDividedBoulevard(string id) => id == "art-deco-divided-boulevard";
+        internal static bool IsModernStreet(string id) => IsAvenue(id) || id is "weathered-concrete-street" or "weathered-asphalt-street";
         internal static bool IsModernRoadSurface(string id) => IsModernStreet(id) || id is "weathered-concrete-road" or "weathered-asphalt-road";
         internal static bool IsFoundersStreet(string id) => FoundersStreetSlot(id) >= 0;
         private static int FoundersStreetSlot(string id) => id switch
@@ -114,7 +118,7 @@ namespace CityForge.World
             if (records == null) return;
             foreach (var road in records)
             {
-                if (HasSidewalks(road.surfaceId) && road.width > OneTileRoadWidth)
+                if (HasSidewalks(road.surfaceId) && !IsAvenue(road.surfaceId) && road.width > OneTileRoadWidth)
                     road.width = OneTileRoadWidth;
                 districtRoads.Add(road);
             }
@@ -127,7 +131,7 @@ namespace CityForge.World
             foreach (var record in records)
             {
                 if (record == null || record.district < 0 || record.district >= districtCount ||
-                    FindRoadSurface(record.surfaceId) < 0 || (record.width != OneTileRoadWidth && Array.IndexOf(LotPathSurface.Widths, record.width) < 0) ||
+                    FindRoadSurface(record.surfaceId) < 0 || (IsAvenue(record.surfaceId) ? record.width != DefaultRoadWidth(record.surfaceId) : record.width != OneTileRoadWidth && Array.IndexOf(LotPathSurface.Widths, record.width) < 0) ||
                     RoadGuideProblem(record.points, record.closed, mapSide * .5f) != null || !StreetTreePalette.Valid(record.streetTreeStyle))
                     throw new InvalidDataException("Invalid district road.");
             }
@@ -144,7 +148,7 @@ namespace CityForge.World
         // Masonry roads already have the same pavement and sidewalks as streets.
         private static bool SupportsCommercialFrontage(string id) => HasSidewalks(id) || id == "paved-street";
 
-        private static int DefaultRoadWidth(string id) => HasSidewalks(id) ? OneTileRoadWidth : RoadWidth;
+        private static int DefaultRoadWidth(string id) => IsDividedBoulevard(id) ? 20 : IsAvenue(id) ? 12 : HasSidewalks(id) ? OneTileRoadWidth : RoadWidth;
 
         private static LotPathMaterial DistrictRoadStyle(string id)
         {
@@ -269,6 +273,7 @@ namespace CityForge.World
 
         private void CancelRoadPlacement()
         {
+            CancelBridgeTool();
             roadStampShape = RoadStampShape.None;
             roadStampQuarterTurns = 0;
             if (roadWire) { roadWire.StampGuide = null; roadWire.StampCompletionRequested = null; roadWire.StampPaths = null; roadWire.StampPathsCompletionRequested = null; }
@@ -633,6 +638,7 @@ namespace CityForge.World
             {
                 var point = new Vector2(vertex.x, vertex.z);
                 if (!InActiveDistrict(point)) return "Keep the full road width inside the district.";
+                if (BridgeRoadConflict(point, 0) is { } bridgeProblem) return bridgeProblem;
                 // The mesh samples the full ribbon already. Check actual water levels at those
                 // samples so near-sea-level harbor ground can be used up to the lot edge.
                 float height = LotHeight(point);
@@ -740,6 +746,9 @@ namespace CityForge.World
 
         private void RebuildDistrictRoads()
         {
+            CancelBridgeTool();
+            RestoreBridgeEarthwork();
+            ClearBridgePresentation();
             ClearDistrictRoadPresentation();
             if (SelectedDistrict < 0) return;
             ApplyZoneGroundPlanes();
@@ -749,6 +758,7 @@ namespace CityForge.World
                 var road = districtRoads[i];
                 if (active.Contains(road.district)) PresentDistrictRoad(road, BuildDistrictRoadMesh(road), i);
             }
+            RebuildBridgePresentation();
             RefreshRoadShoulderDetails();
             RefreshDirtRoadEndFades();
             RefreshDirtJunctionWear();
@@ -973,6 +983,7 @@ namespace CityForge.World
                 }
             }
 
+            PresentBoulevardMedians(visibleRoads,Add);
             var planting=RefreshAutomaticStreetTreesStages();while(planting.MoveNext()){if(paced)yield return planting.Current;}
 
             Material Material(string key, LotPathMaterial style, bool soft, bool masked = false)
