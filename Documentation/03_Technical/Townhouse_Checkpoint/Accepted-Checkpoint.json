@@ -1,0 +1,16 @@
+{
+  "assetId": "cf-building-art-deco-brick-townhouse-2-001",
+  "acceptedVersion": "v005-Recessed-Windows",
+  "acceptedComparison": "After / second version",
+  "userDecision": "2nd is better. This is a good stopping point, let's commit what you have and create a handoff thanks",
+  "weathering": "Heavy / Neglected",
+  "windowFinish": "weathered-cream / painted-wood",
+  "flatWindowRecessMetres": 0.1016,
+  "flatFrameSectionMetres": 0.028,
+  "meetingRailMetres": 0.022,
+  "visualAcceptance": true,
+  "productionDeployment": false,
+  "mainEditorSession": "Preserved; checkpoint branch does not modify the main working tree.",
+  "libraryPath": "/Users/joelinstrum/Documents/CityForgeAssets/Buildings/Era - Art Deco/Art Deco Brick Townhouse 2/v005-Recessed-Windows",
+  "sealedManifestSHA256": "a432fef8d4cd7b121d12bc946f28f4195b9269d756216cc061a2b0cc33200884"
+}

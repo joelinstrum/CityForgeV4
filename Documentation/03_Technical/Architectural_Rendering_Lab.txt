@@ -1,0 +1,73 @@
+CityForge — Architectural Rendering Laboratory
+2026-11-27 / Unity 6000.1.12f1 / URP 17.1.0 / Metal
+
+OPEN AND USE
+Project: /Users/joelinstrum/dev/CityForge - V4
+Menu: CityForge > Development > Architectural Rendering Lab.
+Open the existing lab from the panel when another scene is active. The permanent scene is Assets/CityForge/Scenes/Development/ArchitecturalRenderingLab.unity. Do not add this scene to player build settings. If the session has been stopped for safety, click Resume lab rendering.
+
+This is an Editor tool; Play mode is not required. Lighting controls operate on private pipeline/renderer/profile assets. The preview refreshes once per second. Turn it off to reduce editor overhead. The full Game view follows the selected camera. Capture directory and resolution are configurable; captures include preset, view, color space and dimensions in the filename. Keep the JSON and evidence file beside a PNG when comparing results.
+
+The subject prefab field accepts buildings, vehicles, props and characters. An existing Deco Blue Sedan model was loaded, framed and captured as a separate validation, then the brownstone was restored. Subject position/rotation can be adjusted; generic close-up framing follows the replacement asset bounds. It strips MonoBehaviours from the evaluation instance to prevent their gameplay behavior from changing the scene. Skinned meshes are counted; this does not provide animation retargeting or character control. Diagnostic materials are temporary copies. The reference building and original material assets are not edited by the material sliders. Apply material diagnostics explicitly after changing their controls. Surface overrides intentionally replace packed smoothness/metallic response for inspection; load the preset or restore diagnostic materials to return to original source values.
+
+Normal maps can be disabled, or their authored strength multiplied. Smoothness, metallic and AO-map contribution are available. Inspect any Texture2D with a mip-level preview and native resolution/format display. Absence of a normal or AO map is reported rather than concealed with a generic substitute. Texture import changes are not performed by those diagnostic controls.
+
+REFERENCE AND CAMERAS
+The fixed reference is the approved v005 brownstone, frozen separately from the v006 subject. Its geometry, materials and source version remain unchanged. It is hidden in ordinary subject captures to avoid its cast shadows or a clipped neighboring building affecting the test. Select Reference-Pair to view both. Calibration activates the material swatches automatically. A separate toggle exposes each area while freely inspecting the scene.
+
+Front, front-left and front-right views are repeatable orthographic stations. Street-1.7m is perspective at approximately human eye height. Close-Window frames the complete second-floor standalone window and its decorative surround. Close-Cornice shows the seated crown and cap. Gameplay-0 through Gameplay-5 reproduce the CityForgeCameraController FrameArea/DistrictZoomSize formula and 35.26439-degree isometric pitch with yaw315. District span defaults to256m and terrain relief40m; change those values to match the district being evaluated. This preserves the game's zoom relationship instead of scaling the building arbitrarily to each zoom.
+
+PRESETS
+Neutral Studio: neutral HDRI, 6500K directional light, Neutral tonemapping, zero exposure offset, restrained contact shading.
+Morning Sun: low14-degree sun, warm4800K directional light to reveal relief.
+Midday Sun: 65-degree overhead light, 6100K.
+Late Afternoon: low23-degree warm4300K light and long shadows.
+Overcast: reduced directional light and shadow strength, diffuse HDRI fill.
+Current In-Game: the real approved meadow baseline post profile, sky and SH ambient probe, cloned production URP/contact renderer and approved camera TAA configuration, with DistrictDaylight's default refined Linear afternoon calibration. Sun intensity2.2245436, elevation31, heading25, shadow strength.62, biases.04/.14, exposure+.68EV, contrast6, ACES and baseline bloom.08. The active Vignette component is retained from the production volume. Lighting source and derivation are recorded in Production-Snapshot.json. This is a defined summer district afternoon snapshot, not a claim that every biome, season, running clock phase or temporary user lighting adjustment looks the same.
+Night: cool directional fill, reduced HDRI contribution, warm authored emissions and the subject's existing entrance light pools. It is a controlled inspection preset, not a claim to reproduce the entire nighttime city simulation.
+
+CONTROLLED FINDINGS
+Neutral Studio versus Current In-Game uses identical geometry, material source inputs, camera transform, projection and1600x1200 resolution. The production afternoon produces more pronounced facade relief, warmer stone and stronger roof/parapet shadows. The studio view exposes the shape without the same warm directional emphasis.
+
+The one-variable series independently disables SSAO, removes the +.68EV exposure offset, or disables existing normal maps. State comparisons verify only the named control changes. Exposure has a much larger full-image effect than AO or the normal-map switch. The AO and normal-map whole-frame changes are below the unchanged temporal control in this run, so these captures do not establish a reliable quantitative ranking for those effects. Inspect local contact/detail regions and avoid treating small frame differences as an improvement score. TAA and dithering introduce small per-frame differences even when controls do not change; Temporal-Control-A and Temporal-Control-B quantify that floor. Pixel differences are diagnostic measurements, not realism scores.
+
+The wall uses the supplied Weathered Reddish-Brownstone Wall image at1254x1254. Default importer power-of-two rescaling had reduced it to1024; the private v006 importer now retains its original dimensions. This wall has no authored normal map, metallic map or AO map. Its macro relief comes from geometry and light/shadow; turning up a missing normal map cannot add wall relief. The existing bay/cornice/source detail normal maps remain available and respond to the normal-map diagnostic.
+
+The uncompressed wall comparison keeps the original image resolution, mipmaps, geometry, camera, lighting and other material values fixed. The uncompressed texture is a private lab copy. No broad loss of architectural detail is visible in the high-quality compressed close-up. Small pixel differences include TAA/dither variation; do not interpret the whole-frame difference as a precise compression-error score. Retain mipmaps for distant city views; disabling them may sharpen a still while worsening shimmer during camera movement.
+
+The calibration chrome sphere visibly reflects the HDRI and neighboring building. Its response changes when reflection intensity is zero. The gray/white spheres and brick, sandstone, painted wood and glass swatches separate material response from the building's source textures. These are practical PBR comparison swatches, not a display-calibrated color chart. Absolute color accuracy cannot be established from an uncalibrated concept image and these renders alone.
+
+COLOR SPACE INVESTIGATION
+Two small isolated projects were used, not a production-project color-space toggle. Both use the same scene/assets, material properties, import settings, camera configuration, numerical light settings, volume profiles and URP renderer. One has Gamma; the other Linear. Matched Neutral Studio and Current In-Game views and control captures are included.
+
+Gamma is markedly brighter and washed out under the existing Linear-calibrated numerical values. This isolates the color-space change; it is not a separately retuned Gamma art treatment. Keep production Linear. A future migration would need a whole-project review, not just a favorable building image.
+
+Unity's Linear workflow samples color textures through the appropriate sRGB conversion and performs lighting in linear space. Non-color data such as normals, metallic and AO must retain data sampling rather than color conversion. Color-space changes affect blending, lighting response and existing material calibration; see the Unity documentation below.
+
+Terrain: review layer blends, authored albedo/smoothness values, splat normalization, custom terrain shading, SH ambient fill and saved biome appearance. Existing district daylight calibration already has different Gamma and Linear branches; switching would change more than the GPU sampling mode in normal gameplay.
+Vegetation: review leaf translucency, alpha-cutout shadows, billboard/near-to-far transitions, seasonal palettes and ambient tint. ForestFoliage.shader and ApprovedForestCanopy.shader contain explicit UNITY_COLORSPACE_GAMMA branches. These were inspected, not migrated or visually validated in the lab.
+Water: review the existing Crest and custom water/refraction/reflection paths, depth-based tint, caustics, foam and blending. None of the production water scenes or shaders were modified or certified for Gamma by this investigation.
+Other materials/shaders: inspect authored constant colors, texture color/data classification, emissive masks, roughness-to-smoothness packing and any manual gamma conversions. Revisit lightmaps/baked probes if the project setting changes. Existing building look is not a sufficient regression test for terrain, foliage, water or UI.
+
+PERFORMANCE SCOPE
+Subject geometry totals, material count, renderers with an enabled ShadowCaster pass and active/forced LOD are available where the object provides them. Camera-selected LOD is estimated from the LODGroup thresholds; forcing a tier supports inspection. The brownstone is intentionally loaded as Near, with no automatic LODGroup in this lab prefab.
+
+The panel distinguishes Editor update Hz/frame interval, synchronous render/readback capture time and UnityStats' editor-wide draw calls/batches. Those values include Editor overhead and are not a hardware GPU frame-time measurement or a representative city benchmark. The supplied Near mesh is89045 imported triangles and Medium27048, both three mesh renderers. These remain above the current authoring targets; there is no completed city-scale Far mesh. Many-building profiling, transitions, runtime door behavior and gameplay/save certification remain outside this revision's validated readiness.
+
+ARCHITECTURAL REVISION
+The v005 composition is preserved. All23 standalone windows have55mm side stiles and65mm horizontal outer members while retaining the original outer dimensions and meeting-rail positions. Glass dimensions expand into the reduced frame profile. The opening assembly gains50mm of recess. Sills overlap the frame base8mm; underside/decorative joins overlap12mm. Hidden stone backs extend into masonry rather than stopping in front of it. Eighteen side windows retain plain bearing lintels/sills and lose front-only carved apron pieces. Selected side trim receives a subtle3.5% local discoloration. Existing wall weathering comes from the supplied texture.
+
+Two masonry stacks have non-emissive stone coping, hollow clay flues and roof flashing. The new private native entrance light pools are aligned with the doorway through the FBX/lot axis conversion. The original roof, parapets, bay assets, seated cornice and olive cap geometry are hash-checked against v005 and unchanged. Selected room/lamp variation is retained. No Tripo generations or subscription credits were used for these refinements.
+
+AssemblyParameters.json records the reusable choices. The authoring script accepts --parameters PATH after Blender's -- separator to override the default dimensions. The script operates on the private versioned master, not on the original component library.
+
+SAFETY AND RESTORATION
+The new v006 subject assets live outside Resources under Assets/CityForge/Development/ArchitecturalRenderingLab/SubjectAssets/V006. The lab scene is excluded from player builds. An Editor build preprocessor restores the production pipeline and rejects an explicitly included lab scene. The existing v005 reference assets are reused read-only.
+
+Private pipeline/renderer/feature and profile assets isolate controls from production assets. Scoped pipeline assignment is restored on scene change, assembly reload, quit, explicit stop and player-build preprocessing. A Library recovery record stores previous pipeline paths and serialized settings snapshots for unexpected interruption. Restoration rewrites only this lab's pipeline pointer fields, preserving other settings edits. The final verification compares original ProjectSettings, production rendering assets and pre-existing production scene hashes against their pre-task snapshots. Production color space stays Linear throughout the investigation.
+
+SOURCES
+Unity6.1 color-space workflow: https://docs.unity.cn/6000.1/Documentation/Manual/linear-color-space.html
+Unity non-color textures: https://docs.unity.cn/6000.1/Documentation/Manual/linear-textures.html
+HDRI: Overcast Soil PureSky, Poly Haven, CC0, Jarod Guest / Sergej Majboroda: https://polyhaven.com/a/overcast_soil_puresky
+Approved brick swatch: private cf-component-antique-red-brick-wall-001/v002 dependency, reused read-only. It is a calibration swatch; the brownstone walls retain the user's supplied texture.

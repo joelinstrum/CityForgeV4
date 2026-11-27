@@ -13,6 +13,9 @@ namespace CityForge.Lots
         public string trimColor;
         public string awningColor;
         public string wallColor;
+        public string windowFrameColor;
+        public string windowFrameMaterial;
+        public FacadeWeatheringSettings facadeWeathering;
         public bool wallSaturationSet;
         public float wallSaturation;
         public BuildingSignSelection[] signs;
@@ -46,7 +49,7 @@ namespace CityForge.Lots
             asset?.prefab?.GetComponentsInChildren<BuildingTintProfile>(true).SelectMany(p=>p.bindings)
                 .Where(b=>b!=null&&b.region=="walls").SelectMany(b=>b.finishes??Array.Empty<BuildingWallFinish>())
                 .FirstOrDefault(f=>f!=null&&f.id==id)?.albedo;
-        internal static bool IsPaintable(LotAssetCatalogEntry asset) => SupportsWalls(asset)||SupportsTrim(asset)||SupportsAwnings(asset);
+        internal static bool IsPaintable(LotAssetCatalogEntry asset) => SupportsWalls(asset)||SupportsTrim(asset)||SupportsAwnings(asset)||BuildingWindowFrames.Supports(asset)||BuildingArchitecturalWeathering.Supports(asset);
         internal static bool CanCustomize(LotAssetCatalogEntry asset) => IsPaintable(asset)||BuildingSignCompatibility.TryProfile(asset,out _,out _);
         internal static string WallLabel(LotAssetCatalogEntry asset) => SupportsWalls(asset)?asset.prefab.GetComponentInChildren<BuildingTintProfile>(true).wallLabel:"Walls";
         internal static float WallSaturation(BuildingAppearanceSettings state) => state.wallSaturationSet ? state.wallSaturation : .5f;
@@ -55,7 +58,7 @@ namespace CityForge.Lots
         internal static bool SameSigns(BuildingAppearanceSettings a,BuildingAppearanceSettings b)=>
             (a.signs??Array.Empty<BuildingSignSelection>()).OrderBy(s=>s.mountId,StringComparer.Ordinal).Select(s=>s.mountId+":"+s.signId).SequenceEqual(
             (b.signs??Array.Empty<BuildingSignSelection>()).OrderBy(s=>s.mountId,StringComparer.Ordinal).Select(s=>s.mountId+":"+s.signId));
-        internal static bool Same(BuildingAppearanceSettings a, BuildingAppearanceSettings b) => (a.trimColor??"") == (b.trimColor??"") && (a.awningColor??"") == (b.awningColor??"") && (a.wallColor??"") == (b.wallColor??"") && (string.IsNullOrEmpty(a.wallColor) || WallSaturation(a)==WallSaturation(b)) && SameSigns(a,b);
+        internal static bool Same(BuildingAppearanceSettings a, BuildingAppearanceSettings b) => (a.trimColor??"") == (b.trimColor??"") && (a.awningColor??"") == (b.awningColor??"") && (a.wallColor??"") == (b.wallColor??"") && (string.IsNullOrEmpty(a.wallColor) || WallSaturation(a)==WallSaturation(b)) && (a.windowFrameColor??"") == (b.windowFrameColor??"") && (a.windowFrameMaterial??"") == (b.windowFrameMaterial??"") && FacadeWeatheringSettings.Same(a.facadeWeathering,b.facadeWeathering) && SameSigns(a,b);
         // Pure validation is also called from background save/load threads.
         internal static void Validate(BuildingAppearanceSettings state)
         {
@@ -63,6 +66,8 @@ namespace CityForge.Lots
             if (!string.IsNullOrEmpty(state.awningColor) && !Colors.Any(c=>c.Id==state.awningColor)) throw new InvalidDataException("Invalid building awning tint.");
             if (!string.IsNullOrEmpty(state.wallColor) && !WallColors.Any(c=>c.Id==state.wallColor)&&!BrickFinishes.Any(c=>c.Id==state.wallColor)) throw new InvalidDataException("Invalid building wall tint.");
             if(state.wallSaturationSet && (!float.IsFinite(state.wallSaturation)||state.wallSaturation<0||state.wallSaturation>1)) throw new InvalidDataException("Invalid wall tint saturation.");
+            BuildingWindowFrames.Validate(state);
+            FacadeWeatheringSettings.Validate(state.facadeWeathering);
             bool Id(string s)=>!string.IsNullOrEmpty(s)&&s.Length<=96&&s.All(c=>char.IsLetterOrDigit(c)||c=='-'||c=='_');
             if(state.signs!=null&&(state.signs.Length>16||state.signs.Any(s=>!Id(s.mountId)||!Id(s.signId))||state.signs.Select(s=>s.mountId).Distinct().Count()!=state.signs.Length))
                 throw new InvalidDataException("Invalid building sign selection.");
@@ -101,6 +106,8 @@ namespace CityForge.Lots
                 if((item.buildingAppearance.trimColor??"")!=(pair.Value.trimColor??"")&&!SupportsTrim(asset))throw new InvalidDataException("This building does not have paintable trim.");
                 if((item.buildingAppearance.awningColor??"")!=(pair.Value.awningColor??"")&&!SupportsAwnings(asset))throw new InvalidDataException("This building does not have tintable awnings.");
                 if(((item.buildingAppearance.wallColor??"")!=(pair.Value.wallColor??"") || !string.IsNullOrEmpty(pair.Value.wallColor)&&WallSaturation(item.buildingAppearance)!=WallSaturation(pair.Value))&&!SupportsWalls(asset))throw new InvalidDataException("This building does not have tintable walls.");
+                if(((item.buildingAppearance.windowFrameColor??"")!=(pair.Value.windowFrameColor??"") || (item.buildingAppearance.windowFrameMaterial??"")!=(pair.Value.windowFrameMaterial??""))&&!BuildingWindowFrames.Supports(asset))throw new InvalidDataException("This building has no reviewed window frame bindings.");
+                if(!FacadeWeatheringSettings.Same(item.buildingAppearance.facadeWeathering,pair.Value.facadeWeathering)&&!BuildingArchitecturalWeathering.Supports(asset))throw new InvalidDataException("This building has no reviewed facade weathering bindings.");
                 BuildingSigns.ValidateChange(asset,item.buildingAppearance,pair.Value);
             }
             bool changed=false;

@@ -1,0 +1,36 @@
+{
+  "nonEmissiveCopingVerified": true,
+  "protectedGeometryUnchanged": true,
+  "protectedObjects": [
+    "Continuous bow-front cornice \u2014 fitted source",
+    "Roof deck",
+    "Plain side parapet -1",
+    "Plain side parapet 1",
+    "Rear parapet",
+    "Brownstone front \u2014 contour-joined bay and actual apertures",
+    "Roof felt \u2014 slight settled surface",
+    "Continuous brownstone crown \u2014 seated cornice support"
+  ],
+  "missingImages": [],
+  "bounds": [
+    [
+      -3.9835002422332764,
+      3.9835004806518555
+    ],
+    [
+      -9.824999809265137,
+      9.74000072479248
+    ],
+    [
+      0.0,
+      14.260000228881836
+    ]
+  ],
+  "meshObjects": 821,
+  "nativeValidation": "Preparation-Checks.txt",
+  "limitations": [
+    "Near/Medium exceed current city-scale budgets",
+    "Far tier not added by this architectural refinement",
+    "No gameplay save/load or runtime door interaction certification"
+  ]
+}

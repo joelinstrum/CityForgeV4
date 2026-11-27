@@ -1,0 +1,14 @@
+{
+  "sideStileWidth": 0.055,
+  "sillFrameOverlap": 0.008,
+  "horizontalFrameWidth": 0.065,
+  "additionalRecess": 0.05,
+  "stoneEmbedDepth": 0.08,
+  "sillApronOverlap": 0.012,
+  "sideLintelHeight": 0.19,
+  "chimneyHeight": [
+    1.5,
+    1.3
+  ],
+  "weatheringOpacity": 0.035
+}

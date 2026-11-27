@@ -1,0 +1,15 @@
+CityForge session PR scope
+
+This PR is based on current main (36dda63, merged PR #38). The original local checkpoint 40d627f remains available on checkpoint/townhouse-recessed-windows. The PR branch is feature/townhouse-session-review; its worktree is the same work/commit-checkpoint directory. The reviewed checkpoint was cherry-picked rather than replaying its earlier appearance commit, because that appearance work is already merged in main.
+
+New session source included here:
+- Independent saved window color/material controls, authored black fallback, reusable painted wood / painted metal / exposed metal / stained wood choices and explicit shared material-slot bindings.
+- Assembly-space facade weathering with stable per-building seeds, packed architecture masks, material response profiles, six saved controls and presets in Appearance; existing lot Undo/Redo and original fallback preserved.
+- Architectural Rendering Lab Editor tool, scoped pipeline/reflection/AO/camera/material inspection and recovery/build guards. Private subject/reference art, HDRI, lab scene and pipeline assets are external dependencies, not committed content.
+- Bowfront preparation and native lot review tools; townhouse/frame review tools; final brownstone and recessed-townhouse authoring recipes and metadata.
+- Accepted v005 Brick Townhouse 2 stopping point: Heavy weathering, 32 flat openings at 101.6mm recess, 28mm full frame sections / 22mm meeting rails, weathered cream painted wood; bay/stone/cornice geometry preserved.
+- Permanent default recess rule snapshots, validation evidence and complete continuation handoff.
+
+Earlier session road weathering and building-appearance / brick-finish source was preserved in merged PR #38 and is already in the PR base. It is not duplicated or reverted. Private Tripo source collection, all brownstone/townhouse asset iterations and full render evidence remain in the local library; the accepted/current locations are recorded in the handoff and Bowfront-Authoring metadata. No licensed artwork, models, image maps, material/prefab assets, scenes, saved maps or Unity packages are added to this public source-only repository.
+
+The main open editor, its unsaved review session and unrelated working-tree changes are untouched. No production lighting, catalog or default building is switched by this PR. Accepted visual appearance is not a full-city performance certification: MPB/SRP batching tradeoffs, actual city GPU/LOD profiling and production installation remain documented follow-ups.
