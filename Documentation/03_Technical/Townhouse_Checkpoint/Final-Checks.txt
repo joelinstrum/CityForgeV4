@@ -1,0 +1,4 @@
+PASS Near candidate has valid frame bindings
+PASS Medium candidate has valid frame bindings
+PASS Far candidate has valid frame bindings
+PASS Far candidate retains opaque materials

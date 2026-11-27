@@ -326,3 +326,11 @@ venv/
 !/Assets/CityForge/Resources/Config/BridgeStyles.meta
 !/Assets/CityForge/Resources/Config/BridgeStyles/*.json
 !/Assets/CityForge/Resources/Config/BridgeStyles/*.json.meta
+
+# Authored architectural window/facade shader source; private art remains ignored.
+!/Assets/CityForge/Shaders/
+!/Assets/CityForge/Shaders/Architecture/
+!/Assets/CityForge/Shaders/Architecture/*.shader
+!/Assets/CityForge/Shaders/Architecture/*.hlsl
+!/Assets/CityForge/Shaders/Architecture/*.txt
+!/Assets/CityForge/Shaders/Architecture/*.meta

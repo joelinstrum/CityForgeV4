@@ -244,6 +244,8 @@ namespace CityForge.Lots
                 ChildrenAtPlay.Attach(wrapper);
             DistrictAudioEmitter.Attach(wrapper, asset);
             BuildingPaint.Attach(wrapper, asset, item.buildingAppearance);
+            BuildingWindowFrames.Attach(wrapper, asset, item.buildingAppearance);
+            BuildingArchitecturalWeathering.Set(wrapper,item.buildingAppearance,item.id);
             if(asset.category=="Buildings")BuildingSignInstances.Attach(wrapper,asset,item.buildingAppearance);
             return wrapper;
         }

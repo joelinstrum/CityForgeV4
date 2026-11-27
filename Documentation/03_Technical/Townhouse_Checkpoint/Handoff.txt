@@ -1,0 +1,63 @@
+CityForge — Accepted Townhouse Checkpoint
+November 27, 2026
+
+ACCEPTED STOPPING POINT
+The user accepted the SECOND / AFTER version of Art Deco Brick Townhouse 2 and asked to commit and stop here. Use v005-Recessed-Windows as the accepted visual baseline. Heavy / Neglected weathering stays selected. Do not restart from v003/v004 or repeat Tripo collection, bakes or the render matrix without a new change request.
+
+32 flat openings (24 side singles + 8 front/rear double openings) have sash fronts 101.6 mm / 4 inches behind the masonry face. Full frame sections are 28 mm, meeting rails 22 mm, frame depth 45 mm. Glazing/rooms sit farther inside. Native review finish: weathered cream painted wood, metallic 0. Bay assembly geometry, stone lintels/sills/keystones, cornice, roof, entry and original brick scale remain. Frames previously projected about 100 mm outside the wall. All three tiers preserve the recess; Far gains genuine openings and rebaked slender-frame cards.
+
+APPROVAL / IMMUTABILITY
+Asset ID: cf-building-art-deco-brick-townhouse-2-001
+Accepted library package:
+/Users/joelinstrum/Documents/CityForgeAssets/Buildings/Era - Art Deco/Art Deco Brick Townhouse 2/v005-Recessed-Windows
+
+The library catalog is now handoff-ready, revision 7, with the user's visual acceptance recorded. Its sealed v005 Building.json still says candidate/pending review because the package was sealed before acceptance; the current catalog record and Accepted-Checkpoint.json are the later authoritative acceptance record. Do not edit sealed files to update that older wording. The library claim is released. Source v004 (953 sealed files) and all 541 protected production/source files were verified unchanged.
+
+COMMIT SCOPE
+The source-only checkpoint is on branch checkpoint/townhouse-recessed-windows in:
+/Users/joelinstrum/Documents/Codex/2026-11-27/files-pasted-by-the-user-cityforge/work/commit-checkpoint
+
+It is based on 58c1409. The main working tree at /Users/joelinstrum/dev/CityForge - V4 remains on feature/era-content-profiles with other sessions' uncommitted work intact. Only the two relevant loader calls were taken from the shared LotAssetCatalog.cs; unrelated retirement, traffic, vehicle and lot-row edits were excluded. No merge, push, production import or catalog switch was performed. Use git log -1 on the checkpoint branch for the commit ID; the chat output handoff also includes Commit.txt.
+
+Committed source covers independent window color/material selection, facade save settings/validation, Appearance weathering controls, explicit cached renderer bindings, shared URP window/facade shaders, assembly coordinates/stable seed handling, skill-rule snapshots, the recess authoring scripts and native review adapters, and acceptance/validation documentation. Private Blender/FBX/PNG/material/prefab/Unity packages and full renders are kept outside the public source-only Git repository.
+
+PRIVATE ARTIFACTS
+The accepted v005 directory contains packed editable Near/Medium/Far masters, Native-Export FBXs/recipe/maps, Authoring scripts, Previews/index.html and Townhouse-Recessed-Review.unitypackage. The package includes host facade-customization source prerequisites and dependent private art. Review output also lives at:
+/Users/joelinstrum/Documents/Codex/2026-11-27/files-pasted-by-the-user-cityforge/outputs/Townhouse-Recessed-Windows
+
+Weathering capability:
+/Users/joelinstrum/Documents/CityForgeAssets/SharedArchitecture/Systems/cf-system-architectural-facade-weathering-001/v001
+Window finish library:
+/Users/joelinstrum/Documents/CityForgeAssets/SharedArchitecture/Materials/cf-material-historic-window-frame-finishes-001/v001
+
+Keep the chosen defaultReviewAppearance in Building.json: weathered-cream / painted-wood, Heavy values 0.85 variation, 0.80 rain, 0.65 soot, 0.85 foundation, 0.45 fading, 0.30 minerals. Comparison seed 137 is fixed for review. A production instance may use seed zero to derive deterministic variation from its persistent building ID. Packed Blender masters retain authored black as the original selectable material; cream/wood is the native appearance selection.
+
+VALIDATION ALREADY COMPLETE
+- Exact 101.6 mm front depth on all 32 flat openings in Near, Medium and Far; finite meshes and packed image dependencies.
+- Unrelated geometry/UVs and component root transforms preserved; original stone/cornice/entry/roof geometry unchanged.
+- Native FBX reimport counts, explicit frame bindings, existing room-clock component and opaque Far materials verified.
+- Window choices use existing lot JSON, dirty state, Undo/Redo and atomic unsupported-change validation.
+- Facade presets/six independent sliders/reset and original fallback tested in the isolated native UI; window choices remain independent.
+- 22 before/after native URP day/night pairs across LODs and all four corner directions. Heavy weathering and seed 137 on both sides. Rotation/lighting identical; overview bounds framing differs only at less than 0.00001 m/ortho numeric precision.
+- Both edited host skills pass their validator. See source Documentation/03_Technical/Townhouse_Checkpoint and the private package validation files for evidence.
+
+Native complete assemblies, including the unchanged garden:
+Near: 44,900 triangles, 49 renderers, 47 materials.
+Medium: 25,874 triangles, 48 renderers, 46 materials.
+Far: 4,589 triangles, 31 renderers, 31 materials.
+
+PERMANENT SKILL RULE
+RECESS SINGLE WINDOWS UNLESS TOLD OTHERWISE.
+Active files:
+/Users/joelinstrum/.codex/skills/cityforge-buildings/SKILL.md
+/Users/joelinstrum/.codex/skills/cityforge-brick-buildings/SKILL.md
+/Users/joelinstrum/.codex/skills/cityforge-brick-buildings/references/historic-refinement.md
+
+Four inches is this townhouse's target, not a universal depth for unrelated architecture. Use real wall openings/reveals and slender period frames; verify oblique depth. Preserve approved buildings unless retrofitting is requested. Committed copies are snapshots of the changed skill files; the full active skills and their other references remain at the host paths above.
+
+REMAINING WORK — NOT REQUIRED FOR THIS STOPPING POINT
+The accepted revision is NOT installed as the main game's production default. Main editor/session, scenes, catalog and production art were preserved. Before any future merge/import or Play stop/recompile, preserve the active unsaved lot and inspect current changes from other sessions. Do not copy full shared files over concurrent edits. The private Unity package includes C# prerequisites and triggers compilation on import.
+
+The weathering shader's per-renderer MaterialPropertyBlocks bypass SRP batching; its instancing declarations compile, but the new shader reported SRP compatibility code 1. Explicit SingleCameraRequest captures returned unavailable/zero UnityStats counters even for the noninstanced control; do not interpret them as batching gains. Full-city GPU/draw-call profiling and production lighting validation remain. The 1000-cube CPU parameter update probe was about 1.8 ms per explicit update, not a city-frame benchmark. Far exceeds the preferred 1–3k target because of real openings; city LOD budgeting remains. Existing district Near/Medium routing is unchanged; no new full-building billboard pipeline was introduced.
+
+The isolated tested project remains at work/facade-weathering/UnityQA in this chat folder. It contains private art and is not a clean Git checkout. Authoring scripts retain original machine/workspace paths as provenance; reserve a new asset workspace and retarget outputs before rerunning them. Never write new work into the released v005 workspace or the sealed library version.

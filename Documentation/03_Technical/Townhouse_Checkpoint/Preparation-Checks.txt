@@ -1,0 +1,23 @@
+PASS Near one authored model root
+PASS Near explicit candidate frames
+PASS Near exact FBX triangles 39704
+PASS Near finite vertices
+PASS Near existing room clock retained
+PASS Medium one authored model root
+PASS Medium explicit candidate frames
+PASS Medium exact FBX triangles 21158
+PASS Medium finite vertices
+PASS Medium existing room clock retained
+PASS Far one authored model root
+PASS Far explicit candidate frames
+PASS Far exact FBX triangles 4589
+PASS Far finite vertices
+PASS Far existing room clock retained
+PASS Window customization participates in native dirty/undo state
+PASS Actual LotDefinition save/load preserves independent frame IDs
+PASS Native undo restores authored frame selection
+PASS Native redo restores both frame properties
+PASS Color is independent from surface type
+PASS Surface type is independent from color
+PASS Unsupported multi-selection rejects atomically without partial edits
+PASS Original production prefab remains unbound and unchanged pending review

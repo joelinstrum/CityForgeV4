@@ -1,0 +1,12 @@
+Saved user rule: RECESS SINGLE WINDOWS UNLESS TOLD OTHERWISE.
+
+/Users/joelinstrum/.codex/skills/cityforge-buildings/SKILL.md
+- **RECESS SINGLE WINDOWS UNLESS TOLD OTHERWISE.** Set single-window sash and glazing behind the exterior wall face, with genuine wall openings and finished wall reveals. About 4 inches (0.1016 m) is the current townhouse target; adapt depth to the architecture unless specified. Keep historic sash/frame sections slender and distinguish them from stone lintels, sills and casing. A surface-mounted window assembly with no reveal is not acceptable. Preserve approved buildings unless a retrofit is requested. Verify depth in oblique close-ups and retain the recessed reading across LODs.
+
+/Users/joelinstrum/.codex/skills/cityforge-brick-buildings/SKILL.md
+**RECESS SINGLE WINDOWS UNLESS TOLD OTHERWISE.** Place the sash and glazing behind the brick wall face with real openings and continuous masonry reveals; avoid a pasted-on assembly. Use about 4 inches (0.1016 m) for the current townhouse revision. Keep historic frame sections restrained and preserve stone lintels/sills as distinct masonry. See [historic refinement](references/historic-refinement.md) for review criteria.
+
+/Users/joelinstrum/.codex/skills/cityforge-brick-buildings/references/historic-refinement.md
+- **Recess single windows unless the user says otherwise.** Use a genuine wall opening and masonry returns, with sash/glazing behind the exterior face. The current townhouse target is 4 inches (0.1016 m). Keep stone lintels, sills and decorative masonry separate, and use slender, aged period sash rather than thick pristine frames. Validate an oblique close-up; a darker rectangle on a wall is not a recess.
+
+Both SKILL.md files pass the skill validator. Four inches is this townhouse target; it is not imposed as a universal depth on unrelated architecture. Existing approved buildings are preserved unless a retrofit is requested.

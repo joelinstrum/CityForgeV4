@@ -18,11 +18,15 @@ namespace CityForge.UI
         Action cancel;
         Action<IReadOnlyDictionary<string,BuildingAppearanceSettings>> apply;
         readonly Dictionary<string,BuildingAppearanceSettings> drafts=new();
+        float appearanceScroll=1;
+        readonly List<(Button Button,int Preset)> weatherButtons=new();
+        Text weatherLabel;
         readonly Dictionary<string,BuildingAppearanceSettings> originals=new();
         Button applyButton;
         Text status, tools;
         readonly List<(Button Button,string Id)> paintButtons=new();
-        Text paintLabel,awningLabel,wallLabel,wallSaturationLabel;
+        Text paintLabel,awningLabel,wallLabel,wallSaturationLabel,windowLabel;
+        readonly List<(Button Button,string Id)> windowColors=new(),windowSurfaces=new();
         Slider wallSaturationSlider;
         readonly List<(Button Button,string Id)> wallButtons=new();
         readonly List<(Button Button,string Id)> awningButtons=new();
@@ -87,8 +91,8 @@ namespace CityForge.UI
             buildingName=Label(frame,"",214,216,590,40,22);
             if(buildings.Count>1){Button(frame,"‹",793,217,40,36,()=>Select(-1));Button(frame,"›",840,217,40,36,()=>Select(1));}
             var side=Box(frame,"Sections",24,282,232,470);
-            tabs=new Button[3];var names=new[]{"Appearance","Structure","Signage"};var icons=new[]{0,2,3};
-            for(int i=0;i<3;i++){int v=i;tabs[i]=Button(side,names[i],10,18+i*80,212,66,()=>{tab=v;ShowTab();});Icon(tabs[i].transform,icons[i],10,17,32);var t=tabs[i].GetComponentInChildren<Text>();t.rectTransform.anchoredPosition=new Vector2(50,0);t.rectTransform.sizeDelta=new Vector2(154,66);t.alignment=TextAnchor.MiddleLeft;t.fontSize=21;}
+            tabs=new Button[4];var names=new[]{"Appearance","Windows","Structure","Signage"};var icons=new[]{0,1,2,3};
+            for(int i=0;i<4;i++){int v=i;tabs[i]=Button(side,names[i],10,18+i*80,212,66,()=>{tab=v;ShowTab();});Icon(tabs[i].transform,icons[i],10,17,32);var t=tabs[i].GetComponentInChildren<Text>();t.rectTransform.anchoredPosition=new Vector2(50,0);t.rectTransform.sizeDelta=new Vector2(154,66);t.alignment=TextAnchor.MiddleLeft;t.fontSize=21;}
             tools=Label(side,"Trim tint\navailable now",22,337,190,68,18,Muted);
             content=Rect(frame,"Building controls",270,282,1046,470);
             Button(frame,"Cancel",715,786,224,48,cancel);
@@ -99,30 +103,38 @@ namespace CityForge.UI
             Select(0);ShowTab();Fit();
         }
         void Select(int step)
-        {current=(current+step+buildings.Count)%buildings.Count;var asset=catalog.Find(buildings[current].assetId);buildingName.text=asset.label+(BuildingAppearance.IsPaintable(asset)?" · Paintable":BuildingAppearance.CanCustomize(asset)?" · Sign mounts":" · Original appearance")+(buildings.Count>1?$"   ({current+1} / {buildings.Count})":"");preview.Set(asset,drafts[buildings[current].id]);if(tabs!=null)ShowTab();}
+        {current=(current+step+buildings.Count)%buildings.Count;var asset=catalog.Find(buildings[current].assetId);buildingName.text=asset.label+(BuildingAppearance.IsPaintable(asset)?" · Paintable":BuildingAppearance.CanCustomize(asset)?" · Sign mounts":" · Original appearance")+(buildings.Count>1?$"   ({current+1} / {buildings.Count})":"");preview.Set(asset,drafts[buildings[current].id],buildings[current].id);if(tabs!=null)ShowTab();}
         void Heading(Transform p,string text,int icon,float x,float y,float w)
         {Icon(p,icon,x,y+3,32);Label(p,text,x+44,y,w-44,40,27);}
         void ShowTab()
         {
-            paintButtons.Clear();paintLabel=null;awningButtons.Clear();awningLabel=null;wallButtons.Clear();wallLabel=null;wallSaturationLabel=null;wallSaturationSlider=null;
-            foreach(Transform child in content){child.gameObject.SetActive(false);Destroy(child.gameObject);}
+            weatherButtons.Clear();weatherLabel=null;windowColors.Clear();windowSurfaces.Clear();windowLabel=null;paintButtons.Clear();paintLabel=null;awningButtons.Clear();awningLabel=null;wallButtons.Clear();wallLabel=null;wallSaturationLabel=null;wallSaturationSlider=null;
+            foreach(var child in content.Cast<Transform>().ToArray()){child.gameObject.SetActive(false);DestroyUI(child.gameObject);}
             for(int i=0;i<tabs.Length;i++)tabs[i].image.sprite=i==tab?ZoneModalArtwork.Gold:ZoneModalArtwork.Dark;
             if(tab==0)
             {
-                var walls=Box(content,"Wall Tint",0,0,568,152);Heading(walls,FixedBrick?"Brick Finish":"Wall Paint",0,20,10,520);
+                var viewport=Rect(content,"Appearance viewport",0,0,1046,470);
+                viewport.gameObject.AddComponent<RectMask2D>();
+                var appearanceContent=Rect(viewport,"Appearance sections",0,0,1046,952);
+                var scroll=viewport.gameObject.AddComponent<ScrollRect>();scroll.viewport=viewport;scroll.content=appearanceContent;scroll.horizontal=false;scroll.vertical=true;scroll.movementType=ScrollRect.MovementType.Clamped;scroll.scrollSensitivity=35;scroll.verticalNormalizedPosition=appearanceScroll;scroll.onValueChanged.AddListener(v=>appearanceScroll=v.y);
+
+                var walls=Box(appearanceContent,"Wall Tint",0,0,568,152);Heading(walls,FixedBrick?"Brick Finish":"Wall Paint",0,20,10,520);
                 BuildWalls(walls);
-                var trim=Box(content,"Trim Tint",580,0,466,152);Heading(trim,"Trim Tint",1,20,10,425);
+                var trim=Box(appearanceContent,"Trim Tint",580,0,466,152);Heading(trim,"Trim Tint",1,20,10,425);
                 BuildTrim(trim);
-                var awnings=Box(content,"Awning Tint",0,164,568,182);Heading(awnings,"Awning Tint",2,20,10,520);
+                var awnings=Box(appearanceContent,"Awning Tint",0,164,568,182);Heading(awnings,"Awning Tint",2,20,10,520);
                 BuildAwnings(awnings);
                 Label(awnings,"Keep the original fabric texture and detail.",20,151,528,25,16,Muted);
-                SignCard(content,580,164,466,182);
-                var original=Box(content,"Original Materials",0,358,1046,112);
+                SignCard(appearanceContent,580,164,466,182);
+                var original=Box(appearanceContent,"Original Materials",0,358,1046,112);
                 Heading(original,"Original Textures",0,20,10,990);
                 Label(original,FixedBrick?"Choose a brick-and-mortar texture for the wall surfaces.":"Tint changes color while keeping the building’s original surface detail.",24,55,990,28,20,Muted);
-                Label(original,"Windows, signs, gold details and lighting keep their original colors.",24,82,990,24,17,Muted);
+                Label(original,"Window frames have their own controls. Glazing, masonry and lighting are preserved.",24,82,990,24,17,Muted);
+                var weatherLink=Button(original,"Facade Weathering ↓",756,10,266,34,()=>{scroll.verticalNormalizedPosition=0;appearanceScroll=0;});weatherLink.GetComponentInChildren<Text>().fontSize=18;
+                BuildWeathering(appearanceContent);
             }
-            else if(tab==1)
+            else if(tab==1) BuildWindows();
+            else if(tab==2)
             {
                 var p=Box(content,"Structure",0,0,1046,470);Heading(p,"Building Height",4,24,18,970);
                 Label(p,"Adjust the height of this building.",28,74,900,38,22,Muted);
@@ -135,6 +147,30 @@ namespace CityForge.UI
                 BuildSignage();
             }
             RefreshPaint();
+        }
+        void BuildWeathering(Transform parent)
+        {
+            var p=Box(parent,"Facade Weathering",0,482,1046,476);Heading(p,"Facade Weathering",0,20,8,990);
+            bool supported=BuildingArchitecturalWeathering.Supports(catalog.Find(buildings[current].assetId));
+            Label(p,supported?"Natural aging over the original materials. Scroll for all appearance options.":"Weathering is not available for this building yet.",24,51,990,26,17,Muted);
+            var names=new[]{"Pristine","Established","Weathered","Neglected"};
+            for(int i=0;i<4;i++){int preset=i;var b=Button(p,names[i],24+i*251,86,237,38,()=>ChooseWeather(FacadeWeatheringSettings.Preset(preset)));b.interactable=supported;weatherButtons.Add((b,preset));}
+            string[] channels={"Surface variation","Rainwater streaks","Soot and pollution","Foundation grime","Sun fading","Mineral deposits"};
+            for(int i=0;i<6;i++)
+            {
+                int channel=i;int column=i%2,row=i/2;float x=24+column*502,y=140+row*80;
+                var label=Label(p,channels[i]+": "+Mathf.RoundToInt(Draft.facadeWeathering.Get(i)*100)+"%",x,y,470,27,19,Muted);
+                var rail=Rect(p,"Weathering · "+channels[i],x,y+35,464,18);rail.gameObject.AddComponent<Image>().color=new Color(.12f,.17f,.20f);
+                var handle=Rect(rail,"Handle",0,-3,18,24);handle.gameObject.AddComponent<Image>().color=new Color(.93f,.84f,.62f);
+                var slider=rail.gameObject.AddComponent<Slider>();slider.minValue=0;slider.maxValue=100;slider.wholeNumbers=true;slider.handleRect=handle;slider.targetGraphic=handle.GetComponent<Image>();slider.SetValueWithoutNotify(Draft.facadeWeathering.Get(i)*100);slider.interactable=supported;
+                slider.onValueChanged.AddListener(v=>{var weather=Draft.facadeWeathering;weather.Set(channel,v/100);label.text=channels[channel]+": "+Mathf.RoundToInt(v)+"%";ChooseWeather(weather,false);});
+            }
+            var reset=Button(p,"Reset to original appearance",24,394,996,38,()=>ChooseWeather(default));reset.interactable=supported;
+            weatherLabel=Label(p,Draft.facadeWeathering.enabled?"Custom weathering · saved with this building":"Original authored weathering · no override",24,438,990,24,16,Muted);
+        }
+        void ChooseWeather(FacadeWeatheringSettings weather,bool rebuild=true)
+        {
+            var state=Draft;state.facadeWeathering=weather;drafts[buildings[current].id]=state;preview.Paint(state);if(rebuild)ShowTab();else RefreshPaint();
         }
         BuildingAppearanceSettings Draft => drafts[buildings[current].id];
         bool Paintable => BuildingAppearance.SupportsTrim(catalog.Find(buildings[current].assetId));
@@ -214,6 +250,31 @@ namespace CityForge.UI
             var state=Draft;state.awningColor=id;drafts[buildings[current].id]=state;
             preview.Paint(state);RefreshPaint();
         }
+        void BuildWindows()
+        {
+            var p=Box(content,"Window frames",0,0,1046,470);Heading(p,"Window Frame Color",1,24,12,980);
+            var original=Button(p,"Original black",24,62,230,42,()=>ChooseWindow("",false));windowColors.Add((original,""));
+            for(int i=0;i<BuildingWindowFrames.Colors.Length;i++)
+            {
+                var c=BuildingWindowFrames.Colors[i];int col=i%3,row=i/3;
+                var b=Button(p,c.Label,24+col*337,116+row*58,318,48,()=>ChooseWindow(c.Id,false));
+                var swatch=Rect(b.transform,"Frame color",8,10,26,28).gameObject.AddComponent<Image>();swatch.color=c.Color;swatch.raycastTarget=false;
+                var text=b.GetComponentInChildren<Text>();text.rectTransform.anchoredPosition=new Vector2(42,0);text.rectTransform.sizeDelta=new Vector2(268,48);windowColors.Add((b,c.Id));
+            }
+            Heading(p,"Frame Surface",1,24,244,980);
+            var surface=Button(p,"Original surface",24,296,190,48,()=>ChooseWindow("",true));surface.GetComponentInChildren<Text>().fontSize=18;windowSurfaces.Add((surface,""));
+            for(int i=0;i<BuildingWindowFrames.Surfaces.Length;i++)
+            {var s=BuildingWindowFrames.Surfaces[i];var b=Button(p,s.Label,224+i*199,296,190,48,()=>ChooseWindow(s.Id,true));b.GetComponentInChildren<Text>().fontSize=18;windowSurfaces.Add((b,s.Id));}
+            windowLabel=Label(p,"",24,358,990,36,20,Muted);
+            Label(p,"Painted wood and painted metal are nonmetallic. Exposed metal is metallic; Original surface keeps its authored response.",24,399,990,30,18,Muted);
+            Label(p,"Stone lintels, sills, glazing and decorative masonry retain their original materials.",24,432,990,28,17,Muted);
+        }
+        void ChooseWindow(string id,bool surface)
+        {
+            if(!BuildingWindowFrames.Supports(catalog.Find(buildings[current].assetId)))return;
+            var state=Draft;if(surface)state.windowFrameMaterial=id;else state.windowFrameColor=id;
+            drafts[buildings[current].id]=state;preview.Paint(state);RefreshPaint();
+        }
         void ChooseTrim(string id)
         {
             if(!Paintable)return;
@@ -222,6 +283,12 @@ namespace CityForge.UI
         }
         void RefreshPaint()
         {
+            foreach(var choice in weatherButtons){var preset=FacadeWeatheringSettings.Preset(choice.Preset);preset.seed=Draft.facadeWeathering.seed;choice.Button.image.sprite=FacadeWeatheringSettings.Same(preset,Draft.facadeWeathering)?ZoneModalArtwork.Gold:ZoneModalArtwork.Dark;}
+            if(weatherLabel)weatherLabel.text=Draft.facadeWeathering.enabled?"Custom weathering · saved with this building":"Original authored weathering · no override";
+            bool frames=BuildingWindowFrames.Supports(catalog.Find(buildings[current].assetId));
+            foreach(var choice in windowColors){choice.Button.interactable=frames;choice.Button.image.sprite=(Draft.windowFrameColor??"")==choice.Id?ZoneModalArtwork.Gold:ZoneModalArtwork.Dark;}
+            foreach(var choice in windowSurfaces){choice.Button.interactable=frames;choice.Button.image.sprite=(Draft.windowFrameMaterial??"")==choice.Id?ZoneModalArtwork.Gold:ZoneModalArtwork.Dark;}
+            if(windowLabel)windowLabel.text=frames?"Color and surface are independent. Original black remains available.":"This building has no reviewed frame bindings yet.";
             bool supported=Paintable;
             foreach(var choice in paintButtons)
             {
@@ -249,7 +316,9 @@ namespace CityForge.UI
             if(tools)tools.text=BuildingAppearance.IsPaintable(catalog.Find(buildings[current].assetId))?"Paintable\nSelected surfaces":"Defined sign\nmounts";
             applyButton.interactable=apply!=null&&drafts.Any(p=>!BuildingAppearance.Same(p.Value,originals[p.Key]));
             status.text=FixedBrick?"Choose a brick texture finish, then apply your changes.":supported||AwningTintable||WallTintable?"Preview tints, then apply your changes.":"Original materials retained. Tint controls are not available for this building yet.";
-            if(tab==2){tools.text="Choose a sign\nand preview it";status.text=applyButton.interactable?"Preview changes, then apply to this building.":"Choose a mount and browse compatible signs.";}
+            if(tab==0&&BuildingArchitecturalWeathering.Supports(catalog.Find(buildings[current].assetId))){tools.text="Appearance\nTints + weathering";status.text="Preview appearance changes, then apply to this building.";}
+            if(tab==1){tools.text="Window frames\nColor + surface";status.text=frames?"Preview window finishes, then apply. Original restores the authored finish.":"Window frame customization is not available for this building yet.";}
+            if(tab==3){tools.text="Choose a sign\nand preview it";status.text=applyButton.interactable?"Preview changes, then apply to this building.":"Choose a mount and browse compatible signs.";}
         }
         void Accept()
         {
@@ -305,7 +374,7 @@ namespace CityForge.UI
         void RefreshSignGrid()
         {
             if(!signGrid||browserMount==null)return;
-            foreach(Transform t in signGrid){t.gameObject.SetActive(false);Destroy(t.gameObject);}signButtons.Clear();
+            foreach(var t in signGrid.Cast<Transform>().ToArray()){t.gameObject.SetActive(false);DestroyUI(t.gameObject);}signButtons.Clear();
             var all=BuildingSigns.All();var signs=all.Where(s=>(showIncompatible||BuildingSignCompatibility.Evaluate(browserMount,s).Eligible)&&
                 ((s.label??s.id).IndexOf(signQuery,StringComparison.OrdinalIgnoreCase)>=0)).ToArray();
             signGrid.sizeDelta=new Vector2(674,Mathf.Max(279,Mathf.CeilToInt(signs.Length/3f)*164));
@@ -344,13 +413,14 @@ namespace CityForge.UI
             var selected=(Draft.signs??Array.Empty<BuildingSignSelection>()).FirstOrDefault().signId;
             string name=string.IsNullOrEmpty(selected)?"Original sign":selected==BuildingSigns.None?"No sign":BuildingSigns.All().FirstOrDefault(s=>s.id==selected)?.label??"Unavailable sign";
             Label(card,name,22,59,w-44,42,22);
-            var browse=Button(card,"Browse signs…",22,h-54,w-44,36,()=>{tab=2;ShowTab();});browse.GetComponentInChildren<Text>().fontSize=19;
+            var browse=Button(card,"Browse signs…",22,h-54,w-44,36,()=>{tab=3;ShowTab();});browse.GetComponentInChildren<Text>().fontSize=19;
         }
         void HeightCard(Transform p,float x,float y,float w,float h)
         {var card=Box(p,"Building Height",x,y,w,h);Heading(card,"Building Height",4,20,10,400);Label(card,"Original height",68,57,280,36,21,Muted);for(int i=0;i<5;i++){var b=Button(card,(i+1)+"",420+i*110,33,96,48,null);b.interactable=false;}}
         void Fit(){if(!frame)return;var r=(RectTransform)transform;float scale=Mathf.Min(1,(r.rect.width-36)/1340,(r.rect.height-52)/860);frame.localScale=Vector3.one*Mathf.Max(.1f,scale);}
         void Update(){if(Input.GetKeyDown(KeyCode.Escape))cancel?.Invoke();}
         void LateUpdate(){Fit();preview?.Render();}
-        void OnDestroy(){preview?.Dispose();if(ownsFont&&font)Destroy(font);foreach(var slice in slices)if(slice)Destroy(slice);}
+        static void DestroyUI(UnityEngine.Object value){if(Application.isPlaying)Destroy(value);else DestroyImmediate(value);}
+        void OnDestroy(){preview?.Dispose();if(ownsFont&&font)DestroyUI(font);foreach(var slice in slices)if(slice)DestroyUI(slice);}
     }
 }

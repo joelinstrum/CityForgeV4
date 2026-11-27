@@ -1,0 +1,12 @@
+{
+  "matchedCameraLightingPairs": 22,
+  "cameraTolerance": 1e-05,
+  "note": "Micrometre-level bounds/auto-framing drift only; rotation and lighting identical.",
+  "heavyWeatheringBothVersions": true,
+  "seed": 137,
+  "originalProtectedFiles": 541,
+  "changedOriginalFiles": [],
+  "recessMetres": 0.1016,
+  "fullFrameSectionMetres": 0.028,
+  "meetingRailMetres": 0.022
+}

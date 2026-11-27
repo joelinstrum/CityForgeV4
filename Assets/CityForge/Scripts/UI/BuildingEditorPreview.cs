@@ -37,10 +37,10 @@ namespace CityForge.UI
             var bloom=volume.profile.Add<Bloom>(); bloom.threshold.Override(1); bloom.intensity.Override(.12f); bloom.scatter.Override(.45f);
             target = new RenderTexture(width,height,24,RenderTextureFormat.ARGBHalf) { name="Building editor preview" }; target.Create();
         }
-        internal void Set(LotAssetCatalogEntry asset, BuildingAppearanceSettings appearance=default)
+        internal void Set(LotAssetCatalogEntry asset, BuildingAppearanceSettings appearance=default,string buildingId=null)
         {
-            if(model){model.SetActive(false);UnityEngine.Object.Destroy(model);}
-            model=LotRuntimeLoader.InstantiateObject(new LotObjectDefinition{assetId=asset.id,buildingAppearance=appearance},asset,stage.transform);
+            if(model){model.SetActive(false);DestroyTransient(model);}
+            model=LotRuntimeLoader.InstantiateObject(new LotObjectDefinition{id=buildingId??"appearance-preview-"+asset.id,assetId=asset.id,buildingAppearance=appearance},asset,stage.transform);
             foreach(var t in model.GetComponentsInChildren<Transform>(true))t.gameObject.layer=Layer;
             foreach(var c in model.GetComponentsInChildren<Collider>(true))c.enabled=false;
             foreach(var l in model.GetComponentsInChildren<LODGroup>())l.ForceLOD(0);
@@ -49,7 +49,7 @@ namespace CityForge.UI
             foreach(var r in rs)bounds.Encapsulate(r.bounds);
             SetTime(night);
         }
-        internal void Paint(BuildingAppearanceSettings appearance){if(model){model.GetComponent<BuildingPaint>()?.Set(appearance);model.GetComponent<BuildingSignInstances>()?.Set(appearance);SetTime(night);}}
+        internal void Paint(BuildingAppearanceSettings appearance){if(model){model.GetComponent<BuildingPaint>()?.Set(appearance);model.GetComponent<BuildingWindowFrames>()?.Set(appearance);BuildingArchitecturalWeathering.Set(model,appearance);model.GetComponent<BuildingSignInstances>()?.Set(appearance);SetTime(night);}}
         internal void Turn(float degrees){yaw+=degrees;}
         internal void SetTime(bool value)
         {
