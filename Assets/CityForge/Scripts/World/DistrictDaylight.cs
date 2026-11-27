@@ -632,6 +632,8 @@ namespace CityForge.World
                 }
             }
 
+            ApplyProductionAfternoonLighting(current, progress);
+
             Quaternion Rotation(RegionTimeOfDay phase, float baselineElevation)
             {
                 bool calibrated = phase == RegionTimeOfDay.Afternoon && View.AfternoonCalibrationEnabled;
@@ -701,6 +703,8 @@ namespace CityForge.World
                 Baseline.ambientGround, Baseline.ambientIntensity * 1.20f, PrototypeRegionView.HeldDaylight(time), DistrictAmbientScale, DistrictAmbientTint);
             if (LinearAfternoon)
                 RenderSettings.ambientProbe = AddAfternoonSkyFill(RenderSettings.ambientProbe);
+            productionAmbientFallback = RenderSettings.ambientProbe;
+            ApplyProductionAfternoonLighting(time, 0f);
         }
     }
 }

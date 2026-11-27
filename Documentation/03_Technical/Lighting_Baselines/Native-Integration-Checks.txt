@@ -1,0 +1,67 @@
+E2-Native capture validation: 9839 unique sampled colors, 10486 green terrain/tree samples; native gameplay camera, clean offscreen frame, fixed SMAA, no HUD.
+PASS Native afternoon intensity 2.6
+PASS Native afternoon direction unchanged from E
+PASS Native sunlight color matches E
+PASS E2 High filtering and per-light bias
+PASS Preserved E bias
+PASS Native E2 SH coefficient 0/0
+PASS E2/E sky ratio 0/0
+PASS Native E2 SH coefficient 0/1
+PASS E2/E sky ratio 0/1
+PASS Native E2 SH coefficient 0/2
+PASS E2/E sky ratio 0/2
+PASS Native E2 SH coefficient 0/3
+PASS E2/E sky ratio 0/3
+PASS Native E2 SH coefficient 0/4
+PASS E2/E sky ratio 0/4
+PASS Native E2 SH coefficient 0/5
+PASS E2/E sky ratio 0/5
+PASS Native E2 SH coefficient 0/6
+PASS E2/E sky ratio 0/6
+PASS Native E2 SH coefficient 0/7
+PASS E2/E sky ratio 0/7
+PASS Native E2 SH coefficient 0/8
+PASS E2/E sky ratio 0/8
+PASS Native E2 SH coefficient 1/0
+PASS E2/E sky ratio 1/0
+PASS Native E2 SH coefficient 1/1
+PASS E2/E sky ratio 1/1
+PASS Native E2 SH coefficient 1/2
+PASS E2/E sky ratio 1/2
+PASS Native E2 SH coefficient 1/3
+PASS E2/E sky ratio 1/3
+PASS Native E2 SH coefficient 1/4
+PASS E2/E sky ratio 1/4
+PASS Native E2 SH coefficient 1/5
+PASS E2/E sky ratio 1/5
+PASS Native E2 SH coefficient 1/6
+PASS E2/E sky ratio 1/6
+PASS Native E2 SH coefficient 1/7
+PASS E2/E sky ratio 1/7
+PASS Native E2 SH coefficient 1/8
+PASS E2/E sky ratio 1/8
+PASS Native E2 SH coefficient 2/0
+PASS E2/E sky ratio 2/0
+PASS Native E2 SH coefficient 2/1
+PASS E2/E sky ratio 2/1
+PASS Native E2 SH coefficient 2/2
+PASS E2/E sky ratio 2/2
+PASS Native E2 SH coefficient 2/3
+PASS E2/E sky ratio 2/3
+PASS Native E2 SH coefficient 2/4
+PASS E2/E sky ratio 2/4
+PASS Native E2 SH coefficient 2/5
+PASS E2/E sky ratio 2/5
+PASS Native E2 SH coefficient 2/6
+PASS E2/E sky ratio 2/6
+PASS Native E2 SH coefficient 2/7
+PASS E2/E sky ratio 2/7
+PASS Native E2 SH coefficient 2/8
+PASS E2/E sky ratio 2/8
+PASS Effective exposure zero
+PASS Effective Neutral tone mapping
+Night-Lifecycle capture validation: 4883 unique sampled colors, 10072 green terrain/tree samples; native gameplay camera, clean offscreen frame, fixed SMAA, no HUD.
+PASS Night retains native lighting
+PASS E2 volume disabled at night
+E2-Reentered capture validation: 9852 unique sampled colors, 10481 green terrain/tree samples; native gameplay camera, clean offscreen frame, fixed SMAA, no HUD.
+PASS E2 restored on afternoon reentry

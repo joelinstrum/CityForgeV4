@@ -1,0 +1,7 @@
+Hardware: Apple M1 Max / Metal / Mac OS X 15.7.3
+QA Editor hardware GPU frame time; one forced native gameplay-camera render per frame at1920x1200 ARGBHalf/depth24/MSAA1, fixed SMAA. Includes Editor overhead, not standalone-player FPS. VSync off, target120fps. Three counterbalanced rounds;120 warmup+300 sampling frames per condition. Time paused, same scene, static128px reflection capture excluded from sampling. Duplicate timestamps discarded.
+C: n=909 median=12.6719 ms; p95=14.2445 ms; q25=11.6718; q75=13.3970
+E: n=909 median=12.4263 ms; p95=14.7531 ms; q25=11.3588; q75=13.1300
+E2: n=909 median=12.6914 ms; p95=14.5047 ms; q25=11.7047; q75=13.4742
+Workload calibration E2: one-render median=12.6914 ms; two-render median=15.0066 ms; n=183
+Zero-scene-render control median=1.7032 ms; n=288. Workload-response validation uses absolute increase because fixed/frame-global work can be shared.
