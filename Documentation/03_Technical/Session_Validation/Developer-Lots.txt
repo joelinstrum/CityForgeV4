@@ -1,0 +1,23 @@
+PASS default Player mode hides developer Lots
+PASS Player rules still require resident demand
+PASS Developer mode keeps existing unrestricted growth rule
+PASS HUD mode button enables developer Lots before town founding
+PASS Lots requires an active district
+PASS current native sandstone available for placement
+PASS developer library includes playable, growable and template lots
+PASS template preview clones its definition without editing the library
+PASS growable preview materializes a compatible building
+PASS developer Lots opens actual modal
+PASS all saved lot types appear as rows
+PASS missing-asset lot is listed but not armed
+PASS search filters saved lots by name
+PASS Templates filter shows the template only
+PASS lot row arms normal placement preview and closes picker
+PASS developer placement does not enter pending-founder placement flow
+PASS normal placement cancel clears developer draft
+PASS returning to Player cancels an armed developer lot and hides Lots
+PASS Player mode cannot open developer library through stale callbacks
+PASS Government/shared mode setter refreshes HUD
+PASS mode switch closes developer picker
+PASS existing saved mode field roundtrips
+PASS Player rules restored after developer tool use

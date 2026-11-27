@@ -1,0 +1,11 @@
+Play session preserved: False
+PASS: nonrepeating native weathering enable/disable changes rendered pixels.
+PASS: independently disabled offset leaf scatter and irregular world-space edge pockets produce render deltas.
+PASS: independent micro/medium/macro intensity deltas; six distinct debug views; original masonry maps retained; same-frame/rebuilt/JSON-restored road pixels identical; camera-translation debug MAD=0; far micro detail fades exactly.
+PASS: native StreetSurfaceMask X-union contains no internal edge; exposed gutter remains; native union field rendered on both road ribbons.
+PASS: camber/contact, world grime, sediment, debris and independent sidewalk render deltas; material/era disable override; live Inspector rebind; original sidewalk shader restoration and re-enable.
+PASS: 1024px imports/color spaces/repeat/mips/alpha; profile references; existing curved mesh UV1; zero-intensity exact rendered pixel equality; gutter changes pixels; shader compilation.
+CityForge/Lot Path Blend SRP batcher compatibility code=0
+CityForge/Street Junction SRP batcher compatibility code=0
+Original mesh vertices=264, triangles=430, material passes=1
+PASS: native T-junction union suppresses its connected seam and retains the exposed end.
