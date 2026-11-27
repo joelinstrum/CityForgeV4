@@ -1,0 +1,30 @@
+{
+  "additionalSessionTools": [
+    {
+      "file": "Assets/CityForge/Scripts/Editor/ArchitecturalRenderingLab.cs",
+      "matchesPreviouslyCompiledQA": true
+    },
+    {
+      "file": "Assets/CityForge/Scripts/Editor/BowfrontLotReview.cs",
+      "matchesPreviouslyCompiledQA": true
+    },
+    {
+      "file": "Assets/CityForge/Scripts/Editor/BowfrontRefinementPrepare.cs",
+      "matchesPreviouslyCompiledQA": true
+    },
+    {
+      "file": "Assets/CityForge/Scripts/Lots/ArchitecturalTownhouseReview.cs",
+      "matchesPreviouslyCompiledQA": true
+    },
+    {
+      "file": "Assets/CityForge/Scripts/Lots/WindowFrameReviewTool.cs",
+      "matchesPreviouslyCompiledQA": true
+    }
+  ],
+  "alreadyOnMain": {
+    "pr": 38,
+    "url": "https://github.com/joelinstrum/CityForgeV4/pull/38",
+    "scope": "Road surface weathering and earlier building appearance/brick-finish source are already merged; no duplicate replay."
+  },
+  "privateArtifacts": "Models, textures, scenes, material/prefab assets and rendered review pages remain in the private asset library; source and metadata only in this PR."
+}

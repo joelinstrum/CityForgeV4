@@ -1,0 +1,514 @@
+{
+  "schema": "cityforge-building-composition-v1",
+  "id": "cf-building-victorian-bowfront-brownstone-001",
+  "name": "Victorian Bow-front Brownstone",
+  "version": "v006-Architectural-Lab",
+  "status": "candidate",
+  "eraId": "modern",
+  "eraLabel": "Art Deco Era",
+  "architecturalFamily": "Victorian bow-front brownstone, circa 1900; intentionally retained in later game period",
+  "category": "residential",
+  "subcategory": "townhouse",
+  "lotTiles": [
+    2,
+    5
+  ],
+  "reservedMetres": [
+    8,
+    20
+  ],
+  "width": 8,
+  "depth": 20,
+  "height": 14.260000228881836,
+  "origin": "Centre of reserved 8x20m lot at ground level",
+  "axes": {
+    "up": "+Z",
+    "front": "-Y",
+    "right": "+X"
+  },
+  "master": "Bowfront-Composition.blend",
+  "scope": "Preserved front facade; simpler recessed side windows and two capped non-emissive masonry chimneys; rendering laboratory review",
+  "triangleCount": 89047,
+  "meshObjects": 821,
+  "materials": 42,
+  "lods": [
+    {
+      "tier": "Near",
+      "file": "Native-Unity-Review/Model.fbx",
+      "exportTriangles": 89047,
+      "unityImportedTriangles": 89045
+    },
+    {
+      "tier": "Medium",
+      "file": "Native-Unity-Review/Distant.fbx",
+      "triangles": 27048
+    }
+  ],
+  "nativeIntegration": "Prepared Near/Medium imports and developer-only ArchitecturalRenderingLab validation; no persistent gameplay roster installation or gameplay save/load certification.",
+  "door": "Reused single glazed door; reference double leaves and outward-swing clearance unverified",
+  "lighting": "Five selected lamp windows, dim warm ambient in selected rooms, other rooms unlit; clear non-emissive glazing with restrained reflection. Native Night/Evening/Noon checks passed for both prefabs.",
+  "dependencies": [
+    {
+      "role": "bow",
+      "floor": 1,
+      "source": "VBB-01-bow-window.glb",
+      "bounds_target": [
+        3.45,
+        1.22,
+        3.55
+      ]
+    },
+    {
+      "role": "bow",
+      "floor": 2,
+      "source": "VBB-01-bow-window.glb",
+      "bounds_target": [
+        3.45,
+        1.22,
+        3.55
+      ]
+    },
+    {
+      "role": "bow",
+      "floor": 3,
+      "source": "VBB-01-bow-window.glb",
+      "bounds_target": [
+        3.45,
+        1.22,
+        3.55
+      ]
+    },
+    {
+      "role": "cornice",
+      "source": "VBB-02-curved-cornice.glb",
+      "fit": "sectionwise span fit to 8m frontage and off-centre bow; authoring candidate"
+    },
+    {
+      "role": "entry",
+      "id": "cf-component-art-deco-brownstone-entryway-001",
+      "version": "v002",
+      "scale": 0.89,
+      "position": [
+        -2.58,
+        -6.85,
+        0
+      ],
+      "difference": "Single glazed door source reused; pictured double leaves not reconstructed in this study"
+    },
+    {
+      "role": "straight window",
+      "floor": 1,
+      "side": "Right",
+      "source_id": "cf-component-art-deco-brownstone-window-001",
+      "version": "v001",
+      "position": [
+        3.1,
+        -6.85,
+        1.25
+      ],
+      "scale": [
+        0.73,
+        1,
+        1.1
+      ],
+      "fit": "Narrow sash family with source apron and sill; ornate crown/corbels omitted"
+    },
+    {
+      "role": "straight window",
+      "floor": 2,
+      "side": "Right",
+      "source_id": "cf-component-art-deco-brownstone-window-001",
+      "version": "v001",
+      "position": [
+        3.1,
+        -6.85,
+        4.8
+      ],
+      "scale": [
+        0.73,
+        1,
+        1.1
+      ],
+      "fit": "Narrow sash family with source apron and sill; ornate crown/corbels omitted"
+    },
+    {
+      "role": "straight window",
+      "floor": 2,
+      "side": "Left",
+      "source_id": "cf-component-art-deco-brownstone-window-001",
+      "version": "v001",
+      "position": [
+        -2.65,
+        -6.85,
+        4.8
+      ],
+      "scale": [
+        0.73,
+        1,
+        1.1
+      ],
+      "fit": "Narrow sash family with source apron and sill; ornate crown/corbels omitted"
+    },
+    {
+      "role": "straight window",
+      "floor": 3,
+      "side": "Right",
+      "source_id": "cf-component-art-deco-brownstone-window-001",
+      "version": "v001",
+      "position": [
+        3.1,
+        -6.85,
+        8.35
+      ],
+      "scale": [
+        0.73,
+        1,
+        1.1
+      ],
+      "fit": "Narrow sash family with source apron and sill; ornate crown/corbels omitted"
+    },
+    {
+      "role": "straight window",
+      "floor": 3,
+      "side": "Left",
+      "source_id": "cf-component-art-deco-brownstone-window-001",
+      "version": "v001",
+      "position": [
+        -2.65,
+        -6.85,
+        8.35
+      ],
+      "scale": [
+        0.73,
+        1,
+        1.1
+      ],
+      "fit": "Narrow sash family with source apron and sill; ornate crown/corbels omitted"
+    },
+    {
+      "role": "fence",
+      "id": "cf-component-art-deco-brick-townhouse-2-iron-fence-001",
+      "version": "v001"
+    },
+    {
+      "role": "planting",
+      "id": "cf-component-art-deco-brownstone-white-flowers-001",
+      "version": "v001",
+      "tier": "Medium"
+    }
+  ],
+  "validation": "Refinement-Validation.json",
+  "remainingWork": [
+    "Clear glazing and shallow interiors for source bows",
+    "Far tier, matched LOD transitions and populated-city performance",
+    "Door outward-swing clearance and runtime interaction",
+    "Persistent catalog/gameplay/save-reload certification"
+  ],
+  "appearanceSets": [
+    {
+      "id": "supplied-brownstone",
+      "wallTexture": "Textures/Weathered Reddish-Brownstone Wall.png",
+      "sourceImageUnchanged": true
+    }
+  ],
+  "windowVariants": "Refinement-Checks.json",
+  "buildingLocalWindowVariant": "Variants/Window-NoLamp-OpenRoom.blend",
+  "roof": "Approved v003 geometry and exact albedo/roughness/normal bytes unchanged; preservation checks passed.",
+  "sideWindows": {
+    "left": 9,
+    "right": 9,
+    "openings": "real recessed openings, presently always included"
+  },
+  "refinements": {
+    "status": "window and cornice correction review",
+    "triangles": 89599,
+    "meshObjects": 847,
+    "bounds_min": [
+      -3.9835000038146973,
+      -9.824999809265137,
+      0.0
+    ],
+    "bounds_max": [
+      3.9835000038146973,
+      9.74000072479248,
+      13.397549629211426
+    ],
+    "windows": [
+      {
+        "id": "Left side window 1-1",
+        "lamp": false,
+        "curtains": "folded fabric pulled to jambs; no drawn shades",
+        "interior": "books",
+        "night": "dim warm room"
+      },
+      {
+        "id": "Left side window 1-2",
+        "lamp": false,
+        "curtains": "folded fabric pulled to jambs; no drawn shades",
+        "interior": "potted plant",
+        "night": "unlit"
+      },
+      {
+        "id": "Left side window 1-3",
+        "lamp": true,
+        "curtains": "folded fabric pulled to jambs; no drawn shades",
+        "interior": "lamp",
+        "night": "dim warm room"
+      },
+      {
+        "id": "Left side window 2-1",
+        "lamp": false,
+        "curtains": "folded fabric pulled to jambs; no drawn shades",
+        "interior": "potted plant",
+        "night": "dim warm room"
+      },
+      {
+        "id": "Left side window 2-2",
+        "lamp": false,
+        "curtains": "folded fabric pulled to jambs; no drawn shades",
+        "interior": "books",
+        "night": "unlit"
+      },
+      {
+        "id": "Left side window 2-3",
+        "lamp": false,
+        "curtains": "folded fabric pulled to jambs; no drawn shades",
+        "interior": "potted plant",
+        "night": "unlit"
+      },
+      {
+        "id": "Left side window 3-1",
+        "lamp": true,
+        "curtains": "folded fabric pulled to jambs; no drawn shades",
+        "interior": "lamp",
+        "night": "dim warm room"
+      },
+      {
+        "id": "Left side window 3-2",
+        "lamp": false,
+        "curtains": "folded fabric pulled to jambs; no drawn shades",
+        "interior": "potted plant",
+        "night": "unlit"
+      },
+      {
+        "id": "Left side window 3-3",
+        "lamp": false,
+        "curtains": "folded fabric pulled to jambs; no drawn shades",
+        "interior": "books",
+        "night": "unlit"
+      },
+      {
+        "id": "Left window 2",
+        "lamp": false,
+        "curtains": "folded fabric pulled to jambs; no drawn shades",
+        "interior": "potted plant",
+        "night": "dim warm room"
+      },
+      {
+        "id": "Left window 3",
+        "lamp": true,
+        "curtains": "folded fabric pulled to jambs; no drawn shades",
+        "interior": "lamp",
+        "night": "dim warm room"
+      },
+      {
+        "id": "Right side window 1-1",
+        "lamp": false,
+        "curtains": "folded fabric pulled to jambs; no drawn shades",
+        "interior": "potted plant",
+        "night": "unlit"
+      },
+      {
+        "id": "Right side window 1-2",
+        "lamp": false,
+        "curtains": "folded fabric pulled to jambs; no drawn shades",
+        "interior": "books",
+        "night": "dim warm room"
+      },
+      {
+        "id": "Right side window 1-3",
+        "lamp": false,
+        "curtains": "folded fabric pulled to jambs; no drawn shades",
+        "interior": "potted plant",
+        "night": "unlit"
+      },
+      {
+        "id": "Right side window 2-1",
+        "lamp": false,
+        "curtains": "folded fabric pulled to jambs; no drawn shades",
+        "interior": "books",
+        "night": "unlit"
+      },
+      {
+        "id": "Right side window 2-2",
+        "lamp": true,
+        "curtains": "folded fabric pulled to jambs; no drawn shades",
+        "interior": "lamp",
+        "night": "dim warm room"
+      },
+      {
+        "id": "Right side window 2-3",
+        "lamp": false,
+        "curtains": "folded fabric pulled to jambs; no drawn shades",
+        "interior": "books",
+        "night": "unlit"
+      },
+      {
+        "id": "Right side window 3-1",
+        "lamp": false,
+        "curtains": "folded fabric pulled to jambs; no drawn shades",
+        "interior": "potted plant",
+        "night": "unlit"
+      },
+      {
+        "id": "Right side window 3-2",
+        "lamp": false,
+        "curtains": "folded fabric pulled to jambs; no drawn shades",
+        "interior": "books",
+        "night": "dim warm room"
+      },
+      {
+        "id": "Right side window 3-3",
+        "lamp": false,
+        "curtains": "folded fabric pulled to jambs; no drawn shades",
+        "interior": "potted plant",
+        "night": "unlit"
+      },
+      {
+        "id": "Right window 1",
+        "lamp": true,
+        "curtains": "folded fabric pulled to jambs; no drawn shades",
+        "interior": "lamp",
+        "night": "dim warm room"
+      },
+      {
+        "id": "Right window 2",
+        "lamp": false,
+        "curtains": "folded fabric pulled to jambs; no drawn shades",
+        "interior": "potted plant",
+        "night": "dim warm room"
+      },
+      {
+        "id": "Right window 3",
+        "lamp": false,
+        "curtains": "folded fabric pulled to jambs; no drawn shades",
+        "interior": "books",
+        "night": "unlit"
+      }
+    ],
+    "cornice": {
+      "verticalTranslationMetres": -0.8,
+      "depthRefit": "25% of generated depth, following bow profile; 0.50m moulding projection",
+      "ornamentXZAndUVsUnchanged": true,
+      "connection": "Continuous shaped masonry crown and neck moulding, tucked into bay top and cornice underside"
+    },
+    "roof": "Approved v003 mesh and texture bytes unchanged",
+    "userPreferences": [
+      "Avoid drawn shades; use open rooms with retained details",
+      "Lamps only in selected windows; vary interior furnishings"
+    ],
+    "remaining": [
+      "Opaque source bay glazing/interiors",
+      "Far tier/performance and transitions",
+      "Door runtime/clearance",
+      "Persistent gameplay/save certification"
+    ]
+  },
+  "nativeTriangleNote": "Unity removes two degenerate source/export triangles; bounds and visible silhouette retained.",
+  "cornice": {
+    "verticalTranslationMetres": -0.8,
+    "depthRefit": "25% of generated depth, following bow profile; 0.50m moulding projection",
+    "ornamentXZAndUVsUnchanged": true,
+    "connection": "Continuous shaped masonry crown and neck moulding, tucked into bay top and cornice underside"
+  },
+  "userPreferences": [
+    "Avoid drawn shades; use open rooms with retained details",
+    "Lamps only in selected windows; vary interior furnishings"
+  ],
+  "capFinish": {
+    "status": "Material-only olive cornice cap review",
+    "changedObject": "Continuous brownstone crown \u2014 seated cornice support",
+    "changedFaces": 50,
+    "geometryChanged": false,
+    "sourceFinish": "tripo_mat_adb17583-ab83-433b-97a7-0135d6df6155",
+    "material": "CF_Cornice_OlivePatina_Cap",
+    "maps": [
+      "Textures/Cornice-Cap-Albedo.png",
+      "Textures/Cornice-Cap-Roughness.png",
+      "Textures/Cornice-Cap-Metallic.png"
+    ],
+    "method": "Actual cornice top-surface texture/PBR transfer; original building geometry retained"
+  },
+  "architecturalRefinements": {
+    "windowCount": 23,
+    "windows": [
+      "Left side window 1-1",
+      "Left side window 1-2",
+      "Left side window 1-3",
+      "Left side window 2-1",
+      "Left side window 2-2",
+      "Left side window 2-3",
+      "Left side window 3-1",
+      "Left side window 3-2",
+      "Left side window 3-3",
+      "Left window 2",
+      "Left window 3",
+      "Right side window 1-1",
+      "Right side window 1-2",
+      "Right side window 1-3",
+      "Right side window 2-1",
+      "Right side window 2-2",
+      "Right side window 2-3",
+      "Right side window 3-1",
+      "Right side window 3-2",
+      "Right side window 3-3",
+      "Right window 1",
+      "Right window 2",
+      "Right window 3"
+    ],
+    "parameters": {
+      "sideStileWidth": 0.055,
+      "sillFrameOverlap": 0.008,
+      "horizontalFrameWidth": 0.065,
+      "additionalRecess": 0.05,
+      "stoneEmbedDepth": 0.08,
+      "sillApronOverlap": 0.012,
+      "sideLintelHeight": 0.19,
+      "chimneyHeight": [
+        1.5,
+        1.3
+      ],
+      "weatheringOpacity": 0.035
+    },
+    "preserved": [
+      "bow assets",
+      "olive cornice cap",
+      "roof felt",
+      "parapets",
+      "front masonry",
+      "selected lamp pattern"
+    ],
+    "weathering": "3.5% local trim discoloration; source wall albedo preserved"
+  },
+  "assemblyParameters": "AssemblyParameters.json",
+  "labScene": "Assets/CityForge/Scenes/Development/ArchitecturalRenderingLab.unity",
+  "unitySubjectAssets": "Assets/CityForge/Development/ArchitecturalRenderingLab/SubjectAssets/V006",
+  "performanceReadiness": "Near and Medium above city-scale budgets; Far tier and many-building runtime profiling remain outstanding.",
+  "nativeFixtureAnchors": {
+    "space": "FBX root local; displayed lot facing yaw180",
+    "positions": [
+      [
+        1.5222,
+        3.2485,
+        7.1615
+      ],
+      [
+        3.6378,
+        3.2485,
+        7.1615
+      ]
+    ],
+    "validation": "Entrance light pools align with the left-hand doorway after FBX/lot axis conversion; existing production v005 assets unchanged."
+  },
+  "windowVariantNote": "Variants retains the approved source room reference. Current window outer frames and recesses are parameterized in this revision master."
+}

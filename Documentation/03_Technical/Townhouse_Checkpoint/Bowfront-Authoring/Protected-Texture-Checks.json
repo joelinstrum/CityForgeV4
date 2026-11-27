@@ -1,0 +1,60 @@
+{
+  "providedWallSourceBytesUnchanged": true,
+  "protectedMaps": [
+    {
+      "material": "Roof \u2014 aged felt, restrained edge dirt and laps",
+      "role": "albedo",
+      "sourceBytesUnchanged": true
+    },
+    {
+      "material": "Roof \u2014 aged felt, restrained edge dirt and laps",
+      "role": "normal",
+      "sourceBytesUnchanged": true
+    },
+    {
+      "material": "Roof \u2014 aged felt, restrained edge dirt and laps",
+      "role": "metallicGloss",
+      "sourceBytesUnchanged": true
+    },
+    {
+      "material": "CF_Cornice_OlivePatina_Cap",
+      "role": "albedo",
+      "sourceBytesUnchanged": true
+    },
+    {
+      "material": "CF_Cornice_OlivePatina_Cap",
+      "role": "metallicGloss",
+      "sourceBytesUnchanged": true
+    },
+    {
+      "material": "tripo_mat_278b4c1c-63c9-4de6-8553-d99d3a9505ca",
+      "role": "albedo",
+      "sourceBytesUnchanged": true
+    },
+    {
+      "material": "tripo_mat_278b4c1c-63c9-4de6-8553-d99d3a9505ca",
+      "role": "normal",
+      "sourceBytesUnchanged": true
+    },
+    {
+      "material": "tripo_mat_278b4c1c-63c9-4de6-8553-d99d3a9505ca",
+      "role": "metallicGloss",
+      "sourceBytesUnchanged": true
+    },
+    {
+      "material": "tripo_mat_adb17583-ab83-433b-97a7-0135d6df6155",
+      "role": "albedo",
+      "sourceBytesUnchanged": true
+    },
+    {
+      "material": "tripo_mat_adb17583-ab83-433b-97a7-0135d6df6155",
+      "role": "normal",
+      "sourceBytesUnchanged": true
+    },
+    {
+      "material": "tripo_mat_adb17583-ab83-433b-97a7-0135d6df6155",
+      "role": "metallicGloss",
+      "sourceBytesUnchanged": true
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+PASS CityForge Scripts replaced with the PR worktree source on current origin/main.
+PASS native Unity 6000.1.12f1 C# compilation.
+PASS architectural window/legacy/facade shaders found and supported with no reported shader errors.
+No assets regenerated or production project/settings modified. This check is not a new full-city GPU benchmark.

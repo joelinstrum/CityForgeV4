@@ -1,0 +1,74 @@
+{
+  "nativePresetImagesVerified": 42,
+  "resolution": [
+    1600,
+    1200
+  ],
+  "geometryMatchedAllPresets": true,
+  "neutralGameMaterialStateAndCameraMatched": true,
+  "oneVariableChecks": [
+    {
+      "test": "AO-Off",
+      "onlyExpectedStateChanged": true,
+      "geometryMatched": true
+    },
+    {
+      "test": "Exposure-Zero",
+      "onlyExpectedStateChanged": true,
+      "geometryMatched": true
+    },
+    {
+      "test": "Normals-Off",
+      "onlyExpectedStateChanged": true,
+      "geometryMatched": true
+    }
+  ],
+  "colorSpaceNumericalRenderStatesIdentical": true,
+  "colorSpaceCameraAndMaterialStateMatched": true,
+  "compressionOnlyWallSamplerFormatVaried": true,
+  "reflectionOnlyIntensityVaried": true,
+  "files": [
+    "Neutral-Studio__Front__Linear__1600x1200.png",
+    "Neutral-Studio__Front-Left__Linear__1600x1200.png",
+    "Neutral-Studio__Front-Right__Linear__1600x1200.png",
+    "Neutral-Studio__Street-1.7m__Linear__1600x1200.png",
+    "Neutral-Studio__Close-Window__Linear__1600x1200.png",
+    "Neutral-Studio__Close-Cornice__Linear__1600x1200.png",
+    "Morning-Sun__Front__Linear__1600x1200.png",
+    "Morning-Sun__Front-Left__Linear__1600x1200.png",
+    "Morning-Sun__Front-Right__Linear__1600x1200.png",
+    "Morning-Sun__Street-1.7m__Linear__1600x1200.png",
+    "Morning-Sun__Close-Window__Linear__1600x1200.png",
+    "Morning-Sun__Close-Cornice__Linear__1600x1200.png",
+    "Midday-Sun__Front__Linear__1600x1200.png",
+    "Midday-Sun__Front-Left__Linear__1600x1200.png",
+    "Midday-Sun__Front-Right__Linear__1600x1200.png",
+    "Midday-Sun__Street-1.7m__Linear__1600x1200.png",
+    "Midday-Sun__Close-Window__Linear__1600x1200.png",
+    "Midday-Sun__Close-Cornice__Linear__1600x1200.png",
+    "Late-Afternoon__Front__Linear__1600x1200.png",
+    "Late-Afternoon__Front-Left__Linear__1600x1200.png",
+    "Late-Afternoon__Front-Right__Linear__1600x1200.png",
+    "Late-Afternoon__Street-1.7m__Linear__1600x1200.png",
+    "Late-Afternoon__Close-Window__Linear__1600x1200.png",
+    "Late-Afternoon__Close-Cornice__Linear__1600x1200.png",
+    "Overcast__Front__Linear__1600x1200.png",
+    "Overcast__Front-Left__Linear__1600x1200.png",
+    "Overcast__Front-Right__Linear__1600x1200.png",
+    "Overcast__Street-1.7m__Linear__1600x1200.png",
+    "Overcast__Close-Window__Linear__1600x1200.png",
+    "Overcast__Close-Cornice__Linear__1600x1200.png",
+    "Current-In-Game__Front__Linear__1600x1200.png",
+    "Current-In-Game__Front-Left__Linear__1600x1200.png",
+    "Current-In-Game__Front-Right__Linear__1600x1200.png",
+    "Current-In-Game__Street-1.7m__Linear__1600x1200.png",
+    "Current-In-Game__Close-Window__Linear__1600x1200.png",
+    "Current-In-Game__Close-Cornice__Linear__1600x1200.png",
+    "Night__Front__Linear__1600x1200.png",
+    "Night__Front-Left__Linear__1600x1200.png",
+    "Night__Front-Right__Linear__1600x1200.png",
+    "Night__Street-1.7m__Linear__1600x1200.png",
+    "Night__Close-Window__Linear__1600x1200.png",
+    "Night__Close-Cornice__Linear__1600x1200.png"
+  ]
+}
