@@ -275,6 +275,7 @@ namespace CityForge.World
 
         private void CancelLotPlacement(bool restoreUi = true)
         {
+            developerLotPlacement = false;
             pendingTerrainPlacement=null;
             if(placementTerrainChoice){placementTerrainChoice.SetActive(false);Destroy(placementTerrainChoice);placementTerrainChoice=null;}
             CloseSavedLotPicker();
@@ -317,7 +318,7 @@ namespace CityForge.World
 
         private bool UpdateLotPlacement()
         {
-            var capital = PendingFounder;
+            var capital = LotPlacementFounder;
             if (movingDistrictLot != null || capital == null || !InCapitalDistrict(capital))
             {
                 if (movingDistrictLot == null) offeredFounderPicker = false;

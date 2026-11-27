@@ -1,0 +1,31 @@
+PASS original full-resolution UI sprite loaded
+PASS sprite import retains input alpha, no UI mip bleed
+PASS actual BeginRide enters safely on disposable terrain
+PASS driving entry attaches cockpit automatically
+PASS 1925 year fallback selects Art Deco cockpit
+PASS single non-spatial looping engine configured
+PASS existing Model T MP3 loads
+PASS Model T uses quiet 12 percent gain
+PASS engine audio disables independently
+PASS engine fades in gently
+PASS era gate for founders
+PASS other eras keep driving and fallback controls without cockpit or sound: founders
+PASS era gate for industrial
+PASS other eras keep driving and fallback controls without cockpit or sound: industrial
+PASS era gate for victorian
+PASS other eras keep driving and fallback controls without cockpit or sound: victorian
+PASS era gate for machine
+PASS other eras keep driving and fallback controls without cockpit or sound: machine
+PASS era gate for modern
+PASS era gate for postwar
+PASS other eras keep driving and fallback controls without cockpit or sound: postwar
+PASS era gate for contemporary
+PASS other eras keep driving and fallback controls without cockpit or sound: contemporary
+PASS switching back to Art Deco restores cockpit
+PASS muting audio preserves cockpit
+PASS exit stops engine and hides cockpit
+PASS other-era driving entry still works
+PASS other-era entry is silent without vintage overlay
+PASS Art Deco driving re-entry works
+PASS re-entry does not duplicate cockpit or audio
+PASS disabling component stops sound

@@ -21,6 +21,30 @@ Shader "CityForge/Lot Path Blend"
         _WagonMask("Wagon shoulder opacity", 2D) = "white" {}
         _RoadWearMap("Road Wear", 2D) = "white" {}
         [HideInInspector] _DirtEndFade("Standalone Road Ends", Vector) = (1,1,0,0)
+        _WeatherIntensity("Weathering Intensity", Range(0,1)) = 0
+        _WeatherGutter("Width / Darkness / Contact / Sidewalk", Vector) = (.45,.2,.12,.18)
+        _WeatherGrime("Grime / Inverse Scale / Moisture / Sidewalk", Vector) = (.12,.125,.08,0)
+        _WeatherAccumulation("Sediment / Scale / Debris / Scale", Vector) = (.15,.588,.25,.333)
+        _WeatherPavers("Bluestone Face Shuffle / Inverse Width / Height / Joint",Vector)=(0,1.17647,2,.018)
+        _WeatherPaverTone("Paver Tone / Tint Variation",Vector)=(.20,.09,0,0)
+        _WeatherMicro("Micro: Intensity / Inverse Metres / Sin / Cos",Vector)=(.055,5.882,.292,.956)
+        _WeatherMedium("Medium: Intensity / Inverse Metres / Sin / Cos",Vector)=(.12,.422,.9205,.3907)
+        _WeatherMacro("Macro: Intensity / Inverse Metres / Sin / Cos",Vector)=(.65,.05348,.9205,-.3907)
+        _WeatherLayerOffsets("Independent Micro / Medium Offsets",Vector)=(13.7,41.3,83.1,7.9)
+        _WeatherMacroParams("Macro Offset / Brightness / Tint",Vector)=(-21.5,103.9,.24,.25)
+        _WeatherMacroTint("Macro Tint",Color)=(1.06,1.01,.95,1)
+        _WeatherMaterialParams("Roughness / Debug / Multiscale / Sidewalk Seed",Vector)=(.1,0,1,0)
+        _WeatherGutterVariations("Gutter Width / Darkness / Sediment / Debris Variation",Vector)=(.85,.8,.9,.95)
+        _WeatherGutterFrequencies("Independent Gutter Inverse Metres",Vector)=(.32258,.46948,.57803,.26525)
+        _WeatherVariation("Nonrepeating / Inverse Scale / Seed", Vector) = (1,.041667,137,0)
+        _WeatherPattern("Edge Breakup / Patch Scale / Debris Scatter", Vector) = (.8,.333,.6,0)
+        _WeatherDebrisTint("Debris Tint", Color) = (1,1,1,1)
+        _WeatherSedimentTint("Sediment Tint", Color) = (1,1,1,1)
+        _WeatherCamber("Synthetic Camber", Range(0,.15)) = 0
+        [HideInInspector] _WeatherUseBoundary("Sidewalk Road Boundary", Float) = 0
+        _WeatherGrimeMask("World Grime (Linear)", 2D) = "gray" {}
+        _WeatherSediment("World Sediment", 2D) = "white" {}
+        _WeatherDebris("World Debris RGBA", 2D) = "black" {}
         _EdgeBlend("Edge Blend in Meters", Float) = 0
         _Recessed("Recessed Edge Shadow", Float) = 0
         [HideInInspector] _RecessDepth("Visual Depth in Meters", Float) = 0
@@ -50,6 +74,7 @@ Shader "CityForge/Lot Path Blend"
             #pragma target 3.5
             #pragma vertex PathVertex
             #pragma fragment PathFragment
+            #pragma multi_compile_local_fragment _ _SURFACE_WEATHERING
             #pragma multi_compile_local_fragment _ _ROAD_WEAR
             #pragma multi_compile_local_fragment _ _WAGON_SURFACE
             #pragma multi_compile_local _ _NORMALMAP
@@ -63,23 +88,15 @@ Shader "CityForge/Lot Path Blend"
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
             #pragma multi_compile_fragment _ _SHADOWS_SOFT _SHADOWS_SOFT_LOW _SHADOWS_SOFT_MEDIUM _SHADOWS_SOFT_HIGH
             #pragma multi_compile_fragment _ _ADDITIONAL_LIGHTS
+            #pragma multi_compile_instancing
             #pragma multi_compile_fog
             #define _SURFACE_TYPE_TRANSPARENT 1
-            #include "Packages/com.unity.render-pipelines.universal/Shaders/LitInput.hlsl"
+            #include "PathMaterialInput.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 
-            float4 _DirtEndFade;
             float _DirtJunctionCount;
             float4 _DirtJunctions[32];
             float4 _DirtJunctionAxes[32];
-            float _EdgeBlend;
-            float _Recessed;
-            float _PathOpacity;
-            float _VertexOpacity;
-            float _NaturalFootpath;
-            float _RecessDepth;
-            float _RecessBorder;
-            float _BorderSides, _BorderTextured;
             TEXTURE2D(_BorderTexture);
             SAMPLER(sampler_BorderTexture);
             TEXTURE2D(_RecessDirt);
@@ -112,6 +129,8 @@ Shader "CityForge/Lot Path Blend"
             #endif
 
             #include "RoadRecess.hlsl"
+            #include "SurfaceWeathering.hlsl"
+            #include "SurfaceWeatheringPavers.hlsl"
             struct Attributes
             {
                 float4 positionOS : POSITION;
@@ -120,6 +139,7 @@ Shader "CityForge/Lot Path Blend"
                 float2 uv : TEXCOORD0;
                 float4 ribbon : TEXCOORD1;
                 half4 color : COLOR;
+                UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
             struct Varyings
@@ -132,11 +152,14 @@ Shader "CityForge/Lot Path Blend"
                 float4 ribbon : TEXCOORD4;
                 half fog : TEXCOORD5;
                 half vertexOpacity : TEXCOORD6;
+                UNITY_VERTEX_OUTPUT_STEREO
             };
 
             Varyings PathVertex(Attributes input)
             {
+                UNITY_SETUP_INSTANCE_ID(input);
                 Varyings output;
+                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
                 VertexPositionInputs position = GetVertexPositionInputs(input.positionOS.xyz);
                 VertexNormalInputs basis = GetVertexNormalInputs(input.normalOS, input.tangentOS);
                 output.positionCS = position.positionCS;
@@ -159,6 +182,7 @@ Shader "CityForge/Lot Path Blend"
 
             half4 PathFragment(Varyings input) : SV_Target
             {
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
                 half3 view = GetWorldSpaceNormalizeViewDir(input.positionWS);
                 float2 uv = input.uv;
                 #if defined(_WAGON_SURFACE)
@@ -203,7 +227,12 @@ Shader "CityForge/Lot Path Blend"
                     ApplyPerPixelDisplacement(GetViewDirectionTangentSpace(input.tangentWS, input.normalWS, view), uv);
                 #endif
                 SurfaceData surface;
-                InitializeStandardLitSurfaceData(uv, surface);
+                #if defined(_SURFACE_WEATHERING)
+                UNITY_BRANCH if(_WeatherIntensity>0 && _WeatherPavers.x>.5)
+                    WeatherPaverSurface(input.positionWS.xz,surface);
+                else
+                #endif
+                    InitializeStandardLitSurfaceData(uv, surface);
                 if (_RecessDepth > 0 && _RecessUseFootprint < .5)
                 {
                     half3 lining = SAMPLE_TEXTURE2D(_RecessDirt, sampler_RecessDirt, wallUV * 2).rgb;
@@ -414,6 +443,16 @@ Shader "CityForge/Lot Path Blend"
                     surface.normalTS = lerp(surface.normalTS, half3(0, 0, 1), wall);
                     surface.smoothness *= 1 - wall;
                 }
+                half3 weatherDebug=0;
+                #if defined(_SURFACE_WEATHERING)
+                UNITY_BRANCH if (_WeatherIntensity > 0)
+                {
+                    weatherDebug=ApplySurfaceWeathering(input.positionWS, input.ribbon, roadEdgeDistance, surface, lighting.normalWS);
+                    lighting.bakedGI = SampleSH(lighting.normalWS);
+                }
+                #endif
+                UNITY_BRANCH if(_WeatherIntensity>0 && _WeatherMaterialParams.y>.5)
+                    return half4(weatherDebug,opacity*_PathOpacity*lerp(1,input.vertexOpacity,saturate(_VertexOpacity)));
                 half4 color = UniversalFragmentPBR(lighting, surface);
                 if (_Recessed > 0)
                 {

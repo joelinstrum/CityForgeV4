@@ -1,0 +1,4 @@
+#ifndef CITYFORGE_WEATHERING_PROPERTIES_INCLUDED
+#define CITYFORGE_WEATHERING_PROPERTIES_INCLUDED
+#define CITYFORGE_WEATHERING_PROPERTIES float _WeatherIntensity, _WeatherCamber, _WeatherUseBoundary; float4 _WeatherGutter, _WeatherGrime, _WeatherAccumulation, _WeatherSedimentTint, _WeatherPattern, _WeatherDebrisTint, _WeatherVariation, _WeatherMicro, _WeatherMedium, _WeatherMacro, _WeatherLayerOffsets, _WeatherMacroParams, _WeatherMacroTint, _WeatherMaterialParams, _WeatherGutterVariations, _WeatherGutterFrequencies, _WeatherPavers, _WeatherPaverTone;
+#endif

@@ -77,8 +77,7 @@ namespace CityForge.World
                     for (int slot = 0; slot < materials.Length; slot++) materials[slot] = asset.materialOverride;
                     renderer.sharedMaterials = materials;
                 }
-                else if (!authoredMaterials)
-                    renderer.sharedMaterials = original.sharedMaterials;
+                else if (!authoredMaterials) renderer.sharedMaterials = original.sharedMaterials;
             }
             detail.Bind(rig);
         }

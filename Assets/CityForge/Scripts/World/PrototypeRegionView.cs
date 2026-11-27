@@ -538,6 +538,7 @@ namespace CityForge.World
             var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             BuildDistrictSelection(root.transform,font);
             BuildLotActions(root.transform, font);
+            BuildDeveloperTools(root.transform, font);
             BuildDaylightPicker(root.transform, font);
             BuildZoneWealthPicker(root.transform, font);
             gameObject.AddComponent<DistrictCombiner>().Initialize(this);
@@ -890,6 +891,7 @@ namespace CityForge.World
             TickDistrictClock();
             TickRegionEvents();
             RefreshTownConstruction();
+            RefreshDeveloperTools();
             UpdateRegionDistrictHover();
             if (SelectedDistrict >= 0 && !DistrictLoading && !IsSaving && Input.GetKeyDown(KeyCode.G) &&
                 !(EventSystem.current && EventSystem.current.currentSelectedGameObject &&

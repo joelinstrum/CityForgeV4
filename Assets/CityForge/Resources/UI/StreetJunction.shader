@@ -1,5 +1,30 @@
 Shader "CityForge/Street Junction" {
 Properties {
+        _WeatherIntensity("Weathering Intensity", Range(0,1)) = 0
+        _WeatherGutter("Width / Darkness / Contact / Sidewalk", Vector) = (.45,.2,.12,.18)
+        _WeatherGrime("Grime / Inverse Scale / Moisture / Sidewalk", Vector) = (.12,.125,.08,0)
+        _WeatherAccumulation("Sediment / Scale / Debris / Scale", Vector) = (.15,.588,.25,.333)
+        _WeatherPavers("Bluestone Face Shuffle / Inverse Width / Height / Joint",Vector)=(0,1.17647,2,.018)
+        _WeatherPaverTone("Paver Tone / Tint Variation",Vector)=(.20,.09,0,0)
+        _WeatherMicro("Micro: Intensity / Inverse Metres / Sin / Cos",Vector)=(.055,5.882,.292,.956)
+        _WeatherMedium("Medium: Intensity / Inverse Metres / Sin / Cos",Vector)=(.12,.422,.9205,.3907)
+        _WeatherMacro("Macro: Intensity / Inverse Metres / Sin / Cos",Vector)=(.65,.05348,.9205,-.3907)
+        _WeatherLayerOffsets("Independent Micro / Medium Offsets",Vector)=(13.7,41.3,83.1,7.9)
+        _WeatherMacroParams("Macro Offset / Brightness / Tint",Vector)=(-21.5,103.9,.24,.25)
+        _WeatherMacroTint("Macro Tint",Color)=(1.06,1.01,.95,1)
+        _WeatherMaterialParams("Roughness / Debug / Multiscale / Sidewalk Seed",Vector)=(.1,0,1,0)
+        _WeatherGutterVariations("Gutter Width / Darkness / Sediment / Debris Variation",Vector)=(.85,.8,.9,.95)
+        _WeatherGutterFrequencies("Independent Gutter Inverse Metres",Vector)=(.32258,.46948,.57803,.26525)
+        _WeatherVariation("Nonrepeating / Inverse Scale / Seed", Vector) = (1,.041667,137,0)
+        _WeatherPattern("Edge Breakup / Patch Scale / Debris Scatter", Vector) = (.8,.333,.6,0)
+        _WeatherDebrisTint("Debris Tint", Color) = (1,1,1,1)
+        _WeatherSedimentTint("Sediment Tint", Color) = (1,1,1,1)
+        _WeatherCamber("Synthetic Camber", Range(0,.15)) = 0
+        [HideInInspector] _WeatherUseBoundary("Sidewalk Road Boundary", Float) = 0
+        _WeatherGrimeMask("World Grime (Linear)", 2D) = "gray" {}
+        _WeatherSediment("World Sediment", 2D) = "white" {}
+        _WeatherDebris("World Debris RGBA", 2D) = "black" {}
+
 _RecessDepth("Visual depth",Float)=0
 _RecessBorder("Curb lining",Float)=0
 _RecessDirt("Earth lining",2D)="white"{}
@@ -17,23 +42,33 @@ HLSLPROGRAM
 #pragma target 3.5
 #pragma vertex vert
 #pragma fragment frag
+#pragma multi_compile_local_fragment _ _SURFACE_WEATHERING
 #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
 #pragma multi_compile_fragment _ _SHADOWS_SOFT
 #pragma multi_compile _ _ADDITIONAL_LIGHTS_VERTEX _ADDITIONAL_LIGHTS
+#pragma multi_compile_instancing
 #pragma multi_compile_fog
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
-TEXTURE2D(_Layer0); SAMPLER(sampler_Layer0); float4 _Tint0;
-TEXTURE2D(_Layer1); SAMPLER(sampler_Layer1); float4 _Tint1;
-TEXTURE2D(_Layer2); SAMPLER(sampler_Layer2); float4 _Tint2;
-TEXTURE2D(_Layer3); SAMPLER(sampler_Layer3); float4 _Tint3;
+#include "../Region/SurfaceWeatheringProperties.hlsl"
+CBUFFER_START(UnityPerMaterial)
+float4 _Tint0, _Tint1, _Tint2, _Tint3, _RecessFootprintRect;
+float _RecessDepth, _RecessBorder, _RecessUseFootprint;
+CITYFORGE_WEATHERING_PROPERTIES
+CBUFFER_END
+#define CITYFORGE_SURFACE_PROPERTIES_BOUND 1
+TEXTURE2D(_Layer0); SAMPLER(sampler_Layer0);
+TEXTURE2D(_Layer1); SAMPLER(sampler_Layer1);
+TEXTURE2D(_Layer2); SAMPLER(sampler_Layer2);
+TEXTURE2D(_Layer3); SAMPLER(sampler_Layer3);
 #include "../Region/RoadRecess.hlsl"
-float _RecessDepth, _RecessBorder;
+#include "../Region/SurfaceWeathering.hlsl"
 TEXTURE2D(_RecessDirt); SAMPLER(sampler_RecessDirt);
-struct A {float4 positionOS:POSITION;float3 normalOS:NORMAL;float4 weights:COLOR;float2 uv0:TEXCOORD0;float2 uv1:TEXCOORD1;float2 uv2:TEXCOORD2;float2 uv3:TEXCOORD3;float2 alpha:TEXCOORD4;};
-struct V {float4 positionCS:SV_POSITION;float3 world:TEXCOORD0;float3 normal:TEXCOORD1;float4 weights:COLOR;float4 uv01:TEXCOORD2;float4 uv23:TEXCOORD3;float alpha:TEXCOORD4;};
-V vert(A v){V o;o.world=TransformObjectToWorld(v.positionOS.xyz);o.positionCS=TransformWorldToHClip(o.world);o.normal=TransformObjectToWorldNormal(v.normalOS);o.weights=v.weights;o.uv01=float4(v.uv0,v.uv1);o.uv23=float4(v.uv2,v.uv3);o.alpha=v.alpha.x;return o;}
+struct A {float4 positionOS:POSITION;float3 normalOS:NORMAL;float4 weights:COLOR;float2 uv0:TEXCOORD0;float2 uv1:TEXCOORD1;float2 uv2:TEXCOORD2;float2 uv3:TEXCOORD3;float2 alpha:TEXCOORD4; UNITY_VERTEX_INPUT_INSTANCE_ID };
+struct V {float4 positionCS:SV_POSITION;float3 world:TEXCOORD0;float3 normal:TEXCOORD1;float4 weights:COLOR;float4 uv01:TEXCOORD2;float4 uv23:TEXCOORD3;float alpha:TEXCOORD4; UNITY_VERTEX_OUTPUT_STEREO };
+V vert(A v){UNITY_SETUP_INSTANCE_ID(v);V o;UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);o.world=TransformObjectToWorld(v.positionOS.xyz);o.positionCS=TransformWorldToHClip(o.world);o.normal=TransformObjectToWorldNormal(v.normalOS);o.weights=v.weights;o.uv01=float4(v.uv0,v.uv1);o.uv23=float4(v.uv2,v.uv3);o.alpha=v.alpha.x;return o;}
 half4 frag(V i):SV_Target {
+UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
 float wall=0, edgeDistance=1000;
 if(_RecessDepth>0 && _RecessUseFootprint>.5) {
     float3 view=GetWorldSpaceNormalizeViewDir(i.world);
@@ -70,6 +105,14 @@ lighting.normalizedScreenSpaceUV=GetNormalizedScreenSpaceUV(i.positionCS);
 SurfaceData surface=(SurfaceData)0;
 surface.albedo=c;surface.normalTS=half3(0,0,1);surface.smoothness=.03;
 surface.occlusion=1;surface.alpha=i.alpha;
+half3 weatherDebug=0;
+#if defined(_SURFACE_WEATHERING)
+UNITY_BRANCH if(_WeatherIntensity>0) {
+weatherDebug=ApplySurfaceWeathering(i.world,float4(1000,2000,0,0),edgeDistance,surface,lighting.normalWS);
+lighting.bakedGI=SampleSH(lighting.normalWS);
+}
+#endif
+UNITY_BRANCH if(_WeatherIntensity>0 && _WeatherMaterialParams.y>.5)return half4(weatherDebug,i.alpha);
 half4 color=UniversalFragmentPBR(lighting,surface);
 color.rgb=MixFog(color.rgb,ComputeFogFactor(TransformWorldToHClip(i.world).z));
 color.a=i.alpha;return color;

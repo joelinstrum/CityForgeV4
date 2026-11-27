@@ -78,6 +78,7 @@ namespace CityForge.World
 
         private void CloseSavedLotPicker()
         {
+            developerLotPicker = false;
             if (!savedLotPicker) return;
             savedLotPicker.gameObject.SetActive(false);
             Destroy(savedLotPicker.gameObject);
