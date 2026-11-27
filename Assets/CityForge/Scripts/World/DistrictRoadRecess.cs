@@ -81,6 +81,9 @@ namespace CityForge.World
         }
         private void BindRoadRecess(Material material)
         {
+            var settings = GetComponent<SurfaceWeatheringSettings>();
+            if (!settings) settings = gameObject.AddComponent<SurfaceWeatheringSettings>();
+            // Style/era binding is refreshed by the road/junction presenter below.
             material.SetFloat("_BorderTextured",0);
             material.SetFloat("_BorderSides",0);
             material.SetFloat("_RecessDepth", RoadRecessDepth);

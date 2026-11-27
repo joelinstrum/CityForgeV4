@@ -13,9 +13,11 @@ namespace CityForge.World
 
         internal void SetDeveloperMode(bool developer)
         {
+            if (!developer) CloseDeveloperLotTools();
             DeveloperMode = developer;
             QueueLotGrowth(); nextEventTick = 0;
             RefreshImmigrationControl();
+            RefreshDeveloperTools();
         }
 
         private IEnumerable<EventImmigrant> WaitingResidents => RegionEvents.SelectMany(s => s.immigrants)

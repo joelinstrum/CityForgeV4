@@ -1,8 +1,10 @@
 #ifndef CITYFORGE_ROAD_RECESS_INCLUDED
 #define CITYFORGE_ROAD_RECESS_INCLUDED
 TEXTURE2D(_RecessFootprint); SAMPLER(sampler_RecessFootprint);
+#ifndef CITYFORGE_SURFACE_PROPERTIES_BOUND
 float4 _RecessFootprintRect;
 float _RecessUseFootprint;
+#endif
 float RoadRecessDistance(float2 world) {
     return SAMPLE_TEXTURE2D_LOD(_RecessFootprint, sampler_RecessFootprint,
         (world - _RecessFootprintRect.xy) * _RecessFootprintRect.zw, 0).r;

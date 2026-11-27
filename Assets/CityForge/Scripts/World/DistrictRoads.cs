@@ -722,6 +722,8 @@ namespace CityForge.World
                         }
                     }
                 }
+                GetComponent<SurfaceWeatheringSettings>().Bind(material,
+                    DistrictRoadStyle(record.surfaceId).Id, DistrictAppearanceEra(SelectedDistrict), false);
                 districtRoadMaterials.Add(record.surfaceId, material);
                 roadPresentationAssets.Add(material);
             }
@@ -996,6 +998,19 @@ namespace CityForge.World
                     LotPathMaterial.ApplyEdgeTreatment(material, treatment, soft ? 40 : 0, 0);
                     material.SetFloat("_VertexOpacity", 1);
                     material.SetFloat("_NaturalFootpath", soft ? 1 : 0);
+                }
+                if (!soft)
+                {
+                    var originalShader = material.HasProperty("_WeatherIntensity") ? null : material.shader;
+                    // Preserve base UVs and PBR textures; only switch the existing surface pass.
+                    if (!material.HasProperty("_WeatherIntensity"))
+                        LotPathMaterial.ApplyEdgeTreatment(material, new LotPathDefinition { width = width, materialId = style.Id }, 0, 0);
+                    var weathering = GetComponent<SurfaceWeatheringSettings>();
+                    if (!weathering) weathering = gameObject.AddComponent<SurfaceWeatheringSettings>();
+                    material.SetFloat("_WeatherUseBoundary", roadRecessField ? 1 : 0);
+                    if (roadRecessField) material.SetTexture("_RecessFootprint", roadRecessField);
+                    material.SetVector("_RecessFootprintRect", roadRecessRect);
+                    weathering.Bind(material, style.Id, DistrictAppearanceEra(SelectedDistrict), true, originalShader);
                 }
                 material.renderQueue = soft ? DistrictLotSurfaces.PathRenderQueue : DistrictLotSurfaces.SidewalkRenderQueue;
                 materials.Add(key, material); sidewalkAssets.Add(material);

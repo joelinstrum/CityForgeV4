@@ -1,0 +1,70 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f727d5d43f0a465da8a90b018eb353de, type: 3}
+  m_Name: Road
+  m_EditorClassIdentifier:
+  intensity: .9
+  gutterWidth: .7
+  gutterDarkness: .25
+  grimeStrength: .06
+  grimeScale: 8
+  sedimentStrength: .6
+  sedimentTint: {r: 0.55, g: 0.52, b: 0.47, a: 1}
+  sedimentScale: 1.7
+  organicDebrisStrength: 1
+  debrisScale: 9.5
+  syntheticCamberStrength: 0
+  moistureVariation: 0.08
+  contactShading: .26
+  sidewalkEdgeWeathering: .25
+  grimeMask: {fileID: 2800000, guid: 3e26a3fbb0944faa99e3c383dfed3c50, type: 3}
+  gutterSediment: {fileID: 2800000, guid: 0fab22e26c38401b986323559b33c949, type: 3}
+  organicDebris: {fileID: 2800000, guid: 25efac703c9c4a5c812f9bf82bebf605, type: 3}
+  edgeBreakup: .95
+  edgePatchScale: 12
+  debrisScatter: .7
+  debrisTint: {r: 1.7, g: 1.5, b: 1.1, a: 1}
+  removeRepetition: 1
+  variationScale: 24
+  variationSeed: 137
+  multiScaleWeathering: 1
+  microIntensity: .055
+  microScale: .17
+  microOffset: {x: 13.7, y: 41.3}
+  microRotation: 17
+  mediumIntensity: .12
+  mediumScale: 2.37
+  mediumOffset: {x: 83.1, y: 7.9}
+  mediumRotation: 67
+  macroIntensity: .65
+  macroScale: 18.7
+  macroOffset: {x: -21.5, y: 103.9}
+  macroRotation: 113
+  macroBrightness: .24
+  macroTintStrength: .25
+  macroTint: {r: 1.06, g: 1.01, b: 0.95, a: 1}
+  roughnessVariation: .10
+  gutterWidthVariation: .85
+  gutterDarknessVariation: .8
+  gutterSedimentVariation: .9
+  gutterDebrisVariation: .95
+  gutterWidthScale: 3.1
+  gutterDarknessScale: 2.13
+  gutterSedimentScale: 1.73
+  gutterDebrisScale: 3.77
+  debugView: 0
+  paverFaceVariation: 0
+  paverWidth: 0.85
+  paverHeight: 0.5
+  paverJointWidth: 0.018
+  paverToneVariation: 0.20
+  paverTintVariation: 0.09

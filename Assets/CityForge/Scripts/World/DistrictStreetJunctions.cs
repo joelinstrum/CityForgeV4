@@ -91,6 +91,8 @@ namespace CityForge.World
                 var surfaces=node.Arms.Select(a=>a.Road.surfaceId).Distinct().Take(4).ToArray();
                 var mat=new Material(Resources.Load<Shader>("UI/StreetJunction")){renderQueue=DistrictLotSurfaces.SidewalkRenderQueue+1};
                 BindRoadRecess(mat);
+                GetComponent<SurfaceWeatheringSettings>().Bind(mat, DistrictRoadStyle(surfaces[0]).Id,
+                    DistrictAppearanceEra(SelectedDistrict), false);
                 mat.SetFloat("_RecessBorder", surfaces.Any(id => IsMasonryRoad(id) || id is "blacktop" or "paved-street") ? 1 : 0);
                 mat.SetTexture("_RecessDirt", Resources.Load<Texture2D>("Lots/PathMaterials/DirtRoadEarth"));
                 for(int i=0;i<4;i++)

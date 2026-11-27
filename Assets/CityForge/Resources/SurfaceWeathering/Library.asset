@@ -1,0 +1,17 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 704bf97a2c9c4d1c8d267b02286cab34, type: 3}
+  m_Name: Library
+  m_EditorClassIdentifier:
+  roadProfile: {fileID: 11400000, guid: 047d206e532784e80a39d456c560a950, type: 2}
+  sidewalkProfile: {fileID: 11400000, guid: 9d637efe6f25b4c66a41a6787b4e931c, type: 2}
+  overrides: []

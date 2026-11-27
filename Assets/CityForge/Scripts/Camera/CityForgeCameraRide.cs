@@ -14,6 +14,8 @@ namespace CityForge.CameraSystem
         private float rideHeading, rideSpeed, rideNear, rideFov;
         private int rideDistrict;
         internal float RideSpeed => rideSpeed;
+        internal float RideSteeringInput { get; private set; }
+        private DrivingCockpitOverlay rideCockpitOverlay;
 
         internal bool HandleRideInput(World.PrototypeRegionView region)
         {
@@ -45,10 +47,14 @@ namespace CityForge.CameraSystem
             rideDistrict = region.SelectedDistrict;
             rideSpeed = 0f;
             Riding = true;
+            RideSteeringInput = 0;
             lowerView = true;
             ZoomLevel = 0;
             ApplyRidePose();
             ZoomChanged?.Invoke(ZoomLevel);
+            rideCockpitOverlay=GetComponent<DrivingCockpitOverlay>();
+            if(!rideCockpitOverlay)rideCockpitOverlay=gameObject.AddComponent<DrivingCockpitOverlay>();
+            rideCockpitOverlay.Attach(this,region);
             return true;
         }
 
@@ -56,6 +62,8 @@ namespace CityForge.CameraSystem
         {
             if (!Riding) return;
             Riding = false;
+            RideSteeringInput = 0;
+            if(rideCockpitOverlay)rideCockpitOverlay.Hide();
             rideSpeed = 0f;
             viewCamera.nearClipPlane = rideNear;
             viewCamera.fieldOfView = rideFov;
@@ -71,6 +79,7 @@ namespace CityForge.CameraSystem
 
         internal void StepRide(World.PrototypeRegionView region, float delta, float steer, bool accelerate, bool brake)
         {
+            RideSteeringInput = Mathf.Clamp(steer,-1,1);
             float remaining = Mathf.Max(0f, delta);
             while (remaining > 0f)
             {
@@ -100,7 +109,7 @@ namespace CityForge.CameraSystem
 
         private void OnGUI()
         {
-            if (!Riding) return;
+            if (!Riding || (rideCockpitOverlay&&rideCockpitOverlay.DrawsRideHud)) return;
             GUI.Box(new Rect(16f, 16f, 470f, 48f),
                 $"City ride · {rideSpeed / MetersPerSecondPerMph:0} mph\n↑ Accelerate   ↓ Brake   ← → Steer   Esc Return");
         }
