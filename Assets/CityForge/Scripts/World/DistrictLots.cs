@@ -203,7 +203,7 @@ namespace CityForge.World
             int extraRow = replaceable ? 44 : 0;
             ((RectTransform)changeLotButton.transform).anchoredPosition = new Vector2(14, growable ? -272 : -228);
             var panel = (RectTransform)selectedLotPanel.transform;
-            bool hasBuilding = record.definition.objects.Any(item => LotAssetCatalog.Load().Find(item.assetId)?.category == "Buildings");
+            bool hasBuilding = record.definition.objects.Any(item => BuildingAppearance.CanCustomize(LotAssetCatalog.Load().Find(item.assetId)));
             editSelectedBuildingButton.gameObject.SetActive(hasBuilding);
             float editorRow = hasBuilding ? 44 : 0;
             panel.sizeDelta = new Vector2(300, (growable ? 498 : 454) + extraRow + editorRow);

@@ -196,3 +196,8 @@ Keep normal, roughness/metallic, glass, gold, sign artwork and emission intact.
 Optional saved `awningColor` complements existing `trimColor`; empty restores
 the exact Original inputs independently per region. Native support is checked
 on both tiers. Kingsley now supports trim/awning tints; wall tint remains deferred.
+
+
+### Reviewed wall paint (2026-11-25)
+
+The editor labels buildings with explicit reviewed paint regions **Paintable**. Green Cornice Bay exposes Brick walls; Sandstone Art Deco Townhouse exposes Stone walls (ashlar and foundation). Near and Medium bind the same wall materials to neutral albedos. White and Yellow join the wall palette; Original restores the exact original finish. Windows, doors, bay frames, copper and carved ornament are excluded. Unmapped buildings cannot open appearance customization unless they have explicit reviewed sign mounts. Existing wallColor and saturation save fields persist these choices. The authored sandstone Far atlas is not paint-enabled and is not used by current native tier routing.

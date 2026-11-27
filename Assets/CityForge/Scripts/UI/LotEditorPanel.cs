@@ -238,8 +238,8 @@ namespace CityForge.UI
             scriptButton = Control(bar, "Script", 335, 8, 42, OpenCharacterScript, LotGlyph.Edit,
                 "Script · Configure the selected character or vehicle", true);
 
-            if (!PlayerMode) editBuildingButton = Control(bar, "Edit Building", 382, 8, 42, OpenBuildingEditor,
-                LotGlyph.House, "Edit Building · Customize the selected building’s appearance", true);
+            if (!PlayerMode) editBuildingButton = Control(bar, "Building Look", 382, 8, 42, OpenBuildingEditor,
+                LotGlyph.House, "Building Look · Change colors and signs on the selected building", true);
             varyTreeButton = Control(bar, "Vary when placed: Off", 6, 48, 222,
                 () => ChangeObject(item => item.varyTreeOnPlacement = !item.varyTreeOnPlacement),
                 description: "Vary this tree’s species, size and rotation when a lot is placed");
@@ -3475,7 +3475,11 @@ namespace CityForge.UI
             bool hasSelection = item != null;
             bool propertySelection = !PlayerMode && selectedGroup.Count < 2 && item != null && catalog && catalog.Find(item.assetId)?.category == "Buildings";
             if (buildingPropertiesButton) buildingPropertiesButton.gameObject.SetActive(propertySelection);
-            if (editBuildingButton) editBuildingButton.gameObject.SetActive(propertySelection);
+            if (editBuildingButton)
+            {
+                editBuildingButton.gameObject.SetActive(propertySelection);
+                editBuildingButton.interactable = propertySelection;
+            }
             At(selectedLabel.rectTransform, 20, 482, propertySelection ? 186 : 308, 36);
             selectedLabel.fontSize = propertySelection ? 14 : 18;
             if (!hasSelection) selectedGroup.Clear();

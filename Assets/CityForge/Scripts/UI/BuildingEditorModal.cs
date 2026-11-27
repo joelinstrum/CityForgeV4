@@ -99,7 +99,7 @@ namespace CityForge.UI
             Select(0);ShowTab();Fit();
         }
         void Select(int step)
-        {current=(current+step+buildings.Count)%buildings.Count;var asset=catalog.Find(buildings[current].assetId);buildingName.text=asset.label+(buildings.Count>1?$"   ({current+1} / {buildings.Count})":"");preview.Set(asset,drafts[buildings[current].id]);if(tabs!=null)ShowTab();}
+        {current=(current+step+buildings.Count)%buildings.Count;var asset=catalog.Find(buildings[current].assetId);buildingName.text=asset.label+(BuildingAppearance.IsPaintable(asset)?" · Paintable":BuildingAppearance.CanCustomize(asset)?" · Sign mounts":" · Original appearance")+(buildings.Count>1?$"   ({current+1} / {buildings.Count})":"");preview.Set(asset,drafts[buildings[current].id]);if(tabs!=null)ShowTab();}
         void Heading(Transform p,string text,int icon,float x,float y,float w)
         {Icon(p,icon,x,y+3,32);Label(p,text,x+44,y,w-44,40,27);}
         void ShowTab()
@@ -109,7 +109,7 @@ namespace CityForge.UI
             for(int i=0;i<tabs.Length;i++)tabs[i].image.sprite=i==tab?ZoneModalArtwork.Gold:ZoneModalArtwork.Dark;
             if(tab==0)
             {
-                var walls=Box(content,"Wall Tint",0,0,568,152);Heading(walls,"Wall Tint",0,20,10,520);
+                var walls=Box(content,"Wall Tint",0,0,568,152);Heading(walls,FixedBrick?"Brick Finish":"Wall Paint",0,20,10,520);
                 BuildWalls(walls);
                 var trim=Box(content,"Trim Tint",580,0,466,152);Heading(trim,"Trim Tint",1,20,10,425);
                 BuildTrim(trim);
@@ -119,7 +119,7 @@ namespace CityForge.UI
                 SignCard(content,580,164,466,182);
                 var original=Box(content,"Original Materials",0,358,1046,112);
                 Heading(original,"Original Textures",0,20,10,990);
-                Label(original,"Tint changes color while keeping the building’s original surface detail.",24,55,990,28,20,Muted);
+                Label(original,FixedBrick?"Choose a brick-and-mortar texture for the wall surfaces.":"Tint changes color while keeping the building’s original surface detail.",24,55,990,28,20,Muted);
                 Label(original,"Windows, signs, gold details and lighting keep their original colors.",24,82,990,24,17,Muted);
             }
             else if(tab==1)
@@ -161,16 +161,20 @@ namespace CityForge.UI
             }
             paintLabel=Label(parent,"",20,128,424,22,15,Muted);
         }
+        bool FixedBrick => BuildingAppearance.UsesBrickFinishes(catalog.Find(buildings[current].assetId));
         bool WallTintable => BuildingAppearance.SupportsWalls(catalog.Find(buildings[current].assetId));
         void BuildWalls(Transform parent)
         {
-            var original=Button(parent,"Original",426,12,120,32,()=>ChooseWall(""));original.name="Wall · Original";original.GetComponentInChildren<Text>().fontSize=16;wallButtons.Add((original,""));
-            for(int i=0;i<BuildingAppearance.Colors.Length;i++)
+            var original=Button(parent,FixedBrick?"Original red":"Original",426,12,120,32,()=>ChooseWall(""));original.name="Wall · Original";original.GetComponentInChildren<Text>().fontSize=16;wallButtons.Add((original,""));
+            var choices=FixedBrick?BuildingAppearance.BrickFinishes:BuildingAppearance.WallColors;
+            for(int i=0;i<choices.Length;i++)
             {
-                var color=BuildingAppearance.Colors[i];var b=Button(parent,"",20+i*82,55,62,42,()=>ChooseWall(color.Id));b.name="Wall · "+color.Label;
-                var fill=Rect(b.transform,"Tint swatch",7,7,48,28).gameObject.AddComponent<Image>();fill.color=color.Color;fill.raycastTarget=false;wallButtons.Add((b,color.Id));
+                var color=choices[i];var b=Button(parent,"",20+i*(FixedBrick?88:66),55,FixedBrick?80:56,42,()=>ChooseWall(color.Id));b.name="Wall · "+color.Label;
+                if(FixedBrick){var sample=Rect(b.transform,"Brick texture · "+color.Label,5,4,70,24).gameObject.AddComponent<RawImage>();sample.texture=BuildingAppearance.BrickFinishTexture(catalog.Find(buildings[current].assetId),color.Id);sample.uvRect=new UnityEngine.Rect(0,0,.4f,.4f);sample.raycastTarget=false;Label(b.transform,color.Label,0,25,80,16,12,Color.white);}
+                else{var fill=Rect(b.transform,"Tint swatch",7,7,42,28).gameObject.AddComponent<Image>();fill.color=color.Color;fill.raycastTarget=false;}wallButtons.Add((b,color.Id));
             }
             wallLabel=Label(parent,"",20,100,528,22,16,Muted);
+            if(FixedBrick){Label(parent,"Fixed brick textures · Original restores the red brick.",20,125,528,22,16,Muted);return;}
             wallSaturationLabel=Label(parent,"Saturation: 50%",20,125,148,22,16,Muted);
             var rail=Rect(parent,"Wall saturation",174,128,366,16);rail.gameObject.AddComponent<Image>().color=new Color(.12f,.17f,.20f);
             var fillRect=Rect(rail,"Saturation fill",0,0,366,16);fillRect.anchorMin=Vector2.zero;fillRect.anchorMax=Vector2.one;fillRect.offsetMin=Vector2.zero;fillRect.offsetMax=Vector2.zero;fillRect.gameObject.AddComponent<Image>().color=new Color(.72f,.52f,.21f);
@@ -183,6 +187,7 @@ namespace CityForge.UI
             if(!WallTintable)return;
             var state=Draft;state.wallColor=id;
             if(string.IsNullOrEmpty(id)){state.wallSaturationSet=false;state.wallSaturation=0;}
+            else if(FixedBrick){state.wallSaturationSet=false;state.wallSaturation=0;}
             else if(!state.wallSaturationSet){state.wallSaturationSet=true;state.wallSaturation=.5f;}
             drafts[buildings[current].id]=state;preview.Paint(state);RefreshPaint();
         }
@@ -233,17 +238,17 @@ namespace CityForge.UI
             foreach(var choice in wallButtons)
             {
                 choice.Button.interactable=WallTintable;
-                choice.Button.image.sprite=(Draft.wallColor??"")==choice.Id?ZoneModalArtwork.Gold:ZoneModalArtwork.Dark;
+                choice.Button.image.sprite=(FixedBrick?BuildingAppearance.BrickFinishId(Draft.wallColor):Draft.wallColor??"")==choice.Id?ZoneModalArtwork.Gold:ZoneModalArtwork.Dark;
                 foreach(var image in choice.Button.GetComponentsInChildren<Image>())if(image!=choice.Button.image)image.color=new Color(image.color.r,image.color.g,image.color.b,WallTintable?1:.35f);
             }
             if(wallSaturationSlider){wallSaturationSlider.SetValueWithoutNotify(BuildingAppearance.WallSaturation(Draft)*100);wallSaturationSlider.interactable=WallTintable&&!string.IsNullOrEmpty(Draft.wallColor);}
             if(wallSaturationLabel)wallSaturationLabel.text="Saturation: "+Mathf.RoundToInt(BuildingAppearance.WallSaturation(Draft)*100)+"%";
-            if(wallLabel)wallLabel.text=WallTintable?"Wall tint: "+(string.IsNullOrEmpty(Draft.wallColor)?"Original":BuildingAppearance.Find(Draft.wallColor).Label):"Wall tint is not available for this building yet.";
+            if(wallLabel)wallLabel.text=WallTintable?BuildingAppearance.WallLabel(catalog.Find(buildings[current].assetId))+": "+(string.IsNullOrEmpty(Draft.wallColor)?"Original":(FixedBrick?(BuildingAppearance.BrickFinishes.FirstOrDefault(c=>c.Id==BuildingAppearance.BrickFinishId(Draft.wallColor)).Label??"Original red"):BuildingAppearance.Find(Draft.wallColor).Label)):"Wall tint is not available for this building yet.";
             if(awningLabel)awningLabel.text=AwningTintable?"Awning tint: "+(string.IsNullOrEmpty(Draft.awningColor)?"Original":BuildingAppearance.Find(Draft.awningColor).Label):"Awning tint is not available for this building yet.";
             if(paintLabel)paintLabel.text=supported ? "Trim tint: "+(BuildingAppearance.Original(Draft)?"Original":BuildingAppearance.Find(Draft.trimColor).Label) : "Trim tint is not available for this building yet.";
-            if(tools)tools.text=WallTintable?"Wall, trim &\nawning tints":supported&&AwningTintable?"Trim & awning\ntints available":supported?"Trim tint\navailable now":"Tint controls\ncoming soon";
+            if(tools)tools.text=BuildingAppearance.IsPaintable(catalog.Find(buildings[current].assetId))?"Paintable\nSelected surfaces":"Defined sign\nmounts";
             applyButton.interactable=apply!=null&&drafts.Any(p=>!BuildingAppearance.Same(p.Value,originals[p.Key]));
-            status.text=supported||AwningTintable||WallTintable?"Preview tints, then apply your changes.":"Original materials retained. Tint controls are not available for this building yet.";
+            status.text=FixedBrick?"Choose a brick texture finish, then apply your changes.":supported||AwningTintable||WallTintable?"Preview tints, then apply your changes.":"Original materials retained. Tint controls are not available for this building yet.";
             if(tab==2){tools.text="Choose a sign\nand preview it";status.text=applyButton.interactable?"Preview changes, then apply to this building.":"Choose a mount and browse compatible signs.";}
         }
         void Accept()

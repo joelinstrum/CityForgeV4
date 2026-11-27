@@ -5,18 +5,6 @@ namespace CityForge.UI
     internal sealed partial class LotEditorPanel
     {
         private Button editBuildingButton;
-        private void ToggleHandTool()
-        {
-            viewport.HandTool = !viewport.HandTool;
-            if (viewport.HandTool)
-            {
-                armed = null; moving = false; repeatSource = null; pickingLotEntrance = false;
-                if (viewport.TexturePainting) viewport.EndTexturePaint();
-                ClearGroundPath(); ClearFencePath(); StopOverlay();
-                terrainMode = false; terrainTile = null;
-            }
-            Refresh(rebuildPreview:false);
-        }
         private void OpenBuildingEditor()
         {
             var item=Selection;
